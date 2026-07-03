@@ -1,14 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueData } from "@/hooks/useDriverQueueData";
+import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import { countVehiclesAhead, isDriverCalled, resolveQueuePosition } from "@/lib/queue";
 import { getDisplayPlaca } from "@/lib/checkin-rules";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Card } from "@/components/ui/Card";
 import { QueueDashboard } from "@/components/motorista/QueueDashboard";
+import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
 import { QueueEntryBadges } from "@/components/fila/QueueEntryBadges";
 import { Button } from "@/components/ui/Button";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
@@ -24,20 +28,42 @@ export function DriverQueuePanel() {
 }
 
 function DriverQueueContent({ profile }: { profile: Profile }) {
+  const router = useRouter();
   const { entry, allEntries, loading, refresh } = useDriverQueueData(profile);
+  const geo = useMotoristaGeofence(!loading && !entry);
+
+  useEffect(() => {
+    if (!loading && !entry && geo.isOutside && !geo.skipGeofence) {
+      router.replace("/motorista?fila=1");
+    }
+  }, [loading, entry, geo.isOutside, geo.skipGeofence, router]);
 
   if (loading) {
     return <PageLoader message="Carregando fila…" />;
   }
 
   if (!entry) {
+    if (geo.isOutside && !geo.skipGeofence) {
+      return <PageLoader message="Redirecionando…" />;
+    }
     return (
-      <MotoristaShell profile={profile}>
-        <div className="py-8 text-center">
-          <p className="text-slate-600">Nenhum check-in ativo.</p>
-          <Link href="/checkin" className="mt-4 inline-block">
-            <Button>Fazer check-in</Button>
-          </Link>
+      <MotoristaShell profile={profile} checkinNavEnabled={geo.canCheckIn}>
+        <div className="space-y-4 py-4">
+          <GeofenceStatusBanner
+            variant="home"
+            step={geo.step}
+            distanceLabel={geo.distanceLabel}
+            onRetry={geo.retry}
+          />
+          <p className="text-center text-slate-600">Nenhum check-in ativo.</p>
+          {geo.canCheckIn && (
+            <Link href="/checkin" className="block">
+              <Button className="w-full">Fazer check-in</Button>
+            </Link>
+          )}
+          {allEntries.length > 0 && (
+            <QueueDashboard entries={allEntries} title="Fila do pátio" />
+          )}
         </div>
       </MotoristaShell>
     );
@@ -47,7 +73,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   const posicao = resolveQueuePosition(entry, allEntries) ?? veiculosAFrente + 1;
 
   return (
-    <MotoristaShell profile={profile}>
+    <MotoristaShell profile={profile} checkinNavEnabled>
       <div className="space-y-4">
         <div className="flex justify-end">
           <button

@@ -4,47 +4,35 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useMotoristaGuard } from "@/hooks/useAuthGuard";
+import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import { hasActiveCheckIn, getDeviceId, getUserAgent } from "@/lib/checkin-rules";
 import type { QueueEntry } from "@/lib/types";
 import {
-  DEFAULT_GEOFENCE,
-  VEHICLE_TYPES,
-  OUTSIDE_GEOFENCE_MESSAGE,
   COOLDOWN_MESSAGE,
   CHECKIN_SUCCESS,
   MOTORISTA_HOME,
+  VEHICLE_TYPES,
 } from "@/lib/constants";
-import type { GeofenceConfig } from "@/lib/types";
-import {
-  getCurrentPosition,
-  isWithinGeofence,
-  haversineDistance,
-  formatDistance,
-  isSecureGeolocationContext,
-} from "@/lib/geofence";
 import { formatPhone, formatPlaca } from "@/lib/utils";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { MapPin, CheckCircle2, XCircle } from "lucide-react";
+import { MapPin, CheckCircle2 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
+import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
 import { isValidPlaca, PLACA_MERCOSUL_HINT } from "@/lib/checkin-validation";
-
-type GeoStep = "loading" | "denied" | "outside" | "inside" | "error" | "insecure";
 
 export default function CheckInPage() {
   const router = useRouter();
   const supabase = createClient();
   const { profile, checking, authError } = useMotoristaGuard();
+  const geo = useMotoristaGeofence(!!profile && !checking);
+  const [redirecting, setRedirecting] = useState(false);
 
-  const [geoStep, setGeoStep] = useState<GeoStep>("loading");
-  const [geofence, setGeofence] = useState<GeofenceConfig>(DEFAULT_GEOFENCE);
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [distance, setDistance] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -76,84 +64,21 @@ export default function CheckInPage() {
         .eq("driver_user_id", profile!.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
-      .limit(10);
+        .limit(10);
       const active = hasActiveCheckIn((data as QueueEntry[]) ?? []);
       if (active && !profile!.checkin_liberado) router.replace(MOTORISTA_HOME);
     }
-    checkExisting();
+    void checkExisting();
   }, [profile, supabase, router]);
 
+  // Fora do pátio → volta para fila (acompanhar sem check-in)
   useEffect(() => {
-    async function loadGeofence() {
-      const { data } = await supabase.from("settings").select("value").eq("key", "geofence").single();
-      if (data?.value && typeof data.value === "object") setGeofence(data.value as GeofenceConfig);
+    if (!profile || checking || geo.step === "loading") return;
+    if (geo.isOutside && !geo.skipGeofence) {
+      setRedirecting(true);
+      router.replace(`${MOTORISTA_HOME}?fila=1`);
     }
-    loadGeofence();
-  }, [supabase]);
-
-  const skipGeofence = process.env.NEXT_PUBLIC_SKIP_GEOFENCE === "true";
-
-  useEffect(() => {
-    async function validateLocation() {
-      if (skipGeofence) {
-        setCoords({ lat: geofence.lat, lng: geofence.lng });
-        setGeoStep("inside");
-        return;
-      }
-      if (!isSecureGeolocationContext()) {
-        setGeoStep("insecure");
-        return;
-      }
-      try {
-        const position = await getCurrentPosition();
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setCoords({ lat, lng });
-        const dist = haversineDistance(lat, lng, geofence.lat, geofence.lng);
-        setDistance(dist);
-        setGeoStep(isWithinGeofence(lat, lng, geofence) ? "inside" : "outside");
-      } catch (err) {
-        const error = err as GeolocationPositionError & Error;
-        if (error.message === "insecure_context") {
-          setGeoStep("insecure");
-        } else {
-          setGeoStep(error.code === 1 ? "denied" : "error");
-        }
-      }
-    }
-    validateLocation();
-  }, [geofence, skipGeofence]);
-
-  async function retryLocation() {
-    setGeoStep("loading");
-    setDistance(null);
-    setCoords(null);
-    if (skipGeofence) {
-      setCoords({ lat: geofence.lat, lng: geofence.lng });
-      setGeoStep("inside");
-      return;
-    }
-    if (!isSecureGeolocationContext()) {
-      setGeoStep("insecure");
-      return;
-    }
-    try {
-      const position = await getCurrentPosition();
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      setCoords({ lat, lng });
-      const dist = haversineDistance(lat, lng, geofence.lat, geofence.lng);
-      setDistance(dist);
-      setGeoStep(isWithinGeofence(lat, lng, geofence) ? "inside" : "outside");
-    } catch (err) {
-      const error = err as GeolocationPositionError & Error;
-      if (error.message === "insecure_context") {
-        setGeoStep("insecure");
-      } else {
-        setGeoStep(error.code === 1 ? "denied" : "error");
-      }
-    }
-  }
+  }, [profile, checking, geo.step, geo.isOutside, geo.skipGeofence, router]);
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -182,15 +107,8 @@ export default function CheckInPage() {
   }
 
   async function submitCheckIn(formData: typeof form) {
-    if (geoStep !== "inside" || !coords) {
-      setErrors({
-        form:
-          geoStep === "denied"
-            ? "Ative a localização (GPS) no celular para confirmar que você está no pátio."
-            : geoStep === "outside"
-              ? OUTSIDE_GEOFENCE_MESSAGE
-              : "Aguardando localização GPS…",
-      });
+    if (!geo.canCheckIn || !geo.coords) {
+      setErrors({ form: "Confirme sua localização no pátio antes de enviar." });
       return;
     }
     if (!validateForm(formData)) return;
@@ -207,8 +125,8 @@ export default function CheckInPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          checkin_lat: coords.lat,
-          checkin_lng: coords.lng,
+          checkin_lat: geo.coords.lat,
+          checkin_lng: geo.coords.lng,
           device_id: getDeviceId(),
           user_agent: getUserAgent(),
           retorno_racks_vazios: formData.retorno_racks_vazios === "sim",
@@ -232,8 +150,7 @@ export default function CheckInPage() {
       return;
     }
     if (data.error === "outside_geofence") {
-      setGeoStep("outside");
-      setErrors({ form: OUTSIDE_GEOFENCE_MESSAGE });
+      router.replace(`${MOTORISTA_HOME}?fila=1`);
       return;
     }
     if (data.error === "Acesso negado") {
@@ -257,19 +174,17 @@ export default function CheckInPage() {
   }
 
   if (authError) {
-    return (
-      <PageLoader error={authError} onRetry={() => window.location.reload()} />
-    );
+    return <PageLoader error={authError} onRetry={() => window.location.reload()} />;
   }
 
-  if (checking || !profile) {
-    return <PageLoader message="Verificando sessão…" />;
+  if (checking || !profile || redirecting || (geo.isOutside && !geo.skipGeofence)) {
+    return <PageLoader message="Verificando localização…" />;
   }
 
-  const canSubmit = geoStep === "inside" && !!coords;
+  const canSubmit = geo.canCheckIn && !!geo.coords;
 
   return (
-    <MotoristaShell profile={profile}>
+    <MotoristaShell profile={profile} checkinNavEnabled>
       <div className="space-y-4">
         <div>
           <h1 className="text-lg font-bold text-brand">Check-in</h1>
@@ -284,57 +199,24 @@ export default function CheckInPage() {
               <MapPin className="h-5 w-5" /> Localização GPS
             </CardTitle>
           </CardHeader>
-          {geoStep === "loading" && (
+          {geo.step === "loading" && (
             <div className="flex items-center gap-3 text-slate-600">
               <Spinner size="md" className="h-5 w-5" /> Verificando GPS...
             </div>
           )}
-          {geoStep === "inside" && (
+          {(geo.step === "inside" || geo.step === "skipped") && (
             <div className="flex items-center gap-3 rounded-xl bg-green-50 p-4 text-success">
               <CheckCircle2 className="h-6 w-6" />
               <p className="font-medium">Localização confirmada no pátio!</p>
             </div>
           )}
-          {(geoStep === "outside" || geoStep === "denied" || geoStep === "error" || geoStep === "insecure") && (
-            <div className="rounded-xl bg-red-50 p-4 text-danger">
-              <div className="flex gap-3">
-                <XCircle className="h-6 w-6 shrink-0" />
-                <div className="space-y-2">
-                  <p className="font-semibold">
-                    {geoStep === "insecure"
-                      ? "GPS indisponível neste endereço (HTTP sem cadeado)."
-                      : geoStep === "denied"
-                        ? "Permita o acesso à localização nas configurações do celular."
-                        : geoStep === "error"
-                          ? "Não foi possível obter o GPS. Tente novamente."
-                          : OUTSIDE_GEOFENCE_MESSAGE}
-                  </p>
-                  {geoStep === "insecure" && (
-                    <p className="text-sm leading-relaxed">
-                      Celulares exigem HTTPS para GPS. Na rede local, peça ao admin ativar{" "}
-                      <strong>modo teste LAN</strong> ou use o app com HTTPS (Vercel).
-                      Você pode preencher o formulário abaixo enquanto isso.
-                    </p>
-                  )}
-                  {geoStep === "denied" && (
-                    <p className="text-sm leading-relaxed">
-                      Android: Configurações → Apps → Chrome → Permissões → Localização.
-                      iPhone: Ajustes → Privacidade → Localização → Safari/Chrome → Permitir.
-                    </p>
-                  )}
-                  {geoStep === "outside" && distance !== null && (
-                    <p className="text-sm">Distância do pátio: {formatDistance(distance)}</p>
-                  )}
-                  {geoStep !== "insecure" && (
-                    <Button type="button" variant="outline" size="sm" onClick={retryLocation}>
-                      Tentar GPS novamente
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          {skipGeofence && (
+          <GeofenceStatusBanner
+            variant="checkin"
+            step={geo.step}
+            distanceLabel={geo.distanceLabel}
+            onRetry={geo.retry}
+          />
+          {geo.skipGeofence && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
               Modo teste LAN: geofence desativado — remova antes da operação real.
             </p>

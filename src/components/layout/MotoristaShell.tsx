@@ -17,9 +17,12 @@ const NAV = [
 export function MotoristaShell({
   profile,
   children,
+  checkinNavEnabled = true,
 }: {
   profile: Profile;
   children: React.ReactNode;
+  /** false = fora do pátio sem check-in ativo */
+  checkinNavEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -63,6 +66,21 @@ export function MotoristaShell({
         <div className="page-container flex justify-around gap-1 py-1.5">
           {NAV.map(({ href, label, icon: Icon, exact }) => {
             const active = exact ? pathname === href : pathname.startsWith(href);
+            const disabled = href === "/checkin" && !checkinNavEnabled;
+            if (disabled) {
+              return (
+                <span
+                  key={href}
+                  className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold text-slate-300"
+                  title="Check-in disponível apenas dentro do pátio"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-transparent">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  {label}
+                </span>
+              );
+            }
             return (
               <Link
                 key={href}
