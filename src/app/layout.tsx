@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { BRAND } from "@/lib/constants";
+import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
+import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
 import "./globals.css";
 
 const inter = Inter({
@@ -16,15 +18,18 @@ export const metadata: Metadata = {
   applicationName: "FILA LSL",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "FILA LSL",
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
@@ -43,7 +48,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} antialiased`}>
+        {children}
+        <PwaRegistrar />
+        <InstallAppBanner />
+      </body>
     </html>
   );
 }

@@ -1,26 +1,58 @@
 {
-  "name": "FILA LSL",
+  "name": "FILA LSL — Motorista & Operação",
   "short_name": "FILA LSL",
-  "description": "Check-in e fila de descarregamento — PAD SIF",
+  "description": "Check-in, fila de descarga e operação de pátio — PAD SIF / LSL",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#eef2f7",
-  "theme_color": "#0a4d8c",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0A4D8C",
+  "theme_color": "#0A4D8C",
   "orientation": "portrait-primary",
   "lang": "pt-BR",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
-      "sizes": "32x32",
-      "type": "image/svg+xml"
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
     }
   ],
-  "categories": ["business", "productivity"]
+  "shortcuts": [
+    {
+      "name": "Motorista",
+      "short_name": "Motorista",
+      "description": "Login Google e check-in",
+      "url": "/login/motorista",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Operacional",
+      "short_name": "Operação",
+      "description": "Empilhador e administrador",
+      "url": "/login",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
+  "categories": ["business", "productivity", "logistics"]
 }

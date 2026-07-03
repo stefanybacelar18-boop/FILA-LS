@@ -49,7 +49,7 @@ export default function HomePage() {
         </div>
 
         <p className="mt-10 text-center text-xs leading-relaxed text-white/55">
-          Celular: adicione à tela inicial pelo menu do navegador para acesso rápido
+          Instale o app FILA LSL na tela inicial — abre em tela cheia, sem barra do navegador
         </p>
       </div>
     </div>
