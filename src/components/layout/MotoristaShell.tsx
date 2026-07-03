@@ -18,11 +18,14 @@ export function MotoristaShell({
   profile,
   children,
   checkinNavEnabled = true,
+  checkinBlockHint,
 }: {
   profile: Profile;
   children: React.ReactNode;
-  /** false = fora do pátio sem check-in ativo */
+  /** false = fora do pátio / GPS — check-in desabilitado */
   checkinNavEnabled?: boolean;
+  /** Mensagem curta no header quando check-in bloqueado */
+  checkinBlockHint?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -44,6 +47,11 @@ export function MotoristaShell({
             <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">
               Olá, {firstName}
             </p>
+            {!checkinNavEnabled && checkinBlockHint && (
+              <p className="mt-0.5 truncate text-xs font-semibold text-red-600" role="status">
+                {checkinBlockHint}
+              </p>
+            )}
           </div>
           <button
             type="button"

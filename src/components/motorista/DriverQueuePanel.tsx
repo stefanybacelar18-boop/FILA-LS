@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Card } from "@/components/ui/Card";
 import { QueueDashboard } from "@/components/motorista/QueueDashboard";
-import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
+import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
 import { QueueEntryBadges } from "@/components/fila/QueueEntryBadges";
 import { Button } from "@/components/ui/Button";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
@@ -34,7 +34,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     if (!loading && !entry && geo.isOutside && !geo.skipGeofence) {
-      router.replace("/motorista?fila=1");
+      router.replace("/motorista?motivo=fora");
     }
   }, [loading, entry, geo.isOutside, geo.skipGeofence, router]);
 
@@ -46,15 +46,24 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     if (geo.isOutside && !geo.skipGeofence) {
       return <PageLoader message="Redirecionando…" />;
     }
+    const blocked = !geo.canCheckIn && geo.step !== "loading";
     return (
-      <MotoristaShell profile={profile} checkinNavEnabled={geo.canCheckIn}>
+      <MotoristaShell
+        profile={profile}
+        checkinNavEnabled={geo.canCheckIn}
+        checkinBlockHint={
+          blocked ? "Check-in bloqueado — valide a localização" : undefined
+        }
+      >
         <div className="space-y-4 py-4">
-          <GeofenceStatusBanner
-            variant="home"
-            step={geo.step}
-            distanceLabel={geo.distanceLabel}
-            onRetry={geo.retry}
-          />
+          {blocked && (
+            <CheckinBlockedAlert
+              step={geo.step}
+              distanceLabel={geo.distanceLabel}
+              geofenceName={geo.geofence.name}
+              onRetry={geo.retry}
+            />
+          )}
           <p className="text-center text-slate-600">Nenhum check-in ativo.</p>
           {geo.canCheckIn && (
             <Link href="/checkin" className="block">

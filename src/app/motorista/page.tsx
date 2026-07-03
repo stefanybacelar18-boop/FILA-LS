@@ -7,8 +7,8 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueData } from "@/hooks/useDriverQueueData";
 import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
+import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
 import { QueueDashboard } from "@/components/motorista/QueueDashboard";
-import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { QueueEntryBadges } from "@/components/fila/QueueEntryBadges";
 import { Button } from "@/components/ui/Button";
@@ -50,20 +50,35 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
   const hasEntry = !!entry;
   const checkinNavEnabled = hasEntry || geo.canCheckIn;
   const geoLoading = geo.step === "loading" && !geo.skipGeofence;
+  const checkinBlocked = !hasEntry && !geo.canCheckIn && !geoLoading;
+  const redirectedFromCheckin =
+    searchParams.get("fila") === "1" || searchParams.get("motivo") === "fora";
 
   // Dentro do pátio, sem check-in ativo → vai direto ao formulário
   useEffect(() => {
     if (queueLoading || geoLoading || hasEntry) return;
-    if (geo.canCheckIn && searchParams.get("fila") !== "1") {
+    if (geo.canCheckIn && !redirectedFromCheckin) {
       router.replace(MOTORISTA_CHECKIN);
     }
-  }, [queueLoading, geoLoading, hasEntry, geo.canCheckIn, router, searchParams]);
+  }, [queueLoading, geoLoading, hasEntry, geo.canCheckIn, router, redirectedFromCheckin]);
 
   const posicao = entry ? resolveQueuePosition(entry, allEntries) : null;
   const loading = queueLoading || (!hasEntry && geoLoading);
 
+  const blockHint = checkinBlocked
+    ? geo.step === "outside"
+      ? "Check-in bloqueado — fora do pátio"
+      : geo.step === "denied"
+        ? "Check-in bloqueado — ative o GPS"
+        : "Check-in bloqueado — valide a localização"
+    : null;
+
   return (
-    <MotoristaShell profile={profile} checkinNavEnabled={checkinNavEnabled}>
+    <MotoristaShell
+      profile={profile}
+      checkinNavEnabled={checkinNavEnabled}
+      checkinBlockHint={blockHint}
+    >
       {loading ? (
         <div className="flex justify-center py-16" role="status" aria-live="polite">
           <Spinner label="Carregando…" />
@@ -107,29 +122,23 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
 
           <QueueDashboard entries={allEntries} highlightId={entry.id} title="Fila do pátio" />
         </div>
-      ) : geo.isOutside ? (
+      ) : checkinBlocked ? (
         <div className="space-y-4">
-          <GeofenceStatusBanner
-            variant="home"
+          <CheckinBlockedAlert
             step={geo.step}
             distanceLabel={geo.distanceLabel}
+            geofenceName={geo.geofence.name}
             onRetry={geo.retry}
+            redirectedFromCheckin={redirectedFromCheckin}
           />
 
-          <div className="rounded-2xl border border-brand/15 bg-brand-muted/40 p-5 text-center">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
             <ListOrdered className="mx-auto h-8 w-8 text-brand" />
-            <h2 className="mt-3 text-lg font-bold text-slate-800">Acompanhe a fila</h2>
+            <h2 className="mt-3 text-lg font-bold text-slate-800">Enquanto isso, acompanhe a fila</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Quando chegar ao pátio LSL, atualize a localização para liberar o check-in.
+              Quando estiver dentro do pátio LSL, toque em{" "}
+              <strong>Atualizar minha localização</strong> acima para liberar o check-in.
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 w-full"
-              onClick={() => void geo.retry()}
-            >
-              Verificar se estou no pátio
-            </Button>
           </div>
 
           {allEntries.length > 0 ? (

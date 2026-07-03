@@ -76,7 +76,7 @@ export default function CheckInPage() {
     if (!profile || checking || geo.step === "loading") return;
     if (geo.isOutside && !geo.skipGeofence) {
       setRedirecting(true);
-      router.replace(`${MOTORISTA_HOME}?fila=1`);
+      router.replace(`${MOTORISTA_HOME}?motivo=fora`);
     }
   }, [profile, checking, geo.step, geo.isOutside, geo.skipGeofence, router]);
 
@@ -150,7 +150,7 @@ export default function CheckInPage() {
       return;
     }
     if (data.error === "outside_geofence") {
-      router.replace(`${MOTORISTA_HOME}?fila=1`);
+      router.replace(`${MOTORISTA_HOME}?motivo=fora`);
       return;
     }
     if (data.error === "Acesso negado") {
