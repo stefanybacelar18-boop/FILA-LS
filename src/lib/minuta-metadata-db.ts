@@ -10,9 +10,9 @@ import {
   type MinutaMetadata,
 } from "./minuta-intelligence";
 import type { QueueEntry } from "./types";
-import { isActiveQueueStatus } from "./constants";
+import { isActiveQueueStatus, ACTIVE_QUEUE_DB_STATUSES } from "./constants";
 import { readPriorityMap, saveEntryPrioridade } from "./queue-priorities";
-import { getTodayStartISO, getManausDateYmd } from "./queue-day";
+import { getManausDateYmd } from "./queue-day";
 import { sortQueueEntries } from "./queue";
 
 export const PREVISAO_MANUAL_SETTINGS_KEY = "previsao_manual_ids";
@@ -145,7 +145,7 @@ export async function recalculateQueuePrevisoes(
           .from("queue_entries")
           .select("*")
           .is("deleted_at", null)
-          .gte("created_at", getTodayStartISO())
+          .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
       ).data ??
       [];
     enriched = await enrichQueueWithMinutaMetadata(

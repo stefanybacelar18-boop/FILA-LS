@@ -14,7 +14,7 @@ import {
   upsertMinutaMetadataBatch,
   recalculateQueuePrevisoes,
 } from "@/lib/minuta-metadata-db";
-import { getTodayStartISO } from "@/lib/queue-day";
+import { ACTIVE_QUEUE_DB_STATUSES } from "@/lib/constants";
 import { isActiveQueueStatus } from "@/lib/constants";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import type { QueueEntry } from "@/lib/types";
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       .from("queue_entries")
       .select("*")
       .is("deleted_at", null)
-      .gte("created_at", getTodayStartISO());
+      .in("status", [...ACTIVE_QUEUE_DB_STATUSES]);
 
     const queueEntries = (queueRows ?? []) as QueueEntry[];
     const enriched = await enrichQueueWithMinutaMetadata(admin, queueEntries);

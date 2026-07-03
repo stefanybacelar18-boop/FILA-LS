@@ -1,5 +1,5 @@
--- Atualiza RPC da fila ativa para status simplificado + legado
--- Rode após migracao-status-simplificado.sql
+-- Fila ativa persiste entre dias até finalizar/ausentar/cancelar
+-- Rode no SQL Editor do Supabase
 
 CREATE OR REPLACE FUNCTION public.get_active_queue_summary()
 RETURNS TABLE (
@@ -36,7 +36,7 @@ AS $$
     q.created_at
   FROM public.queue_entries q
   WHERE q.deleted_at IS NULL
-    AND q.status IN (
+    AND q.status::text IN (
       'aguardando_descarregamento',
       'aguardando',
       'chamado',
@@ -48,4 +48,4 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_active_queue_summary() TO anon, authenticated;
 
-SELECT 'RPC get_active_queue_summary atualizado' AS status;
+SELECT 'RPC get_active_queue_summary — fila ativa sem corte de meia-noite' AS status;

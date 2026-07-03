@@ -5,7 +5,6 @@ import {
   loadBasicOperationalQueue,
   loadEnrichedQueueEntries,
 } from "@/lib/queue-enrich";
-import { getTodayStartISO } from "@/lib/queue-day";
 import { withTimeout } from "@/lib/async-timeout";
 
 export const maxDuration = 30;
@@ -39,7 +38,7 @@ export async function GET() {
 
     return NextResponse.json({
       data: entries,
-      meta: { scope: "operational", dayStart: getTodayStartISO(), fallback },
+      meta: { scope: "operational_active", fallback },
     });
   } catch (err) {
     invalidateEnrichedQueueCache();

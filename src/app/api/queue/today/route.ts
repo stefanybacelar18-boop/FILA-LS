@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffQueueRole } from "@/lib/role-permissions";
-import { getTodayStartISO } from "@/lib/queue-day";
 import { loadEnrichedQueueEntries } from "@/lib/queue-enrich";
 
 export async function GET(request: NextRequest) {
@@ -34,8 +33,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: entries,
       meta: {
-        scope: includeInactive ? "all_today" : "operational",
-        dayStart: getTodayStartISO(),
+        scope: includeInactive ? "active_plus_closed_today" : "operational_active",
       },
     });
   } catch (err) {

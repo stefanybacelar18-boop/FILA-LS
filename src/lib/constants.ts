@@ -77,6 +77,12 @@ export const LEGACY_ACTIVE_STATUSES = [
   "aguardando_carregamento_racks",
 ] as const;
 
+/** Status persistidos na fila até finalizar/ausentar/cancelar (não somem à meia-noite). */
+export const ACTIVE_QUEUE_DB_STATUSES = [
+  "aguardando_descarregamento",
+  ...LEGACY_ACTIVE_STATUSES,
+] as const;
+
 export function isActiveQueueStatus(status: string): boolean {
   if (status === "ausente" || status === "finalizado" || status === "cancelado") return false;
   if (status === "aguardando_descarregamento") return true;
@@ -94,7 +100,7 @@ export function shouldShowInQueuePanel(entry: { status: string }, showFinalizado
   return isActiveQueueStatus(entry.status);
 }
 
-/** Painéis operacionais (motorista, empilhador, TV): só fila ativa do dia. */
+/** Painéis operacionais (motorista, empilhador, TV): fila ativa até encerrar. */
 export function isOperationalPanelEntry(entry: { status: string }): boolean {
   return isActiveQueueStatus(entry.status);
 }

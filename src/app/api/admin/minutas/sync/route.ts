@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAccessAdmin } from "@/lib/role-permissions";
-import { getTodayStartISO } from "@/lib/queue-day";
+import { ACTIVE_QUEUE_DB_STATUSES } from "@/lib/constants";
 import { isActiveQueueStatus } from "@/lib/constants";
 import {
   enrichQueueWithMinutaMetadata,
@@ -43,7 +43,7 @@ export async function POST() {
       .from("queue_entries")
       .select("*")
       .is("deleted_at", null)
-      .gte("created_at", getTodayStartISO());
+      .in("status", [...ACTIVE_QUEUE_DB_STATUSES]);
 
     const enriched = await enrichQueueWithMinutaMetadata(
       admin,

@@ -8,9 +8,11 @@ import {
 } from "./minuta-metadata-db";
 import { computePrevisoesDescarregamento } from "./minuta-intelligence";
 import { sortQueueEntries } from "./queue";
-import { filterOperationalPanelEntries, shouldShowInQueuePanel } from "./constants";
+import { filterOperationalPanelEntries, shouldShowInQueuePanel, ACTIVE_QUEUE_DB_STATUSES } from "./constants";
 import { getTodayStartISO } from "./queue-day";
 import type { QueueEntry } from "./types";
+
+const CLOSED_QUEUE_DB_STATUSES = ["finalizado", "ausente", "cancelado"] as const;
 
 export type EnrichedQueueEntry = QueueEntry & {
   prioridade_automatica?: boolean;
@@ -31,7 +33,7 @@ function enrichCacheKey(includeInactive: boolean): string {
   return includeInactive ? "all" : "operational";
 }
 
-/** Carrega fila do dia, enriquece com metadata, prioridade e previsão automática. */
+/** Carrega fila ativa (aguardando até finalizar), enriquece com metadata, prioridade e previsão. */
 export async function loadEnrichedQueueEntries(
   admin: SupabaseClient,
   options?: { includeInactive?: boolean; bypassCache?: boolean }
@@ -84,16 +86,39 @@ async function loadEnrichedQueueEntriesUncached(
   admin: SupabaseClient,
   includeInactive: boolean
 ): Promise<EnrichedQueueEntry[]> {
-  const { data, error } = await admin
+  const activeQuery = admin
     .from("queue_entries")
     .select("*")
     .is("deleted_at", null)
-    .gte("created_at", getTodayStartISO())
+    .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
     .order("created_at", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  let rows: QueueEntry[];
 
-  const rows = (data ?? []) as QueueEntry[];
+  if (includeInactive) {
+    const [activeResult, closedTodayResult] = await Promise.all([
+      activeQuery,
+      admin
+        .from("queue_entries")
+        .select("*")
+        .is("deleted_at", null)
+        .in("status", [...CLOSED_QUEUE_DB_STATUSES])
+        .gte("created_at", getTodayStartISO())
+        .order("created_at", { ascending: true }),
+    ]);
+
+    if (activeResult.error) throw new Error(activeResult.error.message);
+    if (closedTodayResult.error) throw new Error(closedTodayResult.error.message);
+
+    rows = [
+      ...((activeResult.data ?? []) as QueueEntry[]),
+      ...((closedTodayResult.data ?? []) as QueueEntry[]),
+    ];
+  } else {
+    const { data, error } = await activeQuery;
+    if (error) throw new Error(error.message);
+    rows = (data ?? []) as QueueEntry[];
+  }
 
   const [priorityMap, expedicao, manualPrevisaoIds] = await Promise.all([
     readPriorityMap(admin),
@@ -123,7 +148,7 @@ async function loadEnrichedQueueEntriesUncached(
   return sortQueueEntries(filtered) as EnrichedQueueEntry[];
 }
 
-/** Fila básica do dia (sem metadata) — fallback quando enriquecimento falha. */
+/** Fila básica ativa (sem metadata) — fallback quando enriquecimento falha. */
 export async function loadBasicOperationalQueue(
   admin: SupabaseClient
 ): Promise<QueueEntry[]> {
@@ -131,7 +156,7 @@ export async function loadBasicOperationalQueue(
     .from("queue_entries")
     .select("*")
     .is("deleted_at", null)
-    .gte("created_at", getTodayStartISO())
+    .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);

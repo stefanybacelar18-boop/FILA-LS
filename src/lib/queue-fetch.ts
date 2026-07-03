@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueEntry } from "@/lib/types";
-import { getTodayStartISO } from "@/lib/queue-day";
-import { filterOperationalPanelEntries } from "@/lib/constants";
+import { filterOperationalPanelEntries, ACTIVE_QUEUE_DB_STATUSES } from "@/lib/constants";
 
 const FETCH_TIMEOUT_MS = 25_000;
 let inFlight: Promise<QueueEntry[]> | null = null;
@@ -46,7 +45,7 @@ export async function fetchEnrichedOperationalQueue(
   return inFlight;
 }
 
-/** Leitura direta no Supabase (sem enriquecimento). */
+/** Leitura direta no Supabase (sem enriquecimento) — fila ativa até finalizar. */
 export async function fetchActiveQueueToday(
   supabase: SupabaseClient
 ): Promise<QueueEntry[]> {
@@ -58,13 +57,11 @@ export async function fetchActiveQueueToday(
     return filterOperationalPanelEntries(rpcData as QueueEntry[]);
   }
 
-  const todayIso = getTodayStartISO();
-
   const { data, error } = await supabase
     .from("queue_entries")
     .select("*")
     .is("deleted_at", null)
-    .gte("created_at", todayIso)
+    .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
     .order("created_at", { ascending: true });
 
   if (error) {

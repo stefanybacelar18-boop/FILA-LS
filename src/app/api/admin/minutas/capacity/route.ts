@@ -13,7 +13,7 @@ import { withTimeout } from "@/lib/async-timeout";
 import { computeCapacityPlan } from "@/lib/minuta-intelligence";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import { mergePrioritiesIntoEntries, readPriorityMap } from "@/lib/queue-priorities";
-import { getTodayStartISO } from "@/lib/queue-day";
+import { ACTIVE_QUEUE_DB_STATUSES } from "@/lib/constants";
 import { sortQueueEntries } from "@/lib/queue";
 import type { QueueEntry } from "@/lib/types";
 
@@ -50,7 +50,7 @@ export async function GET() {
           .from("queue_entries")
           .select("*")
           .is("deleted_at", null)
-          .gte("created_at", getTodayStartISO()),
+          .in("status", [...ACTIVE_QUEUE_DB_STATUSES]),
         readPriorityMap(admin),
         countMinutaMetadata(admin),
       ]),
