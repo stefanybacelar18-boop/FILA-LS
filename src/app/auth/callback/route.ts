@@ -3,12 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ensureProfileForUser } from "@/lib/ensure-profile-server";
 import { resolveMotoristaLandingPath } from "@/lib/motorista-routing";
 import { resolveAppOriginFromRequest } from "@/lib/app-url";
+import { normalizeSupabaseUrl } from "@/lib/supabase/url";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 function createCallbackClient(request: NextRequest, applyCookie: (c: CookieToSet) => void) {
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {

@@ -27,6 +27,12 @@ type ProviderInfo = {
 
 function formatAuthDetail(detail: string): string {
   const lower = detail.toLowerCase();
+  if (lower.includes("invalid path specified in request url")) {
+    return (
+      "URL do Supabase incorreta na Vercel. Em Environment Variables, NEXT_PUBLIC_SUPABASE_URL deve ser " +
+      "https://xctzcizqoussthitrihm.supabase.co (sem /rest/v1). Depois faça Redeploy."
+    );
+  }
   if (lower.includes("unable to exchange external code")) {
     return (
       "O Supabase não conseguiu validar o Google. Confira: (1) Client ID e Secret corretos no Supabase, " +
@@ -219,6 +225,12 @@ function MotoristaLoginContent() {
               </>
             )}
           </Button>
+          {appleEnabled === false && (
+            <p className="text-center text-xs text-slate-500">
+              Login com Apple ainda não está ativado no Supabase. Use Google ou peça ao administrador
+              para configurar (requer conta Apple Developer).
+            </p>
+          )}
         </div>
 
         {error && (
