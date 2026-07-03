@@ -35,7 +35,22 @@ http://localhost:3000/**
 
 4. No `.env.local`: `NEXT_PUBLIC_APP_URL=http://192.168.0.122:3000`
 
-**Nunca acesse o app por `http://0.0.0.0:3000`** — o navegador não conecta. Use sempre `192.168.0.122` ou `localhost`.
+### Produção Vercel (HTTPS — teste externo)
+
+1. Abra: [URL Configuration](https://supabase.com/dashboard/project/xctzcizqoussthitrihm/auth/url-configuration)
+2. **Site URL:** `https://fila-lsl.vercel.app` (substitua pela sua URL Vercel)
+3. **Redirect URLs** — adicione (mantendo as LAN se precisar):
+
+```
+https://fila-lsl.vercel.app/**
+https://fila-lsl.vercel.app/auth/callback
+```
+
+4. Na Vercel: `NEXT_PUBLIC_APP_URL` = mesma URL
+
+Guia completo: `TESTE-EXTERNO-AMANHA.md`
+
+**Nunca acesse o app por `http://0.0.0.0:3000`** — o navegador não conecta. Use sempre a URL Vercel, `192.168.0.122` ou `localhost`.
 
 ## Passo 4 — Testar
 

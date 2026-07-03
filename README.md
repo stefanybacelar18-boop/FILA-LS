@@ -61,16 +61,21 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000)
 
-## Deploy na Vercel
+## Deploy na Vercel (acesso externo / HTTPS)
 
-1. Faça push do repositório para o GitHub
-2. Importe o projeto na [Vercel](https://vercel.com)
-3. Configure as variáveis de ambiente:
+Guia completo: **`TESTE-EXTERNO-AMANHA.md`**
+
+1. Repositório: `stefanybacelar18-boop/FILA-LS` branch `main`
+2. [Vercel](https://vercel.com) → projeto **FILA LSL** → Settings → Git conectado
+3. Variáveis de ambiente (Production + Preview + Development):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-   - `NEXT_PUBLIC_APP_URL` (URL de produção)
-4. Deploy automático a cada push
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `NEXT_PUBLIC_APP_URL` (URL `.vercel.app` após 1º deploy)
+4. Supabase → Authentication → URL Configuration → Site URL e Redirect URLs com a URL Vercel
+5. Google OAuth: redirect continua `https://xctzcizqoussthitrihm.supabase.co/auth/v1/callback`
+
+Verificação local: `.\scripts\verificar-deploy.ps1`
 
 ## Rotas
 

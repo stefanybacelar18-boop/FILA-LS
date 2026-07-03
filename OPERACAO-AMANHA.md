@@ -1,8 +1,25 @@
 # Operação amanhã — FILA LSL
 
-Guia rápido para usar o sistema no trabalho: **motoristas e empilhador no celular**, **admin no notebook**.
+Guia rápido para usar o sistema no trabalho.
+
+> **Recomendado para teste externo (4G / qualquer rede):** siga **`TESTE-EXTERNO-AMANHA.md`** (Vercel + Supabase).  
+> **Alternativa só Wi-Fi da empresa:** seções LAN abaixo.
 
 ---
+
+## Modo externo (Vercel) — resumo
+
+1. Vercel → deploy **Ready** na URL `https://....vercel.app`
+2. Supabase → Site URL + Redirect URLs apontando para essa URL
+3. Google OAuth → **Publish app** (ou test users) para motoristas
+4. Admin → geofence + QR code na URL Vercel
+5. Testar no celular **com 4G** (desligue Wi-Fi)
+
+Detalhes: **`TESTE-EXTERNO-AMANHA.md`**
+
+---
+
+## Modo LAN (notebook na Wi-Fi) — resumo
 
 ## Antes de abrir o pátio (15 min)
 

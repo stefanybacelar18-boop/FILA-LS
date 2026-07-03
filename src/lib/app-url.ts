@@ -1,8 +1,20 @@
 /** URL pública do app — nunca use 0.0.0.0 no navegador */
 export function getConfiguredAppUrl(): string | null {
   const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
-  if (!raw || raw.includes("0.0.0.0")) return null;
-  return raw;
+  if (raw && !raw.includes("0.0.0.0")) return raw;
+
+  // Vercel injeta estas variáveis automaticamente (fallback se APP_URL ainda não foi configurada)
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(/^https?:\/\//, "");
+  if (productionHost && productionHost !== "0.0.0.0") {
+    return `https://${productionHost}`;
+  }
+
+  const vercelHost = process.env.VERCEL_URL?.trim().replace(/^https?:\/\//, "");
+  if (vercelHost && vercelHost !== "0.0.0.0") {
+    return `https://${vercelHost}`;
+  }
+
+  return null;
 }
 
 function originFromHost(protocol: string, host: string | null): string | null {
