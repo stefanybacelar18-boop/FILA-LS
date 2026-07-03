@@ -1,0 +1,11 @@
+-- ============================================================
+-- FILA LSL — Evolução v1
+--
+-- ⚠️ NÃO rode este arquivo inteiro de uma vez!
+-- O PostgreSQL exige 2 passos separados:
+--
+--   1. evolucao-v1-parte1-enums.sql  (nova aba → Run → Success)
+--   2. evolucao-v1-parte2.sql        (nova aba → Run → Success)
+-- ============================================================
+
+-- Use os arquivos parte1 e parte2 acima.

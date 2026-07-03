@@ -1,0 +1,194 @@
+import type { QueueStatus, UserRole } from "./types";
+
+export type AnyQueueStatus = QueueStatus | LegacyQueueStatus;
+
+/** Status legados — dados antigos no banco; tratados como aguardando descarregamento na UI */
+export type LegacyQueueStatus =
+  | "aguardando"
+  | "chamado"
+  | "em_deslocamento"
+  | "em_descarga"
+  | "aguardando_carregamento_racks"
+  | "cancelado";
+
+export const APP_NAME = "FILA LSL";
+export const COMPANY_NAME = "PAD SIF";
+export const BRANCH_TAGLINE = "Operação de descarga · LSL";
+
+export const BRAND = {
+  primary: "#0A4D8C",
+  secondary: "#1976D2",
+  white: "#FFFFFF",
+  gray: "#F5F7FA",
+  success: "#2E7D32",
+  danger: "#D32F2F",
+} as const;
+
+export const MOTORISTA_HOME = "/motorista";
+export const MOTORISTA_CHECKIN = "/checkin";
+export const CHECKIN_SUCCESS = "/checkin/sucesso";
+
+/** Contas fixas @lsl.com — roles usados pelo ensure-profile (criar no Supabase Auth) */
+export const FIXED_ACCOUNT_ROLES: Record<string, UserRole> = {
+  "motorista@lsl.com": "motorista",
+  "empilhador@lsl.com": "empilhador",
+  "admin@lsl.com": "administrador",
+};
+
+/** Únicos status operacionais do sistema */
+export const QUEUE_STATUSES: QueueStatus[] = [
+  "aguardando_descarregamento",
+  "ausente",
+  "finalizado",
+];
+
+export const STATUS_LABELS: Record<QueueStatus, string> = {
+  aguardando_descarregamento: "Aguardando descarregamento",
+  ausente: "Ausente",
+  finalizado: "Finalizado",
+};
+
+const LEGACY_STATUS_LABELS: Record<LegacyQueueStatus, string> = {
+  aguardando: "Aguardando descarregamento",
+  chamado: "Aguardando descarregamento",
+  em_deslocamento: "Aguardando descarregamento",
+  em_descarga: "Aguardando descarregamento",
+  aguardando_carregamento_racks: "Aguardando descarregamento",
+  cancelado: "Cancelado",
+};
+
+export function getStatusLabel(status: string): string {
+  if (status in STATUS_LABELS) return STATUS_LABELS[status as QueueStatus];
+  if (status in LEGACY_STATUS_LABELS) return LEGACY_STATUS_LABELS[status as LegacyQueueStatus];
+  return status;
+}
+
+export function normalizeQueueStatus(status: string): QueueStatus {
+  if (status === "ausente" || status === "finalizado") return status;
+  if (status === "aguardando_descarregamento") return status;
+  return "aguardando_descarregamento";
+}
+
+export const LEGACY_ACTIVE_STATUSES = [
+  "aguardando",
+  "chamado",
+  "em_deslocamento",
+  "em_descarga",
+  "aguardando_carregamento_racks",
+] as const;
+
+export function isActiveQueueStatus(status: string): boolean {
+  if (status === "ausente" || status === "finalizado" || status === "cancelado") return false;
+  if (status === "aguardando_descarregamento") return true;
+  return (LEGACY_ACTIVE_STATUSES as readonly string[]).includes(status);
+}
+
+export function shouldShowInQueuePanel(entry: { status: string }, showFinalizados: boolean): boolean {
+  if (showFinalizados) {
+    return (
+      isActiveQueueStatus(entry.status) ||
+      entry.status === "ausente" ||
+      entry.status === "finalizado"
+    );
+  }
+  return isActiveQueueStatus(entry.status);
+}
+
+/** Painéis operacionais (motorista, empilhador, TV): só fila ativa do dia. */
+export function isOperationalPanelEntry(entry: { status: string }): boolean {
+  return isActiveQueueStatus(entry.status);
+}
+
+export function filterOperationalPanelEntries<T extends { status: string }>(entries: T[]): T[] {
+  return entries.filter(isOperationalPanelEntry);
+}
+
+/** Status preferido para gravação (requer migracao-status-simplificado.sql) */
+export function statusForDatabase(status: string): string {
+  if (status === "aguardando_descarregamento") return "aguardando_descarregamento";
+  return status;
+}
+
+/** Fallback se enum novo ainda não existir no Supabase */
+export function statusForDatabaseLegacy(status: string): string {
+  if (status === "aguardando_descarregamento") return "aguardando";
+  return status;
+}
+
+export function isEnumStatusError(message: string): boolean {
+  return /invalid input value for enum|queue_status/i.test(message);
+}
+
+export const STATUS_COLORS: Record<QueueStatus, string> = {
+  aguardando_descarregamento: "bg-amber-50 text-amber-800 border-amber-200",
+  ausente: "bg-red-50 text-red-800 border-red-200",
+  finalizado: "bg-slate-50 text-slate-600 border-slate-200",
+};
+
+export function getStatusColor(status: string): string {
+  return STATUS_COLORS[normalizeQueueStatus(status)];
+}
+
+export const ACTIVE_STATUSES: QueueStatus[] = ["aguardando_descarregamento"];
+
+export const STAFF_GUARD_ROLES = [
+  "empilhador",
+  "administrador",
+  "operador",
+  "supervisor",
+] as const;
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  motorista: "Motorista",
+  empilhador: "Empilhador",
+  administrador: "Administrador",
+};
+
+export const ROLE_ROUTES: Record<UserRole, string> = {
+  motorista: MOTORISTA_HOME,
+  empilhador: "/empilhador",
+  administrador: "/admin",
+};
+
+export const CARGO_TYPES = [
+  "Granel",
+  "Paletes",
+  "Container",
+  "Frigorificada",
+  "Perigosa",
+  "Outros",
+];
+
+/** Valores padrão quando o motorista não informa no check-in */
+export const DEFAULT_CHECKIN_EMPRESA = "Não informado";
+export const DEFAULT_CHECKIN_TIPO_CARGA = "Não informado";
+
+export const VEHICLE_TYPES = [
+  { value: "convencional", label: "Convencional" },
+  { value: "bitrem", label: "Bitrem" },
+] as const;
+
+export const DEFAULT_GEOFENCE = {
+  lat: -23.5505,
+  lng: -46.6333,
+  radius_meters: 100,
+  name: "PAD SIF - Pátio",
+};
+
+export const CHECKIN_COOLDOWN_DAYS = 6;
+
+/** Dev/testes — ignora cooldown de 6 dias e bloqueio de check-in ativo (NÃO use em produção) */
+export function skipCheckinLimits(): boolean {
+  return process.env.NEXT_PUBLIC_SKIP_CHECKIN_LIMITS === "true";
+}
+
+export const OUTSIDE_GEOFENCE_MESSAGE =
+  "Você ainda não está no pátio da empresa. Aproxime-se da empresa para realizar o check-in.";
+
+export const COOLDOWN_MESSAGE =
+  "Já existe um check-in recente vinculado a este motorista. Um novo check-in somente poderá ser realizado após 6 dias da última operação.";
+
+export const WHATSAPP_CALL_TEMPLATE =
+  "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início da operação de descarga.\n\nObrigado.";
+
+export const ALL_QUEUE_STATUSES = QUEUE_STATUSES;

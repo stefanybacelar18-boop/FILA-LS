@@ -1,0 +1,2 @@
+-- Use fix-backfill-profiles.sql (substitui este arquivo)
+-- Rode: supabase/fix-backfill-profiles.sql
