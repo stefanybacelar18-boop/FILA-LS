@@ -264,7 +264,7 @@ body {
   background-size: auto, auto, 32px 32px, 32px 32px, cover;
 }
 
-/* Splash screen — abertura do app */
+/* Splash screen — logo + carregamento, fundo neutro */
 .app-splash {
   position: fixed;
   inset: 0;
@@ -272,16 +272,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--brand-dark);
-  background-image:
-    radial-gradient(circle at 20% 80%, rgb(255 255 255 / 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgb(255 255 255 / 0.06) 0%, transparent 45%),
-    linear-gradient(
-      145deg,
-      var(--brand-dark) 0%,
-      var(--brand-primary) 48%,
-      var(--brand-secondary) 100%
-    );
+  background: #ffffff;
   transition: opacity 0.45s ease, visibility 0.45s ease;
 }
 
@@ -305,7 +296,7 @@ body {
   margin-top: 0.25rem;
   overflow: hidden;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.18);
+  background: rgb(21 101 192 / 0.12);
 }
 
 .app-splash__loader::after {
@@ -314,7 +305,7 @@ body {
   width: 45%;
   height: 100%;
   border-radius: inherit;
-  background: rgb(255 255 255 / 0.92);
+  background: var(--brand-primary);
   animation: splash-loader 1.15s ease-in-out infinite;
 }
 
