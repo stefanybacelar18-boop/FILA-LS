@@ -22,7 +22,7 @@ export function PageLoader({
         className="app-canvas flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center"
         role="alert"
       >
-        <BrandLogo size="sm" showCompany className="opacity-60" />
+        <BrandLogo size="sm" className="opacity-60" />
         <p className="max-w-sm text-sm text-red-600">{error}</p>
         {onRetry && (
           <Button variant="outline" onClick={onRetry}>

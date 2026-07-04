@@ -1,21 +1,17 @@
 import Image from "next/image";
-import { BRANCH_TAGLINE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-export const LOGO_MARK_SRC = "/logo-mark.svg";
-export const LOGO_FULL_SRC = "/brand/logo-full.svg";
+/** Ícone recortado do PNG oficial — apenas o símbolo, sem fundo branco externo */
+export const LOGO_MARK_SRC = "/logo-mark.png";
 
 type BrandLogoSize = "xs" | "sm" | "md" | "lg" | "xl";
 
-const sizes: Record<
-  BrandLogoSize,
-  { mark: number; title: string; subtitle: string; gap: string }
-> = {
-  xs: { mark: 28, title: "text-xs", subtitle: "text-[9px]", gap: "gap-2" },
-  sm: { mark: 32, title: "text-sm", subtitle: "text-[10px]", gap: "gap-2.5" },
-  md: { mark: 40, title: "text-base", subtitle: "text-xs", gap: "gap-3" },
-  lg: { mark: 56, title: "text-xl", subtitle: "text-sm", gap: "gap-3" },
-  xl: { mark: 72, title: "text-2xl", subtitle: "text-sm", gap: "gap-3.5" },
+const sizes: Record<BrandLogoSize, { mark: number; title: string; gap: string }> = {
+  xs: { mark: 28, title: "text-xs", gap: "gap-2" },
+  sm: { mark: 32, title: "text-sm", gap: "gap-2.5" },
+  md: { mark: 40, title: "text-base", gap: "gap-3" },
+  lg: { mark: 56, title: "text-xl", gap: "gap-3" },
+  xl: { mark: 72, title: "text-2xl", gap: "gap-3.5" },
 };
 
 export function BrandWordmark({
@@ -37,28 +33,14 @@ export function BrandWordmark({
   );
 }
 
-function BrandMark({
-  size,
-  inverted,
-  className,
-}: {
-  size: number;
-  inverted: boolean;
-  className?: string;
-}) {
+function BrandMark({ size, className }: { size: number; className?: string }) {
   return (
     <Image
       src={LOGO_MARK_SRC}
-      alt="FilaDock"
+      alt=""
       width={size}
       height={size}
-      className={cn(
-        "shrink-0 rounded-[22%]",
-        inverted
-          ? "shadow-md shadow-black/25 ring-1 ring-white/15"
-          : "shadow-sm ring-1 ring-slate-200/60",
-        className
-      )}
+      className={cn("shrink-0 rounded-[22%]", className)}
       priority
     />
   );
@@ -67,17 +49,14 @@ function BrandMark({
 export function BrandLogo({
   size = "sm",
   showWordmark = true,
-  showCompany = false,
   className,
   inverted = false,
   markOnly = false,
 }: {
   size?: BrandLogoSize;
   showWordmark?: boolean;
-  showCompany?: boolean;
   className?: string;
   inverted?: boolean;
-  /** Apenas o símbolo FD — cards, botões, favicon inline */
   markOnly?: boolean;
 }) {
   const s = sizes[size];
@@ -85,50 +64,15 @@ export function BrandLogo({
   if (markOnly || !showWordmark) {
     return (
       <div className={cn("inline-flex", className)}>
-        <BrandMark size={s.mark} inverted={inverted} />
+        <BrandMark size={s.mark} />
       </div>
     );
   }
 
   return (
     <div className={cn("flex items-center", s.gap, className)}>
-      <BrandMark size={s.mark} inverted={inverted} />
-      <div className="min-w-0 leading-tight">
-        <BrandWordmark size={size} inverted={inverted} />
-        {showCompany && (
-          <span
-            className={cn(
-              "mt-0.5 block truncate font-medium",
-              s.subtitle,
-              inverted ? "text-white/75" : "text-slate-500"
-            )}
-          >
-            {BRANCH_TAGLINE}
-          </span>
-        )}
-      </div>
+      <BrandMark size={s.mark} />
+      <BrandWordmark size={size} inverted={inverted} />
     </div>
-  );
-}
-
-/** Logo completa horizontal — login e materiais de marca */
-export function BrandLogoFull({
-  className,
-  height = 80,
-}: {
-  className?: string;
-  height?: number;
-}) {
-  const width = Math.round(height * 3.75);
-
-  return (
-    <Image
-      src={LOGO_FULL_SRC}
-      alt="FilaDock — Gestão inteligente de docas"
-      width={width}
-      height={height}
-      className={cn("h-auto w-auto max-w-full", className)}
-      priority
-    />
   );
 }

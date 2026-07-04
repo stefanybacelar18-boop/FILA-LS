@@ -24,19 +24,11 @@ export function AuthLayout({
       )}
     >
       <div className="mb-8 text-center">
-        <div
-          className={cn(
-            "mx-auto inline-flex rounded-2xl p-1",
-            dark && "border border-white/10 bg-white/5 px-1 py-0.5 backdrop-blur-sm"
-          )}
-        >
-          <BrandLogo
-            size="xl"
-            showCompany
-            inverted={dark}
-            className="justify-center px-4 py-3"
-          />
-        </div>
+        <BrandLogo
+          size="xl"
+          inverted={dark}
+          className="mx-auto justify-center"
+        />
         {subtitle && (
           <p
             className={cn(
