@@ -29,7 +29,6 @@ import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional, isFin
 import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
-import { QueueEntryListItem } from "@/components/fila/QueueEntryListItem";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { QueueStatsBar } from "@/components/fila/QueueStatsBar";
@@ -360,32 +359,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   function renderQueueList(
     list: QueueEntry[],
-    variant: "admin" | "mobile",
     options?: { sectionLabel?: string; startIndex?: number }
   ) {
     const start = options?.startIndex ?? 0;
-
-    if (variant === "mobile") {
-      return (
-        <div className="space-y-2">
-          {options?.sectionLabel && (
-            <p className="section-eyebrow px-0.5 pt-1">{options.sectionLabel}</p>
-          )}
-          {list.map((entry, idx) => (
-            <EmpilhadorQueueCard
-              key={entry.id}
-              entry={entry}
-              position={idx + 1}
-              selected={selectedId === entry.id}
-              isNext={
-                entry.id === nextToCallId && isActiveQueueStatus(entry.status)
-              }
-              onClick={() => selectEntry(entry)}
-            />
-          ))}
-        </div>
-      );
-    }
 
     return (
       <div className="space-y-2">
@@ -393,13 +369,12 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           <p className="section-eyebrow px-0.5 pt-1">{options.sectionLabel}</p>
         )}
         {list.map((entry, idx) => (
-          <QueueEntryListItem
+          <EmpilhadorQueueCard
             key={entry.id}
             entry={entry}
             position={start + idx + 1}
             selected={selectedId === entry.id}
             isNext={entry.id === nextToCallId && isActiveQueueStatus(entry.status)}
-            variant={variant}
             onClick={() => selectEntry(entry)}
           />
         ))}
@@ -656,7 +631,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]"
             }
           >
-            <div className={isEmpilhador ? "space-y-2" : "space-y-4"}>
+            <div className="space-y-2">
               {displayedEntries.length === 0 ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>
@@ -669,17 +644,17 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               ) : isAdmin ? (
                 <>
                   {adminOperationalList.length > 0 &&
-                    renderQueueList(adminOperationalList, "admin", {
+                    renderQueueList(adminOperationalList, {
                       sectionLabel: showFinalizados ? "Fila do pátio" : undefined,
                     })}
                   {showFinalizados && adminClosedList.length > 0 &&
-                    renderQueueList(adminClosedList, "admin", {
+                    renderQueueList(adminClosedList, {
                       sectionLabel: "Finalizados hoje",
                       startIndex: adminOperationalList.length,
                     })}
                 </>
               ) : (
-                renderQueueList(displayedEntries, "mobile")
+                renderQueueList(displayedEntries)
               )}
             </div>
 
