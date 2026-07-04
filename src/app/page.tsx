@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BrandLogoHero, ENTRY_COLUMN_CLASS } from "@/components/brand/BrandLogoHero";
 import { Truck, Monitor, ChevronRight, ListOrdered } from "lucide-react";
-import { APP_NAME, FILA_DESCARGA_PUBLIC, COMPANY_NAME } from "@/lib/constants";
+import { APP_NAME, FILA_DESCARGA_PUBLIC, SITE_FOOTER_BRAND } from "@/lib/constants";
 
 export default function HomePage() {
   return (
@@ -54,7 +54,7 @@ export default function HomePage() {
 
         <footer className="mt-10 w-full space-y-1 text-center">
           <p className="text-sm font-semibold tracking-wide text-white/80">
-            {APP_NAME} · {COMPANY_NAME}
+            {APP_NAME} · {SITE_FOOTER_BRAND}
           </p>
           <p className="text-xs leading-relaxed text-white/50">
             Toque em &quot;Adicionar à tela inicial&quot; no navegador

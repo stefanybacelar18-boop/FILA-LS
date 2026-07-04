@@ -13,6 +13,7 @@ export type LegacyQueueStatus =
 
 export const APP_NAME = "FilaDock";
 export const COMPANY_NAME = "PAD SIF";
+export const SITE_FOOTER_BRAND = "LSL T. AM - PAD SIF";
 export const BRANCH_TAGLINE = "Gestão inteligente de docas";
 
 export const BRAND = {
