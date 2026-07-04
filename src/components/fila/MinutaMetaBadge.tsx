@@ -24,12 +24,13 @@ export function MinutaMetaBadge({
       {volumeMotos != null && volumeMotos > 0 && (
         <span
           className={cn(
-            "inline-flex items-center gap-0.5 rounded-md bg-slate-100 font-medium text-slate-600",
+            "inline-flex items-center gap-1 rounded-md bg-slate-100 font-semibold tabular-nums text-slate-700",
             compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs"
           )}
+          title={`${volumeMotos} motos`}
         >
-          <Bike className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-          {volumeMotos} motos
+          <Bike className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
+          {volumeMotos}
         </span>
       )}
       {vencLabel && (

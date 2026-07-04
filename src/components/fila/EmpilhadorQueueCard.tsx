@@ -4,10 +4,15 @@ import type { QueueEntry } from "@/lib/types";
 import { isDriverCalled, isActiveQueueStatus, isAusenteQueueStatus } from "@/lib/queue";
 import { entryHasPrioridade } from "@/lib/queue-priorities";
 import { entryRetornoRacksVazios } from "@/lib/queue-badges";
+import { MinutaMetaBadge } from "@/components/fila/MinutaMetaBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { cn } from "@/lib/utils";
 import { Star } from "lucide-react";
+
+function getCarretaPlaca(entry: QueueEntry): string {
+  return entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
+}
 
 type EmpilhadorQueueCardProps = {
   entry: QueueEntry;
@@ -31,6 +36,8 @@ export function EmpilhadorQueueCard({
   const priority = entryHasPrioridade(entry);
   const racks = entryRetornoRacksVazios(entry);
   const firstName = entry.nome.split(" ")[0];
+  const hasMinutaMeta =
+    (entry.volume_motos != null && entry.volume_motos > 0) || Boolean(entry.menor_vencimento);
 
   return (
     <button
@@ -59,11 +66,11 @@ export function EmpilhadorQueueCard({
         </div>
 
         <div className="min-w-0">
-          <p className="truncate text-base font-bold leading-tight text-brand">
+          <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
             {entry.minuta || "—"}
           </p>
-          <p className="mt-0.5 font-mono text-lg font-bold leading-none tracking-wide text-slate-900">
-            {entry.placa_cavalo || entry.placa}
+          <p className="mt-0.5 font-mono text-sm font-medium leading-none tracking-wide text-slate-600">
+            {getCarretaPlaca(entry)}
           </p>
         </div>
 
@@ -77,12 +84,19 @@ export function EmpilhadorQueueCard({
           )}
         </div>
 
-        <div className="col-span-2 min-w-0">
+        <div className="col-span-2 min-w-0 space-y-1.5">
           <p className="truncate text-sm text-slate-700">
             <span className="font-semibold text-slate-900">{firstName}</span>
             <span className="text-slate-400"> · </span>
             <span className="text-slate-500">{entry.transportadora}</span>
           </p>
+          {hasMinutaMeta && (
+            <MinutaMetaBadge
+              compact
+              volumeMotos={entry.volume_motos}
+              menorVencimento={entry.menor_vencimento}
+            />
+          )}
         </div>
       </div>
 
@@ -97,12 +111,12 @@ export function EmpilhadorQueueCard({
         </div>
       )}
 
-      {(priority || called || racks || (entry.volume_motos != null && entry.volume_motos > 0)) && (
+      {(priority || called || racks) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {priority && active && (
             <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
               <Star className="h-3 w-3" aria-hidden />
-              Prioridade
+              {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
             </span>
           )}
           {called && (
@@ -113,11 +127,6 @@ export function EmpilhadorQueueCard({
           {racks && (
             <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-900">
               Retorna racks
-            </span>
-          )}
-          {entry.volume_motos != null && entry.volume_motos > 0 && (
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-              {entry.volume_motos} motos
             </span>
           )}
         </div>
