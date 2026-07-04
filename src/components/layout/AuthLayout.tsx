@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { BrandLogoHero, ENTRY_COLUMN_CLASS } from "@/components/brand/BrandLogoHero";
 import { cn } from "@/lib/utils";
 
 export function AuthLayout({
@@ -23,26 +23,16 @@ export function AuthLayout({
         dark ? "bg-brand-hero hero-pattern" : "app-canvas"
       )}
     >
-      <div className="mb-10 w-full max-w-xs text-center">
-        <BrandLogo
-          size="auth"
-          variant="stacked"
+      <div className={cn("flex flex-col items-center", ENTRY_COLUMN_CLASS)}>
+        <BrandLogoHero
           inverted={dark}
-          className="mx-auto w-full"
+          subtitle={subtitle}
+          subtitleClassName={dark ? "text-white/75" : "text-slate-500"}
+          className="mb-10"
         />
-        {subtitle && (
-          <p
-            className={cn(
-              "mt-6 text-sm font-medium tracking-wide",
-              dark ? "text-white/75" : "text-slate-500"
-            )}
-          >
-            {subtitle}
-          </p>
-        )}
-      </div>
 
-      <div className="w-full max-w-sm">{children}</div>
+        <div className="w-full">{children}</div>
+      </div>
     </div>
   );
 }

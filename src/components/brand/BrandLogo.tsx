@@ -32,7 +32,7 @@ export function BrandWordmark({
   return (
     <span
       className={cn(
-        "font-bold tracking-tight",
+        "block text-center font-bold tracking-tight",
         s.title,
         inverted && "drop-shadow-sm",
         className
@@ -98,7 +98,7 @@ export function BrandLogo({
 
   if (variant === "stacked") {
     return (
-      <div className={cn("flex flex-col items-center", s.stackedGap, className)}>
+      <div className={cn("inline-flex flex-col items-center", s.stackedGap, className)}>
         <BrandMark size={s.mark} displayClass={authMarkDisplay} className={markClass} />
         <BrandWordmark size={size} inverted={inverted} />
       </div>
