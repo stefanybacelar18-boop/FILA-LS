@@ -1,3 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#1565C0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#003B73"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-width="17">
+      <path d="M112 128v256"/>
+      <path d="M131 128v256"/>
+      <path d="M150 128v256"/>
+      <path d="M112 128h112"/>
+      <path d="M131 128h112"/>
+      <path d="M150 128h112"/>
+      <path d="M112 224h88"/>
+      <path d="M131 224h88"/>
+      <path d="M150 224h88"/>
+    </g>
+    <g stroke-width="17">
+      <path d="M272 128v256"/>
+      <path d="M291 128v256"/>
+      <path d="M310 128v256"/>
+      <path d="M272 128l112 64v128l-112 64"/>
+      <path d="M291 128l112 64v128l-112 64"/>
+      <path d="M310 128l112 64v128l-112 64"/>
+      <path d="M272 256h112"/>
+      <path d="M291 256h112"/>
+      <path d="M310 256h112"/>
+    </g>
+    <path d="M88 392c0-80 64-144 144-160 48-8 96 8 128 40" stroke-width="21"/>
+    <path d="M360 272l-32-28M360 272l12 40" stroke-width="21"/>
+  </g>
 </svg>
