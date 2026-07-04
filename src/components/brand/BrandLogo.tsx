@@ -14,7 +14,7 @@ const sizes: Record<
   md: { mark: 48, title: "text-lg", gap: "gap-3", stackedGap: "gap-2.5" },
   lg: { mark: 64, title: "text-xl", gap: "gap-3", stackedGap: "gap-3" },
   xl: { mark: 80, title: "text-2xl", gap: "gap-3.5", stackedGap: "gap-3.5" },
-  /** Telas de login — ícone maior, wordmark proporcional */
+  /** Entrada / login — ícone maior, wordmark proporcional */
   auth: { mark: 112, title: "text-4xl", gap: "gap-4", stackedGap: "gap-4" },
 };
 

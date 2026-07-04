@@ -7,8 +7,8 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-brand-hero hero-pattern">
       <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-12">
-        <div className="mb-10 text-center">
-          <BrandLogo size="lg" variant="stacked" inverted className="mx-auto" />
+        <div className="mb-10 w-full max-w-xs text-center">
+          <BrandLogo size="auth" variant="stacked" inverted className="mx-auto w-full" />
         </div>
 
         <div className="space-y-3">
