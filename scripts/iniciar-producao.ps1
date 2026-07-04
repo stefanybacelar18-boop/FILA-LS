@@ -1,11 +1,11 @@
-# FILA LSL — inicia o app em modo produção na rede local (Wi-Fi da empresa)
+# FilaDock — inicia o app em modo produção na rede local (Wi-Fi da empresa)
 # Uso: .\scripts\iniciar-producao.ps1
 
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 Write-Host ""
-Write-Host "=== FILA LSL — Modo producao (rede local) ===" -ForegroundColor Cyan
+Write-Host "=== FilaDock — Modo producao (rede local) ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Descobre IP na rede Wi-Fi / Ethernet (ignora VPN e loopback)

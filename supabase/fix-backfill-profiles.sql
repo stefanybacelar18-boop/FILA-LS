@@ -1,4 +1,4 @@
--- FILA LSL — Cria perfis para TODOS os usuários auth sem profile
+-- FilaDock — Cria perfis para TODOS os usuários auth sem profile
 -- Rode no SQL Editor (nova aba). Resolve oi@oi.com e qualquer outro usuário órfão.
 
 -- 1) Garantir trigger de criação automática para novos usuários

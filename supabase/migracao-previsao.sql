@@ -1,4 +1,4 @@
--- FILA LSL — previsão + colunas + RPC da fila
+-- FilaDock — previsão + colunas + RPC da fila
 -- Rode no SQL Editor do Supabase (nova aba).
 
 -- Novos valores do enum (se ainda não existirem)

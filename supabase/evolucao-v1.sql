@@ -1,5 +1,5 @@
 -- ============================================================
--- FILA LSL — Evolução v1
+-- FilaDock — Evolução v1
 --
 -- ⚠️ NÃO rode este arquivo inteiro de uma vez!
 -- O PostgreSQL exige 2 passos separados:

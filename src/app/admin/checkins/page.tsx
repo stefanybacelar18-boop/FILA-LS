@@ -92,7 +92,7 @@ export default function AdminCheckinsPage() {
       const stamp = new Date().toISOString().slice(0, 10);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `checkins-lsl-${stamp}.csv`;
+      link.download = `checkins-filadock-${stamp}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     } catch {

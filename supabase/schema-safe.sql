@@ -1,4 +1,4 @@
--- FILA LSL - Schema idempotente (pode rodar mais de uma vez)
+-- FilaDock - Schema idempotente (pode rodar mais de uma vez)
 -- Use ESTE arquivo se o schema.sql der erro "já existe"
 --
 -- IMPORTANTE: abra uma NOVA aba no SQL Editor antes de rodar.

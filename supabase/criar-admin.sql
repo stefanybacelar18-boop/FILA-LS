@@ -1,5 +1,5 @@
 -- ============================================================
--- FILA LSL — Tornar usuário administrador
+-- FilaDock — Tornar usuário administrador
 -- Rode DEPOIS de criar o usuário em Authentication → Users
 --
 -- Troque o e-mail abaixo pelo seu:

@@ -1,4 +1,4 @@
-# FILA LSL — Evolução v1
+# FilaDock — Evolução v1
 
 Execute **depois** do `setup-completo.sql`:
 

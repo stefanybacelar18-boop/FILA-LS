@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand: #0a4d8c;
-  --color-brand-light: #1976d2;
-  --color-brand-dark: #0d3b6e;
-  --color-brand-muted: #e8f1f9;
+  --color-brand: #1565c0;
+  --color-brand-light: #42a5f5;
+  --color-brand-dark: #0d1b2a;
+  --color-brand-muted: #e3f2fd;
   --color-surface: #ffffff;
   --color-surface-muted: #f4f7fb;
   --color-border: #e2e8f0;
@@ -20,9 +20,9 @@
 :root {
   --background: #eef2f7;
   --foreground: #0f172a;
-  --brand-primary: #0a4d8c;
-  --brand-secondary: #1976d2;
-  --brand-dark: #0d3b6e;
+  --brand-primary: #1565c0;
+  --brand-secondary: #42a5f5;
+  --brand-dark: #0d1b2a;
   --brand-success: #2e7d32;
   --brand-danger: #d32f2f;
 }
@@ -60,12 +60,12 @@ body {
   border: none;
   font-weight: 600;
   letter-spacing: 0.01em;
-  box-shadow: 0 1px 2px rgb(10 77 140 / 0.2), 0 4px 12px rgb(10 77 140 / 0.15);
+  box-shadow: 0 1px 2px rgb(21 101 192 / 0.2), 0 4px 12px rgb(21 101 192 / 0.15);
   transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 .btn-brand:hover:not(:disabled) {
   opacity: 0.95;
-  box-shadow: 0 2px 4px rgb(10 77 140 / 0.25), 0 6px 16px rgb(10 77 140 / 0.2);
+  box-shadow: 0 2px 4px rgb(21 101 192 / 0.25), 0 6px 16px rgb(21 101 192 / 0.2);
 }
 .btn-brand:active:not(:disabled) {
   transform: scale(0.98);

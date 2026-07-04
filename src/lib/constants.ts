@@ -11,13 +11,14 @@ export type LegacyQueueStatus =
   | "aguardando_carregamento_racks"
   | "cancelado";
 
-export const APP_NAME = "FILA LSL";
+export const APP_NAME = "FilaDock";
 export const COMPANY_NAME = "PAD SIF";
-export const BRANCH_TAGLINE = "Operação de descarga · LSL";
+export const BRANCH_TAGLINE = "Gestão inteligente de docas";
 
 export const BRAND = {
-  primary: "#0A4D8C",
-  secondary: "#1976D2",
+  primary: "#1565C0",
+  secondary: "#42A5F5",
+  dark: "#0D1B2A",
   white: "#FFFFFF",
   gray: "#F5F7FA",
   success: "#2E7D32",
@@ -206,6 +207,6 @@ export const WHATSAPP_CALL_TEMPLATE =
 
 /** Mensagem de chamada para empilhador — sem referência a doca */
 export const WHATSAPP_EMPILHADOR_CALL_TEMPLATE =
-  "PAD SIF · LSL\n\nOlá, motorista da minuta {MINUTA}!\n\nVocê foi chamado para descarregamento no pátio.\nPor favor, dirija-se à área de descarga o mais breve possível.\n\nObrigado!";
+  "PAD SIF · FilaDock\n\nOlá, motorista da minuta {MINUTA}!\n\nVocê foi chamado para descarregamento no pátio.\nPor favor, dirija-se à área de descarga o mais breve possível.\n\nObrigado!";
 
 export const ALL_QUEUE_STATUSES = QUEUE_STATUSES;

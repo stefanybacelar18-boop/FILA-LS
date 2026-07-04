@@ -1,5 +1,5 @@
 -- ============================================================
--- FILA LSL — RESET COMPLETO
+-- FilaDock — RESET COMPLETO
 -- Apaga TUDO do projeto para recomeçar do zero
 -- Seguro mesmo se o banco estiver vazio (sem tabelas ainda)
 --

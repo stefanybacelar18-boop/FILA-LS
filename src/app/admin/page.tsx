@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_GEOFENCE, ROLE_LABELS } from "@/lib/constants";
+import { DEFAULT_GEOFENCE, ROLE_LABELS, APP_NAME } from "@/lib/constants";
 import { getTodayStartISO } from "@/lib/queue-day";
 import type { GeofenceConfig, QueueEntry } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
@@ -290,7 +290,7 @@ export default function AdminPage() {
         variant="light"
         icon={Settings}
         eyebrow="Central de administração"
-        title="Painel LSL"
+        title={`Painel ${APP_NAME}`}
         description="Visão geral, ferramentas e configurações do sistema"
       >
         <Button

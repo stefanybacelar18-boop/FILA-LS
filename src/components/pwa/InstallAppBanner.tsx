@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, Share, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { APP_NAME } from "@/lib/constants";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -69,13 +70,13 @@ export function InstallAppBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-brand/20 bg-white p-4 shadow-[0_-8px_32px_rgba(10,77,140,0.15)] pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-brand/20 bg-white p-4 shadow-[0_-8px_32px_rgba(21,101,192,0.15)] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto flex max-w-lg items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-white">
           <Download className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-slate-900">Instale o app FILA LSL</p>
+          <p className="font-bold text-slate-900">Instale o app {APP_NAME}</p>
           <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
             {iosHint
               ? "Toque em Compartilhar → Adicionar à Tela de Início. Abre em tela cheia, sem barra do navegador."

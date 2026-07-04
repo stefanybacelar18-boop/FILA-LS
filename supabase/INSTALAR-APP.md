@@ -1,4 +1,4 @@
-# Instalação Supabase — FILA LSL (ordem correta)
+# Instalação Supabase — FilaDock (ordem correta)
 
 Use **apenas esta sequência** para ambiente alinhado com o app atual.
 

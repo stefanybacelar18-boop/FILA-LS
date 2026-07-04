@@ -1,4 +1,4 @@
-# Instalar banco para teste local — FILA LSL
+# Instalar banco para teste local — FilaDock
 
 Erro **"Could not find the table public.profiles"** = banco vazio ou setup incompleto.
 

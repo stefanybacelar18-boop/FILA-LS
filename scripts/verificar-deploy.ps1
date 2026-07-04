@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-Write-Host "`n=== FILA LSL — verificação de deploy ===" -ForegroundColor Cyan
+Write-Host "`n=== FilaDock — verificação de deploy ===" -ForegroundColor Cyan
 
 # Git
 Write-Host "`n[Git]" -ForegroundColor Yellow

@@ -1,4 +1,4 @@
--- FILA LSL - Schema Supabase
+-- FilaDock - Schema Supabase
 -- Execute no SQL Editor do Supabase (primeira instalação)
 --
 -- Se der erro "já existe", NÃO rode este arquivo de novo.

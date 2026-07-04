@@ -1,4 +1,4 @@
--- FILA LSL — segurança RLS + índices de performance
+-- FilaDock — segurança RLS + índices de performance
 -- Rode no SQL Editor (nova aba) após setup/evolução.
 
 -- ========== SEGURANÇA ==========

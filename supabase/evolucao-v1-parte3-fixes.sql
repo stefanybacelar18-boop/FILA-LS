@@ -1,4 +1,4 @@
--- FILA LSL — Correções RLS e trigger (nova aba SQL Editor)
+-- FilaDock — Correções RLS e trigger (nova aba SQL Editor)
 -- Rode DEPOIS de evolucao-v1-parte1 e parte2
 -- Se der "infinite recursion" em profiles, rode também: fix-rls-recursion.sql
 

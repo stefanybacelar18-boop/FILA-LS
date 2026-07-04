@@ -40,7 +40,7 @@ function bodyForStep(step: GeofenceStep, geofenceName?: string): string {
     case "denied":
       return "Permita o acesso à localização no celular (Chrome/Safari → Configurações → Localização). Sem GPS não é possível confirmar que você está no pátio LSL.";
     case "insecure":
-      return "O navegador só libera GPS em conexão segura (HTTPS). Use o app instalado ou acesse https://fila-lsl.vercel.app.";
+      return "O navegador só libera GPS em conexão segura (HTTPS). Use o app FilaDock instalado ou acesse o endereço oficial de produção (HTTPS).";
     case "error":
       return "Não conseguimos ler sua posição. Verifique se o GPS está ligado e tente novamente.";
     default:

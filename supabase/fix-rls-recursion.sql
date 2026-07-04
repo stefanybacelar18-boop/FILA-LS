@@ -1,4 +1,4 @@
--- FILA LSL — CORREÇÃO: infinite recursion detected in policy for relation "profiles"
+-- FilaDock — CORREÇÃO: infinite recursion detected in policy for relation "profiles"
 -- Rode em NOVA ABA do SQL Editor do Supabase (pode rodar quantas vezes precisar)
 
 -- Funções auxiliares bypassam RLS (SECURITY DEFINER) — evitam recursão

@@ -1,10 +1,10 @@
-# FILA LSL — Instalação do zero no Supabase
+# FilaDock — Instalação do zero no Supabase
 
 Siga **exatamente** esta ordem. Use **uma nova aba** no SQL Editor para cada arquivo.
 
 ---
 
-## Passo 1 — Reset (apaga tudo do FILA LSL)
+## Passo 1 — Reset (apaga tudo do FilaDock)
 
 Arquivo: **`reset-completo.sql`**
 

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { BRAND } from "@/lib/constants";
+import { APP_NAME, BRAND, BRANCH_TAGLINE } from "@/lib/constants";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
 import "./globals.css";
@@ -12,20 +12,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "FILA LSL - Controle de Descarregamento",
-  description: "Sistema de check-in e fila de descarregamento — PAD SIF",
+  title: `${APP_NAME} - Gestão Inteligente de Docas`,
+  description: `${BRANCH_TAGLINE} — controle de filas, check-in e operação logística em tempo real.`,
   manifest: "/manifest.json",
-  applicationName: "FILA LSL",
+  applicationName: APP_NAME,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "FILA LSL",
+    title: APP_NAME,
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],

@@ -1,4 +1,4 @@
-const CACHE = "fila-lsl-v1";
+const CACHE = "filadock-v1";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

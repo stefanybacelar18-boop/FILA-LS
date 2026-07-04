@@ -1,4 +1,4 @@
--- FILA LSL - Verificar o que já existe no banco
+-- FilaDock - Verificar o que já existe no banco
 -- Rode no SQL Editor antes de executar qualquer schema
 
 SELECT 'Tabelas' AS tipo, tablename AS nome

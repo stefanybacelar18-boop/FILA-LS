@@ -1,6 +1,6 @@
-# FILA LSL
+# FilaDock
 
-Sistema web responsivo para controle de check-in e fila de descarregamento de caminhões.
+Plataforma web responsiva para **gestão inteligente de docas** — controle de filas, check-in e operação logística em tempo real.
 
 ## Tecnologias
 
@@ -61,12 +61,22 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000)
 
+## Identidade visual / PWA
+
+Gerar ícones a partir do SVG oficial:
+
+```bash
+npm run generate:icons
+```
+
+Assets em `public/logo-mark.svg`, `public/icons/` e `public/brand/logo-full.png`.
+
 ## Deploy na Vercel (acesso externo / HTTPS)
 
 Guia completo: **`TESTE-EXTERNO-AMANHA.md`**
 
 1. Repositório: `stefanybacelar18-boop/FILA-LS` branch `main`
-2. [Vercel](https://vercel.com) → projeto **FILA LSL** → Settings → Git conectado
+2. [Vercel](https://vercel.com) → projeto **FilaDock** → Settings → Git conectado
 3. Variáveis de ambiente (Production + Preview + Development):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -99,4 +109,4 @@ Também: `Ausente`, `Cancelado`
 
 ## Licença
 
-Projeto privado — LSL.
+Projeto privado — PAD SIF / LSL.

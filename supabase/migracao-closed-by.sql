@@ -1,4 +1,4 @@
--- FILA LSL — rastreio de quem encerrou a operação (empilhador/admin)
+-- FilaDock — rastreio de quem encerrou a operação (empilhador/admin)
 -- Rode no SQL Editor do Supabase.
 
 ALTER TABLE public.queue_entries

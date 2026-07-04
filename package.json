@@ -1,5 +1,5 @@
 {
-  "name": "fila-lsl",
+  "name": "filadock",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,8 @@
     "start": "next start",
     "start:lan": "next start -H 0.0.0.0 -p 3000",
     "prod:lan": "npm run build && npm run start:lan",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate:icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -32,6 +33,7 @@
     "@types/react-dom": "^19.1.5",
     "eslint": "^9.28.0",
     "eslint-config-next": "^15.3.3",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4.1.8",
     "typescript": "^5.8.3"
   }

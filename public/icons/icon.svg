@@ -1,17 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0A4D8C"/>
+    <linearGradient id="fd-bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D1B2A"/>
       <stop offset="1" stop-color="#1565C0"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <path d="M96 136h160M96 184h120M96 232h80" stroke="#fff" stroke-width="20" stroke-linecap="round" opacity="0.45"/>
-  <rect x="224" y="288" width="208" height="28" rx="14" fill="#fff"/>
-  <path d="M216 192h44l28 96h160l44-96h44l-36 120H296l-10-40h-36l-10 40H180l36-120z" fill="#fff"/>
-  <path d="M264 144h96l28 48H236l28-48z" fill="#fff" opacity="0.88"/>
-  <circle cx="264" cy="332" r="32" fill="#fff"/>
-  <circle cx="264" cy="332" r="18" fill="#1976D2"/>
-  <circle cx="392" cy="332" r="32" fill="#fff"/>
-  <circle cx="392" cy="332" r="18" fill="#1976D2"/>
+  <rect width="512" height="512" rx="112" fill="url(#fd-bg)"/>
+  <path d="M112 144h160M112 192h120M112 240h80" stroke="#FFFFFF" stroke-width="19" stroke-linecap="round" opacity="0.95"/>
+  <path d="M112 144v208" stroke="#FFFFFF" stroke-width="19" stroke-linecap="round"/>
+  <path d="M288 176h128v208H288" stroke="#FFFFFF" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M320 176v208M384 176v208" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round" opacity="0.55"/>
+  <path d="M288 368h128" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round"/>
+  <path d="M144 352C192 288 240 256 336 240" stroke="#42A5F5" stroke-width="18" stroke-linecap="round"/>
+  <path d="M336 240l-32 20M336 240l-12-36" stroke="#42A5F5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

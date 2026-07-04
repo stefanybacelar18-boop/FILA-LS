@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Truck, Monitor, ChevronRight } from "lucide-react";
-import { COMPANY_NAME } from "@/lib/constants";
+import { APP_NAME, BRANCH_TAGLINE } from "@/lib/constants";
 
 export default function HomePage() {
   return (
@@ -13,7 +13,7 @@ export default function HomePage() {
               <BrandLogo size="lg" showCompany inverted />
             </div>
             <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
-              Logística · Descarga · {COMPANY_NAME}
+              {BRANCH_TAGLINE}
             </p>
           </div>
         </div>
@@ -49,7 +49,7 @@ export default function HomePage() {
         </div>
 
         <p className="mt-10 text-center text-xs leading-relaxed text-white/55">
-          Instale o app FILA LSL na tela inicial — abre em tela cheia, sem barra do navegador
+          Instale o app {APP_NAME} na tela inicial — abre em tela cheia, sem barra do navegador
         </p>
       </div>
     </div>

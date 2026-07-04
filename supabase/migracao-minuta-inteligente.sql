@@ -1,4 +1,4 @@
--- FILA LSL — Metadados de minuta (import Excel) + expedição diária
+-- FilaDock — Metadados de minuta (import Excel) + expedição diária
 -- Rode no SQL Editor do Supabase.
 
 CREATE TABLE IF NOT EXISTS public.minuta_metadata (

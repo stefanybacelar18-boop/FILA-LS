@@ -79,7 +79,7 @@ export function buildCheckinsExcelCsv(entries: QueueEntry[]): string {
   return BOM + [headers.map(escapeCsvCell).join(";"), ...rows.map((r) => r.join(";"))].join("\r\n");
 }
 
-export function downloadCheckinsExcel(entries: QueueEntry[], filenamePrefix = "checkins-lsl") {
+export function downloadCheckinsExcel(entries: QueueEntry[], filenamePrefix = "checkins-filadock") {
   const csv = buildCheckinsExcelCsv(entries);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

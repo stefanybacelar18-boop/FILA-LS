@@ -1,4 +1,4 @@
-# Operação amanhã — FILA LSL
+# Operação amanhã — FilaDock
 
 Guia rápido para usar o sistema no trabalho.
 

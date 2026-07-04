@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="checkins-lsl-${stamp}.csv"`,
+          "Content-Disposition": `attachment; filename="checkins-filadock-${stamp}.csv"`,
         },
       });
     }

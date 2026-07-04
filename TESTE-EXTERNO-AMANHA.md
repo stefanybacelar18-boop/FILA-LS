@@ -1,4 +1,4 @@
-# Teste externo amanhã — FILA LSL (internet / HTTPS)
+# Teste externo amanhã — FilaDock (internet / HTTPS)
 
 Guia para operar **fora da Wi-Fi da empresa** (4G, qualquer rede).  
 Tempo para ativar hoje à noite: **~10 minutos** na Vercel + **~3 minutos** no Supabase.
@@ -18,7 +18,7 @@ Tempo para ativar hoje à noite: **~10 minutos** na Vercel + **~3 minutos** no S
 
 ### 1.1 Conectar GitHub
 
-1. [vercel.com/dashboard](https://vercel.com/dashboard) → projeto **FILA LSL**
+1. [vercel.com/dashboard](https://vercel.com/dashboard) → projeto **FilaDock**
 2. **Settings** → **Git**
 3. **Connected Git Repository** deve ser `stefanybacelar18-boop/FILA-LS`
 4. **Production Branch:** `main`

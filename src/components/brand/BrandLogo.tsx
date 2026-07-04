@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { APP_NAME, COMPANY_NAME } from "@/lib/constants";
+import { BRANCH_TAGLINE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 type BrandLogoSize = "xs" | "sm" | "md" | "lg";
@@ -10,6 +10,23 @@ const sizes: Record<BrandLogoSize, { mark: number; title: string; subtitle: stri
   md: { mark: 40, title: "text-base", subtitle: "text-xs" },
   lg: { mark: 56, title: "text-xl", subtitle: "text-sm" },
 };
+
+function BrandWordmark({
+  size,
+  inverted,
+}: {
+  size: BrandLogoSize;
+  inverted: boolean;
+}) {
+  const s = sizes[size];
+
+  return (
+    <span className={cn("font-bold tracking-tight", s.title)}>
+      <span className={inverted ? "text-white" : "text-brand-dark"}>Fila</span>
+      <span className={inverted ? "text-sky-300" : "text-brand"}>Dock</span>
+    </span>
+  );
+}
 
 export function BrandLogo({
   size = "sm",
@@ -30,23 +47,15 @@ export function BrandLogo({
     <div className={cn("flex items-center gap-2.5", className)}>
       <Image
         src="/logo-mark.svg"
-        alt=""
+        alt="FilaDock"
         width={s.mark}
         height={s.mark}
-        className="shrink-0 rounded-lg ring-1 ring-slate-200/80"
+        className="shrink-0 rounded-lg shadow-sm ring-1 ring-slate-200/60"
         priority
       />
       {showWordmark && (
         <div className="min-w-0 leading-tight">
-          <span
-            className={cn(
-              "block font-bold tracking-tight",
-              s.title,
-              inverted ? "text-white" : "text-brand"
-            )}
-          >
-            {APP_NAME}
-          </span>
+          <BrandWordmark size={size} inverted={inverted} />
           {showCompany && (
             <span
               className={cn(
@@ -55,7 +64,7 @@ export function BrandLogo({
                 inverted ? "text-white/70" : "text-slate-400"
               )}
             >
-              {COMPANY_NAME}
+              {BRANCH_TAGLINE}
             </span>
           )}
         </div>

@@ -1,5 +1,5 @@
 -- ============================================================
--- FILA LSL — SETUP COMPLETO (banco limpo)
+-- FilaDock — SETUP COMPLETO (banco limpo)
 -- Rode DEPOIS de reset-completo.sql
 --
 -- COMO USAR:
