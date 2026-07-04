@@ -14,12 +14,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary:
         "bg-slate-800 text-white shadow-sm hover:bg-slate-900 hover:shadow-md",
       outline:
-        "border border-slate-300/90 bg-white text-slate-700 shadow-sm hover:border-brand/35 hover:bg-slate-50/80",
+        "border border-slate-200/90 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50/80",
       ghost: "bg-transparent text-slate-600 hover:bg-slate-100/80",
       danger:
         "bg-red-600 text-white shadow-sm hover:bg-red-700 hover:shadow-md",
       success:
-        "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 hover:shadow-md",
+        "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
     };
 
     const sizes = {

@@ -9,7 +9,7 @@ import { formatDuration, formatQueueTime } from "@/lib/utils";
 import { formatManausDateLabel, getTodayStartISO } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { AppShell } from "@/components/layout/AppShell";
-import { PageHero } from "@/components/ui/PageHero";
+import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
@@ -96,8 +96,7 @@ export function DashboardPanel({
 
   return (
     <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>
-      <PageHero
-        variant="light"
+      <AdminPageHeader
         eyebrow="Dashboard · Operação"
         title={formatManausDateLabel()}
         description="Indicadores do dia · atualização em tempo real"
@@ -110,29 +109,13 @@ export function DashboardPanel({
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Na fila agora"
-              value={stats.veiculosAguardando}
-              icon={Clock}
-              accent="brand"
-            />
-            <StatCard
-              title="Chamados p/ doca"
-              value={stats.veiculosEmDescarga}
-              icon={PhoneCall}
-              accent="blue"
-            />
-            <StatCard
-              title="Finalizados"
-              value={stats.veiculosFinalizados}
-              icon={CheckCircle2}
-              accent="green"
-            />
+            <StatCard title="Na fila agora" value={stats.veiculosAguardando} accent="brand" />
+            <StatCard title="Chamados p/ doca" value={stats.veiculosEmDescarga} accent="blue" />
+            <StatCard title="Finalizados" value={stats.veiculosFinalizados} accent="green" />
             <StatCard
               title="Taxa de conclusão"
               value={`${taxaConclusao}%`}
               subtitle={`${stats.veiculosFinalizados} de ${stats.veiculosHoje} hoje`}
-              icon={BarChart3}
               accent="green"
             />
           </div>
@@ -141,21 +124,14 @@ export function DashboardPanel({
             <StatCard
               title="Tempo médio espera"
               value={formatDuration(stats.tempoMedioEsperaMin)}
-              icon={Timer}
               accent="slate"
             />
             <StatCard
               title="Tempo médio descarga"
               value={formatDuration(stats.tempoMedioDescargaMin)}
-              icon={Timer}
               accent="slate"
             />
-            <StatCard
-              title="Ausentes"
-              value={stats.veiculosAusentes}
-              icon={UserX}
-              accent="amber"
-            />
+            <StatCard title="Ausentes" value={stats.veiculosAusentes} accent="amber" />
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">

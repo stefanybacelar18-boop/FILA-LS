@@ -6,8 +6,8 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
-import { SectionHeader } from "@/components/ui/StatCard";
 import type { CapacityPlan, ExpedicaoDiaria } from "@/lib/minuta-intelligence";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Spinner } from "@/components/ui/Spinner";
@@ -204,9 +204,9 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string } }) {
 
   return (
     <AppShell role="administrador" userName={profile.full_name}>
-      <SectionHeader
+      <AdminPageHeader
         title="Inteligência de minutas"
-        subtitle="Importe Excel, defina expedição e recalcule prioridades e previsões"
+        description="Importe Excel, defina expedição e recalcule prioridades e previsões"
       />
 
       {loadError && (
@@ -220,27 +220,24 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string } }) {
         {syncResult && <span className="text-sm text-green-700">{syncResult}</span>}
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Minutas importadas" value={totalImportadas} icon={FileSpreadsheet} accent="brand" />
+      <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Minutas importadas" value={totalImportadas} accent="brand" />
         <StatCard
           title="Expedição (motos)"
           value={expedicao?.motos ?? "—"}
           subtitle="Capacidade diária"
-          icon={Bike}
           accent="blue"
         />
         <StatCard
           title="Minutas cabem hoje"
           value={plan?.minutasCabeHoje ?? "—"}
           subtitle={plan ? `${plan.motosCabeHoje} de ${plan.motosExpedicao} motos` : "Informe expedição"}
-          icon={Package}
           accent="green"
         />
         <StatCard
           title="Motos na fila"
           value={plan?.motosNaFila ?? "—"}
           subtitle={plan ? `${plan.minutasNaFila} minuta(s) c/ volume` : undefined}
-          icon={AlertTriangle}
           accent="amber"
         />
       </div>

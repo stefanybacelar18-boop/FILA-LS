@@ -9,8 +9,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard, SectionHeader } from "@/components/ui/StatCard";
-import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { computeDashboardStats } from "@/lib/dashboard-stats";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { PageLoader } from "@/components/ui/PageLoader";
@@ -275,7 +275,7 @@ export default function AdminPage() {
   return (
     <AppShell role="administrador" userName={profile.full_name}>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PanelPageTitle title="Administração" className="mb-0" />
+        <AdminPageHeader title="Administração" className="mb-0" />
         <Button
           type="button"
           variant="outline"

@@ -136,9 +136,9 @@ export function isEnumStatusError(message: string): boolean {
 }
 
 export const STATUS_COLORS: Record<QueueStatus, string> = {
-  aguardando_descarregamento: "bg-amber-50 text-amber-800 border-amber-200",
-  ausente: "bg-red-50 text-red-800 border-red-200",
-  finalizado: "bg-slate-50 text-slate-600 border-slate-200",
+  aguardando_descarregamento: "bg-amber-50 text-amber-900 border-amber-100",
+  ausente: "bg-orange-50 text-orange-900 border-orange-100",
+  finalizado: "bg-emerald-50 text-emerald-800 border-emerald-100",
 };
 
 export function getStatusColor(status: string): string {

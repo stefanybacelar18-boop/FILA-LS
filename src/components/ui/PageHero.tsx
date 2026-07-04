@@ -1,6 +1,6 @@
-import { BrandLogo } from "@/components/brand/BrandLogo";
 import { cn } from "@/lib/utils";
 
+/** Cabeçalho de página — variante light sem logo duplicada */
 export function PageHero({
   eyebrow,
   title,
@@ -18,48 +18,44 @@ export function PageHero({
 }) {
   const isLight = variant === "light";
 
+  if (isLight) {
+    return (
+      <div
+        className={cn(
+          "mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+          className
+        )}
+      >
+        <div className="min-w-0">
+          {eyebrow && <p className="section-eyebrow">{eyebrow}</p>}
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 lg:text-2xl">{title}</h1>
+          {description && (
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">{description}</p>
+          )}
+        </div>
+        {children && <div className="shrink-0">{children}</div>}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
-        isLight
-          ? "mb-6 rounded-[var(--radius-card)] border border-slate-200/90 bg-white p-6 shadow-[var(--shadow-card)]"
-          : "mb-6 overflow-hidden rounded-2xl border border-white/10 bg-brand-hero p-6 text-white shadow-[var(--shadow-premium)] hero-pattern",
+        "mb-6 overflow-hidden rounded-2xl border border-white/10 bg-brand-hero p-6 text-white shadow-[var(--shadow-premium)] hero-pattern",
         className
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <BrandLogo size="sm" inverted={!isLight} className="shrink-0" />
-          <div className="min-w-0 border-l border-slate-100 pl-4 sm:border-white/15">
-            {eyebrow && (
-              <p
-                className={cn(
-                  "text-[11px] font-bold uppercase tracking-[0.12em]",
-                  isLight ? "section-eyebrow" : "text-sky-100"
-                )}
-              >
-                {eyebrow}
-              </p>
-            )}
-            <h1
-              className={cn(
-                "mt-1 text-2xl font-bold tracking-tight sm:text-[1.65rem]",
-                isLight ? "text-slate-900" : "text-white"
-              )}
-            >
-              {title}
-            </h1>
-            {description && (
-              <p
-                className={cn(
-                  "mt-2 max-w-2xl text-sm leading-relaxed",
-                  isLight ? "text-slate-500" : "text-sky-50/95"
-                )}
-              >
-                {description}
-              </p>
-            )}
-          </div>
+        <div className="min-w-0">
+          {eyebrow && (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100">
+              {eyebrow}
+            </p>
+          )}
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-[1.65rem]">{title}</h1>
+          {description && (
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-sky-50/95">{description}</p>
+          )}
         </div>
         {children && <div className="shrink-0 sm:pt-1">{children}</div>}
       </div>

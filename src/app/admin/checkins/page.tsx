@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card } from "@/components/ui/Card";
-import { PageHero } from "@/components/ui/PageHero";
+import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { RegistryStatsBar } from "@/components/ui/RegistryStatsBar";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -23,7 +23,7 @@ import {
 } from "@/lib/queue-entry-dates";
 import { QueueEntryDateCell } from "@/components/fila/QueueEntryDates";
 import type { QueueEntry } from "@/lib/types";
-import { ClipboardList, Search, FileSpreadsheet, Truck, CheckCircle2, UserX, Layers } from "lucide-react";
+import { ClipboardList, Search, FileSpreadsheet } from "lucide-react";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
@@ -118,21 +118,20 @@ export default function AdminCheckinsPage() {
 
   return (
     <AppShell role="administrador" userName={profile.full_name}>
-      <PageHero
-        variant="light"
+      <AdminPageHeader
         eyebrow="Registros · Operação"
         title="Check-ins"
-        description="Histórico com dia de chegada, finalização, doca e previsão — consulte dias anteriores e minutas encerradas."
+        description="Histórico com dia de chegada, finalização, doca e previsão."
       />
 
       {!loading && entries.length > 0 && (
         <RegistryStatsBar
-          className="mb-4"
+          className="mb-6"
           items={[
-            { label: "Registros", value: registryStats.total, icon: Layers, tone: "brand" },
-            { label: "Ativos", value: registryStats.active, icon: Truck, tone: "amber" },
-            { label: "Finalizados", value: registryStats.finished, icon: CheckCircle2, tone: "emerald" },
-            { label: "Ausentes", value: registryStats.absent, icon: UserX, tone: "slate" },
+            { label: "Registros", value: registryStats.total, tone: "brand" },
+            { label: "Ativos", value: registryStats.active, tone: "amber" },
+            { label: "Finalizados", value: registryStats.finished, tone: "emerald" },
+            { label: "Ausentes", value: registryStats.absent, tone: "slate" },
           ]}
         />
       )}
@@ -184,18 +183,18 @@ export default function AdminCheckinsPage() {
         </div>
       ) : (
         <Card className="overflow-x-auto overflow-hidden p-0">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead className="sticky top-[3.75rem] z-10 bg-slate-50/95 backdrop-blur-sm">
-              <tr className="border-b border-slate-200 text-left">
-                <th className="section-eyebrow px-4 py-3.5">Dia chegada</th>
-                <th className="section-eyebrow px-4 py-3.5">Dia finalização</th>
-                <th className="section-eyebrow px-4 py-3.5">Minuta</th>
-                <th className="section-eyebrow px-4 py-3.5">Placa</th>
-                <th className="section-eyebrow px-4 py-3.5">Motorista</th>
-                <th className="section-eyebrow px-4 py-3.5">Transportadora</th>
-                <th className="section-eyebrow px-4 py-3.5">Status</th>
-                <th className="section-eyebrow px-4 py-3.5">Doca</th>
-                <th className="section-eyebrow px-4 py-3.5">Previsão</th>
+          <table className="data-table w-full min-w-[960px] text-sm">
+            <thead className="sticky top-12 z-10 border-b border-slate-200">
+              <tr className="text-left">
+                <th className="table-head-cell">Dia chegada</th>
+                <th className="table-head-cell">Dia finalização</th>
+                <th className="table-head-cell">Minuta</th>
+                <th className="table-head-cell">Placa</th>
+                <th className="table-head-cell">Motorista</th>
+                <th className="table-head-cell">Transportadora</th>
+                <th className="table-head-cell">Status</th>
+                <th className="table-head-cell">Doca</th>
+                <th className="table-head-cell">Previsão</th>
               </tr>
             </thead>
             <tbody>
@@ -222,10 +221,7 @@ export default function AdminCheckinsPage() {
                   return (
                   <tr
                     key={row.id}
-                    className={cn(
-                      "border-b border-slate-100 transition-colors hover:bg-brand-muted/25",
-                      idx % 2 === 1 && "bg-slate-50/40"
-                    )}
+                    className={cn(idx % 2 === 1 && "bg-slate-50/30")}
                   >
                     <td className="whitespace-nowrap px-4 py-3">
                       <QueueEntryDateCell

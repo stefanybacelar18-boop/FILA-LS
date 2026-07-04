@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { History } from "lucide-react";
+import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
 import { createClient } from "@/lib/supabase/client";
@@ -84,21 +84,17 @@ export default function HistoricoPage() {
 
   return (
     <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
-            <History className="h-6 w-6 text-brand" />
-            Histórico de Movimentações
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">Registro completo de alterações</p>
-        </div>
+      <AdminPageHeader
+        title="Histórico de movimentações"
+        description="Registro completo de alterações"
+      >
         <Input
           placeholder="Buscar por minuta, placa, nome..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="w-full sm:max-w-xs"
+          className="w-full sm:min-w-[240px]"
         />
-      </div>
+      </AdminPageHeader>
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -106,17 +102,17 @@ export default function HistoricoPage() {
         </div>
       ) : (
         <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/90 text-left">
-                <th className="section-eyebrow px-4 py-3.5">Data</th>
-                <th className="section-eyebrow px-4 py-3.5">Minuta</th>
-                <th className="section-eyebrow px-4 py-3.5">Placa</th>
-                <th className="section-eyebrow px-4 py-3.5">Motorista</th>
-                <th className="section-eyebrow px-4 py-3.5">De</th>
-                <th className="section-eyebrow px-4 py-3.5">Para</th>
-                <th className="section-eyebrow px-4 py-3.5">Doca</th>
-                <th className="section-eyebrow px-4 py-3.5">Por</th>
+          <table className="data-table w-full min-w-[720px] text-sm">
+            <thead className="border-b border-slate-200">
+              <tr className="text-left">
+                <th className="table-head-cell">Data</th>
+                <th className="table-head-cell">Minuta</th>
+                <th className="table-head-cell">Placa</th>
+                <th className="table-head-cell">Motorista</th>
+                <th className="table-head-cell">De</th>
+                <th className="table-head-cell">Para</th>
+                <th className="table-head-cell">Doca</th>
+                <th className="table-head-cell">Por</th>
               </tr>
             </thead>
             <tbody>
@@ -128,10 +124,7 @@ export default function HistoricoPage() {
                 </tr>
               ) : (
                 filtered.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-slate-100 transition-colors hover:bg-brand-muted/20"
-                  >
+                  <tr key={row.id}>
                     <td className="whitespace-nowrap px-4 py-3">
                       {formatDateTime(row.created_at)}
                     </td>

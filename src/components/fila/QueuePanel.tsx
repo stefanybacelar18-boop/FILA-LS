@@ -34,6 +34,7 @@ import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { QueueStatsBar } from "@/components/fila/QueueStatsBar";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
+import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   FieldStaffShell,
@@ -768,52 +769,44 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   return (
     <AppShell role={appRole} userName={profile.full_name}>
-      <div className="mb-6 space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="section-eyebrow">Operação · Descarga</p>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {permissions.panelTitle}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Ordem por check-in e prioridade · atualização em tempo real
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {nextToCall && permissions.canChamarWhatsApp && (
-              <Button
-                variant="success"
-                disabled={saving}
-                onClick={() => {
-                  selectEntry(nextToCall);
-                  chamarMotorista(nextToCall);
-                }}
-              >
-                <Zap className="h-4 w-4" />
-                Chamar próximo (WhatsApp)
-              </Button>
-            )}
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600 shadow-sm">
-              <input
-                type="checkbox"
-                checked={showFinalizados}
-                onChange={(e) => {
-                  setLoading(true);
-                  setShowFinalizados(e.target.checked);
-                }}
-                className="rounded border-slate-300 text-brand focus:ring-brand"
-              />
-              Mostrar finalizados / ausentes de hoje
-            </label>
-          </div>
-        </div>
+      <AdminPageHeader
+        eyebrow="Operação · Descarga"
+        title={permissions.panelTitle}
+        description="Ordem por check-in e prioridade · atualização em tempo real"
+      >
+        {nextToCall && permissions.canChamarWhatsApp && (
+          <Button
+            variant="success"
+            disabled={saving}
+            onClick={() => {
+              selectEntry(nextToCall);
+              chamarMotorista(nextToCall);
+            }}
+          >
+            <Zap className="h-4 w-4" />
+            Chamar próximo (WhatsApp)
+          </Button>
+        )}
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={showFinalizados}
+            onChange={(e) => {
+              setLoading(true);
+              setShowFinalizados(e.target.checked);
+            }}
+            className="rounded border-slate-300 text-brand focus:ring-brand/20"
+          />
+          Mostrar finalizados / ausentes de hoje
+        </label>
+      </AdminPageHeader>
 
-        <QueueStatsBar
-          waiting={waitingNotCalledCount}
-          called={calledCount}
-          total={displayedEntries.length}
-        />
-      </div>
+      <QueueStatsBar
+        waiting={waitingNotCalledCount}
+        called={calledCount}
+        total={displayedEntries.length}
+        className="mb-6"
+      />
       {queueContent}
     </AppShell>
   );

@@ -79,6 +79,11 @@ const NAV_ITEMS: {
   },
 ];
 
+function isNavActive(pathname: string, href: string): boolean {
+  if (href === "/admin") return pathname === "/admin";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function AppShell({
   children,
   role,
@@ -109,17 +114,18 @@ export function AppShell({
   return (
     <div className="min-h-screen app-canvas-admin">
       <PanelShellHeader
+        layout="admin"
         logoHref="/"
         trailing={
           <>
             {role && userName && (
-              <div className="hidden items-center gap-3 md:flex">
+              <div className="hidden items-center gap-2.5 md:flex">
                 <div className="text-right">
                   <p className="text-sm font-semibold text-slate-800">{userName}</p>
                   <span className="role-badge mt-0.5">{ROLE_LABELS[toAppRole(role)]}</span>
                 </div>
                 <div
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-muted text-xs font-bold text-brand ring-2 ring-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-muted text-xs font-bold text-brand"
                   aria-hidden
                 >
                   {userName.charAt(0).toUpperCase()}
@@ -127,7 +133,7 @@ export function AppShell({
               </div>
             )}
             {role && (
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500">
                 <LogOut className="h-4 w-4" />
                 <span className="hidden sm:inline">Sair</span>
               </Button>
@@ -139,26 +145,26 @@ export function AppShell({
       {role && (
         <>
           <nav
-            className="hidden border-b border-slate-100 bg-white/80 lg:block"
+            className="hidden border-b border-slate-200/70 bg-white lg:block"
             aria-label="Navegação principal"
           >
-            <div className="page-container-admin flex gap-0.5 py-2">
+            <div className="page-container-admin flex gap-1 py-1.5">
               {visibleNav.map((item) => {
                 const Icon = item.icon;
-                const active = pathname.startsWith(item.href);
+                const active = isNavActive(pathname, item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                      "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                       active
-                        ? "bg-brand-muted font-semibold text-brand-dark shadow-sm ring-1 ring-brand/20 [&_svg]:text-brand-dark"
-                        : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+                        ? "bg-brand-muted/90 font-semibold text-brand-dark"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4 shrink-0 opacity-80" />
                     {item.label}
                   </Link>
                 );
@@ -167,25 +173,25 @@ export function AppShell({
           </nav>
 
           <nav
-            className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-white/80 px-4 py-2 lg:hidden"
+            className="flex gap-1 overflow-x-auto border-b border-slate-200/70 bg-white px-3 py-1.5 lg:hidden"
             aria-label="Navegação principal"
           >
             {visibleNav.map((item) => {
               const Icon = item.icon;
-              const active = pathname.startsWith(item.href);
+              const active = isNavActive(pathname, item.href);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition",
+                    "flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors",
                     active
-                      ? "bg-brand-muted font-semibold text-brand-dark shadow-sm [&_svg]:text-brand-dark"
+                      ? "bg-brand-muted/90 font-semibold text-brand-dark"
                       : "text-slate-500 hover:text-slate-700"
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
                   {item.label}
                 </Link>
               );
@@ -194,7 +200,7 @@ export function AppShell({
         </>
       )}
 
-      <main className="page-container-admin py-7 lg:py-9">{children}</main>
+      <main className="page-container-admin py-8 lg:py-9">{children}</main>
     </div>
   );
 }
