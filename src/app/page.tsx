@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BrandLogoHero, ENTRY_COLUMN_CLASS } from "@/components/brand/BrandLogoHero";
 import { Truck, Monitor, ChevronRight, ListOrdered } from "lucide-react";
-import { APP_NAME, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
+import { APP_NAME, FILA_DESCARGA_PUBLIC, COMPANY_NAME } from "@/lib/constants";
 
 export default function HomePage() {
   return (
@@ -52,9 +52,14 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <p className="mt-10 w-full text-center text-xs leading-relaxed text-white/55">
-          Instale o app {APP_NAME} na tela inicial — abre em tela cheia, sem barra do navegador
-        </p>
+        <footer className="mt-10 w-full space-y-1 text-center">
+          <p className="text-sm font-semibold tracking-wide text-white/80">
+            {APP_NAME} · {COMPANY_NAME}
+          </p>
+          <p className="text-xs leading-relaxed text-white/50">
+            Toque em &quot;Adicionar à tela inicial&quot; no navegador
+          </p>
+        </footer>
       </div>
     </div>
   );
