@@ -2,9 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { LogOut, ListOrdered, LayoutDashboard } from "lucide-react";
 
@@ -38,24 +39,29 @@ export function FieldStaffShell({
   }
 
   return (
-    <div className="min-h-screen app-canvas-mobile pb-24">
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-lg">
-        <div className="border-t-[3px] border-brand" aria-hidden />
-        <div className="page-container flex items-center justify-between py-3">
-          <BrandLogo size="xs" showCompany />
-          <div className="flex items-center gap-2">
-            <div className="text-right">
-              <p className="truncate text-sm font-semibold text-slate-800">
-                {firstName}
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Empilhador
-              </p>
-            </div>
+    <div className="flex min-h-screen flex-col app-canvas-mobile">
+      <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white shadow-sm">
+        <div className="page-container flex h-14 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Image
+              src="/logo-mark.svg"
+              alt=""
+              width={32}
+              height={32}
+              className="shrink-0 rounded-lg ring-1 ring-slate-200/80"
+            />
+            <span className="truncate text-sm font-bold tracking-tight text-slate-900">
+              {APP_NAME}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="max-w-[7rem] truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {firstName}
+            </span>
             <button
               type="button"
               onClick={handleLogout}
-              className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200/80 bg-white px-2.5 py-2 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-slate-50"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
               aria-label="Sair"
             >
               <LogOut className="h-4 w-4" />
@@ -64,13 +70,15 @@ export function FieldStaffShell({
         </div>
       </header>
 
-      <main className="page-container py-5">{children}</main>
+      <main className="page-container flex-1 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
+        {children}
+      </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 shadow-[0_-4px_24px_rgb(15_23_42/0.06)] backdrop-blur-lg safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white shadow-[0_-8px_30px_rgb(15_23_42/0.08)] safe-bottom"
         aria-label="Navegação principal"
       >
-        <div className="page-container flex items-stretch justify-around gap-1 py-1.5">
+        <div className="page-container flex">
           {BOTTOM_NAV.map(({ href, label, icon: Icon, match }) => {
             const active = match(pathname);
             return (
@@ -79,20 +87,17 @@ export function FieldStaffShell({
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-h-[52px] min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2 text-[11px] font-semibold transition",
-                  active ? "text-brand" : "text-slate-400 hover:text-slate-600"
+                  "relative flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition",
+                  active ? "text-brand" : "text-slate-400"
                 )}
               >
-                <div
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-xl transition",
-                    active
-                      ? "bg-brand-muted shadow-sm ring-1 ring-brand/15"
-                      : "bg-transparent"
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
+                {active && (
+                  <span
+                    className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-brand"
+                    aria-hidden
+                  />
+                )}
+                <Icon className={cn("h-5 w-5", active && "stroke-[2.25]")} />
                 {label}
               </Link>
             );

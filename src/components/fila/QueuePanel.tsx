@@ -22,16 +22,18 @@ import {
   assertStatusAllowed,
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink } from "@/lib/whatsapp";
-import { cn, formatPhone, isoToDateInput } from "@/lib/utils";
+import { formatPhone, isoToDateInput } from "@/lib/utils";
 import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { QueueEntryListItem } from "@/components/fila/QueueEntryListItem";
+import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
+import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { QueueStatsBar } from "@/components/fila/QueueStatsBar";
+import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   FieldStaffShell,
-  FieldStaffPageTitle,
 } from "@/components/layout/FieldStaffShell";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
@@ -358,6 +360,27 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     options?: { sectionLabel?: string; startIndex?: number }
   ) {
     const start = options?.startIndex ?? 0;
+
+    if (variant === "mobile") {
+      return (
+        <div className="space-y-2">
+          {options?.sectionLabel && (
+            <p className="section-eyebrow px-0.5 pt-1">{options.sectionLabel}</p>
+          )}
+          {list.map((entry, idx) => (
+            <EmpilhadorQueueCard
+              key={entry.id}
+              entry={entry}
+              position={start + idx + 1}
+              selected={selectedId === entry.id}
+              isNext={entry.id === nextToCallId && isActiveQueueStatus(entry.status)}
+              onClick={() => selectEntry(entry)}
+            />
+          ))}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-2">
         {options?.sectionLabel && (
@@ -615,7 +638,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           <div
             className={
               isEmpilhador
-                ? "space-y-2 pb-36"
+                ? "space-y-2 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]"
                 : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]"
             }
           >
@@ -666,12 +689,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           </div>
 
           {isEmpilhador && nextToCall && permissions.canChamarWhatsApp && !selected && empilhadorFilter === "ativas" && (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-4 backdrop-blur-md safe-bottom">
-              <div className="page-container">
+            <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgb(15_23_42/0.06)] backdrop-blur-sm">
                 <Button
                   variant="success"
                   size="lg"
-                  className="w-full shadow-lg"
+                  className="w-full shadow-md"
                   disabled={saving}
                   onClick={() => {
                     selectEntry(nextToCall);
@@ -681,7 +703,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   <Zap className="h-5 w-5" />
                   Chamar próximo · Minuta {nextToCall.minuta || "—"}
                 </Button>
-              </div>
             </div>
           )}
 
@@ -715,53 +736,42 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   if (isEmpilhador) {
     return (
       <FieldStaffShell userName={profile.full_name}>
-        <FieldStaffPageTitle
-          title={permissions.panelTitle}
-          subtitle={
-            empilhadorFilter === "ativas"
-              ? `${activeEntries.length} aguardando descarregamento`
-              : `${displayedEntries.length} minuta(s) · ${empilhadorFilterLabels[empilhadorFilter].toLowerCase()}`
-          }
-        />
+        <header className="mb-4">
+          <p className="section-eyebrow">Operação · Descarga</p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            {permissions.panelTitle}
+          </h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {empilhadorFilter === "ativas"
+              ? `${activeEntries.length} veículo${activeEntries.length !== 1 ? "s" : ""} na fila`
+              : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} · ${empilhadorFilterLabels[empilhadorFilter].toLowerCase()}`}
+          </p>
+        </header>
 
         {empilhadorFilter === "ativas" && (
-          <QueueStatsBar
+          <QueueMobileSummaryStrip
             waiting={waitingCount}
             called={calledCount}
             className="mb-4"
           />
         )}
 
-        <div className="mb-4 flex rounded-xl border border-slate-200/90 bg-slate-100/80 p-1">
-          {(["ativas", "finalizadas", "ausentes"] as const).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => {
-                setEmpilhadorFilter(filter);
-                setSelectedId(null);
-              }}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-3 text-xs font-semibold transition",
-                empilhadorFilter === filter
-                  ? "bg-white text-brand shadow-sm ring-1 ring-slate-200/80"
-                  : "text-slate-500"
-              )}
-            >
-              {filter === "ativas" ? (
-                <Filter className="h-3.5 w-3.5" />
-              ) : filter === "finalizadas" ? (
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              ) : (
-                <UserX className="h-3.5 w-3.5" />
-              )}
-              {empilhadorFilterLabels[filter]}
-            </button>
-          ))}
-        </div>
+        <EmpilhadorQueueTabs
+          className="mb-4"
+          value={empilhadorFilter}
+          onChange={(filter) => {
+            setEmpilhadorFilter(filter);
+            setSelectedId(null);
+          }}
+          tabs={[
+            { id: "ativas", label: "Ativas", icon: Filter },
+            { id: "finalizadas", label: "Finalizadas", icon: CheckCircle2 },
+            { id: "ausentes", label: "Ausentes", icon: UserX },
+          ]}
+        />
 
         {empilhadorFilter !== "ativas" && (
-          <p className="mb-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <p className="mb-3 text-xs leading-relaxed text-slate-500">
             Toque em uma minuta encerrada para reativar na fila, se necessário.
           </p>
         )}
