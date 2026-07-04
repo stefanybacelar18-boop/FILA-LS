@@ -5,6 +5,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/tv",
   "/fila",
+  "/fila-descarga",
   "/api",
   "/cadastro",
   "/_next",

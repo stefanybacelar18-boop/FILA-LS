@@ -31,7 +31,6 @@ export default function CheckInPage() {
   const supabase = createClient();
   const { profile, checking, authError } = useMotoristaGuard();
   const geo = useMotoristaGeofence(!!profile && !checking);
-  const [redirecting, setRedirecting] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -71,14 +70,8 @@ export default function CheckInPage() {
     void checkExisting();
   }, [profile, supabase, router]);
 
-  // Fora do pátio → volta para fila (acompanhar sem check-in)
-  useEffect(() => {
-    if (!profile || checking || geo.step === "loading") return;
-    if (geo.isOutside && !geo.skipGeofence) {
-      setRedirecting(true);
-      router.replace(`${MOTORISTA_HOME}?motivo=fora`);
-    }
-  }, [profile, checking, geo.step, geo.isOutside, geo.skipGeofence, router]);
+  const geoLoading = geo.step === "loading" && !geo.skipGeofence;
+  const canSubmit = geo.canCheckIn && !!geo.coords;
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -177,11 +170,9 @@ export default function CheckInPage() {
     return <PageLoader error={authError} onRetry={() => window.location.reload()} />;
   }
 
-  if (checking || !profile || redirecting || (geo.isOutside && !geo.skipGeofence)) {
+  if (checking || !profile || geoLoading) {
     return <PageLoader message="Verificando localização…" />;
   }
-
-  const canSubmit = geo.canCheckIn && !!geo.coords;
 
   return (
     <MotoristaShell profile={profile} checkinNavEnabled>
@@ -228,6 +219,7 @@ export default function CheckInPage() {
             <CardTitle className="text-brand">Dados do check-in</CardTitle>
           </CardHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <fieldset disabled={!canSubmit || submitting} className="space-y-4 disabled:opacity-60">
             <Input label="Minuta *" value={form.minuta} onChange={(e) => updateField("minuta", e.target.value)} error={errors.minuta} className="text-lg py-3" />
             <Input label="Nome completo *" value={form.nome} onChange={(e) => updateField("nome", e.target.value)} error={errors.nome} className="text-lg py-3" />
             <Input label="Telefone *" value={form.telefone} onChange={(e) => updateField("telefone", formatPhone(e.target.value))} error={errors.telefone} className="text-lg py-3" />
@@ -240,6 +232,13 @@ export default function CheckInPage() {
             )}
             <Select label="Retornará com racks vazios? *" value={form.retorno_racks_vazios} onChange={(e) => updateField("retorno_racks_vazios", e.target.value)} options={[{ value: "", label: "Selecione" }, { value: "sim", label: "Sim" }, { value: "nao", label: "Não" }]} error={errors.retorno_racks_vazios} />
             <Textarea label="Observações" value={form.observacoes} onChange={(e) => updateField("observacoes", e.target.value)} />
+            </fieldset>
+
+            {!canSubmit && geo.step !== "loading" && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Confirme sua localização no pátio para liberar o formulário.
+              </p>
+            )}
 
             {errors.form && <p className="text-sm text-danger">{errors.form}</p>}
 

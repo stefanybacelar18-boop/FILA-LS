@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MOTORISTA_HOME } from "@/lib/constants";
+import { MOTORISTA_CHECKIN } from "@/lib/constants";
 
-/** Sempre inicia em /motorista — GPS no cliente define se pode ir ao check-in. */
+/** Após login OAuth — vai direto ao check-in; GPS libera o formulário. */
 export async function resolveMotoristaLandingPath(
   _supabase: SupabaseClient,
   _userId: string
 ): Promise<string> {
-  return MOTORISTA_HOME;
+  return MOTORISTA_CHECKIN;
 }

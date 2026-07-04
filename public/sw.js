@@ -1,9 +1,11 @@
-const CACHE = "filadock-v6";
+const CACHE = "filadock-v7";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(["/", "/login/motorista", "/manifest.json"]))
+    caches.open(CACHE).then((cache) =>
+      cache.addAll(["/", "/login/motorista", "/fila-descarga", "/manifest.json"])
+    )
   );
 });
 

@@ -8,21 +8,14 @@ import { useDriverQueueData } from "@/hooks/useDriverQueueData";
 import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
-import { QueueDashboard } from "@/components/motorista/QueueDashboard";
+import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { QueueEntryBadges } from "@/components/fila/QueueEntryBadges";
 import { Button } from "@/components/ui/Button";
 import type { Profile } from "@/lib/types";
 import { getDisplayPlaca } from "@/lib/checkin-rules";
-import { resolveQueuePosition, isDriverCalled } from "@/lib/queue";
-import { MOTORISTA_CHECKIN } from "@/lib/constants";
-import {
-  ClipboardList,
-  ArrowRight,
-  CheckCircle2,
-  MapPin,
-  ListOrdered,
-} from "lucide-react";
+import { resolveQueuePosition } from "@/lib/queue";
+import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
+import { ClipboardList, ArrowRight, CheckCircle2, ListOrdered } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 
 export default function MotoristaHomePage() {
@@ -54,7 +47,6 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
   const redirectedFromCheckin =
     searchParams.get("fila") === "1" || searchParams.get("motivo") === "fora";
 
-  // Dentro do pátio, sem check-in ativo → vai direto ao formulário
   useEffect(() => {
     if (queueLoading || geoLoading || hasEntry) return;
     if (geo.canCheckIn && !redirectedFromCheckin) {
@@ -89,7 +81,7 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
             className="overflow-hidden rounded-2xl border border-brand/20 bg-brand-hero p-5 text-white shadow-[var(--shadow-premium)] hero-pattern"
             aria-live="polite"
           >
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm opacity-80">Você está na fila</p>
                 <p className="mt-1 text-4xl font-black">{posicao != null ? `${posicao}º` : "—"}</p>
@@ -99,28 +91,16 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
               </div>
               <StatusBadge status={entry.status} className="border-white/30 bg-white/20 text-white" />
             </div>
-            {isDriverCalled(entry) && entry.doca && (
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-sm">
-                <MapPin className="h-4 w-4" />
-                Dirija-se à {entry.doca}
-              </div>
-            )}
-            <QueueEntryBadges
-              entry={entry}
-              compact
-              layout="inline"
-              className="mt-4 [&_span]:bg-white/15 [&_span]:text-white"
-            />
           </div>
 
           <Link href="/minha-fila">
             <Button className="w-full py-3.5 text-base">
-              Ver detalhes da fila
+              Ver minha posição
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
 
-          <QueueDashboard entries={allEntries} highlightId={entry.id} title="Fila do pátio" />
+          <MotoristaQueueList entries={allEntries} highlightId={entry.id} title="Fila do pátio" />
         </div>
       ) : checkinBlocked ? (
         <div className="space-y-4">
@@ -134,10 +114,10 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
             <ListOrdered className="mx-auto h-8 w-8 text-brand" />
-            <h2 className="mt-3 text-lg font-bold text-slate-800">Enquanto isso, acompanhe a fila</h2>
+            <h2 className="mt-3 text-lg font-bold text-slate-800">Acompanhe a fila</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Quando estiver dentro do pátio LSL, toque em{" "}
-              <strong>Atualizar minha localização</strong> acima para liberar o check-in.
+              Quando estiver dentro do pátio LSL, use <strong>Check-in</strong> no menu ou atualize
+              sua localização acima.
             </p>
           </div>
 
@@ -147,7 +127,7 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 {allEntries.length} carreta{allEntries.length !== 1 ? "s" : ""} na fila agora
               </div>
-              <QueueDashboard entries={allEntries} title="Fila do pátio" />
+              <MotoristaQueueList entries={allEntries} title="Fila do pátio" />
             </>
           ) : (
             <p className="text-center text-sm text-slate-500">Nenhum veículo na fila no momento.</p>
@@ -172,10 +152,16 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
           </div>
 
           {allEntries.length > 0 && (
-            <QueueDashboard entries={allEntries} title="Fila do pátio" />
+            <MotoristaQueueList entries={allEntries} title="Fila do pátio" />
           )}
         </div>
       )}
+
+      <p className="mt-6 text-center text-xs text-slate-400">
+        <Link href={FILA_DESCARGA_PUBLIC} className="font-semibold text-brand hover:underline">
+          Ver fila pública
+        </Link>
+      </p>
     </MotoristaShell>
   );
 }

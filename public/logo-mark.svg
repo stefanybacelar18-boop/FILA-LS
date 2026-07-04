@@ -1,13 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="FilaDock">
-  <rect width="64" height="64" rx="14" fill="#0D1B2A"/>
-  <g stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M12 50V27C12 18.5 21 12 32 12C43 12 52 18.5 52 27V50" stroke-width="4"/>
-    <path d="M12 50H52" stroke-width="4"/>
-    <path d="M12 50V54M16 50V54" stroke-width="3"/>
-    <path d="M19 50L29 30H35L45 50" stroke-width="3.25"/>
-    <path d="M21 44h6M22.5 38h5" stroke-width="2.5"/>
-    <path d="M37 44h6M36.5 38h5" stroke-width="2.5"/>
-    <rect x="28.25" y="22" width="7.5" height="7.5" rx="1.5" stroke-width="3"/>
-    <path d="M32 28.5V24M32 24l-2.5 2.25M32 24l2.5 2.25" stroke-width="2.75"/>
+  <rect width="64" height="64" rx="14" fill="#003B73"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-width="2.15">
+      <path d="M14 16v32"/>
+      <path d="M16.4 16v32"/>
+      <path d="M18.8 16v32"/>
+      <path d="M14 16h14"/>
+      <path d="M16.4 16h14"/>
+      <path d="M18.8 16h14"/>
+      <path d="M14 28h11"/>
+      <path d="M16.4 28h11"/>
+      <path d="M18.8 28h11"/>
+    </g>
+    <g stroke-width="2.15">
+      <path d="M34 16v32"/>
+      <path d="M36.4 16v32"/>
+      <path d="M38.8 16v32"/>
+      <path d="M34 16l14 8v16l-14 8"/>
+      <path d="M36.4 16l14 8v16l-14 8"/>
+      <path d="M38.8 16l14 8v16l-14 8"/>
+      <path d="M34 32h14"/>
+      <path d="M36.4 32h14"/>
+      <path d="M38.8 32h14"/>
+    </g>
+    <path d="M11 49c0-10 8-18 18-20 6-1 12 1 16 5" stroke-width="2.6"/>
+    <path d="M45 34l-4-3.5M45 34l1.5 5" stroke-width="2.6"/>
   </g>
 </svg>

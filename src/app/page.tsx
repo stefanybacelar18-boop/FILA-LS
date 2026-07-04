@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
-import { Truck, Monitor, ChevronRight } from "lucide-react";
-import { APP_NAME } from "@/lib/constants";
+import { Truck, Monitor, ChevronRight, ListOrdered } from "lucide-react";
+import { APP_NAME, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 
 export default function HomePage() {
   return (
@@ -38,6 +38,20 @@ export default function HomePage() {
               <p className="text-sm text-white/80">Empilhador · Administrador</p>
             </div>
             <ChevronRight className="h-5 w-5 text-white/40 transition group-hover:text-white/80" />
+          </Link>
+
+          <Link
+            href={FILA_DESCARGA_PUBLIC}
+            className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/5 p-4 backdrop-blur-sm transition duration-200 hover:bg-white/10"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+              <ListOrdered className="h-5 w-5 text-white/90" />
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="font-semibold text-white/95">Ver fila de descarga</p>
+              <p className="text-xs text-white/65">Sem login · somente leitura</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-white/35 transition group-hover:text-white/70" />
           </Link>
         </div>
 

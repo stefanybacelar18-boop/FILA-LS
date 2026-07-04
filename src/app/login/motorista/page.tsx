@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { completeMotoristaLogin } from "@/lib/auth-profile";
 import { resolveMotoristaLandingPath } from "@/lib/motorista-routing";
+import { FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { resolveAppOrigin, oauthRedirectUrl } from "@/lib/app-url";
 import { AuthLayout, AuthCard, AuthFooterLink } from "@/components/layout/AuthLayout";
 import { Button } from "@/components/ui/Button";
@@ -239,6 +240,10 @@ function MotoristaLoginContent() {
           </p>
         )}
       </AuthCard>
+
+      <AuthFooterLink href={FILA_DESCARGA_PUBLIC}>
+        Ver fila de descarga sem entrar →
+      </AuthFooterLink>
 
       <AuthFooterLink href="/login">Sou empilhador ou admin →</AuthFooterLink>
     </AuthLayout>

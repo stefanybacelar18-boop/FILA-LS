@@ -11,9 +11,9 @@ const sizes: Record<
 > = {
   xs: { mark: 28, title: "text-xs", gap: "gap-2", stackedGap: "gap-1.5" },
   sm: { mark: 32, title: "text-sm", gap: "gap-2.5", stackedGap: "gap-2" },
-  md: { mark: 44, title: "text-lg", gap: "gap-3", stackedGap: "gap-2.5" },
-  lg: { mark: 56, title: "text-xl", gap: "gap-3", stackedGap: "gap-3" },
-  xl: { mark: 72, title: "text-2xl", gap: "gap-3.5", stackedGap: "gap-3.5" },
+  md: { mark: 48, title: "text-lg", gap: "gap-3", stackedGap: "gap-2.5" },
+  lg: { mark: 64, title: "text-xl", gap: "gap-3", stackedGap: "gap-3" },
+  xl: { mark: 80, title: "text-2xl", gap: "gap-3.5", stackedGap: "gap-3.5" },
 };
 
 export function BrandWordmark({
@@ -58,6 +58,7 @@ function BrandMark({
       height={size}
       className={cn("shrink-0 rounded-[22%]", className)}
       draggable={false}
+      decoding="async"
     />
   );
 }

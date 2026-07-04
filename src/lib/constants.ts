@@ -28,6 +28,7 @@ export const BRAND = {
 export const MOTORISTA_HOME = "/motorista";
 export const MOTORISTA_CHECKIN = "/checkin";
 export const CHECKIN_SUCCESS = "/checkin/sucesso";
+export const FILA_DESCARGA_PUBLIC = "/fila-descarga";
 
 /** Contas fixas @lsl.com — roles usados pelo ensure-profile (criar no Supabase Auth) */
 export const FIXED_ACCOUNT_ROLES: Record<string, UserRole> = {
