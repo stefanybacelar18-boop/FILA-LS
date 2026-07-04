@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { APP_NAME, BRAND } from "@/lib/constants";
+import { APP_NAME, BRAND, BRANCH_TAGLINE } from "@/lib/constants";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
 import "./globals.css";
@@ -12,8 +12,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} - Filas e Docas`,
-  description: "Controle de filas, check-in e operação logística em tempo real.",
+  title: `${APP_NAME} - Gestão Inteligente de Docas`,
+  description: `${BRANCH_TAGLINE} — controle de filas, check-in e operação logística em tempo real.`,
   manifest: "/manifest.json",
   applicationName: APP_NAME,
   appleWebApp: {

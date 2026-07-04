@@ -112,7 +112,7 @@ export function AppShell({
         <div className="border-t-[3px] border-brand" aria-hidden />
         <div className="page-container-admin flex h-[3.75rem] items-center justify-between">
           <Link href="/" className="flex items-center">
-            <BrandLogo size="sm" />
+            <BrandLogo size="sm" showCompany />
           </Link>
 
           {role && (

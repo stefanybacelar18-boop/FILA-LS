@@ -51,7 +51,7 @@ export function TVPanel() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-8 py-4 backdrop-blur-sm">
-        <BrandLogo size="md" inverted />
+        <BrandLogo size="md" showCompany inverted />
         <div className="text-right">
           <p className="font-mono text-3xl font-bold text-brand-light">{clock}</p>
           <p className="text-sm text-slate-400">{waitingCount} aguardando descarregamento</p>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BrandLogoFull } from "@/components/brand/BrandLogo";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { cn } from "@/lib/utils";
 
 export function AuthLayout({
@@ -24,8 +24,18 @@ export function AuthLayout({
       )}
     >
       <div className="mb-8 text-center">
-        <div className="mx-auto inline-flex rounded-2xl bg-white p-5 shadow-[var(--shadow-premium)]">
-          <BrandLogoFull size={188} />
+        <div
+          className={cn(
+            "mx-auto inline-flex rounded-2xl p-1",
+            dark && "border border-white/10 bg-white/5 px-1 py-0.5 backdrop-blur-sm"
+          )}
+        >
+          <BrandLogo
+            size="xl"
+            showCompany
+            inverted={dark}
+            className="justify-center px-4 py-3"
+          />
         </div>
         {subtitle && (
           <p
