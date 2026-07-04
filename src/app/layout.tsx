@@ -51,6 +51,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className="bg-[var(--app-shell-bg)]">
+      <head>
+        {/* iOS PWA — splash só com fundo azul, sem logo, até a home carregar */}
+        <link rel="apple-touch-startup-image" href="/splash/launch-1290x2796.png" />
+      </head>
       <body className={`${inter.variable} min-h-screen bg-[var(--app-shell-bg)] antialiased`}>
         {children}
         <AppLoadingBar />

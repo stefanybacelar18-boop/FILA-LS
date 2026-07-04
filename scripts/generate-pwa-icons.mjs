@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const iconSvg = readFileSync(join(root, "public/icons/icon.svg"));
 const maskableSvg = readFileSync(join(root, "public/icons/icon-maskable.svg"));
+const launchSvg = readFileSync(join(root, "public/splash/launch.svg"));
 
 const iconSizes = [
   { name: "icon-24.png", size: 24 },
@@ -21,6 +22,7 @@ const iconSizes = [
 
 mkdirSync(join(root, "public/icons"), { recursive: true });
 mkdirSync(join(root, "public/brand"), { recursive: true });
+mkdirSync(join(root, "public/splash"), { recursive: true });
 
 for (const { name, size } of iconSizes) {
   await sharp(iconSvg, { density: 320 })
@@ -45,5 +47,11 @@ await sharp(maskableSvg, { density: 320 })
   .png()
   .toFile(join(root, "public/icons/icon-512-maskable.png"));
 console.log("Generated icons/icon-512-maskable.png");
+
+await sharp(launchSvg, { density: 320 })
+  .resize(1290, 2796)
+  .png()
+  .toFile(join(root, "public/splash/launch-1290x2796.png"));
+console.log("Generated splash/launch-1290x2796.png");
 
 console.log("Generated favicon.ico and brand/logo-symbol-512.png");
