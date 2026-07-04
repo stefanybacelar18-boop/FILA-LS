@@ -23,17 +23,17 @@ export function AuthLayout({
         dark ? "bg-brand-hero hero-pattern" : "app-canvas"
       )}
     >
-      <div className="mb-8 text-center">
+      <div className="mb-10 w-full max-w-xs text-center">
         <BrandLogo
-          size="lg"
+          size="auth"
           variant="stacked"
           inverted={dark}
-          className="mx-auto"
+          className="mx-auto w-full"
         />
         {subtitle && (
           <p
             className={cn(
-              "mt-5 text-sm font-medium tracking-wide",
+              "mt-6 text-sm font-medium tracking-wide",
               dark ? "text-white/75" : "text-slate-500"
             )}
           >

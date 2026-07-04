@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 export const LOGO_MARK_SRC = "/logo-mark.svg";
 
-type BrandLogoSize = "xs" | "sm" | "md" | "lg" | "xl";
+type BrandLogoSize = "xs" | "sm" | "md" | "lg" | "xl" | "auth";
 type BrandLogoVariant = "inline" | "stacked";
 
 const sizes: Record<
@@ -14,6 +14,8 @@ const sizes: Record<
   md: { mark: 48, title: "text-lg", gap: "gap-3", stackedGap: "gap-2.5" },
   lg: { mark: 64, title: "text-xl", gap: "gap-3", stackedGap: "gap-3" },
   xl: { mark: 80, title: "text-2xl", gap: "gap-3.5", stackedGap: "gap-3.5" },
+  /** Telas de login — ícone maior, wordmark proporcional */
+  auth: { mark: 112, title: "text-4xl", gap: "gap-4", stackedGap: "gap-4" },
 };
 
 export function BrandWordmark({
@@ -45,9 +47,11 @@ export function BrandWordmark({
 function BrandMark({
   size,
   className,
+  displayClass,
 }: {
   size: number;
   className?: string;
+  displayClass?: string;
 }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -56,7 +60,7 @@ function BrandMark({
       alt=""
       width={size}
       height={size}
-      className={cn("shrink-0 rounded-[22%]", className)}
+      className={cn("shrink-0 rounded-[22%]", displayClass, className)}
       draggable={false}
       decoding="async"
     />
@@ -82,11 +86,12 @@ export function BrandLogo({
   const markClass = cn(
     inverted && "shadow-lg shadow-black/20 ring-1 ring-white/10"
   );
+  const authMarkDisplay = size === "auth" ? "h-28 w-28 sm:h-32 sm:w-32" : undefined;
 
   if (markOnly || !showWordmark) {
     return (
       <div className={cn("inline-flex", className)}>
-        <BrandMark size={s.mark} className={markClass} />
+        <BrandMark size={s.mark} displayClass={authMarkDisplay} className={markClass} />
       </div>
     );
   }
@@ -94,7 +99,7 @@ export function BrandLogo({
   if (variant === "stacked") {
     return (
       <div className={cn("flex flex-col items-center", s.stackedGap, className)}>
-        <BrandMark size={s.mark} className={markClass} />
+        <BrandMark size={s.mark} displayClass={authMarkDisplay} className={markClass} />
         <BrandWordmark size={size} inverted={inverted} />
       </div>
     );
@@ -102,7 +107,7 @@ export function BrandLogo({
 
   return (
     <div className={cn("flex items-center", s.gap, className)}>
-      <BrandMark size={s.mark} className={markClass} />
+      <BrandMark size={s.mark} displayClass={authMarkDisplay} className={markClass} />
       <BrandWordmark size={size} inverted={inverted} />
     </div>
   );
