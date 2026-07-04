@@ -1,58 +1,52 @@
-{
-  "name": "FilaDock — Motorista & Operação",
-  "short_name": "FilaDock",
-  "description": "Gestão inteligente de docas — check-in, fila e operação logística em tempo real",
-  "id": "/",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#1565C0",
-  "theme_color": "#1565C0",
-  "orientation": "portrait-primary",
-  "lang": "pt-BR",
-  "dir": "ltr",
-  "prefer_related_applications": false,
-  "icons": [
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512-maskable.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Motorista",
-      "short_name": "Motorista",
-      "description": "Login Google e check-in",
-      "url": "/login/motorista",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    },
-    {
-      "name": "Operacional",
-      "short_name": "Operação",
-      "description": "Empilhador e administrador",
-      "url": "/login",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    }
-  ],
-  "categories": ["business", "productivity", "logistics"]
-}
+{
+  "name": "FilaDock — Motorista & Operação",
+  "short_name": "FilaDock",
+  "description": "Gestão inteligente de docas — check-in, fila e operação logística em tempo real",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#1565C0",
+  "theme_color": "#1565C0",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/icon-512-plain.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Motorista",
+      "short_name": "Motorista",
+      "description": "Login Google e check-in",
+      "url": "/login/motorista",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Operacional",
+      "short_name": "Operação",
+      "description": "Empilhador e administrador",
+      "url": "/login",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
+  "categories": ["business", "productivity", "logistics"]
+}

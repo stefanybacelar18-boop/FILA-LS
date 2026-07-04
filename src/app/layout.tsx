@@ -4,6 +4,7 @@ import { APP_NAME, BRAND, BRANCH_TAGLINE } from "@/lib/constants";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
 import { AppLoadingBar } from "@/components/brand/AppLoadingBar";
+import { PwaBootCoverScript } from "@/components/pwa/PwaBootCoverScript";
 import "./globals.css";
 
 const inter = Inter({
@@ -52,10 +53,31 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="bg-[var(--app-shell-bg)]">
       <head>
-        {/* iOS PWA — splash só com fundo azul, sem logo, até a home carregar */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var s=window.matchMedia("(display-mode: standalone)").matches||(window.navigator&&window.navigator.standalone);if(s)document.documentElement.classList.add("pwa-standalone");})();`,
+          }}
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html.pwa-standalone::before{content:"";position:fixed;inset:0;z-index:99999;background:linear-gradient(145deg,#0D1B2A 0%,#1565C0 45%,#42A5F5 100%);}html.pwa-standalone.pwa-boot-done::before{opacity:0;transition:opacity .22s ease-out;}html.pwa-standalone.pwa-boot-removed::before{content:none;}`,
+          }}
+        />
+        {/* iOS PWA — splash só com fundo azul, sem logo */}
         <link rel="apple-touch-startup-image" href="/splash/launch-1290x2796.png" />
+        <link
+          rel="apple-touch-startup-image"
+          href="/splash/launch-1290x2796.png"
+          media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
+        />
+        <link
+          rel="apple-touch-startup-image"
+          href="/splash/launch-1290x2796.png"
+          media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)"
+        />
       </head>
       <body className={`${inter.variable} min-h-screen bg-[var(--app-shell-bg)] antialiased`}>
+        <PwaBootCoverScript />
         {children}
         <AppLoadingBar />
         <PwaRegistrar />

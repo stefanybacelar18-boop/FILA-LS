@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const iconSvg = readFileSync(join(root, "public/icons/icon.svg"));
 const maskableSvg = readFileSync(join(root, "public/icons/icon-maskable.svg"));
+const plainSvg = readFileSync(join(root, "public/icons/icon-plain.svg"));
 const launchSvg = readFileSync(join(root, "public/splash/launch.svg"));
 
 const iconSizes = [
@@ -47,6 +48,12 @@ await sharp(maskableSvg, { density: 320 })
   .png()
   .toFile(join(root, "public/icons/icon-512-maskable.png"));
 console.log("Generated icons/icon-512-maskable.png");
+
+await sharp(plainSvg, { density: 320 })
+  .resize(512, 512)
+  .png()
+  .toFile(join(root, "public/icons/icon-512-plain.png"));
+console.log("Generated icons/icon-512-plain.png");
 
 await sharp(launchSvg, { density: 320 })
   .resize(1290, 2796)
