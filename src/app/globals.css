@@ -535,13 +535,12 @@ body {
   .animate-pulse-ring,
   .animate-spin,
   .animate-slide-up,
-  .app-splash__inner,
-  .app-splash__loader::after {
+  .app-loading-bar__fill {
     animation: none !important;
   }
 
-  .app-splash {
-    transition-duration: 0.15s;
+  .app-loading-bar {
+    transition-duration: 0.1s;
   }
 
   .btn-brand:active:not(:disabled) {
@@ -565,76 +564,42 @@ body {
   background-size: auto, auto, 32px 32px, 32px 32px, cover;
 }
 
-/* Splash — ícone FD, fundo igual ao shell do app */
-.app-splash {
+/* Barra de carregamento inicial — topo, leve */
+.app-loading-bar {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--app-shell-bg);
-  transition: opacity 0.28s ease-out, visibility 0.28s ease-out;
-}
-
-.app-splash--exit {
-  opacity: 0;
-  visibility: hidden;
   pointer-events: none;
+  transition: opacity 0.2s ease-out;
 }
 
-.app-splash__inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  animation: splash-rise 0.32s ease-out both;
+.app-loading-bar--done {
+  opacity: 0;
 }
 
-.app-splash__mark img {
-  width: 5rem;
-  height: 5rem;
-}
-
-@media (min-width: 640px) {
-  .app-splash__mark img {
-    width: 5.5rem;
-    height: 5.5rem;
-  }
-}
-
-.app-splash__loader {
-  width: 2.25rem;
-  height: 2px;
+.app-loading-bar__track {
+  height: 3px;
   overflow: hidden;
-  border-radius: 999px;
   background: rgb(21 101 192 / 0.1);
 }
 
-.app-splash__loader::after {
-  content: "";
-  display: block;
-  width: 45%;
+.app-loading-bar__fill {
   height: 100%;
-  border-radius: inherit;
-  background: var(--brand-primary);
-  animation: splash-loader 0.9s ease-in-out infinite;
+  width: 40%;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(
+    90deg,
+    var(--brand-primary) 0%,
+    var(--brand-secondary) 100%
+  );
+  animation: app-loading-slide 0.9s ease-in-out infinite;
 }
 
-@keyframes splash-rise {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes splash-loader {
+@keyframes app-loading-slide {
   0% {
-    transform: translateX(-110%);
+    transform: translateX(-105%);
   }
   100% {
     transform: translateX(320%);

@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import { APP_NAME, BRAND, BRANCH_TAGLINE } from "@/lib/constants";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
-import { AppSplashOverlay } from "@/components/brand/AppSplashOverlay";
+import { AppLoadingBar } from "@/components/brand/AppLoadingBar";
 import "./globals.css";
 
 const inter = Inter({
@@ -53,7 +53,7 @@ export default function RootLayout({
     <html lang="pt-BR" className="bg-[var(--app-shell-bg)]">
       <body className={`${inter.variable} min-h-screen bg-[var(--app-shell-bg)] antialiased`}>
         {children}
-        <AppSplashOverlay />
+        <AppLoadingBar />
         <PwaRegistrar />
         <InstallAppBanner />
       </body>
