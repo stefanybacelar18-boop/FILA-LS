@@ -7,7 +7,8 @@ import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
 import { getStatusLabel } from "@/lib/constants";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
-import { formatPrevisaoDate } from "@/lib/utils";
+import { formatPrevisaoDate, getDriverFirstName } from "@/lib/utils";
+import { sanitizeQueueEntry } from "@/lib/sanitize-queue-entry";
 import { maskPlaca } from "@/lib/checkin-rules";
 import { createDebouncedFn } from "@/lib/debounce";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -35,7 +36,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
       return;
     }
 
-    setEntry(row as QueueEntry);
+    setEntry(sanitizeQueueEntry(row as QueueEntry));
 
     setAllEntries(await fetchEnrichedOperationalQueue(supabase));
     setLoading(false);
@@ -75,7 +76,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
 
   const veiculosAFrente = Math.max(0, countVehiclesAhead(entry, allEntries));
   const posicao = resolveQueuePosition(entry, allEntries) ?? veiculosAFrente + 1;
-  const placaMasked = maskPlaca(entry.placa_cavalo || entry.placa);
+  const placaMasked = maskPlaca(entry.placa_cavalo || entry.placa || "");
 
   return (
     <div className="min-h-screen app-canvas-mobile">
@@ -101,7 +102,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
               <p className="text-sm text-slate-600">Minuta: {entry.minuta || "—"}</p>
             </>
           ) : (
-            <h1 className="mt-1 text-2xl font-bold">{entry.nome}</h1>
+            <h1 className="mt-1 text-2xl font-bold">{getDriverFirstName(entry.nome)}</h1>
           )}
         </div>
 

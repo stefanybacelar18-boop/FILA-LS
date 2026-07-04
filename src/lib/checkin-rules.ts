@@ -29,14 +29,15 @@ export function getUserAgent(): string {
   return navigator.userAgent;
 }
 
-export function maskPlaca(placa: string): string {
+export function maskPlaca(placa?: string | null): string {
+  if (!placa?.trim()) return "****";
   const clean = placa.replace(/[^A-Z0-9]/gi, "").toUpperCase();
   if (clean.length <= 4) return "****";
   return `****${clean.slice(-4)}`;
 }
 
-export function getDisplayPlaca(entry: QueueEntry): string {
-  return entry.placa_cavalo || entry.placa;
+export function getDisplayPlaca(entry: Pick<QueueEntry, "placa_cavalo" | "placa">): string {
+  return entry.placa_cavalo?.trim() || entry.placa?.trim() || "—";
 }
 
 export function canCheckInAgain(

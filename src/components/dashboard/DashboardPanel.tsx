@@ -6,6 +6,7 @@ import type { QueueEntry } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
 import { computeDashboardStats, computeHourlyBuckets } from "@/lib/dashboard-stats";
 import { formatDuration, formatQueueTime } from "@/lib/utils";
+import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { formatManausDateLabel, getTodayStartISO } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { AppShell } from "@/components/layout/AppShell";
@@ -47,7 +48,7 @@ export function DashboardPanel({
       .is("deleted_at", null)
       .gte("created_at", getTodayStartISO());
 
-    setEntries((data as QueueEntry[]) ?? []);
+    setEntries(sanitizeQueueEntries((data as QueueEntry[]) ?? []));
     setLoading(false);
   }, [supabase]);
 

@@ -24,6 +24,7 @@ import {
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
 import { formatPhone, isoToDateInput, getProfileDisplayName } from "@/lib/utils";
+import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
@@ -64,8 +65,8 @@ type EmpilhadorFilter = "aguardando" | "finalizadas";
 function sortClosedEntries(entries: QueueEntry[]): QueueEntry[] {
   return [...entries].sort(
     (a, b) =>
-      new Date(b.finished_at ?? b.updated_at).getTime() -
-      new Date(a.finished_at ?? a.updated_at).getTime()
+      new Date(b.finished_at ?? b.updated_at ?? 0).getTime() -
+      new Date(a.finished_at ?? a.updated_at ?? 0).getTime()
   );
 }
 
@@ -112,16 +113,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         return;
       }
 
-      const raw = json.data ?? [];
-      const sanitized = raw.map((entry) => ({
-        ...entry,
-        nome: entry.nome ?? "",
-        telefone: entry.telefone ?? "",
-        transportadora: entry.transportadora ?? "",
-        placa: entry.placa ?? "",
-      }));
-
-      setEntries(sortQueueEntries(sanitized));
+      setEntries(sortQueueEntries(sanitizeQueueEntries(json.data ?? [])));
       setLoading(false);
     },
     [showFinalizados, isAdmin, isEmpilhador]

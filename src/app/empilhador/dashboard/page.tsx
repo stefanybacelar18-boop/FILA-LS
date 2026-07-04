@@ -8,7 +8,7 @@ export default function EmpilhadorDashboardPage() {
     <AuthGate roles={["empilhador"]}>
       {(profile) => (
         <EmpilhadorDashboardPanel
-          profile={{ id: profile.id, full_name: profile.full_name }}
+          profile={{ id: profile.id, full_name: profile.full_name, email: profile.email }}
         />
       )}
     </AuthGate>

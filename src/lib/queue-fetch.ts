@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueEntry } from "@/lib/types";
 import { filterOperationalPanelEntries, OPERATIONAL_PANEL_DB_STATUSES } from "@/lib/constants";
+import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 
 const FETCH_TIMEOUT_MS = 25_000;
 let inFlight: Promise<QueueEntry[]> | null = null;
@@ -29,7 +30,7 @@ export async function fetchEnrichedOperationalQueue(
         throw new Error(json.error ?? `HTTP ${res.status}`);
       }
 
-      return json.data ?? [];
+      return sanitizeQueueEntries(json.data ?? []);
     } catch (err) {
       console.warn("[fetchEnrichedOperationalQueue]", err);
       if (supabaseFallback) {
@@ -54,7 +55,7 @@ export async function fetchActiveQueueToday(
   );
 
   if (!rpcError && rpcData != null) {
-    return filterOperationalPanelEntries(rpcData as QueueEntry[]);
+    return sanitizeQueueEntries(filterOperationalPanelEntries(rpcData as QueueEntry[]));
   }
 
   const { data, error } = await supabase
@@ -69,7 +70,9 @@ export async function fetchActiveQueueToday(
     return [];
   }
 
-  return filterOperationalPanelEntries((data as QueueEntry[]) ?? []);
+  return sanitizeQueueEntries(
+    filterOperationalPanelEntries((data as QueueEntry[]) ?? [])
+  );
 }
 
 /** Fila do dia via API autenticada (staff). */
@@ -91,5 +94,5 @@ export async function fetchStaffQueueToday(options?: {
     return { data: [], error: json.error ?? "Erro ao carregar fila" };
   }
 
-  return { data: json.data ?? [] };
+  return { data: sanitizeQueueEntries(json.data ?? []) };
 }

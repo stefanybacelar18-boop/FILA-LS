@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard, SectionHeader } from "@/components/ui/StatCard";
 import { computeDashboardStats } from "@/lib/dashboard-stats";
+import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
@@ -164,7 +165,7 @@ export default function AdminPage() {
       .is("deleted_at", null)
       .gte("created_at", todayIso);
 
-    const entries = (entriesToday ?? []) as QueueEntry[];
+    const entries = sanitizeQueueEntries((entriesToday ?? []) as QueueEntry[]);
     const stats = computeDashboardStats(entries);
     setDayStats(stats);
     setQueueAtivos(stats.veiculosAguardando);

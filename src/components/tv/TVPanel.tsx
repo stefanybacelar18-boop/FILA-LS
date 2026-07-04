@@ -75,7 +75,7 @@ export function TVPanel() {
           {nextDriver ? (
             <div className="text-center">
               <p className="text-8xl font-black text-white lg:text-9xl">
-                {maskPlaca(nextDriver.placa_cavalo || nextDriver.placa)}
+                {maskPlaca(nextDriver.placa_cavalo || nextDriver.placa || "")}
               </p>
               <p className="mt-4 text-3xl font-semibold text-brand-light">
                 Minuta {nextDriver.minuta || "—"}
@@ -113,7 +113,7 @@ export function TVPanel() {
                 >
                   <div>
                     <p className="font-mono text-3xl font-bold">
-                      {maskPlaca(driver.placa_cavalo || driver.placa)}
+                      {maskPlaca(driver.placa_cavalo || driver.placa || "")}
                     </p>
                     <p className="text-lg text-slate-400">Minuta {driver.minuta || "—"}</p>
                   </div>

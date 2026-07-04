@@ -22,11 +22,12 @@ import {
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { normalizeQueueStatus } from "@/lib/constants";
+import { getDriverFirstName, getProfileDisplayName } from "@/lib/utils";
 
 export function EmpilhadorDashboardPanel({
   profile,
 }: {
-  profile: { id: string; full_name: string };
+  profile: { id: string; full_name: string; email?: string | null };
 }) {
   const supabase = createClient();
   const [entries, setEntries] = useState<QueueEntry[]>([]);
@@ -85,7 +86,7 @@ export function EmpilhadorDashboardPanel({
     .slice(0, 6);
 
   return (
-    <FieldStaffShell userName={profile.full_name}>
+    <FieldStaffShell userName={getProfileDisplayName(profile.full_name, profile.email)}>
       <PanelPageTitle
         eyebrow="Operação · Descarga"
         title="Meu desempenho"
@@ -188,7 +189,7 @@ export function EmpilhadorDashboardPanel({
                   <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-brand">
-                        {e.minuta ? `Minuta ${e.minuta}` : e.nome}
+                        {e.minuta ? `Minuta ${e.minuta}` : getDriverFirstName(e.nome)}
                       </p>
                       <p className="truncate font-mono text-xs text-slate-600">
                         {e.placa_cavalo || e.placa}

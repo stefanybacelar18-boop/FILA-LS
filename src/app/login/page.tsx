@@ -38,6 +38,7 @@ function LoginContent() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    let redirecting = false;
 
     try {
       const { data, error: authError } =
@@ -78,7 +79,7 @@ function LoginContent() {
       }
 
       if (!isStaffRole(role)) {
-        setError(`Perfil sem acesso ao sistema.`);
+        setError("Perfil sem acesso ao sistema.");
         await supabase.auth.signOut();
         return;
       }
@@ -88,13 +89,13 @@ function LoginContent() {
         staffHomePath(role)
       );
 
-      // Navegação completa garante cookies de sessão + chunks atualizados (evita crash pós-login).
+      await supabase.auth.getSession();
+      redirecting = true;
       window.location.assign(destination);
-      return;
     } catch {
       setError("Erro inesperado. Verifique sua conexão.");
     } finally {
-      setLoading(false);
+      if (!redirecting) setLoading(false);
     }
   }
 

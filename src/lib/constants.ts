@@ -142,7 +142,7 @@ export const STATUS_COLORS: Record<QueueStatus, string> = {
 };
 
 export function getStatusColor(status: string): string {
-  return STATUS_COLORS[normalizeQueueStatus(status)];
+  return STATUS_COLORS[normalizeQueueStatus(status)] ?? "bg-slate-50 text-slate-700 border-slate-200";
 }
 
 export const ACTIVE_STATUSES: QueueStatus[] = ["aguardando_descarregamento"];

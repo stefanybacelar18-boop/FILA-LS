@@ -385,7 +385,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
                   <p className="text-xs text-slate-500">
                     {item.volume_motos} motos
                     {item.menor_vencimento
-                      ? ` · Venc. ${item.menor_vencimento.split("-").reverse().join("/")}`
+                      ? ` · Venc. ${formatPrevisaoDate(item.menor_vencimento)}`
                       : ""}
                   </p>
                 </div>

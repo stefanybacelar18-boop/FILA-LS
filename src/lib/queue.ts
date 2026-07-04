@@ -21,7 +21,9 @@ export function compareQueueOrder(
     : Number.POSITIVE_INFINITY;
   if (vencA !== vencB) return vencA - vencB;
 
-  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+  const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+  return aTime - bTime;
 }
 
 export function countVehiclesAhead(
@@ -117,8 +119,8 @@ export function sortQueueEntries(entries: QueueEntry[]): QueueEntry[] {
     ...active.sort(compareQueueOrder),
     ...finalizados.sort(
       (a, b) =>
-        new Date(b.finished_at ?? b.updated_at).getTime() -
-        new Date(a.finished_at ?? a.updated_at).getTime()
+        new Date(b.finished_at ?? b.updated_at ?? 0).getTime() -
+        new Date(a.finished_at ?? a.updated_at ?? 0).getTime()
     ),
     ...other,
   ];

@@ -57,7 +57,8 @@ export function getNameInitial(name?: string | null): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
-export function formatPlaca(value: string): string {
+export function formatPlaca(value?: string | null): string {
+  if (!value) return "";
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
 }
 

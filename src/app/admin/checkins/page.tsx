@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/Button";
 import { downloadCheckinsExcel } from "@/lib/export-checkins";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 
 export default function AdminCheckinsPage() {
   const { profile, checking, authError } = useAuthGuard(["administrador"]);
@@ -52,7 +53,7 @@ export default function AdminCheckinsPage() {
     };
 
     if (res.ok) {
-      setEntries(json.data ?? []);
+      setEntries(sanitizeQueueEntries(json.data ?? []));
     }
     setLoading(false);
   }, [search, statusFilter]);
@@ -244,7 +245,7 @@ export default function AdminCheckinsPage() {
                     <td className="px-4 py-3 font-mono text-sm font-semibold text-slate-800">
                       {row.placa_cavalo || row.placa}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{row.nome}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.nome || "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{row.transportadora}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.status} />
