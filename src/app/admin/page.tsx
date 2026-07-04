@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_GEOFENCE, ROLE_LABELS, APP_NAME } from "@/lib/constants";
+import { DEFAULT_GEOFENCE, getTodayStartISO } from "@/lib/constants";
 import { getTodayStartISO } from "@/lib/queue-day";
 import type { GeofenceConfig, QueueEntry } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { StatCard, AdminToolCard, SectionHeader } from "@/components/ui/StatCard";
-import { PageHero } from "@/components/ui/PageHero";
+import { StatCard, SectionHeader } from "@/components/ui/StatCard";
+import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { computeDashboardStats } from "@/lib/dashboard-stats";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { PageLoader } from "@/components/ui/PageLoader";
@@ -18,19 +18,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import {
   MapPin,
   QrCode,
-  ListOrdered,
-  LayoutDashboard,
-  History,
-  Tv,
-  Users,
-  ClipboardList,
-  Truck,
-  UserCog,
-  CheckCircle2,
-  UserX,
   RefreshCw,
-  FileSpreadsheet,
-  Settings,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { usePublicAppUrl } from "@/hooks/usePublicAppUrl";
@@ -286,35 +274,27 @@ export default function AdminPage() {
 
   return (
     <AppShell role="administrador" userName={profile.full_name}>
-      <PageHero
-        variant="light"
-        eyebrow="Central de administração"
-        title={`Painel ${APP_NAME}`}
-        description="Visão geral, ferramentas e configurações do sistema"
-      >
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PanelPageTitle title="Administração" className="mb-0" />
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={handleRefreshOverview}
           disabled={refreshing}
+          className="shrink-0 self-start sm:self-auto"
         >
-          {refreshing ? (
-            <Spinner size="sm" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          <span className="ml-1.5 hidden sm:inline">Atualizar</span>
+          {refreshing ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
+          <span className="ml-1.5">Atualizar</span>
         </Button>
-      </PageHero>
+      </div>
 
-      <SectionHeader title="Indicadores do dia" subtitle="Operação de hoje" />
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Ativos na fila" value={queueAtivos} icon={Truck} accent="brand" />
+      <SectionHeader title="Hoje" />
+      <div className="mb-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Ativos na fila" value={queueAtivos} accent="brand" />
         <StatCard
           title="Finalizados"
           value={dayStats?.veiculosFinalizados ?? "—"}
-          icon={CheckCircle2}
           accent="green"
         />
         <StatCard
@@ -325,96 +305,30 @@ export default function AdminPage() {
               ? `${dayStats.veiculosFinalizados} de ${dayStats.veiculosHoje}`
               : undefined
           }
-          icon={LayoutDashboard}
           accent="green"
         />
         <StatCard
-          title="Ausentes hoje"
+          title="Ausentes"
           value={dayStats?.veiculosAusentes ?? "—"}
-          icon={UserX}
           accent="amber"
         />
       </div>
 
-      <SectionHeader title="Equipe cadastrada" subtitle="Usuários por perfil" />
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <StatCard title="Empilhadores" value={roleCounts.empilhador ?? 0} icon={Users} accent="blue" />
-        <StatCard title="Administradores" value={roleCounts.administrador ?? 0} icon={UserCog} accent="slate" />
-        <StatCard title="Motoristas" value={roleCounts.motorista ?? 0} icon={Users} accent="green" />
+      <SectionHeader title="Equipe" />
+      <div className="mb-10 grid gap-3 sm:grid-cols-3">
+        <StatCard title="Empilhadores" value={roleCounts.empilhador ?? 0} accent="blue" />
+        <StatCard title="Administradores" value={roleCounts.administrador ?? 0} accent="slate" />
+        <StatCard title="Motoristas" value={roleCounts.motorista ?? 0} accent="green" />
       </div>
 
-      <SectionHeader title="Ferramentas" subtitle="Acesso rápido às áreas do sistema" />
-      <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <AdminToolCard
-          href="/admin/minutas"
-          label="Inteligência de minutas"
-          description="Importar Excel, vencimento, prioridade e capacidade"
-          icon={FileSpreadsheet}
-        />
-        <AdminToolCard
-          href="/admin/fila"
-          label="Gerenciar fila"
-          description="Prioridade, previsões, status e docas"
-          icon={ListOrdered}
-        />
-        <AdminToolCard
-          href="/admin/checkins"
-          label="Registro de check-ins"
-          description="Histórico de entradas no pátio"
-          icon={ClipboardList}
-        />
-        <AdminToolCard
-          href="/dashboard"
-          label="Dashboard"
-          description="Indicadores, gráficos e atividade do dia"
-          icon={LayoutDashboard}
-        />
-        <AdminToolCard
-          href="/historico"
-          label="Histórico"
-          description="Consulta completa de operações"
-          icon={History}
-        />
-        <AdminToolCard
-          href="/tv"
-          label="Painel TV"
-          description="Exibição para monitor no pátio"
-          icon={Tv}
-        />
-      </div>
-
-      <SectionHeader title="Configurações" subtitle="Geofence, QR codes e liberações" />
+      <SectionHeader title="Configurações" />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-brand" />
-              Papéis e permissões
-            </CardTitle>
-          </CardHeader>
-          <ul className="space-y-3 text-sm text-slate-600">
-            <li>
-              <strong className="text-slate-800">{ROLE_LABELS.motorista}</strong> — login, check-in
-              sem CPF, painel com posição e todas as minutas do dia.
-            </li>
-            <li>
-              <strong className="text-slate-800">{ROLE_LABELS.empilhador}</strong> — fila, chama
-              motorista via WhatsApp e altera status (vê prioridade definida pelo admin).
-            </li>
-            <li>
-              <strong className="text-slate-800">{ROLE_LABELS.administrador}</strong> — controle
-              total: fila, prioridade, previsões, geofence, QR code, histórico com dia de chegada e
-              finalização, dashboard.
-            </li>
-          </ul>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-brand" />
-              Perímetro Geográfico (Geofence)
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="h-4 w-4 text-brand" />
+              Geofence
             </CardTitle>
           </CardHeader>
 
@@ -480,7 +394,7 @@ export default function AdminPage() {
               ) : saved ? (
                 "Salvo!"
               ) : (
-                "Salvar Configurações"
+                "Salvar"
               )}
             </Button>
           </div>
@@ -488,44 +402,39 @@ export default function AdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <QrCode className="h-5 w-5 text-brand" />
-              QR Codes — celular
+            <CardTitle className="flex items-center gap-2 text-base">
+              <QrCode className="h-4 w-4 text-brand" />
+              QR codes
             </CardTitle>
           </CardHeader>
 
-          <p className="mb-4 text-sm text-slate-600">
-            Imprima ou exiba na portaria. Motoristas e empilhador acessam pelo celular
-            na mesma Wi-Fi do servidor.
-          </p>
-
           <div className="grid gap-6 sm:grid-cols-2">
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-sm font-semibold text-slate-800">Motorista</p>
-              <div className="rounded-xl border-2 border-slate-200 bg-white p-4">
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm font-medium text-slate-700">Motorista</p>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <QRCodeSVG
                   value={`${appUrl}/login/motorista`}
-                  size={180}
+                  size={160}
                   level="H"
                   includeMargin
                 />
               </div>
-              <p className="break-all text-center text-xs text-slate-500">
+              <p className="break-all text-center text-[11px] text-slate-400">
                 {appUrl}/login/motorista
               </p>
             </div>
 
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-sm font-semibold text-slate-800">Empilhador</p>
-              <div className="rounded-xl border-2 border-slate-200 bg-white p-4">
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm font-medium text-slate-700">Operacional</p>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <QRCodeSVG
                   value={`${appUrl}/login`}
-                  size={180}
+                  size={160}
                   level="H"
                   includeMargin
                 />
               </div>
-              <p className="break-all text-center text-xs text-slate-500">
+              <p className="break-all text-center text-[11px] text-slate-400">
                 {appUrl}/login
               </p>
             </div>
@@ -534,10 +443,10 @@ export default function AdminPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Liberar check-in (cooldown 6 dias)</CardTitle>
+            <CardTitle className="text-base">Liberar check-in</CardTitle>
           </CardHeader>
-          <p className="mb-4 text-sm text-slate-600">
-            Permite novo check-in antes dos 6 dias e encerra fila ativa do motorista (para testes).
+          <p className="mb-4 text-sm text-slate-500">
+            Antecipa novo check-in e encerra fila ativa do motorista (testes).
           </p>
           <div className="flex flex-wrap gap-3">
             <Input
