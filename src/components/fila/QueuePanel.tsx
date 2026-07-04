@@ -24,6 +24,7 @@ import {
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
 import { formatPhone, isoToDateInput } from "@/lib/utils";
+import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
@@ -90,9 +91,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const fetchQueue = useCallback(async () => {
       setFetchError(null);
 
-      const needsFullDay =
-        (isAdmin && showFinalizados) ||
-        (isEmpilhador && empilhadorFilter !== "aguardando");
+      const needsFullDay = (isAdmin && showFinalizados) || isEmpilhador;
 
       const params = new URLSearchParams();
       if (needsFullDay) params.set("scope", "all");
@@ -114,7 +113,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       setEntries(sortQueueEntries(json.data ?? []));
       setLoading(false);
     },
-    [showFinalizados, isAdmin, isEmpilhador, empilhadorFilter]
+    [showFinalizados, isAdmin, isEmpilhador]
   );
 
   async function refreshAfterSave(statusChanged?: QueueStatus) {
@@ -317,25 +316,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const ausenteEntries = entries.filter((e) => isAusenteQueueStatus(e.status));
   const operationalEntries = [...activeEntries, ...ausenteEntries];
   const calledCount = activeEntries.filter((e) => isDriverCalled(e)).length;
-  const waitingCount = activeEntries.filter((e) => !isDriverCalled(e)).length;
-  const finalizedTodayCount = useMemo(
-    () =>
-      entries.filter(
-        (e) =>
-          normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
-      ).length,
-    [entries]
-  );
+  const aguardandoCount = countAguardandoDescarregamento(entries);
+  const waitingNotCalledCount = activeEntries.filter((e) => !isDriverCalled(e)).length;
+  const finalizedTodayCount = countFinalizadasNoDiaOperacional(entries);
 
   const displayedEntries = useMemo(() => {
     if (!isEmpilhador) return entries;
     if (empilhadorFilter === "finalizadas") {
-      return sortClosedEntries(
-        entries.filter(
-          (e) =>
-            normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
-        )
-      );
+      return sortClosedEntries(entries.filter(isFinalizadaNoDiaOperacional));
     }
     return entries.filter(
       (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
@@ -750,7 +738,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         </header>
 
         <QueueMobileSummaryStrip
-          waiting={waitingCount}
+          waiting={aguardandoCount}
           finalized={finalizedTodayCount}
           className="mb-4"
         />
@@ -822,7 +810,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         </div>
 
         <QueueStatsBar
-          waiting={waitingCount}
+          waiting={waitingNotCalledCount}
           called={calledCount}
           total={displayedEntries.length}
         />

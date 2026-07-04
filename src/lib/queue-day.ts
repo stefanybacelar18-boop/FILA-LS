@@ -1,5 +1,8 @@
-/** Fuso operacional LSL (pátio). */
-export const OPERATIONAL_TIMEZONE = "America/Manaus";
+/** Fuso operacional LSL (pátio) — São Paulo. */
+export const OPERATIONAL_TIMEZONE = "America/Sao_Paulo";
+
+/** Offset fixo do fuso operacional (BRT, sem horário de verão). */
+const OPERATIONAL_UTC_OFFSET = "-03:00";
 
 /** Data YYYY-MM-DD no fuso operacional. */
 export function getManausDateYmd(
@@ -21,15 +24,15 @@ export function addManausDays(ymd: string, days: number): string {
   return utc.toISOString().slice(0, 10);
 }
 
-/** Meio-dia Manaus (UTC−4) para armazenar previsão sem ambiguidade de fuso. */
+/** Meio-dia no fuso operacional para armazenar previsão sem ambiguidade. */
 export function manausDayStartISO(ymd: string): string {
-  return new Date(`${ymd}T12:00:00-04:00`).toISOString();
+  return new Date(`${ymd}T12:00:00${OPERATIONAL_UTC_OFFSET}`).toISOString();
 }
 
-/** Início do dia civil no fuso operacional (meia-noite Manaus). */
+/** Início do dia civil no fuso operacional (meia-noite São Paulo). */
 export function getTodayStartISO(timeZone = OPERATIONAL_TIMEZONE): string {
   const ymd = getManausDateYmd(new Date(), timeZone);
-  return new Date(`${ymd}T00:00:00-04:00`).toISOString();
+  return new Date(`${ymd}T00:00:00${OPERATIONAL_UTC_OFFSET}`).toISOString();
 }
 
 /** Entrada pertence ao dia operacional atual. */

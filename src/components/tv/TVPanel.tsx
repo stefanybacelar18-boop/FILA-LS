@@ -10,6 +10,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { maskPlaca } from "@/lib/checkin-rules";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Star } from "lucide-react";
+import { OPERATIONAL_TIMEZONE } from "@/lib/queue-day";
 
 export function TVPanel() {
   const supabase = createClient();
@@ -38,7 +39,7 @@ export function TVPanel() {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-          timeZone: "America/Manaus",
+          timeZone: OPERATIONAL_TIMEZONE,
         }).format(new Date())
       );
     }

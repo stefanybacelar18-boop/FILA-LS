@@ -19,7 +19,7 @@ export function QueueMobileSummaryStrip({
         className
       )}
       role="status"
-      aria-label={`${waiting} aguardando, ${finalized} finalizadas`}
+      aria-label={`${waiting} aguardando descarregamento na fila, ${finalized} finalizadas hoje`}
     >
       <div className="flex flex-1 flex-col items-center border-r border-slate-100 px-3 py-2.5">
         <span className="text-xl font-bold tabular-nums leading-none text-amber-700">
@@ -28,6 +28,7 @@ export function QueueMobileSummaryStrip({
         <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           Aguardando
         </span>
+        <span className="mt-0.5 text-[9px] font-medium text-slate-400">Na fila agora</span>
       </div>
       <div className="flex flex-1 flex-col items-center px-3 py-2.5">
         <span className="text-xl font-bold tabular-nums leading-none text-emerald-700">
@@ -36,6 +37,7 @@ export function QueueMobileSummaryStrip({
         <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           Finalizadas
         </span>
+        <span className="mt-0.5 text-[9px] font-medium text-slate-400">Hoje</span>
       </div>
     </div>
   );

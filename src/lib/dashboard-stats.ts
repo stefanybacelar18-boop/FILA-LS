@@ -4,6 +4,7 @@ import {
   isAusenteQueueStatus,
   normalizeQueueStatus,
 } from "./constants";
+import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional } from "./queue-counters";
 import { isEntryClosedToday, isQueueEntryFromToday } from "./queue-day";
 
 function isDriverCalled(entry: QueueEntry): boolean {
@@ -87,9 +88,7 @@ export function computeEmpilhadorStats(
   const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
   const closedToday = entries.filter((e) => isEntryClosedToday(e));
 
-  const finalizadosHoje = closedToday.filter(
-    (e) => normalizeQueueStatus(e.status) === "finalizado"
-  ).length;
+  const finalizadosHoje = countFinalizadasNoDiaOperacional(entries);
 
   const ausentesHoje = entries.filter((e) => isAusenteQueueStatus(e.status)).length;
 
@@ -108,15 +107,15 @@ export function computeEmpilhadorStats(
   const encerradosPorMim = minhasFinalizadas + minhasAusencias;
 
   return {
-    aguardando: activeEntries.filter((e) => !isDriverCalled(e)).length,
+    aguardando: countAguardandoDescarregamento(entries),
     chamados: activeEntries.filter((e) => isDriverCalled(e)).length,
-    finalizadosHoje,
+    finalizadosHoje: countFinalizadasNoDiaOperacional(entries),
     ausentesHoje,
     retornoRacks: entries.filter((e) => e.retorno_racks_vazios === true).length,
     encerradosPorMim,
     minhasFinalizadas,
     minhasAusencias,
-    totalOperacoesHoje: finalizadosHoje + ausentesHoje,
+    totalOperacoesHoje: countFinalizadasNoDiaOperacional(entries) + ausentesHoje,
   };
 }
 
