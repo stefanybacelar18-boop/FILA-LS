@@ -1,4 +1,4 @@
-import { WHATSAPP_CALL_TEMPLATE } from "./constants";
+import { WHATSAPP_CALL_TEMPLATE, WHATSAPP_EMPILHADOR_CALL_TEMPLATE } from "./constants";
 
 export function normalizePhoneForWhatsApp(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -23,5 +23,15 @@ export function getCallDriverWhatsAppLink(
   const message = template
     .replace("{MINUTA}", minuta || "—")
     .replace("{DOCA}", doca || "indicada");
+  return getWhatsAppLink(phone, message);
+}
+
+/** Chamada pelo empilhador — mensagem sem doca */
+export function getEmpilhadorCallWhatsAppLink(
+  phone: string,
+  minuta: string,
+  template = WHATSAPP_EMPILHADOR_CALL_TEMPLATE
+): string {
+  const message = template.replace("{MINUTA}", minuta || "—");
   return getWhatsAppLink(phone, message);
 }

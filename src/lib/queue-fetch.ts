@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueEntry } from "@/lib/types";
-import { filterOperationalPanelEntries, ACTIVE_QUEUE_DB_STATUSES } from "@/lib/constants";
+import { filterOperationalPanelEntries, OPERATIONAL_PANEL_DB_STATUSES } from "@/lib/constants";
 
 const FETCH_TIMEOUT_MS = 25_000;
 let inFlight: Promise<QueueEntry[]> | null = null;
@@ -61,7 +61,7 @@ export async function fetchActiveQueueToday(
     .from("queue_entries")
     .select("*")
     .is("deleted_at", null)
-    .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
+    .in("status", [...OPERATIONAL_PANEL_DB_STATUSES])
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -70,4 +70,26 @@ export async function fetchActiveQueueToday(
   }
 
   return filterOperationalPanelEntries((data as QueueEntry[]) ?? []);
+}
+
+/** Fila do dia via API autenticada (staff). */
+export async function fetchStaffQueueToday(options?: {
+  includeClosedToday?: boolean;
+}): Promise<{ data: QueueEntry[]; error?: string }> {
+  const params = new URLSearchParams({ _: String(Date.now()) });
+  if (options?.includeClosedToday !== false) {
+    params.set("scope", "all");
+  }
+
+  const res = await fetch(`/api/queue/today?${params}`, { cache: "no-store" });
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    data?: QueueEntry[];
+  };
+
+  if (!res.ok) {
+    return { data: [], error: json.error ?? "Erro ao carregar fila" };
+  }
+
+  return { data: json.data ?? [] };
 }

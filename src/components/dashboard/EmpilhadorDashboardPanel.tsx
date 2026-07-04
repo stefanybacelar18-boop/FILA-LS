@@ -4,12 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { QueueEntry } from "@/lib/types";
 import { computeEmpilhadorStats } from "@/lib/dashboard-stats";
-import { formatManausDateLabel, getTodayStartISO } from "@/lib/queue-day";
+import { formatManausDateLabel, isEntryClosedToday } from "@/lib/queue-day";
+import { fetchStaffQueueToday } from "@/lib/queue-fetch";
 import { createDebouncedFn } from "@/lib/debounce";
-import {
-  FieldStaffShell,
-  FieldStaffPageTitle,
-} from "@/components/layout/FieldStaffShell";
+import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
@@ -18,8 +16,8 @@ import {
   UserX,
   PhoneCall,
   Clock,
-  BarChart3,
   Target,
+  AlertCircle,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { normalizeQueueStatus } from "@/lib/constants";
@@ -32,17 +30,19 @@ export function EmpilhadorDashboardPanel({
   const supabase = createClient();
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const { data } = await supabase
-      .from("queue_entries")
-      .select("*")
-      .is("deleted_at", null)
-      .gte("created_at", getTodayStartISO());
-
-    setEntries((data as QueueEntry[]) ?? []);
+    setFetchError(null);
+    const { data, error } = await fetchStaffQueueToday();
+    if (error) {
+      setFetchError(error);
+      setEntries([]);
+    } else {
+      setEntries(data);
+    }
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -72,9 +72,9 @@ export function EmpilhadorDashboardPanel({
   const minhasRecentes = entries
     .filter(
       (e) =>
-        (normalizeQueueStatus(e.status) === "finalizado" ||
-          normalizeQueueStatus(e.status) === "ausente") &&
-        e.closed_by_user_id === profile.id
+        normalizeQueueStatus(e.status) === "finalizado" &&
+        e.closed_by_user_id === profile.id &&
+        isEntryClosedToday(e)
     )
     .sort(
       (a, b) =>
@@ -85,15 +85,38 @@ export function EmpilhadorDashboardPanel({
 
   return (
     <FieldStaffShell userName={profile.full_name}>
-      <FieldStaffPageTitle
-        title="Meu desempenho"
-        subtitle={`Resumo do dia · ${formatManausDateLabel(new Date())}`}
-        icon={BarChart3}
-      />
+      <header className="mb-4">
+        <p className="section-eyebrow">Operação · Descarga</p>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">Meu desempenho</h1>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Resumo do dia · {formatManausDateLabel(new Date())}
+        </p>
+      </header>
 
       {loading ? (
         <div className="flex justify-center py-16">
           <Spinner />
+        </div>
+      ) : fetchError ? (
+        <div
+          className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          role="alert"
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">Não foi possível carregar o resumo</p>
+            <p className="mt-1 text-red-700">{fetchError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                void fetchData();
+              }}
+              className="mt-2 font-semibold underline"
+            >
+              Tentar novamente
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -165,20 +188,26 @@ export function EmpilhadorDashboardPanel({
               </CardHeader>
               <ul className="divide-y divide-slate-100">
                 {minhasRecentes.map((e) => (
-                    <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-brand">
-                          {e.minuta ? `Minuta ${e.minuta}` : e.nome}
-                        </p>
-                        <p className="truncate font-mono text-xs text-slate-600">
-                          {e.placa_cavalo || e.placa}
-                        </p>
-                      </div>
-                      <StatusBadge status={e.status} />
-                    </li>
-                  ))}
+                  <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-brand">
+                        {e.minuta ? `Minuta ${e.minuta}` : e.nome}
+                      </p>
+                      <p className="truncate font-mono text-xs text-slate-600">
+                        {e.placa_cavalo || e.placa}
+                      </p>
+                    </div>
+                    <StatusBadge status={e.status} />
+                  </li>
+                ))}
               </ul>
             </Card>
+          )}
+
+          {stats.totalOperacoesHoje === 0 && stats.aguardando === 0 && stats.chamados === 0 && (
+            <p className="mt-6 text-center text-sm text-slate-500">
+              Nenhuma operação registrada hoje no pátio.
+            </p>
           )}
         </>
       )}

@@ -36,8 +36,8 @@ export function getQueuePermissions(role: string): QueuePermissions {
 
   return {
     panelTitle: "Fila do pátio",
-    panelSubtitle: "Chame motoristas, docas e ordem da fila",
-    canEditDoca: true,
+    panelSubtitle: "Chame motoristas e acompanhe a ordem da fila",
+    canEditDoca: false,
     canEditPrevisao: false,
     canChamarWhatsApp: true,
     canSetPrioridade: false,

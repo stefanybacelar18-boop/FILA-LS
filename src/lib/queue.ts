@@ -1,5 +1,9 @@
 import type { QueueEntry, QueueStatus } from "./types";
-import { isActiveQueueStatus, normalizeQueueStatus } from "./constants";
+import {
+  isActiveQueueStatus,
+  isAusenteQueueStatus,
+  normalizeQueueStatus,
+} from "./constants";
 
 export function compareQueueOrder(
   a: QueueEntry & { menor_vencimento?: string | null },
@@ -44,12 +48,13 @@ export function resolveQueuePosition(
   return ahead + 1;
 }
 
+/** Próximo chamável — ausentes ficam no topo mas são pulados até voltarem. */
 export function getNextToCall(entries: QueueEntry[]): QueueEntry | null {
   const waiting = entries
     .filter((e) => isActiveQueueStatus(e.status))
     .sort(compareQueueOrder);
 
-  return waiting.find((e) => !e.called_at) ?? waiting[0] ?? null;
+  return waiting.find((e) => !e.called_at) ?? null;
 }
 
 export function getRecentlyCalled(entries: QueueEntry[]): QueueEntry[] {
@@ -71,40 +76,52 @@ export function getStatusTimestampUpdates(newStatus: QueueStatus): Partial<Queue
   const now = new Date().toISOString();
   switch (newStatus) {
     case "finalizado":
-      return { finished_at: now };
+      return { finished_at: now, called_at: null };
     case "aguardando_descarregamento":
-      return { finished_at: null };
+      return { finished_at: null, called_at: null };
     case "ausente":
-      return { finished_at: now };
+      return { finished_at: null, called_at: null };
     default:
       return {};
   }
 }
 
-/** Data/hora em que a operação foi encerrada (finalizado ou ausente). */
+/** Data/hora em que a operação foi encerrada (somente finalizado). */
 export function resolveEntryFinishedAt(
   entry: Pick<QueueEntry, "status" | "finished_at" | "updated_at">
 ): string | null {
   const status = normalizeQueueStatus(entry.status);
-  if (status === "ausente") return entry.updated_at;
   if (status === "finalizado") return entry.finished_at ?? entry.updated_at;
   if (entry.finished_at) return entry.finished_at;
   return null;
 }
 
+/** Ausentes sempre no topo; ativos em seguida; finalizados por último. */
 export function sortQueueEntries(entries: QueueEntry[]): QueueEntry[] {
-  const statusOrder: Record<QueueStatus, number> = {
-    aguardando_descarregamento: 0,
-    ausente: 1,
-    finalizado: 2,
-  };
+  const ausentes = entries.filter((e) => isAusenteQueueStatus(e.status));
+  const active = entries.filter((e) => isActiveQueueStatus(e.status));
+  const finalizados = entries.filter(
+    (e) => normalizeQueueStatus(e.status) === "finalizado"
+  );
+  const other = entries.filter(
+    (e) =>
+      !isActiveQueueStatus(e.status) &&
+      !isAusenteQueueStatus(e.status) &&
+      normalizeQueueStatus(e.status) !== "finalizado"
+  );
 
-  return [...entries].sort((a, b) => {
-    const orderA = statusOrder[normalizeQueueStatus(a.status)];
-    const orderB = statusOrder[normalizeQueueStatus(b.status)];
-    if (orderA !== orderB) return orderA - orderB;
-    return compareQueueOrder(a, b);
-  });
+  return [
+    ...ausentes.sort(
+      (a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+    ),
+    ...active.sort(compareQueueOrder),
+    ...finalizados.sort(
+      (a, b) =>
+        new Date(b.finished_at ?? b.updated_at).getTime() -
+        new Date(a.finished_at ?? a.updated_at).getTime()
+    ),
+    ...other,
+  ];
 }
 
-export { isActiveQueueStatus, normalizeQueueStatus };
+export { isActiveQueueStatus, isAusenteQueueStatus, normalizeQueueStatus };

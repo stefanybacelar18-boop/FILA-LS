@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
-export type EmpilhadorTabId = "ativas" | "finalizadas" | "ausentes";
+export type EmpilhadorTabId = "aguardando" | "finalizadas";
 
 type EmpilhadorQueueTabsProps = {
   value: EmpilhadorTabId;

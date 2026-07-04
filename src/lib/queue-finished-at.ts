@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeQueueStatus } from "./constants";
 import type { QueueEntry } from "./types";
 
-const TERMINAL_STATUSES = ["finalizado", "ausente"] as const;
+const TERMINAL_STATUSES = ["finalizado"] as const;
 
 function enrichFromHistory(
   entries: QueueEntry[],
@@ -15,7 +15,7 @@ function enrichFromHistory(
     if (fromHistory) return { ...entry, finished_at: fromHistory };
 
     const status = normalizeQueueStatus(entry.status);
-    if (status === "finalizado" || status === "ausente") {
+    if (status === "finalizado") {
       return { ...entry, finished_at: entry.updated_at };
     }
 
@@ -28,7 +28,7 @@ export function enrichEntriesWithFinishedAtReadOnly(entries: QueueEntry[]): Queu
   return entries.map((entry) => {
     if (entry.finished_at) return entry;
     const status = normalizeQueueStatus(entry.status);
-    if (status === "finalizado" || status === "ausente") {
+    if (status === "finalizado") {
       return { ...entry, finished_at: entry.updated_at };
     }
     return entry;

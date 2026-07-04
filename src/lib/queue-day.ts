@@ -40,18 +40,17 @@ export function isQueueEntryFromToday(
   return new Date(createdAt) >= new Date(getTodayStartISO(timeZone));
 }
 
-/** Momento em que a minuta foi encerrada (finalizado ou ausente). */
+/** Momento em que a minuta foi encerrada (somente finalizado). */
 export function resolveEntryClosedAt(entry: {
   status: string;
   finished_at?: string | null;
   updated_at: string;
 }): string | null {
-  if (entry.status === "ausente") return entry.updated_at;
   if (entry.status === "finalizado") return entry.finished_at ?? entry.updated_at;
   return null;
 }
 
-/** Minuta finalizada ou marcada ausente no dia operacional atual. */
+/** Minuta finalizada no dia operacional atual. Ausente permanece na fila operacional. */
 export function isEntryClosedToday(
   entry: {
     status: string;

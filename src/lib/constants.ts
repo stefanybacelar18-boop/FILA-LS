@@ -77,11 +77,21 @@ export const LEGACY_ACTIVE_STATUSES = [
   "aguardando_carregamento_racks",
 ] as const;
 
-/** Status persistidos na fila até finalizar/ausentar/cancelar (não somem à meia-noite). */
+/** Status persistidos na fila até finalizar (ausente permanece visível até voltar). */
 export const ACTIVE_QUEUE_DB_STATUSES = [
   "aguardando_descarregamento",
   ...LEGACY_ACTIVE_STATUSES,
 ] as const;
+
+/** Fila operacional visível nos painéis (ativos + ausentes aguardando retorno). */
+export const OPERATIONAL_PANEL_DB_STATUSES = [
+  ...ACTIVE_QUEUE_DB_STATUSES,
+  "ausente",
+] as const;
+
+export function isAusenteQueueStatus(status: string): boolean {
+  return normalizeQueueStatus(status) === "ausente";
+}
 
 export function isActiveQueueStatus(status: string): boolean {
   if (status === "ausente" || status === "finalizado" || status === "cancelado") return false;
@@ -97,9 +107,9 @@ export function shouldShowInQueuePanel(entry: { status: string }, showFinalizado
   return isActiveQueueStatus(entry.status);
 }
 
-/** Painéis operacionais (motorista, empilhador, TV): fila ativa até encerrar. */
+/** Painéis operacionais (motorista, empilhador, TV): fila ativa + ausentes aguardando retorno. */
 export function isOperationalPanelEntry(entry: { status: string }): boolean {
-  return isActiveQueueStatus(entry.status);
+  return isActiveQueueStatus(entry.status) || isAusenteQueueStatus(entry.status);
 }
 
 export function filterOperationalPanelEntries<T extends { status: string }>(entries: T[]): T[] {
@@ -193,5 +203,9 @@ export const COOLDOWN_MESSAGE =
 
 export const WHATSAPP_CALL_TEMPLATE =
   "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início da operação de descarga.\n\nObrigado.";
+
+/** Mensagem de chamada para empilhador — sem referência a doca */
+export const WHATSAPP_EMPILHADOR_CALL_TEMPLATE =
+  "PAD SIF · LSL\n\nOlá, motorista da minuta {MINUTA}!\n\nVocê foi chamado para descarregamento no pátio.\nPor favor, dirija-se à área de descarga o mais breve possível.\n\nObrigado!";
 
 export const ALL_QUEUE_STATUSES = QUEUE_STATUSES;

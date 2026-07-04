@@ -8,11 +8,15 @@ import {
 } from "./minuta-metadata-db";
 import { computePrevisoesDescarregamento } from "./minuta-intelligence";
 import { sortQueueEntries } from "./queue";
-import { filterOperationalPanelEntries, isActiveQueueStatus, ACTIVE_QUEUE_DB_STATUSES } from "./constants";
+import {
+  filterOperationalPanelEntries,
+  isOperationalPanelEntry,
+  OPERATIONAL_PANEL_DB_STATUSES,
+} from "./constants";
 import { isEntryClosedToday } from "./queue-day";
 import type { QueueEntry } from "./types";
 
-const CLOSED_QUEUE_DB_STATUSES = ["finalizado", "ausente", "cancelado"] as const;
+const CLOSED_QUEUE_DB_STATUSES = ["finalizado", "cancelado"] as const;
 
 export type EnrichedQueueEntry = QueueEntry & {
   prioridade_automatica?: boolean;
@@ -90,7 +94,7 @@ async function loadEnrichedQueueEntriesUncached(
     .from("queue_entries")
     .select("*")
     .is("deleted_at", null)
-    .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
+    .in("status", [...OPERATIONAL_PANEL_DB_STATUSES])
     .order("created_at", { ascending: true });
 
   let rows: QueueEntry[];
@@ -143,7 +147,9 @@ async function loadEnrichedQueueEntriesUncached(
       : sortedEnriched;
 
   const filtered = includeInactive
-    ? withPrevisao.filter((e) => isActiveQueueStatus(e.status) || isEntryClosedToday(e))
+    ? withPrevisao.filter(
+        (e) => isOperationalPanelEntry(e) || isEntryClosedToday(e)
+      )
     : filterOperationalPanelEntries(withPrevisao);
 
   return sortQueueEntries(filtered) as EnrichedQueueEntry[];
@@ -157,7 +163,7 @@ export async function loadBasicOperationalQueue(
     .from("queue_entries")
     .select("*")
     .is("deleted_at", null)
-    .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
+    .in("status", [...OPERATIONAL_PANEL_DB_STATUSES])
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);

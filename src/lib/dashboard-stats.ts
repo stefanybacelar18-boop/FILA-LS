@@ -1,9 +1,10 @@
 import type { QueueEntry, DashboardStats } from "./types";
 import {
   isActiveQueueStatus,
+  isAusenteQueueStatus,
   normalizeQueueStatus,
 } from "./constants";
-import { isQueueEntryFromToday } from "./queue-day";
+import { isEntryClosedToday, isQueueEntryFromToday } from "./queue-day";
 
 function isDriverCalled(entry: QueueEntry): boolean {
   return isActiveQueueStatus(entry.status) && Boolean(entry.called_at);
@@ -83,36 +84,35 @@ export function computeEmpilhadorStats(
   entries: QueueEntry[],
   userId: string
 ): EmpilhadorDashboardStats {
-  const todayEntries = entries.filter((e) => isQueueEntryFromToday(e.created_at));
+  const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
+  const closedToday = entries.filter((e) => isEntryClosedToday(e));
 
-  const finalizadosHoje = todayEntries.filter(
+  const finalizadosHoje = closedToday.filter(
     (e) => normalizeQueueStatus(e.status) === "finalizado"
   ).length;
 
-  const ausentesHoje = todayEntries.filter(
-    (e) => normalizeQueueStatus(e.status) === "ausente"
-  ).length;
+  const ausentesHoje = entries.filter((e) => isAusenteQueueStatus(e.status)).length;
 
-  const minhasFinalizadas = todayEntries.filter(
+  const minhasFinalizadas = closedToday.filter(
     (e) =>
       normalizeQueueStatus(e.status) === "finalizado" &&
       e.closed_by_user_id === userId
   ).length;
 
-  const minhasAusencias = todayEntries.filter(
+  const minhasAusencias = entries.filter(
     (e) =>
-      normalizeQueueStatus(e.status) === "ausente" &&
+      isAusenteQueueStatus(e.status) &&
       e.closed_by_user_id === userId
   ).length;
 
   const encerradosPorMim = minhasFinalizadas + minhasAusencias;
 
   return {
-    aguardando: todayEntries.filter((e) => isActiveQueueStatus(e.status)).length,
-    chamados: todayEntries.filter((e) => isDriverCalled(e)).length,
+    aguardando: activeEntries.filter((e) => !isDriverCalled(e)).length,
+    chamados: activeEntries.filter((e) => isDriverCalled(e)).length,
     finalizadosHoje,
     ausentesHoje,
-    retornoRacks: todayEntries.filter((e) => e.retorno_racks_vazios === true).length,
+    retornoRacks: entries.filter((e) => e.retorno_racks_vazios === true).length,
     encerradosPorMim,
     minhasFinalizadas,
     minhasAusencias,

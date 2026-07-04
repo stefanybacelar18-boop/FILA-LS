@@ -2,14 +2,14 @@ import { cn } from "@/lib/utils";
 
 type QueueMobileSummaryStripProps = {
   waiting: number;
-  called: number;
+  finalized: number;
   className?: string;
 };
 
 /** Resumo horizontal compacto — empilhador mobile */
 export function QueueMobileSummaryStrip({
   waiting,
-  called,
+  finalized,
   className,
 }: QueueMobileSummaryStripProps) {
   return (
@@ -19,7 +19,7 @@ export function QueueMobileSummaryStrip({
         className
       )}
       role="status"
-      aria-label={`${waiting} aguardando, ${called} chamados`}
+      aria-label={`${waiting} aguardando, ${finalized} finalizadas`}
     >
       <div className="flex flex-1 flex-col items-center border-r border-slate-100 px-3 py-2.5">
         <span className="text-xl font-bold tabular-nums leading-none text-amber-700">
@@ -31,10 +31,10 @@ export function QueueMobileSummaryStrip({
       </div>
       <div className="flex flex-1 flex-col items-center px-3 py-2.5">
         <span className="text-xl font-bold tabular-nums leading-none text-emerald-700">
-          {called}
+          {finalized}
         </span>
         <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-          Chamados
+          Finalizadas
         </span>
       </div>
     </div>

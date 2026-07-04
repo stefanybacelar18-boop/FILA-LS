@@ -8,6 +8,7 @@ import {
   sortQueueEntries,
   isDriverCalled,
   isActiveQueueStatus,
+  isAusenteQueueStatus,
   normalizeQueueStatus,
   getNextToCall,
 } from "@/lib/queue";
@@ -21,7 +22,7 @@ import {
   statusOptionsForRole,
   assertStatusAllowed,
 } from "@/lib/role-permissions";
-import { getCallDriverWhatsAppLink } from "@/lib/whatsapp";
+import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
 import { formatPhone, isoToDateInput } from "@/lib/utils";
 import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
@@ -52,9 +53,10 @@ import {
   X,
   PackageOpen,
   Filter,
+  Clock,
 } from "lucide-react";
 
-type EmpilhadorFilter = "ativas" | "finalizadas" | "ausentes";
+type EmpilhadorFilter = "aguardando" | "finalizadas";
 
 function sortClosedEntries(entries: QueueEntry[]): QueueEntry[] {
   return [...entries].sort(
@@ -83,14 +85,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [editPrioridade, setEditPrioridade] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showFinalizados, setShowFinalizados] = useState(false);
-  const [empilhadorFilter, setEmpilhadorFilter] = useState<EmpilhadorFilter>("ativas");
+  const [empilhadorFilter, setEmpilhadorFilter] = useState<EmpilhadorFilter>("aguardando");
 
   const fetchQueue = useCallback(async () => {
       setFetchError(null);
 
       const needsFullDay =
         (isAdmin && showFinalizados) ||
-        (isEmpilhador && empilhadorFilter !== "ativas");
+        (isEmpilhador && empilhadorFilter !== "aguardando");
 
       const params = new URLSearchParams();
       if (needsFullDay) params.set("scope", "all");
@@ -116,16 +118,20 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   );
 
   async function refreshAfterSave(statusChanged?: QueueStatus) {
-    if (statusChanged === "finalizado" || statusChanged === "ausente") {
+    if (statusChanged === "finalizado") {
       setSelectedId(null);
-      if ((isAdmin && showFinalizados) || (isEmpilhador && empilhadorFilter !== "ativas")) {
+      if ((isAdmin && showFinalizados) || (isEmpilhador && empilhadorFilter !== "aguardando")) {
         await fetchQueue();
         return;
       }
     }
+    if (statusChanged === "ausente") {
+      await fetchQueue();
+      return;
+    }
     if (statusChanged === "aguardando_descarregamento" && isEmpilhador) {
       setSelectedId(null);
-      if (empilhadorFilter !== "ativas") {
+      if (empilhadorFilter !== "aguardando") {
         await fetchQueue();
         return;
       }
@@ -221,25 +227,8 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     setSaving(true);
 
     if (isEmpilhador && isActiveQueueStatus(entry.status)) {
-      const payload: {
-        entryId: string;
-        doca?: string | null;
-        prioridade?: boolean;
-        previsao_descarregamento?: string | null;
-      } = { entryId: selectedId };
-      if (permissions.canEditDoca) payload.doca = editDoca || null;
-      if (permissions.canSetPrioridade) payload.prioridade = editPrioridade;
-      if (permissions.canEditPrevisao) {
-        payload.previsao_descarregamento = editPrevisao ? editPrevisao : null;
-      }
-
-      const { error } = await updateQueueEntryViaApi(payload);
       setSaving(false);
-      if (error) {
-        alert(`Erro ao salvar: ${error}`);
-        return;
-      }
-      fetchQueue();
+      alert("Use o botão WhatsApp para chamar o motorista ou altere o status.");
       return;
     }
 
@@ -274,60 +263,69 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     await refreshAfterSave(editStatus);
   }
 
-  async function chamarParaDoca(entry: QueueEntry, docaOverride?: string) {
+  async function chamarMotorista(entry: QueueEntry) {
     if (!permissions.canChamarWhatsApp) return;
 
-    const doca = docaOverride ?? (editDoca.trim() || entry.doca?.trim() || "Doca 1");
     setSaving(true);
 
-    if (
-      selectedId === entry.id &&
-      isActiveQueueStatus(entry.status) &&
-      (permissions.canEditDoca || permissions.canEditPrevisao)
-    ) {
-      const { error: fieldsError } = await updateQueueEntryViaApi({
-        entryId: entry.id,
-        ...(permissions.canEditDoca ? { doca: doca || null } : {}),
-        ...(permissions.canEditPrevisao
-          ? { previsao_descarregamento: editPrevisao ? editPrevisao : null }
-          : {}),
-        called_at: new Date().toISOString(),
-      });
+    const payload: {
+      entryId: string;
+      called_at: string;
+      doca?: string | null;
+      previsao_descarregamento?: string | null;
+    } = {
+      entryId: entry.id,
+      called_at: new Date().toISOString(),
+    };
 
-      if (fieldsError) {
-        setSaving(false);
-        alert(`Erro ao salvar doca/previsão: ${fieldsError}`);
-        return;
-      }
-    } else {
-      const { error: callError } = await updateQueueEntryViaApi({
-        entryId: entry.id,
-        doca: doca || null,
-        called_at: new Date().toISOString(),
-      });
-
-      if (callError) {
-        setSaving(false);
-        alert(`Erro ao registrar chamada: ${callError}`);
-        return;
-      }
+    if (permissions.canEditDoca) {
+      const doca = editDoca.trim() || entry.doca?.trim() || null;
+      payload.doca = doca;
     }
+
+    if (
+      permissions.canEditPrevisao &&
+      selectedId === entry.id &&
+      isActiveQueueStatus(entry.status)
+    ) {
+      payload.previsao_descarregamento = editPrevisao ? editPrevisao : null;
+    }
+
+    const { error } = await updateQueueEntryViaApi(payload);
 
     setSaving(false);
 
-    setEditDoca(doca);
-    const link = getCallDriverWhatsAppLink(
-      entry.telefone,
-      entry.minuta || entry.placa,
-      doca
-    );
+    if (error) {
+      alert(`Erro ao registrar chamada: ${error}`);
+      return;
+    }
+
+    const minuta = entry.minuta || entry.placa;
+    const link = permissions.canEditDoca
+      ? getCallDriverWhatsAppLink(
+          entry.telefone,
+          minuta,
+          payload.doca ?? entry.doca
+        )
+      : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
+
     window.open(link, "_blank", "noopener,noreferrer");
     fetchQueue();
   }
 
   const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
+  const ausenteEntries = entries.filter((e) => isAusenteQueueStatus(e.status));
+  const operationalEntries = [...activeEntries, ...ausenteEntries];
   const calledCount = activeEntries.filter((e) => isDriverCalled(e)).length;
-  const waitingCount = activeEntries.length - calledCount;
+  const waitingCount = activeEntries.filter((e) => !isDriverCalled(e)).length;
+  const finalizedTodayCount = useMemo(
+    () =>
+      entries.filter(
+        (e) =>
+          normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
+      ).length,
+    [entries]
+  );
 
   const displayedEntries = useMemo(() => {
     if (!isEmpilhador) return entries;
@@ -339,14 +337,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         )
       );
     }
-    if (empilhadorFilter === "ausentes") {
-      return sortClosedEntries(
-        entries.filter(
-          (e) => normalizeQueueStatus(e.status) === "ausente" && isEntryClosedToday(e)
-        )
-      );
-    }
-    return entries.filter((e) => isActiveQueueStatus(e.status));
+    return entries.filter(
+      (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
+    );
   }, [entries, isEmpilhador, empilhadorFilter]);
 
   const selected = entries.find((e) => e.id === selectedId);
@@ -371,9 +364,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             <EmpilhadorQueueCard
               key={entry.id}
               entry={entry}
-              position={start + idx + 1}
+              position={idx + 1}
               selected={selectedId === entry.id}
-              isNext={entry.id === nextToCallId && isActiveQueueStatus(entry.status)}
+              isNext={
+                entry.id === nextToCallId && isActiveQueueStatus(entry.status)
+              }
               onClick={() => selectEntry(entry)}
             />
           ))}
@@ -401,11 +396,16 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     );
   }
 
-  const adminActiveList = isAdmin
-    ? displayedEntries.filter((e) => isActiveQueueStatus(e.status))
+  const adminOperationalList = isAdmin
+    ? displayedEntries.filter(
+        (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
+      )
     : [];
   const adminClosedList = isAdmin
-    ? displayedEntries.filter((e) => !isActiveQueueStatus(e.status))
+    ? displayedEntries.filter(
+        (e) =>
+          normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
+      )
     : [];
 
   useEffect(() => {
@@ -500,7 +500,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             className="w-full"
             size="lg"
             disabled={saving}
-            onClick={() => chamarParaDoca(selected)}
+            onClick={() => chamarMotorista(selected)}
           >
             <MessageCircle className="h-4 w-4" />
             Chamar motorista (WhatsApp)
@@ -540,8 +540,17 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             }
           >
             <RotateCcw className="h-4 w-4" />
-            Reativar na fila
+            {isAusenteQueueStatus(selected.status)
+              ? "Motorista voltou — liberar descarga"
+              : "Reativar na fila"}
           </Button>
+        )}
+
+        {isAusenteQueueStatus(selected.status) && isEmpilhador && (
+          <p className="text-xs leading-relaxed text-slate-500">
+            Ausente permanece no topo da fila até ser descarregado. Os demais passam
+            enquanto ele não retorna.
+          </p>
         )}
 
         {isAdmin && statusOptions.length > 0 && (
@@ -648,22 +657,20 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   <p className="section-eyebrow">Fila do dia</p>
                   <p className="mt-2 text-sm text-slate-500">
                   {isEmpilhador && empilhadorFilter === "finalizadas"
-                    ? "Nenhuma minuta finalizada hoje."
-                    : isEmpilhador && empilhadorFilter === "ausentes"
-                      ? "Nenhuma minuta marcada como ausente hoje."
-                      : "Nenhum veículo na fila hoje."}
+                    ? "Nenhuma minuta encerrada hoje."
+                    : "Nenhum veículo aguardando na fila."}
                   </p>
                 </Card>
               ) : isAdmin ? (
                 <>
-                  {adminActiveList.length > 0 &&
-                    renderQueueList(adminActiveList, "admin", {
-                      sectionLabel: showFinalizados ? "Ativos na fila" : undefined,
+                  {adminOperationalList.length > 0 &&
+                    renderQueueList(adminOperationalList, "admin", {
+                      sectionLabel: showFinalizados ? "Fila do pátio" : undefined,
                     })}
                   {showFinalizados && adminClosedList.length > 0 &&
                     renderQueueList(adminClosedList, "admin", {
-                      sectionLabel: "Finalizados / ausentes hoje",
-                      startIndex: adminActiveList.length,
+                      sectionLabel: "Finalizados hoje",
+                      startIndex: adminOperationalList.length,
                     })}
                 </>
               ) : (
@@ -688,7 +695,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             )}
           </div>
 
-          {isEmpilhador && nextToCall && permissions.canChamarWhatsApp && !selected && empilhadorFilter === "ativas" && (
+          {isEmpilhador && nextToCall && permissions.canChamarWhatsApp && !selected && empilhadorFilter === "aguardando" && (
             <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgb(15_23_42/0.06)] backdrop-blur-sm">
                 <Button
                   variant="success"
@@ -697,7 +704,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   disabled={saving}
                   onClick={() => {
                     selectEntry(nextToCall);
-                    chamarParaDoca(nextToCall);
+                    chamarMotorista(nextToCall);
                   }}
                 >
                   <Zap className="h-5 w-5" />
@@ -727,12 +734,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     </>
   );
 
-  const empilhadorFilterLabels: Record<EmpilhadorFilter, string> = {
-    ativas: "Ativas",
-    finalizadas: "Finalizadas",
-    ausentes: "Ausentes",
-  };
-
   if (isEmpilhador) {
     return (
       <FieldStaffShell userName={profile.full_name}>
@@ -742,19 +743,17 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             {permissions.panelTitle}
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {empilhadorFilter === "ativas"
-              ? `${activeEntries.length} veículo${activeEntries.length !== 1 ? "s" : ""} na fila`
-              : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} · ${empilhadorFilterLabels[empilhadorFilter].toLowerCase()}`}
+            {empilhadorFilter === "aguardando"
+              ? `${operationalEntries.length} veículo${operationalEntries.length !== 1 ? "s" : ""} no pátio${ausenteEntries.length > 0 ? ` · ${ausenteEntries.length} ausente${ausenteEntries.length !== 1 ? "s" : ""}` : ""}`
+              : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} finalizada${displayedEntries.length !== 1 ? "s" : ""} hoje`}
           </p>
         </header>
 
-        {empilhadorFilter === "ativas" && (
-          <QueueMobileSummaryStrip
-            waiting={waitingCount}
-            called={calledCount}
-            className="mb-4"
-          />
-        )}
+        <QueueMobileSummaryStrip
+          waiting={waitingCount}
+          finalized={finalizedTodayCount}
+          className="mb-4"
+        />
 
         <EmpilhadorQueueTabs
           className="mb-4"
@@ -764,15 +763,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             setSelectedId(null);
           }}
           tabs={[
-            { id: "ativas", label: "Ativas", icon: Filter },
+            { id: "aguardando", label: "Aguardando", icon: Clock },
             { id: "finalizadas", label: "Finalizadas", icon: CheckCircle2 },
-            { id: "ausentes", label: "Ausentes", icon: UserX },
           ]}
         />
 
-        {empilhadorFilter !== "ativas" && (
+        {empilhadorFilter === "finalizadas" && (
           <p className="mb-3 text-xs leading-relaxed text-slate-500">
-            Toque em uma minuta encerrada para reativar na fila, se necessário.
+            Minutas finalizadas hoje. Ausentes continuam na aba Aguardando até voltarem.
           </p>
         )}
 
@@ -801,7 +799,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 disabled={saving}
                 onClick={() => {
                   selectEntry(nextToCall);
-                  chamarParaDoca(nextToCall);
+                  chamarMotorista(nextToCall);
                 }}
               >
                 <Zap className="h-4 w-4" />
