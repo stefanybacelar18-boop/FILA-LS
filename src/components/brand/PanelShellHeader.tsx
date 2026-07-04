@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/utils";
 
 type PanelShellHeaderProps = {
@@ -76,23 +77,28 @@ export function PanelShellHeader({
   );
 }
 
-/** Título de página interno — clean, sem competir com a logomarca do header */
+/** Título de página — alias de PageHeader */
 export function PanelPageTitle({
   eyebrow,
   title,
   subtitle,
   className,
+  children,
 }: {
   eyebrow?: string;
   title: string;
   subtitle?: string;
   className?: string;
+  children?: React.ReactNode;
 }) {
   return (
-    <header className={cn("mb-5", className)}>
-      {eyebrow && <p className="section-eyebrow">{eyebrow}</p>}
-      <h1 className="text-xl font-bold tracking-tight text-slate-900">{title}</h1>
-      {subtitle && <p className="mt-0.5 text-sm leading-snug text-slate-500">{subtitle}</p>}
-    </header>
+    <PageHeader
+      eyebrow={eyebrow}
+      title={title}
+      subtitle={subtitle}
+      className={className}
+    >
+      {children}
+    </PageHeader>
   );
 }

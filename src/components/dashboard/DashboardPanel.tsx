@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { QueueEntry } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
@@ -36,7 +36,7 @@ export function DashboardPanel({
 }: {
   profile: { role: string; full_name: string };
 }) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,29 +70,46 @@ export function DashboardPanel({
     };
   }, [supabase, fetchData]);
 
-  const stats = computeDashboardStats(entries);
-  const hourlyBuckets = computeHourlyBuckets(entries);
-  const maxHourly = Math.max(...hourlyBuckets.map((b) => b.count), 1);
+  const stats = useMemo(() => computeDashboardStats(entries), [entries]);
+  const hourlyBuckets = useMemo(() => computeHourlyBuckets(entries), [entries]);
+  const maxHourly = useMemo(
+    () => Math.max(...hourlyBuckets.map((b) => b.count), 1),
+    [hourlyBuckets]
+  );
 
-  const statusCounts = Object.fromEntries(
-    QUEUE_STATUSES.map((status) => [
-      status,
-      entries.filter((e) => normalizeQueueStatus(e.status) === status).length,
-    ])
-  ) as Record<(typeof QUEUE_STATUSES)[number], number>;
+  const statusCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        QUEUE_STATUSES.map((status) => [
+          status,
+          entries.filter((e) => normalizeQueueStatus(e.status) === status).length,
+        ])
+      ) as Record<(typeof QUEUE_STATUSES)[number], number>,
+    [entries]
+  );
 
-  const maxStatusCount = Math.max(...Object.values(statusCounts), 1);
-  const taxaConclusao =
-    stats.veiculosHoje > 0
-      ? Math.round((stats.veiculosFinalizados / stats.veiculosHoje) * 100)
-      : 0;
+  const maxStatusCount = useMemo(
+    () => Math.max(...Object.values(statusCounts), 1),
+    [statusCounts]
+  );
 
-  const recentActivity = [...entries]
-    .sort(
-      (a, b) =>
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    )
-    .slice(0, 8);
+  const taxaConclusao = useMemo(
+    () =>
+      stats.veiculosHoje > 0
+        ? Math.round((stats.veiculosFinalizados / stats.veiculosHoje) * 100)
+        : 0,
+    [stats.veiculosHoje, stats.veiculosFinalizados]
+  );
+
+  const recentActivity = useMemo(
+    () =>
+      [...entries]
+        .sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        )
+        .slice(0, 8),
+    [entries]
+  );
 
   return (
     <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>

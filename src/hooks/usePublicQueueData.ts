@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
-import { createDebouncedFn } from "@/lib/debounce";
 
 const POLL_MS = 15_000;
 
@@ -30,12 +29,8 @@ export function usePublicQueueData() {
 
   useEffect(() => {
     void fetchRef.current();
-    const debounced = createDebouncedFn(() => fetchRef.current(), 800);
-    const timer = window.setInterval(() => debounced.call(), POLL_MS);
-    return () => {
-      debounced.cancel();
-      window.clearInterval(timer);
-    };
+    const timer = window.setInterval(() => void fetchRef.current(), POLL_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   return { entries, loading, error, refresh: fetchData };

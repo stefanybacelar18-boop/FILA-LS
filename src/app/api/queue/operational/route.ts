@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isStaffRole } from "@/lib/auth-profile";
 import {
   invalidateEnrichedQueueCache,
   loadBasicOperationalQueue,
   loadEnrichedQueueEntries,
 } from "@/lib/queue-enrich";
+import { toMotoristaQueueEntry, toPublicQueueEntries } from "@/lib/queue-public-dto";
 import { withTimeout } from "@/lib/async-timeout";
 
 export const maxDuration = 30;
@@ -12,9 +15,27 @@ export const dynamic = "force-dynamic";
 
 const LOAD_TIMEOUT_MS = 18_000;
 
-/** Fila operacional enriquecida — público (TV, tracker) e motorista autenticado. */
+/** Fila operacional enriquecida — escopo conforme autenticação */
 export async function GET() {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    let scope: "public" | "motorista" | "staff" = "public";
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.role === "motorista") scope = "motorista";
+      else if (profile?.role && isStaffRole(profile.role)) scope = "staff";
+    }
+
     const admin = createAdminClient();
     let entries;
     let fallback = false;
@@ -36,13 +57,20 @@ export async function GET() {
       fallback = true;
     }
 
+    const data =
+      scope === "staff"
+        ? entries
+        : scope === "motorista"
+          ? entries.map(toMotoristaQueueEntry)
+          : toPublicQueueEntries(entries);
+
     return NextResponse.json({
-      data: entries,
-      meta: { scope: "operational_active", fallback },
+      data,
+      meta: { scope: "operational_active", fallback, visibility: scope },
     });
   } catch (err) {
     invalidateEnrichedQueueCache();
-    const message = err instanceof Error ? err.message : "Erro interno";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[queue/operational]", err);
+    return NextResponse.json({ error: "Não foi possível carregar a fila." }, { status: 500 });
   }
 }

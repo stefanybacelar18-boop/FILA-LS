@@ -3,8 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { LogOut, ListOrdered, LayoutDashboard } from "lucide-react";
 
@@ -45,19 +45,20 @@ export function FieldStaffShell({
             <span className="max-w-[7rem] truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
               {firstName}
             </span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              className="h-9 w-9 rounded-full p-0 text-slate-400"
               aria-label="Sair"
             >
               <LogOut className="h-4 w-4" />
-            </button>
+            </Button>
           </>
         }
       />
 
-      <main className="page-container flex-1 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
+      <main className="page-container shell-main flex-1 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
         {children}
       </main>
 

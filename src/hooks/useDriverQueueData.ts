@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, QueueEntry } from "@/lib/types";
 import { hasActiveCheckIn } from "@/lib/checkin-rules";
@@ -11,7 +11,7 @@ const REALTIME_DEBOUNCE_MS = 1200;
 
 /** Fila do motorista — dados enriquecidos (prioridade, minuta, previsão). */
 export function useDriverQueueData(profile: Profile | null) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
   const [allEntries, setAllEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,17 +20,11 @@ export function useDriverQueueData(profile: Profile | null) {
   const fetchData = useCallback(async () => {
     if (!profileId) return;
 
-    const { data: myEntries } = await supabase
-      .from("queue_entries")
-      .select("*")
-      .eq("driver_user_id", profileId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(10);
+    const entries = await fetchEnrichedOperationalQueue(supabase);
+    setAllEntries(entries);
 
-    const mine = hasActiveCheckIn((myEntries as QueueEntry[]) ?? []);
-    setEntry(mine);
-    setAllEntries(await fetchEnrichedOperationalQueue(supabase));
+    const mineEntries = entries.filter((e) => e.driver_user_id === profileId);
+    setEntry(hasActiveCheckIn(mineEntries));
     setLoading(false);
   }, [supabase, profileId]);
 

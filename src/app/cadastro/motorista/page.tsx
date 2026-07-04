@@ -2,10 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { Spinner } from "@/components/ui/Spinner";
 
 /** Cadastro substituído por login Google/Apple */
@@ -27,9 +26,9 @@ export default function CadastroMotoristaPage() {
             O cadastro agora é feito com sua conta Google ou Apple.
           </p>
         </CardHeader>
-        <Link href="/login/motorista">
-          <Button className="w-full py-3 text-lg">Entrar com Google ou Apple</Button>
-        </Link>
+        <LinkButton href="/login/motorista" className="w-full py-3 text-lg">
+          Entrar com Google ou Apple
+        </LinkButton>
         <p className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-400">
           <Spinner size="sm" />
           Redirecionando...

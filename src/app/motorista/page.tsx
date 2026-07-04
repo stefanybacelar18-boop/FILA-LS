@@ -10,12 +10,13 @@ import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import type { Profile } from "@/lib/types";
 import { getDisplayPlaca } from "@/lib/checkin-rules";
 import { resolveQueuePosition } from "@/lib/queue";
 import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { ClipboardList, ArrowRight, CheckCircle2, ListOrdered } from "lucide-react";
+import { QueuePositionHero } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 
 export default function MotoristaHomePage() {
@@ -77,28 +78,20 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
         </div>
       ) : entry ? (
         <div className="space-y-4">
-          <div
-            className="overflow-hidden rounded-2xl border border-brand/20 bg-brand-hero p-5 text-white shadow-[var(--shadow-premium)] hero-pattern"
-            aria-live="polite"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm opacity-80">Você está na fila</p>
-                <p className="mt-1 text-4xl font-black">{posicao != null ? `${posicao}º` : "—"}</p>
-                <p className="mt-1 text-sm opacity-90">
-                  Minuta {entry.minuta} · {getDisplayPlaca(entry)}
-                </p>
-              </div>
+          <QueuePositionHero
+            className="hero-pattern"
+            label="Você está na fila"
+            value={posicao != null ? `${posicao}º` : "—"}
+            detail={`Minuta ${entry.minuta} · ${getDisplayPlaca(entry)}`}
+            trailing={
               <StatusBadge status={entry.status} className="border-white/30 bg-white/20 text-white" />
-            </div>
-          </div>
+            }
+          />
 
-          <Link href="/minha-fila">
-            <Button className="w-full py-3.5 text-base">
-              Ver minha posição
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          <LinkButton href="/minha-fila" className="w-full py-3.5 text-base">
+            Ver minha posição
+            <ArrowRight className="h-4 w-4" />
+          </LinkButton>
 
           <MotoristaQueueList entries={allEntries} highlightId={entry.id} title="Fila do pátio" />
         </div>
@@ -112,10 +105,10 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
             redirectedFromCheckin={redirectedFromCheckin}
           />
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+          <div className="panel-card">
             <ListOrdered className="mx-auto h-8 w-8 text-brand" />
-            <h2 className="mt-3 text-lg font-bold text-slate-800">Acompanhe a fila</h2>
-            <p className="mt-2 text-sm text-slate-600">
+            <h2 className="panel-card__title mt-3">Acompanhe a fila</h2>
+            <p className="panel-card__desc">
               Quando estiver dentro do pátio LSL, use <strong>Check-in</strong> no menu ou atualize
               sua localização acima.
             </p>
@@ -135,20 +128,18 @@ function MotoristaHomeContent({ profile }: { profile: Profile }) {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-8 text-center shadow-[var(--shadow-card)]">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-muted ring-1 ring-brand/10">
+          <div className="panel-card">
+            <div className="panel-card__icon">
               <ClipboardList className="h-7 w-7 text-brand" />
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Faça seu check-in</h2>
-            <p className="mt-2 text-sm text-slate-500">
+            <h2 className="panel-card__title">Faça seu check-in</h2>
+            <p className="panel-card__desc">
               Você está no pátio. Preencha os dados da carga para entrar na fila.
             </p>
-            <Link href="/checkin" className="mt-6 block">
-              <Button className="w-full py-3.5 text-base">
-                Iniciar check-in
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <LinkButton href="/checkin" className="mt-6 w-full py-3.5 text-base">
+              Iniciar check-in
+              <ArrowRight className="h-4 w-4" />
+            </LinkButton>
           </div>
 
           {allEntries.length > 0 && (

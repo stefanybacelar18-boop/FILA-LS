@@ -23,6 +23,7 @@ import { MapPin, CheckCircle2 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
+import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
 import { isValidPlaca, PLACA_MERCOSUL_HINT } from "@/lib/checkin-validation";
 
@@ -177,12 +178,10 @@ export default function CheckInPage() {
   return (
     <MotoristaShell profile={profile} checkinNavEnabled>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-lg font-bold text-brand">Check-in</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Preencha os dados da carga para entrar na fila de descarga.
-          </p>
-        </div>
+        <PanelPageTitle
+          title="Check-in"
+          subtitle="Preencha os dados da carga para entrar na fila de descarga."
+        />
 
         <Card className="card-brand">
           <CardHeader>
@@ -196,9 +195,9 @@ export default function CheckInPage() {
             </div>
           )}
           {(geo.step === "inside" || geo.step === "skipped") && (
-            <div className="flex items-center gap-3 rounded-xl bg-green-50 p-4 text-success">
-              <CheckCircle2 className="h-6 w-6" />
-              <p className="font-medium">Localização confirmada no pátio!</p>
+            <div className="alert-success">
+              <CheckCircle2 className="h-6 w-6 shrink-0" />
+              <p>Localização confirmada no pátio!</p>
             </div>
           )}
           <GeofenceStatusBanner
@@ -208,7 +207,7 @@ export default function CheckInPage() {
             onRetry={geo.retry}
           />
           {geo.skipGeofence && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p className="alert-warning mt-3">
               Modo teste LAN: geofence desativado — remova antes da operação real.
             </p>
           )}
@@ -235,12 +234,12 @@ export default function CheckInPage() {
             </fieldset>
 
             {!canSubmit && geo.step !== "loading" && (
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="alert-warning">
                 Confirme sua localização no pátio para liberar o formulário.
               </p>
             )}
 
-            {errors.form && <p className="text-sm text-danger">{errors.form}</p>}
+            {errors.form && <p className="alert-error text-left">{errors.form}</p>}
 
             <Button type="submit" className="w-full py-4 text-lg" size="lg" disabled={!canSubmit || submitting}>
               {submitting ? <Spinner size="md" className="h-5 w-5" /> : "Confirmar check-in"}

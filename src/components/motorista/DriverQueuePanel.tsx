@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueData } from "@/hooks/useDriverQueueData";
@@ -13,7 +12,7 @@ import { PageLoader } from "@/components/ui/PageLoader";
 import { Card } from "@/components/ui/Card";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
 import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
-import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import type { Profile } from "@/lib/types";
 import { RefreshCw } from "lucide-react";
@@ -65,9 +64,9 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           )}
           <p className="text-center text-slate-600">Nenhum check-in ativo.</p>
           {geo.canCheckIn && (
-            <Link href="/checkin" className="block">
-              <Button className="w-full">Fazer check-in</Button>
-            </Link>
+            <LinkButton href="/checkin" className="w-full">
+              Fazer check-in
+            </LinkButton>
           )}
           {allEntries.length > 0 && (
             <MotoristaQueueList entries={allEntries} title="Fila do pátio" />

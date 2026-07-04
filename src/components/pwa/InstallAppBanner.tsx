@@ -1,9 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Download, Share, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { APP_NAME } from "@/lib/constants";
+
+const HIDDEN_PREFIXES = [
+  "/motorista",
+  "/checkin",
+  "/minha-fila",
+  "/empilhador",
+  "/admin",
+  "/dashboard",
+  "/historico",
+];
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -32,11 +43,16 @@ const DISMISS_KEY = "fila-lsl-install-dismissed";
 
 /** Banner para instalar o app — some quando aberto em modo standalone (sem barra de URL). */
 export function InstallAppBanner() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosHint, setIosHint] = useState(false);
 
   useEffect(() => {
+    if (HIDDEN_PREFIXES.some((p) => pathname.startsWith(p))) {
+      setVisible(false);
+      return;
+    }
     if (isStandalone()) return;
     if (sessionStorage.getItem(DISMISS_KEY)) return;
     if (!isMobile()) return;
@@ -52,7 +68,7 @@ export function InstallAppBanner() {
 
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     return () => window.removeEventListener("beforeinstallprompt", onBeforeInstall);
-  }, []);
+  }, [pathname]);
 
   const dismiss = useCallback(() => {
     sessionStorage.setItem(DISMISS_KEY, "1");

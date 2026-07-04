@@ -119,18 +119,16 @@ export function EmpilhadorDashboardPanel({
         </div>
       ) : (
         <>
-          <div className="mb-4 overflow-hidden rounded-2xl border border-brand/20 bg-brand-hero p-5 text-white shadow-lg shadow-brand/15">
+          <div className="queue-position-hero hero-pattern mb-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                  Operações encerradas por você
-                </p>
+                <p className="queue-position-hero__label">Operações encerradas por você</p>
                 <p className="mt-1 text-5xl font-bold tabular-nums">{stats.encerradosPorMim}</p>
-                <p className="mt-2 text-sm text-white/80">
+                <p className="queue-position-hero__detail">
                   {stats.minhasFinalizadas} finalizadas · {stats.minhasAusencias} ausentes
                 </p>
               </div>
-              <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+              <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-card bg-white/15 backdrop-blur">
                 <Target className="h-6 w-6 text-white/90" />
                 <span className="mt-0.5 text-xs font-bold">{participacaoPct}%</span>
               </div>

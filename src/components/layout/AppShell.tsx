@@ -200,7 +200,7 @@ export function AppShell({
         </>
       )}
 
-      <main className="page-container-admin py-8 lg:py-9">{children}</main>
+      <main className="page-container-admin shell-main shell-main--admin">{children}</main>
     </div>
   );
 }

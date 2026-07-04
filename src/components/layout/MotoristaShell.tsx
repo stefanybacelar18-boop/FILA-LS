@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { Truck, ClipboardList, ListOrdered, LogOut } from "lucide-react";
 import type { Profile } from "@/lib/types";
@@ -45,26 +46,25 @@ export function MotoristaShell({
             <BrandLogo size="sm" />
             <p className="mt-1 truncate text-sm font-semibold text-slate-800">Olá, {firstName}</p>
             {!checkinNavEnabled && checkinBlockHint && (
-              <p className="mt-0.5 truncate text-xs font-semibold text-red-600" role="status">
+              <p
+                id="checkin-block-hint"
+                className="mt-0.5 truncate text-xs font-semibold text-red-600"
+                role="status"
+              >
                 {checkinBlockHint}
               </p>
             )}
           </div>
         }
         trailing={
-          <button
-            type="button"
-            onClick={logout}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-slate-50"
-            aria-label="Sair"
-          >
+          <Button variant="ghost" size="sm" onClick={logout} className="text-slate-500" aria-label="Sair">
             <LogOut className="h-4 w-4" />
             Sair
-          </button>
+          </Button>
         }
       />
 
-      <main className="page-container py-5">{children}</main>
+      <main className="page-container shell-main">{children}</main>
 
       <nav
         className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200/80 bg-white/95 shadow-[0_-4px_24px_rgb(15_23_42/0.06)] backdrop-blur-lg safe-bottom"
@@ -78,6 +78,8 @@ export function MotoristaShell({
               return (
                 <span
                   key={href}
+                  aria-disabled="true"
+                  aria-describedby={checkinBlockHint ? "checkin-block-hint" : undefined}
                   className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold text-slate-300"
                   title="Check-in disponível apenas dentro do pátio"
                 >

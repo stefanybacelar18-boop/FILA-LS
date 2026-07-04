@@ -1,7 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import type { QueueEntry } from "@/lib/types";
-import { compareQueueOrder, countVehiclesAhead } from "@/lib/queue";
+import { compareQueueOrder } from "@/lib/queue";
 import { filterOperationalPanelEntries } from "@/lib/constants";
 import { MotoristaQueueCard } from "@/components/motorista/MotoristaQueueCard";
 import { ListOrdered } from "lucide-react";
@@ -18,11 +19,21 @@ export function MotoristaQueueList({
   highlightId,
   title = "Fila de descarga",
 }: MotoristaQueueListProps) {
-  const operational = filterOperationalPanelEntries(entries);
-  const sorted = [...operational].sort(compareQueueOrder);
+  const sorted = useMemo(() => {
+    const operational = filterOperationalPanelEntries(entries);
+    return [...operational].sort(compareQueueOrder);
+  }, [entries]);
+
+  const positionById = useMemo(() => {
+    const map = new Map<string, number>();
+    sorted.forEach((entry, index) => {
+      map.set(entry.id, index + 1);
+    });
+    return map;
+  }, [sorted]);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[var(--shadow-card)]">
+    <section className="overflow-hidden rounded-card border border-slate-200/90 bg-white shadow-[var(--shadow-card)]">
       <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3.5">
         <h2 className="flex items-center gap-2 text-base font-bold text-brand">
           <ListOrdered className="h-5 w-5 shrink-0" aria-hidden />
@@ -40,17 +51,14 @@ export function MotoristaQueueList({
         </p>
       ) : (
         <div className="space-y-2 p-3">
-          {sorted.map((entry) => {
-            const position = countVehiclesAhead(entry, sorted) + 1;
-            return (
-              <MotoristaQueueCard
-                key={entry.id}
-                entry={entry}
-                position={position}
-                isMine={entry.id === highlightId}
-              />
-            );
-          })}
+          {sorted.map((entry) => (
+            <MotoristaQueueCard
+              key={entry.id}
+              entry={entry}
+              position={positionById.get(entry.id) ?? 0}
+              isMine={entry.id === highlightId}
+            />
+          ))}
         </div>
       )}
     </section>

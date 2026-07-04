@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,11 @@ type MotoristaQueueCardProps = {
 };
 
 /** Card somente leitura — minuta e placa, mesmo visual do empilhador */
-export function MotoristaQueueCard({ entry, position, isMine = false }: MotoristaQueueCardProps) {
+export const MotoristaQueueCard = memo(function MotoristaQueueCard({
+  entry,
+  position,
+  isMine = false,
+}: MotoristaQueueCardProps) {
   return (
     <div
       className={cn(
@@ -46,4 +51,4 @@ export function MotoristaQueueCard({ entry, position, isMine = false }: Motorist
       </div>
     </div>
   );
-}
+});

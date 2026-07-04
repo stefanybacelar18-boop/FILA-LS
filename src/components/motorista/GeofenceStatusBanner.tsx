@@ -25,11 +25,7 @@ export function GeofenceStatusBanner({
 
   return (
     <div
-      className={
-        isHome
-          ? "rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950"
-          : "rounded-xl bg-red-50 p-4 text-danger"
-      }
+      className={isHome ? "alert-banner alert-banner--warning" : "alert-banner alert-banner--error"}
       role="status"
     >
       <div className="flex gap-3">

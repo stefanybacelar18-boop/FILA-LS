@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isStaffRole } from "@/lib/auth-profile";
 import { staffHomePath } from "@/lib/role-permissions";
+import { safeInternalPath } from "@/lib/safe-redirect";
 import { AuthLayout, AuthCard, AuthFooterLink } from "@/components/layout/AuthLayout";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -17,6 +18,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   nao_autorizado: "Conta não autorizada. Peça ao administrador criar seu perfil.",
   perfil: "Não foi possível carregar seu perfil. Tente novamente.",
   auth: "Falha na autenticação. Tente novamente.",
+  acesso: "Você não tem permissão para acessar esta área.",
 };
 
 function LoginContent() {
@@ -63,9 +65,7 @@ function LoginContent() {
         .maybeSingle();
 
       if (profileError || !profile) {
-        setError(
-          "Perfil não encontrado. Crie o usuário no Supabase Auth e rode criar-usuarios-fixos.sql."
-        );
+        setError("Perfil não encontrado. Peça ao administrador criar seu usuário.");
         await supabase.auth.signOut();
         return;
       }
@@ -84,7 +84,11 @@ function LoginContent() {
         return;
       }
 
-      router.push(staffHomePath(role));
+      const destination = safeInternalPath(
+        searchParams.get("next"),
+        staffHomePath(role)
+      );
+      router.push(destination);
       router.refresh();
     } catch {
       setError("Erro inesperado. Verifique sua conexão.");

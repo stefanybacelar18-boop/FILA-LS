@@ -51,8 +51,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className="bg-[#f4f6f9]">
-      <body className={`${inter.variable} min-h-screen bg-[#f4f6f9] antialiased`}>
+    <html lang="pt-BR" className="bg-[var(--app-shell-bg)]">
+      <body className={`${inter.variable} min-h-screen bg-[var(--app-shell-bg)] antialiased`}>
         <SplashScreen />
         {children}
         <SplashScreenDismiss />
