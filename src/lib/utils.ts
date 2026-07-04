@@ -13,8 +13,10 @@ export function formatCPF(value: string): string {
     .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 }
 
-export function formatPhone(value: string): string {
+export function formatPhone(value?: string | null): string {
+  if (!value) return "—";
   const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "—";
   if (digits.length <= 10) {
     return digits
       .replace(/(\d{2})(\d)/, "($1) $2")
@@ -23,6 +25,13 @@ export function formatPhone(value: string): string {
   return digits
     .replace(/(\d{2})(\d)/, "($1) $2")
     .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+/** Primeiro nome do motorista — seguro para valores vazios */
+export function getDriverFirstName(nome?: string | null): string {
+  const trimmed = nome?.trim();
+  if (!trimmed) return "—";
+  return trimmed.split(/\s+/)[0] ?? "—";
 }
 
 export function formatPlaca(value: string): string {

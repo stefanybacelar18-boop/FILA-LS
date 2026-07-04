@@ -155,6 +155,17 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     };
   }, [supabase, fetchQueue, profile.role]);
 
+  const selected = useMemo(
+    () => (selectedId ? entries.find((e) => e.id === selectedId) ?? null : null),
+    [entries, selectedId]
+  );
+
+  useEffect(() => {
+    if (selected) {
+      setEditPrioridade(entryHasPrioridade(selected));
+    }
+  }, [selected]);
+
   function selectEntry(entry: QueueEntry) {
     setSelectedId(entry.id);
     const normalized = normalizeQueueStatus(entry.status);
@@ -267,6 +278,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   async function chamarMotorista(entry: QueueEntry) {
     if (!permissions.canChamarWhatsApp) return;
 
+    if (!entry.telefone?.replace(/\D/g, "").trim()) {
+      alert("Telefone do motorista não disponível para WhatsApp.");
+      return;
+    }
+
     setSaving(true);
 
     const payload: {
@@ -310,6 +326,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         )
       : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
 
+    if (!link) {
+      alert("Telefone do motorista inválido para WhatsApp.");
+      return;
+    }
+
     window.open(link, "_blank", "noopener,noreferrer");
     fetchQueue();
   }
@@ -332,7 +353,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     );
   }, [entries, isEmpilhador, empilhadorFilter]);
 
-  const selected = entries.find((e) => e.id === selectedId);
   const selectedIsActive = selected ? isActiveQueueStatus(selected.status) : false;
   const nextToCall = getNextToCall(activeEntries);
   const nextToCallId = nextToCall?.id ?? null;
@@ -398,12 +418,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       )
     : [];
 
-  useEffect(() => {
-    if (selected) {
-      setEditPrioridade(entryHasPrioridade(selected));
-    }
-  }, [selected]);
-
   function renderEntryDetail() {
     if (!selected) {
       return (
@@ -428,7 +442,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               {selected.placa_cavalo || selected.placa}
             </p>
             <p className="text-sm text-slate-600">
-              {selected.nome} · {selected.transportadora}
+              {selected.nome || "—"} · {selected.transportadora || "—"}
             </p>
             <p className="text-xs text-slate-400">{formatPhone(selected.telefone)}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">

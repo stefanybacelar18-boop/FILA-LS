@@ -7,7 +7,7 @@ import { entryRetornoRacksVazios } from "@/lib/queue-badges";
 import { MinutaMetaBadge } from "@/components/fila/MinutaMetaBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
-import { cn } from "@/lib/utils";
+import { cn, getDriverFirstName } from "@/lib/utils";
 import { Star } from "lucide-react";
 
 function getCarretaPlaca(entry: QueueEntry): string {
@@ -35,7 +35,7 @@ export function EmpilhadorQueueCard({
   const called = active && isDriverCalled(entry);
   const priority = entryHasPrioridade(entry);
   const racks = entryRetornoRacksVazios(entry);
-  const firstName = entry.nome.split(" ")[0];
+  const firstName = getDriverFirstName(entry.nome);
   const hasMinutaMeta =
     (entry.volume_motos != null && entry.volume_motos > 0) || Boolean(entry.menor_vencimento);
 

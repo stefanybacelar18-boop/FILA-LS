@@ -7,7 +7,7 @@ import { entryRetornoRacksVazios } from "@/lib/queue-badges";
 import { QueueEntryBadges } from "@/components/fila/QueueEntryBadges";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { RacksVaziosBadge } from "@/components/fila/RacksVaziosBadge";
-import { cn } from "@/lib/utils";
+import { cn, getDriverFirstName } from "@/lib/utils";
 import { Megaphone, Star } from "lucide-react";
 
 type QueueEntryListItemProps = {
@@ -84,7 +84,7 @@ export function QueueEntryListItem({
           <p className="mt-0.5 font-mono text-[15px] font-semibold leading-tight text-slate-900 sm:text-sm">
             {entry.placa_cavalo || entry.placa}
             <span className="ml-2 font-sans text-sm font-normal text-slate-500">
-              {entry.nome.split(" ")[0]}
+              {getDriverFirstName(entry.nome)}
             </span>
           </p>
 
