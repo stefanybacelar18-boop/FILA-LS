@@ -95,9 +95,10 @@ export function QueueDashboard({
         </ul>
       )}
 
-      <p className="border-t border-slate-100 px-4 py-2.5 text-center text-[10px] text-slate-400">
-        {sorted.length} minuta{sorted.length !== 1 ? "s" : ""} ativa
-        {sorted.length !== 1 ? "s" : ""} hoje · ordem por prioridade e check-in
+      <p className="border-t border-slate-100 px-4 py-2.5 text-center text-[10px] leading-relaxed text-slate-400">
+        {sorted.length}{" "}
+        {sorted.length === 1 ? "minuta ativa" : "minutas ativas"} · ordem por prioridade e
+        check-in
       </p>
     </Card>
   );

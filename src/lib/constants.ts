@@ -91,11 +91,8 @@ export function isActiveQueueStatus(status: string): boolean {
 
 export function shouldShowInQueuePanel(entry: { status: string }, showFinalizados: boolean): boolean {
   if (showFinalizados) {
-    return (
-      isActiveQueueStatus(entry.status) ||
-      entry.status === "ausente" ||
-      entry.status === "finalizado"
-    );
+    const normalized = normalizeQueueStatus(entry.status);
+    return isActiveQueueStatus(entry.status) || normalized === "ausente" || normalized === "finalizado";
   }
   return isActiveQueueStatus(entry.status);
 }

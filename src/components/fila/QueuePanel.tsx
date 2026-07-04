@@ -23,8 +23,11 @@ import {
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink } from "@/lib/whatsapp";
 import { cn, formatPhone, isoToDateInput } from "@/lib/utils";
+import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
+import { QueueEntryListItem } from "@/components/fila/QueueEntryListItem";
+import { QueueStatsBar } from "@/components/fila/QueueStatsBar";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   FieldStaffShell,
@@ -87,9 +90,12 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         (isAdmin && showFinalizados) ||
         (isEmpilhador && empilhadorFilter !== "ativas");
 
-      const url = needsFullDay ? "/api/queue/today?scope=all" : "/api/queue/today";
+      const params = new URLSearchParams();
+      if (needsFullDay) params.set("scope", "all");
+      params.set("_", String(Date.now()));
+      const url = `/api/queue/today?${params.toString()}`;
 
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: "no-store" });
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         data?: QueueEntry[];
@@ -318,17 +324,24 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   }
 
   const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
+  const calledCount = activeEntries.filter((e) => isDriverCalled(e)).length;
+  const waitingCount = activeEntries.length - calledCount;
 
   const displayedEntries = useMemo(() => {
     if (!isEmpilhador) return entries;
     if (empilhadorFilter === "finalizadas") {
       return sortClosedEntries(
-        entries.filter((e) => normalizeQueueStatus(e.status) === "finalizado")
+        entries.filter(
+          (e) =>
+            normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
+        )
       );
     }
     if (empilhadorFilter === "ausentes") {
       return sortClosedEntries(
-        entries.filter((e) => normalizeQueueStatus(e.status) === "ausente")
+        entries.filter(
+          (e) => normalizeQueueStatus(e.status) === "ausente" && isEntryClosedToday(e)
+        )
       );
     }
     return entries.filter((e) => isActiveQueueStatus(e.status));
@@ -337,6 +350,40 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const selected = entries.find((e) => e.id === selectedId);
   const selectedIsActive = selected ? isActiveQueueStatus(selected.status) : false;
   const nextToCall = getNextToCall(activeEntries);
+  const nextToCallId = nextToCall?.id ?? null;
+
+  function renderQueueList(
+    list: QueueEntry[],
+    variant: "admin" | "mobile",
+    options?: { sectionLabel?: string; startIndex?: number }
+  ) {
+    const start = options?.startIndex ?? 0;
+    return (
+      <div className="space-y-2">
+        {options?.sectionLabel && (
+          <p className="section-eyebrow px-0.5 pt-1">{options.sectionLabel}</p>
+        )}
+        {list.map((entry, idx) => (
+          <QueueEntryListItem
+            key={entry.id}
+            entry={entry}
+            position={start + idx + 1}
+            selected={selectedId === entry.id}
+            isNext={entry.id === nextToCallId && isActiveQueueStatus(entry.status)}
+            variant={variant}
+            onClick={() => selectEntry(entry)}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const adminActiveList = isAdmin
+    ? displayedEntries.filter((e) => isActiveQueueStatus(e.status))
+    : [];
+  const adminClosedList = isAdmin
+    ? displayedEntries.filter((e) => !isActiveQueueStatus(e.status))
+    : [];
 
   useEffect(() => {
     if (selected) {
@@ -347,9 +394,15 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   function renderEntryDetail() {
     if (!selected) {
       return (
-        <p className="py-8 text-center text-sm text-slate-500">
-          Selecione uma minuta na lista.
-        </p>
+        <div className="py-10 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <Filter className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-medium text-slate-600">Nenhuma minuta selecionada</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Clique em um veículo na fila para editar status, doca e prioridade.
+          </p>
+        </div>
       );
     }
 
@@ -563,10 +616,10 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             className={
               isEmpilhador
                 ? "space-y-2 pb-36"
-                : "grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]"
+                : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]"
             }
           >
-            <div className={isEmpilhador ? "space-y-2" : "space-y-3"}>
+            <div className={isEmpilhador ? "space-y-2" : "space-y-4"}>
               {displayedEntries.length === 0 ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>
@@ -578,71 +631,36 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                       : "Nenhum veículo na fila hoje."}
                   </p>
                 </Card>
+              ) : isAdmin ? (
+                <>
+                  {adminActiveList.length > 0 &&
+                    renderQueueList(adminActiveList, "admin", {
+                      sectionLabel: showFinalizados ? "Ativos na fila" : undefined,
+                    })}
+                  {showFinalizados && adminClosedList.length > 0 &&
+                    renderQueueList(adminClosedList, "admin", {
+                      sectionLabel: "Finalizados / ausentes hoje",
+                      startIndex: adminActiveList.length,
+                    })}
+                </>
               ) : (
-                displayedEntries.map((entry, idx) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => selectEntry(entry)}
-                    className={cn(
-                      "w-full rounded-[var(--radius-card)] border p-4 text-left shadow-sm transition duration-150 active:scale-[0.99]",
-                      selectedId === entry.id
-                        ? "border-brand/40 bg-brand-muted/40 shadow-[var(--shadow-card)] ring-2 ring-brand/15"
-                        : entryHasPrioridade(entry)
-                          ? "border-amber-200/90 bg-amber-50/50 hover:shadow-[var(--shadow-card)]"
-                          : "border-slate-200/90 bg-white hover:border-slate-300/80 hover:shadow-[var(--shadow-card)]"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-sm font-bold text-brand">
-                            {entry.minuta || "—"}
-                          </span>
-                          {entryHasPrioridade(entry) && (
-                            <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
-                              <Star className="h-3 w-3" />
-                              Prioridade
-                            </span>
-                          )}
-                          {entryRetornoRacksVazios(entry) && <RacksVaziosBadge />}
-                        </div>
-                        <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
-                          {entry.placa_cavalo || entry.placa}
-                          <span className="ml-2 font-sans font-normal text-slate-500">
-                            {entry.nome.split(" ")[0]}
-                          </span>
-                        </p>
-                        <QueueEntryBadges
-                          entry={entry}
-                          compact
-                          showRacks={false}
-                          className="mt-1.5"
-                        />
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-500">
-                          #{idx + 1}
-                        </span>
-                        <StatusBadge status={entry.status} />
-                        {isDriverCalled(entry) && (
-                          <span className="text-[10px] font-medium text-emerald-600">
-                            Chamado
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))
+                renderQueueList(displayedEntries, "mobile")
               )}
             </div>
 
             {!isEmpilhador && (
-              <Card className="sticky top-24 h-fit p-5">
-                <h2 className="mb-4 text-base font-semibold text-slate-900">
-                  Gerenciar minuta
-                </h2>
-                {renderEntryDetail()}
+              <Card className="sticky top-28 h-fit overflow-hidden p-0">
+                <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+                  <h2 className="text-base font-semibold text-slate-900">
+                    Gerenciar minuta
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {selected
+                      ? `Minuta ${selected.minuta || "—"} · ${selected.placa_cavalo || selected.placa}`
+                      : "Selecione um veículo na fila ao lado"}
+                  </p>
+                </div>
+                <div className="p-5">{renderEntryDetail()}</div>
               </Card>
             )}
           </div>
@@ -706,7 +724,15 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           }
         />
 
-        <div className="mb-4 flex gap-2">
+        {empilhadorFilter === "ativas" && (
+          <QueueStatsBar
+            waiting={waitingCount}
+            called={calledCount}
+            className="mb-4"
+          />
+        )}
+
+        <div className="mb-4 flex rounded-xl border border-slate-200/90 bg-slate-100/80 p-1">
           {(["ativas", "finalizadas", "ausentes"] as const).map((filter) => (
             <button
               key={filter}
@@ -716,10 +742,10 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 setSelectedId(null);
               }}
               className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold transition",
+                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-3 text-xs font-semibold transition",
                 empilhadorFilter === filter
-                  ? "border-brand bg-brand-muted text-brand"
-                  : "border-slate-200 bg-white text-slate-500"
+                  ? "bg-white text-brand shadow-sm ring-1 ring-slate-200/80"
+                  : "text-slate-500"
               )}
             >
               {filter === "ativas" ? (
@@ -747,39 +773,51 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   return (
     <AppShell role={appRole} userName={profile.full_name}>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {permissions.panelTitle}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {activeEntries.length} na fila · ordem por check-in e prioridade
-          </p>
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="section-eyebrow">Operação · Descarga</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {permissions.panelTitle}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Ordem por check-in e prioridade · atualização em tempo real
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {nextToCall && permissions.canChamarWhatsApp && (
+              <Button
+                variant="success"
+                disabled={saving}
+                onClick={() => {
+                  selectEntry(nextToCall);
+                  chamarParaDoca(nextToCall);
+                }}
+              >
+                <Zap className="h-4 w-4" />
+                Chamar próximo (WhatsApp)
+              </Button>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600 shadow-sm">
+              <input
+                type="checkbox"
+                checked={showFinalizados}
+                onChange={(e) => {
+                  setLoading(true);
+                  setShowFinalizados(e.target.checked);
+                }}
+                className="rounded border-slate-300 text-brand focus:ring-brand"
+              />
+              Mostrar finalizados / ausentes de hoje
+            </label>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {nextToCall && permissions.canChamarWhatsApp && (
-            <Button
-              variant="success"
-              disabled={saving}
-              onClick={() => {
-                selectEntry(nextToCall);
-                chamarParaDoca(nextToCall);
-              }}
-            >
-              <Zap className="h-4 w-4" />
-              Chamar próximo (WhatsApp)
-            </Button>
-          )}
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={showFinalizados}
-              onChange={(e) => setShowFinalizados(e.target.checked)}
-              className="rounded"
-            />
-            Mostrar finalizados / ausentes de hoje
-          </label>
-        </div>
+
+        <QueueStatsBar
+          waiting={waitingCount}
+          called={calledCount}
+          total={displayedEntries.length}
+        />
       </div>
       {queueContent}
     </AppShell>

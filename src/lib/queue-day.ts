@@ -40,6 +40,31 @@ export function isQueueEntryFromToday(
   return new Date(createdAt) >= new Date(getTodayStartISO(timeZone));
 }
 
+/** Momento em que a minuta foi encerrada (finalizado ou ausente). */
+export function resolveEntryClosedAt(entry: {
+  status: string;
+  finished_at?: string | null;
+  updated_at: string;
+}): string | null {
+  if (entry.status === "ausente") return entry.updated_at;
+  if (entry.status === "finalizado") return entry.finished_at ?? entry.updated_at;
+  return null;
+}
+
+/** Minuta finalizada ou marcada ausente no dia operacional atual. */
+export function isEntryClosedToday(
+  entry: {
+    status: string;
+    finished_at?: string | null;
+    updated_at: string;
+  },
+  timeZone = OPERATIONAL_TIMEZONE
+): boolean {
+  const closedAt = resolveEntryClosedAt(entry);
+  if (!closedAt) return false;
+  return new Date(closedAt) >= new Date(getTodayStartISO(timeZone));
+}
+
 /** Data legível no fuso operacional (ex.: "terça-feira, 2 de julho"). */
 export function formatManausDateLabel(
   date: Date = new Date(),

@@ -38,7 +38,7 @@ export function FieldStaffShell({
   }
 
   return (
-    <div className="min-h-screen app-canvas pb-24">
+    <div className="min-h-screen app-canvas-mobile pb-24">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-lg">
         <div className="border-t-[3px] border-brand" aria-hidden />
         <div className="page-container flex items-center justify-between py-3">

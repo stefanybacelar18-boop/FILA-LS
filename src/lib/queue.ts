@@ -75,7 +75,7 @@ export function getStatusTimestampUpdates(newStatus: QueueStatus): Partial<Queue
     case "aguardando_descarregamento":
       return { finished_at: null };
     case "ausente":
-      return { finished_at: null };
+      return { finished_at: now };
     default:
       return {};
   }
@@ -85,9 +85,10 @@ export function getStatusTimestampUpdates(newStatus: QueueStatus): Partial<Queue
 export function resolveEntryFinishedAt(
   entry: Pick<QueueEntry, "status" | "finished_at" | "updated_at">
 ): string | null {
-  if (entry.finished_at) return entry.finished_at;
   const status = normalizeQueueStatus(entry.status);
-  if (status === "finalizado" || status === "ausente") return entry.updated_at;
+  if (status === "ausente") return entry.updated_at;
+  if (status === "finalizado") return entry.finished_at ?? entry.updated_at;
+  if (entry.finished_at) return entry.finished_at;
   return null;
 }
 

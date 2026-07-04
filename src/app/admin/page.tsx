@@ -30,6 +30,7 @@ import {
   UserX,
   RefreshCw,
   FileSpreadsheet,
+  Settings,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { usePublicAppUrl } from "@/hooks/usePublicAppUrl";
@@ -286,6 +287,8 @@ export default function AdminPage() {
   return (
     <AppShell role="administrador" userName={profile.full_name}>
       <PageHero
+        variant="light"
+        icon={Settings}
         eyebrow="Central de administração"
         title="Painel LSL"
         description="Visão geral, ferramentas e configurações do sistema"
@@ -296,7 +299,6 @@ export default function AdminPage() {
           size="sm"
           onClick={handleRefreshOverview}
           disabled={refreshing}
-          className="border-white/30 bg-white/10 text-white hover:bg-white/20"
         >
           {refreshing ? (
             <Spinner size="sm" />

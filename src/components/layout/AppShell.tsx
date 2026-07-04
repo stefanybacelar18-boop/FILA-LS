@@ -107,8 +107,9 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-screen app-canvas">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-lg shadow-[0_1px_0_rgb(15_23_42/0.04)]">
+    <div className="min-h-screen app-canvas-admin">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-lg shadow-[0_1px_0_rgb(15_23_42/0.04)]">
+        <div className="border-t-[3px] border-brand" aria-hidden />
         <div className="page-container-admin flex h-[3.75rem] items-center justify-between">
           <Link href="/" className="flex items-center">
             <BrandLogo size="sm" showCompany />

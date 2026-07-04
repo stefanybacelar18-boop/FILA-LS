@@ -13,6 +13,7 @@ import { PageHero } from "@/components/ui/PageHero";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   Trophy,
   BarChart3,
@@ -22,6 +23,7 @@ import {
   Timer,
   UserX,
   Activity,
+  LayoutDashboard,
 } from "lucide-react";
 import {
   QUEUE_STATUSES,
@@ -95,7 +97,9 @@ export function DashboardPanel({
   return (
     <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>
       <PageHero
-        eyebrow="Dashboard operacional"
+        variant="light"
+        icon={LayoutDashboard}
+        eyebrow="Dashboard · Operação"
         title={formatManausDateLabel()}
         description="Indicadores do dia · atualização em tempo real"
       />
@@ -106,7 +110,7 @@ export function DashboardPanel({
         </div>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Na fila agora"
               value={stats.veiculosAguardando}
@@ -134,7 +138,7 @@ export function DashboardPanel({
             />
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <StatCard
               title="Tempo médio espera"
               value={formatDuration(stats.tempoMedioEsperaMin)}
@@ -155,15 +159,15 @@ export function DashboardPanel({
             />
           </div>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <Card className="overflow-hidden p-0">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-4">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <BarChart3 className="h-5 w-5 text-brand" />
                   Distribuição por status
                 </CardTitle>
               </CardHeader>
-              <div className="space-y-3">
+              <div className="space-y-3 p-5">
                 {QUEUE_STATUSES.filter((status) => statusCounts[status] > 0).map((status) => {
                   const count = statusCounts[status];
                   return (
@@ -187,13 +191,14 @@ export function DashboardPanel({
               </div>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="overflow-hidden p-0">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-4">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Trophy className="h-5 w-5 text-amber-500" />
                   Veículos por transportadora
                 </CardTitle>
               </CardHeader>
+              <div className="p-5">
               {stats.rankingTransportadoras.length === 0 ? (
                 <p className="text-sm text-slate-500">Sem dados hoje.</p>
               ) : (
@@ -222,15 +227,17 @@ export function DashboardPanel({
                   })}
                 </div>
               )}
+              </div>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="overflow-hidden p-0">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-4">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Activity className="h-5 w-5 text-brand" />
                   Chegadas por hora
                 </CardTitle>
               </CardHeader>
+              <div className="p-5">
               {hourlyBuckets.every((b) => b.count === 0) ? (
                 <p className="text-sm text-slate-500">Nenhuma chegada registrada hoje.</p>
               ) : (
@@ -255,37 +262,40 @@ export function DashboardPanel({
                   ))}
                 </div>
               )}
+              </div>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="overflow-hidden p-0">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-4">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Clock className="h-5 w-5 text-brand" />
                   Atividade recente
                 </CardTitle>
               </CardHeader>
+              <div className="p-0">
               {recentActivity.length === 0 ? (
-                <p className="text-sm text-slate-500">Sem movimentação hoje.</p>
+                <p className="p-5 text-sm text-slate-500">Sem movimentação hoje.</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {recentActivity.map((entry) => (
                     <li
                       key={entry.id}
-                      className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                      className="flex items-center justify-between gap-3 px-5 py-3 text-sm transition-colors hover:bg-slate-50/80"
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-800">
-                          {entry.minuta || entry.placa}
+                        <p className="truncate font-semibold text-brand">
+                          {entry.minuta || "—"}
+                        </p>
+                        <p className="truncate font-mono text-xs text-slate-600">
+                          {entry.placa_cavalo || entry.placa}
                         </p>
                         <p className="truncate text-xs text-slate-400">
-                          {entry.placa} · {entry.transportadora}
+                          {entry.transportadora}
                         </p>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          {STATUS_LABELS[normalizeQueueStatus(entry.status)]}
-                        </span>
-                        <p className="mt-0.5 text-[10px] text-slate-400">
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <StatusBadge status={entry.status} />
+                        <p className="text-[10px] tabular-nums text-slate-400">
                           {formatQueueTime(entry.updated_at)}
                         </p>
                       </div>
@@ -293,6 +303,7 @@ export function DashboardPanel({
                   ))}
                 </ul>
               )}
+              </div>
             </Card>
           </div>
         </>

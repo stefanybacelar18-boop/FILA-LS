@@ -8,8 +8,8 @@ import {
 } from "./minuta-metadata-db";
 import { computePrevisoesDescarregamento } from "./minuta-intelligence";
 import { sortQueueEntries } from "./queue";
-import { filterOperationalPanelEntries, shouldShowInQueuePanel, ACTIVE_QUEUE_DB_STATUSES } from "./constants";
-import { getTodayStartISO } from "./queue-day";
+import { filterOperationalPanelEntries, isActiveQueueStatus, ACTIVE_QUEUE_DB_STATUSES } from "./constants";
+import { isEntryClosedToday } from "./queue-day";
 import type { QueueEntry } from "./types";
 
 const CLOSED_QUEUE_DB_STATUSES = ["finalizado", "ausente", "cancelado"] as const;
@@ -96,24 +96,25 @@ async function loadEnrichedQueueEntriesUncached(
   let rows: QueueEntry[];
 
   if (includeInactive) {
-    const [activeResult, closedTodayResult] = await Promise.all([
+    const [activeResult, closedResult] = await Promise.all([
       activeQuery,
       admin
         .from("queue_entries")
         .select("*")
         .is("deleted_at", null)
         .in("status", [...CLOSED_QUEUE_DB_STATUSES])
-        .gte("created_at", getTodayStartISO())
-        .order("created_at", { ascending: true }),
+        .order("updated_at", { ascending: false })
+        .limit(500),
     ]);
 
     if (activeResult.error) throw new Error(activeResult.error.message);
-    if (closedTodayResult.error) throw new Error(closedTodayResult.error.message);
+    if (closedResult.error) throw new Error(closedResult.error.message);
 
-    rows = [
-      ...((activeResult.data ?? []) as QueueEntry[]),
-      ...((closedTodayResult.data ?? []) as QueueEntry[]),
-    ];
+    const closedToday = ((closedResult.data ?? []) as QueueEntry[]).filter((e) =>
+      isEntryClosedToday(e)
+    );
+
+    rows = [...((activeResult.data ?? []) as QueueEntry[]), ...closedToday];
   } else {
     const { data, error } = await activeQuery;
     if (error) throw new Error(error.message);
@@ -142,7 +143,7 @@ async function loadEnrichedQueueEntriesUncached(
       : sortedEnriched;
 
   const filtered = includeInactive
-    ? withPrevisao.filter((e) => shouldShowInQueuePanel(e, true))
+    ? withPrevisao.filter((e) => isActiveQueueStatus(e.status) || isEntryClosedToday(e))
     : filterOperationalPanelEntries(withPrevisao);
 
   return sortQueueEntries(filtered) as EnrichedQueueEntry[];

@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card } from "@/components/ui/Card";
+import { PageHero } from "@/components/ui/PageHero";
+import { RegistryStatsBar } from "@/components/ui/RegistryStatsBar";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getStatusLabel, QUEUE_STATUSES, isActiveQueueStatus } from "@/lib/constants";
+import {
+  getStatusLabel,
+  QUEUE_STATUSES,
+  isActiveQueueStatus,
+  normalizeQueueStatus,
+} from "@/lib/constants";
 import {
   formatEntryArrivalDay,
   formatEntryArrivalTime,
@@ -16,12 +23,13 @@ import {
 } from "@/lib/queue-entry-dates";
 import { QueueEntryDateCell } from "@/components/fila/QueueEntryDates";
 import type { QueueEntry } from "@/lib/types";
-import { ClipboardList, Search, FileSpreadsheet } from "lucide-react";
+import { ClipboardList, Search, FileSpreadsheet, Truck, CheckCircle2, UserX, Layers } from "lucide-react";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
 import { downloadCheckinsExcel } from "@/lib/export-checkins";
 import { formatPrevisaoDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export default function AdminCheckinsPage() {
   const { profile, checking, authError } = useAuthGuard(["administrador"]);
@@ -54,6 +62,17 @@ export default function AdminCheckinsPage() {
     const timer = setTimeout(fetchCheckins, search ? 300 : 0);
     return () => clearTimeout(timer);
   }, [fetchCheckins, search, profile]);
+
+  const registryStats = useMemo(() => {
+    const active = entries.filter((e) => isActiveQueueStatus(e.status)).length;
+    const finished = entries.filter(
+      (e) => normalizeQueueStatus(e.status) === "finalizado"
+    ).length;
+    const absent = entries.filter(
+      (e) => normalizeQueueStatus(e.status) === "ausente"
+    ).length;
+    return { total: entries.length, active, finished, absent };
+  }, [entries]);
 
   async function handleExportExcel() {
     setExporting(true);
@@ -99,65 +118,76 @@ export default function AdminCheckinsPage() {
 
   return (
     <AppShell role="administrador" userName={profile.full_name}>
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-          <ClipboardList className="h-6 w-6 text-brand" />
-          Registro de check-ins
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Histórico completo com dia da chegada do motorista e dia da finalização — para consultas
-          futuras, dias anteriores e minutas encerradas.
-        </p>
-      </div>
+      <PageHero
+        variant="light"
+        icon={ClipboardList}
+        eyebrow="Registros · Operação"
+        title="Check-ins"
+        description="Histórico com dia de chegada, finalização, doca e previsão — consulte dias anteriores e minutas encerradas."
+      />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <div className="relative min-w-0 flex-1 sm:min-w-[220px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Buscar minuta, placa, motorista..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select
-          label=""
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          options={[
-            { value: "all", label: "Todos os status" },
-            ...QUEUE_STATUSES.map((s) => ({
-              value: s,
-              label: getStatusLabel(s),
-            })),
+      {!loading && entries.length > 0 && (
+        <RegistryStatsBar
+          className="mb-4"
+          items={[
+            { label: "Registros", value: registryStats.total, icon: Layers, tone: "brand" },
+            { label: "Ativos", value: registryStats.active, icon: Truck, tone: "amber" },
+            { label: "Finalizados", value: registryStats.finished, icon: CheckCircle2, tone: "emerald" },
+            { label: "Ausentes", value: registryStats.absent, icon: UserX, tone: "slate" },
           ]}
-          className="min-w-[200px]"
         />
-        <Button
-          type="button"
-          variant="outline"
-          className="shrink-0"
-          disabled={exporting || loading}
-          onClick={handleExportExcel}
-        >
-          {exporting ? (
-            <Spinner size="sm" />
-          ) : (
-            <FileSpreadsheet className="h-4 w-4" />
-          )}
-          Exportar CSV
-        </Button>
-      </div>
+      )}
+
+      <Card className="mb-4 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Buscar minuta, placa, motorista..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select
+            label=""
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[
+              { value: "all", label: "Todos os status" },
+              ...QUEUE_STATUSES.map((s) => ({
+                value: s,
+                label: getStatusLabel(s),
+              })),
+            ]}
+            className="min-w-[200px]"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0"
+            disabled={exporting || loading}
+            onClick={handleExportExcel}
+          >
+            {exporting ? (
+              <Spinner size="sm" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            Exportar CSV
+          </Button>
+        </div>
+      </Card>
 
       {loading ? (
         <div className="flex justify-center py-16">
           <Spinner />
         </div>
       ) : (
-        <Card className="overflow-x-auto p-0">
+        <Card className="overflow-x-auto overflow-hidden p-0">
           <table className="w-full min-w-[960px] text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/90 text-left">
+            <thead className="sticky top-[3.75rem] z-10 bg-slate-50/95 backdrop-blur-sm">
+              <tr className="border-b border-slate-200 text-left">
                 <th className="section-eyebrow px-4 py-3.5">Dia chegada</th>
                 <th className="section-eyebrow px-4 py-3.5">Dia finalização</th>
                 <th className="section-eyebrow px-4 py-3.5">Minuta</th>
@@ -172,12 +202,20 @@ export default function AdminCheckinsPage() {
             <tbody>
               {entries.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
-                    Nenhum check-in encontrado.
+                  <td colSpan={9} className="px-4 py-16 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                      <ClipboardList className="h-5 w-5" />
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-slate-600">
+                      Nenhum check-in encontrado
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Ajuste a busca ou o filtro de status.
+                    </p>
                   </td>
                 </tr>
               ) : (
-                entries.map((row) => {
+                entries.map((row, idx) => {
                   const active = isActiveQueueStatus(row.status);
                   const finishedDay = formatEntryFinishedDay(row);
                   const finishedTime = formatEntryFinishedTime(row);
@@ -185,7 +223,10 @@ export default function AdminCheckinsPage() {
                   return (
                   <tr
                     key={row.id}
-                    className="border-b border-slate-100 transition-colors hover:bg-brand-muted/20"
+                    className={cn(
+                      "border-b border-slate-100 transition-colors hover:bg-brand-muted/25",
+                      idx % 2 === 1 && "bg-slate-50/40"
+                    )}
                   >
                     <td className="whitespace-nowrap px-4 py-3">
                       <QueueEntryDateCell
@@ -205,22 +246,22 @@ export default function AdminCheckinsPage() {
                     <td className="px-4 py-3 font-medium text-brand">
                       {row.minuta || "—"}
                     </td>
-                    <td className="px-4 py-3 font-mono font-bold">
+                    <td className="px-4 py-3 font-mono text-sm font-semibold text-slate-800">
                       {row.placa_cavalo || row.placa}
                     </td>
-                    <td className="px-4 py-3">{row.nome}</td>
-                    <td className="px-4 py-3">{row.transportadora}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.nome}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.transportadora}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.status} />
                     </td>
-                    <td className="px-4 py-3">{row.doca ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.doca ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {row.previsao_descarregamento ? (
-                        <span className="text-sky-800">
+                        <span className="inline-flex rounded-md bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
                           {formatPrevisaoDate(row.previsao_descarregamento)}
                         </span>
                       ) : (
-                        "—"
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                   </tr>
@@ -229,7 +270,7 @@ export default function AdminCheckinsPage() {
               )}
             </tbody>
           </table>
-          <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">
+          <p className="border-t border-slate-100 bg-slate-50/50 px-4 py-3 text-xs text-slate-500">
             {entries.length} registro{entries.length !== 1 ? "s" : ""} · até 300 na tela · exportação
             inclui até 2.000
           </p>

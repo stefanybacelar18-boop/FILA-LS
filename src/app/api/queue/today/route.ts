@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffQueueRole } from "@/lib/role-permissions";
 import { loadEnrichedQueueEntries } from "@/lib/queue-enrich";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -28,14 +30,25 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const scope = request.nextUrl.searchParams.get("scope");
     const includeInactive = scope === "all";
-    const entries = await loadEnrichedQueueEntries(admin, { includeInactive });
-
-    return NextResponse.json({
-      data: entries,
-      meta: {
-        scope: includeInactive ? "active_plus_closed_today" : "operational_active",
-      },
+    const entries = await loadEnrichedQueueEntries(admin, {
+      includeInactive,
+      bypassCache: request.nextUrl.searchParams.has("_"),
     });
+
+    return NextResponse.json(
+      {
+        data: entries,
+        meta: {
+          scope: includeInactive ? "active_plus_closed_today" : "operational_active",
+          count: entries.length,
+        },
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro interno";
     return NextResponse.json({ error: message }, { status: 500 });

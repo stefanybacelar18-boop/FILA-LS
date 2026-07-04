@@ -38,7 +38,7 @@ export function MotoristaShell({
   }
 
   return (
-    <div className="min-h-screen app-canvas pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+    <div className="min-h-screen app-canvas-mobile pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-lg">
         <div className="border-t-[3px] border-brand" aria-hidden />
         <div className="page-container flex items-center justify-between py-3">

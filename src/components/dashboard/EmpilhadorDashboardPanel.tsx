@@ -21,8 +21,8 @@ import {
   BarChart3,
   Target,
 } from "lucide-react";
-import { STATUS_LABELS, normalizeQueueStatus } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { normalizeQueueStatus } from "@/lib/constants";
 
 export function EmpilhadorDashboardPanel({
   profile,
@@ -131,7 +131,7 @@ export function EmpilhadorDashboardPanel({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5">
             <StatCard
               title="Finalizadas (pátio)"
               value={stats.finalizadosHoje}
@@ -156,39 +156,27 @@ export function EmpilhadorDashboardPanel({
           </div>
 
           {minhasRecentes.length > 0 && (
-            <Card className="mt-5">
-              <CardHeader>
+            <Card className="mt-4 overflow-hidden p-0">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                   Suas últimas operações
                 </CardTitle>
               </CardHeader>
               <ul className="divide-y divide-slate-100">
-                {minhasRecentes.map((e) => {
-                  const status = normalizeQueueStatus(e.status);
-                  return (
-                    <li key={e.id} className="flex items-center justify-between py-2.5 text-sm">
+                {minhasRecentes.map((e) => (
+                    <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-800">
+                        <p className="truncate font-semibold text-brand">
                           {e.minuta ? `Minuta ${e.minuta}` : e.nome}
                         </p>
-                        <p className="truncate text-xs text-slate-400">
-                          {e.placa} · {e.transportadora}
+                        <p className="truncate font-mono text-xs text-slate-600">
+                          {e.placa_cavalo || e.placa}
                         </p>
                       </div>
-                      <span
-                        className={cn(
-                          "ml-2 shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold",
-                          status === "finalizado"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-amber-50 text-amber-700"
-                        )}
-                      >
-                        {STATUS_LABELS[status]}
-                      </span>
+                      <StatusBadge status={e.status} />
                     </li>
-                  );
-                })}
+                  ))}
               </ul>
             </Card>
           )}
