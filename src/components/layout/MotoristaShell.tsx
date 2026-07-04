@@ -7,13 +7,12 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { Truck, ClipboardList, ListOrdered, LogOut } from "lucide-react";
+import { ClipboardList, ListOrdered, LogOut } from "lucide-react";
 import type { Profile } from "@/lib/types";
 
 const NAV = [
-  { href: "/motorista", label: "Início", icon: Truck, exact: true },
   { href: "/checkin", label: "Check-in", icon: ClipboardList, exact: false },
-  { href: "/minha-fila", label: "Minha fila", icon: ListOrdered, exact: false },
+  { href: "/motorista", label: "Fila", icon: ListOrdered, exact: true },
 ];
 
 export function MotoristaShell({

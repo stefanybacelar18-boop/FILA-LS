@@ -2,6 +2,8 @@
 
 import { memo } from "react";
 import type { QueueEntry } from "@/lib/types";
+import { isActiveQueueStatus } from "@/lib/queue";
+import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { cn } from "@/lib/utils";
 
 function getCarretaPlaca(entry: QueueEntry): string {
@@ -12,13 +14,16 @@ type MotoristaQueueCardProps = {
   entry: QueueEntry;
   position: number;
   isMine?: boolean;
+  /** Exibe nome do motorista — área logada do motorista */
+  showDriverName?: boolean;
 };
 
-/** Card somente leitura — minuta e placa, mesmo visual do empilhador */
+/** Card somente leitura — minuta, placa e dados do motorista */
 export const MotoristaQueueCard = memo(function MotoristaQueueCard({
   entry,
   position,
   isMine = false,
+  showDriverName = false,
 }: MotoristaQueueCardProps) {
   return (
     <div
@@ -44,11 +49,27 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
           <p className="mt-0.5 font-mono text-sm font-medium leading-none tracking-wide text-slate-600">
             {getCarretaPlaca(entry)}
           </p>
+          {showDriverName && isMine && (
+            <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+              {entry.nome?.trim() || "—"}
+            </p>
+          )}
           {isMine && (
             <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-brand">Você</p>
           )}
         </div>
       </div>
+
+      {isActiveQueueStatus(entry.status) && entry.previsao_descarregamento && (
+        <div className="mt-2.5 border-t border-slate-100 pt-2.5">
+          <PrevisaoDisplay
+            previsao={entry.previsao_descarregamento}
+            automatic={entry.previsao_automatica}
+            compact={false}
+            className="w-full justify-start text-xs"
+          />
+        </div>
+      )}
     </div>
   );
 });

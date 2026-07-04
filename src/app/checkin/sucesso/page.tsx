@@ -10,7 +10,7 @@ import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { StatusBanner } from "@/components/ui/PageHeader";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { CheckCircle2, ListOrdered, Truck } from "lucide-react";
+import { CheckCircle2, ListOrdered } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { PageLoader } from "@/components/ui/PageLoader";
 import type { QueueEntry } from "@/lib/types";
@@ -129,14 +129,9 @@ function CheckInSuccessContent() {
           Você receberá atualizações quando for chamado para a doca.
         </p>
 
-        <LinkButton href="/minha-fila" className="w-full py-3.5 text-base">
+        <LinkButton href="/motorista" className="w-full py-3.5 text-base">
           <ListOrdered className="h-5 w-5" />
-          Acompanhar minha posição na fila
-        </LinkButton>
-
-        <LinkButton href="/motorista" variant="outline" className="w-full py-3.5 text-base">
-          <Truck className="h-5 w-5" />
-          Voltar ao início
+          Ver minha fila
         </LinkButton>
       </div>
     </MotoristaShell>

@@ -11,13 +11,15 @@ type MotoristaQueueListProps = {
   entries: QueueEntry[];
   highlightId?: string;
   title?: string;
+  showDriverName?: boolean;
 };
 
-/** Lista da fila para motorista — somente leitura, minuta e placa */
+/** Lista da fila para motorista — somente leitura */
 export function MotoristaQueueList({
   entries,
   highlightId,
   title = "Fila de descarga",
+  showDriverName = false,
 }: MotoristaQueueListProps) {
   const sorted = useMemo(() => {
     const operational = filterOperationalPanelEntries(entries);
@@ -57,6 +59,7 @@ export function MotoristaQueueList({
               entry={entry}
               position={positionById.get(entry.id) ?? 0}
               isMine={entry.id === highlightId}
+              showDriverName={showDriverName}
             />
           ))}
         </div>

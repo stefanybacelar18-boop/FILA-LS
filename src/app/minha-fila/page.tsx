@@ -1,5 +1,6 @@
-import { DriverQueuePanel } from "@/components/motorista/DriverQueuePanel";
+import { redirect } from "next/navigation";
 
+/** Rota legada — fila unificada em /motorista */
 export default function MinhaFilaPage() {
-  return <DriverQueuePanel />;
+  redirect("/motorista");
 }
