@@ -1,20 +1,15 @@
 import Link from "next/link";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { BrandLogoFull } from "@/components/brand/BrandLogo";
 import { Truck, Monitor, ChevronRight } from "lucide-react";
-import { APP_NAME, BRANCH_TAGLINE } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-brand-hero hero-pattern">
       <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-12">
         <div className="text-center text-white">
-          <div className="mx-auto mb-6 inline-flex flex-col items-center">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-5 shadow-[var(--shadow-premium)] backdrop-blur-md">
-              <BrandLogo size="xl" showCompany inverted />
-            </div>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
-              {BRANCH_TAGLINE}
-            </p>
+          <div className="mx-auto mb-8 inline-flex rounded-2xl bg-white p-5 shadow-[var(--shadow-premium)]">
+            <BrandLogoFull size={200} />
           </div>
         </div>
 

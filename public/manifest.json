@@ -1,7 +1,7 @@
 {
   "name": "FilaDock — Motorista & Operação",
   "short_name": "FilaDock",
-  "description": "Gestão inteligente de docas — check-in, fila e operação logística em tempo real",
+  "description": "Controle de filas, check-in e operação logística em tempo real",
   "id": "/",
   "start_url": "/",
   "scope": "/",
