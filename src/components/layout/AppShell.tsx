@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ElementType } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ROLE_LABELS } from "@/lib/constants";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { toAppRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -108,15 +108,41 @@ export function AppShell({
 
   return (
     <div className="min-h-screen app-canvas-admin">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-lg shadow-[0_1px_0_rgb(15_23_42/0.04)]">
-        <div className="border-t-[3px] border-brand" aria-hidden />
-        <div className="page-container-admin flex h-[3.75rem] items-center justify-between">
-          <Link href="/" className="flex items-center">
-            <BrandLogo size="sm" />
-          </Link>
+      <PanelShellHeader
+        logoHref="/"
+        trailing={
+          <>
+            {role && userName && (
+              <div className="hidden items-center gap-3 md:flex">
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-slate-800">{userName}</p>
+                  <span className="role-badge mt-0.5">{ROLE_LABELS[toAppRole(role)]}</span>
+                </div>
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-muted text-xs font-bold text-brand ring-2 ring-white"
+                  aria-hidden
+                >
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+              </div>
+            )}
+            {role && (
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sair</span>
+              </Button>
+            )}
+          </>
+        }
+      />
 
-          {role && (
-          <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Navegação principal">
+      {role && (
+        <>
+          <nav
+            className="hidden border-b border-slate-100 bg-white/80 lg:block"
+            aria-label="Navegação principal"
+          >
+            <div className="page-container-admin flex gap-0.5 py-2">
               {visibleNav.map((item) => {
                 const Icon = item.icon;
                 const active = pathname.startsWith(item.href);
@@ -137,38 +163,11 @@ export function AppShell({
                   </Link>
                 );
               })}
-            </nav>
-          )}
+            </div>
+          </nav>
 
-          <div className="flex items-center gap-2">
-            {role && userName && (
-              <div className="hidden items-center gap-3 md:flex">
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-800">{userName}</p>
-                  <span className="role-badge mt-0.5">
-                    {ROLE_LABELS[toAppRole(role)]}
-                  </span>
-                </div>
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-muted text-xs font-bold text-brand ring-2 ring-white"
-                  aria-hidden
-                >
-                  {userName.charAt(0).toUpperCase()}
-                </div>
-              </div>
-            )}
-            {role && (
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sair</span>
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {role && (
           <nav
-            className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 py-2 lg:hidden"
+            className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-white/80 px-4 py-2 lg:hidden"
             aria-label="Navegação principal"
           >
             {visibleNav.map((item) => {
@@ -192,8 +191,9 @@ export function AppShell({
               );
             })}
           </nav>
-        )}
-      </header>
+        </>
+      )}
+
       <main className="page-container-admin py-7 lg:py-9">{children}</main>
     </div>
   );

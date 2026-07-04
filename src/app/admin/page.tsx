@@ -288,7 +288,6 @@ export default function AdminPage() {
     <AppShell role="administrador" userName={profile.full_name}>
       <PageHero
         variant="light"
-        icon={Settings}
         eyebrow="Central de administração"
         title={`Painel ${APP_NAME}`}
         description="Visão geral, ferramentas e configurações do sistema"

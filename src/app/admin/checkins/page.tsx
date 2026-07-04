@@ -120,7 +120,6 @@ export default function AdminCheckinsPage() {
     <AppShell role="administrador" userName={profile.full_name}>
       <PageHero
         variant="light"
-        icon={ClipboardList}
         eyebrow="Registros · Operação"
         title="Check-ins"
         description="Histórico com dia de chegada, finalização, doca e previsão — consulte dias anteriores e minutas encerradas."

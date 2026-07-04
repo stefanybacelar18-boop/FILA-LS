@@ -98,7 +98,6 @@ export function DashboardPanel({
     <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>
       <PageHero
         variant="light"
-        icon={LayoutDashboard}
         eyebrow="Dashboard · Operação"
         title={formatManausDateLabel()}
         description="Indicadores do dia · atualização em tempo real"

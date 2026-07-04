@@ -3,11 +3,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { Truck } from "lucide-react";
-import { COMPANY_NAME } from "@/lib/constants";
 
 /** Cadastro substituído por login Google/Apple */
 export default function CadastroMotoristaPage() {
@@ -19,11 +18,11 @@ export default function CadastroMotoristaPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-muted p-4">
+    <div className="flex min-h-screen items-center justify-center app-canvas p-4">
       <Card className="card-brand w-full max-w-md text-center shadow-lg">
         <CardHeader>
-          <Truck className="mx-auto h-12 w-12 text-brand" />
-          <CardTitle className="text-brand">{COMPANY_NAME}</CardTitle>
+          <BrandLogo size="md" variant="stacked" className="mx-auto mb-2" />
+          <CardTitle className="sr-only">FilaDock</CardTitle>
           <p className="mt-2 text-slate-600">
             O cadastro agora é feito com sua conta Google ou Apple.
           </p>

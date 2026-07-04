@@ -6,7 +6,7 @@ import { getNextToCall, getRecentlyCalled, sortQueueEntries } from "@/lib/queue"
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
 import { createClient } from "@/lib/supabase/client";
 import { isActiveQueueStatus } from "@/lib/constants";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { maskPlaca } from "@/lib/checkin-rules";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Star } from "lucide-react";
@@ -50,13 +50,17 @@ export function TVPanel() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-8 py-4 backdrop-blur-sm">
-        <BrandLogo size="md" inverted />
-        <div className="text-right">
-          <p className="font-mono text-3xl font-bold text-brand-light">{clock}</p>
-          <p className="text-sm text-slate-400">{waitingCount} aguardando descarregamento</p>
-        </div>
-      </header>
+      <PanelShellHeader
+        tone="dark"
+        logoSize="md"
+        logoHref={false}
+        trailing={
+          <div className="text-right">
+            <p className="font-mono text-3xl font-bold text-brand-light">{clock}</p>
+            <p className="text-sm text-slate-400">{waitingCount} aguardando descarregamento</p>
+          </div>
+        }
+      />
 
       <div className="grid min-h-[calc(100vh-80px)] grid-rows-2 gap-0 lg:grid-cols-2 lg:grid-rows-1">
         <section

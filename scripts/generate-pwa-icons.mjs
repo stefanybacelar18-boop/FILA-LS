@@ -1,14 +1,11 @@
 import sharp from "sharp";
-import { mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
-const fullLogoPath = join(root, "public/brand/logo-full.png");
-
-/** Recorte do ícone no PNG oficial 1024×1024 — só o quadrado azul, sem texto nem fundo externo. */
-const ICON_CROP = { left: 238, top: 82, width: 548, height: 548 };
+const iconSvg = readFileSync(join(root, "public/icons/icon.svg"));
 
 const iconSizes = [
   { name: "icon-24.png", size: 24 },
@@ -24,19 +21,22 @@ const iconSizes = [
 mkdirSync(join(root, "public/icons"), { recursive: true });
 mkdirSync(join(root, "public/brand"), { recursive: true });
 
-const iconBuffer = await sharp(fullLogoPath).extract(ICON_CROP).png().toBuffer();
-
-await sharp(iconBuffer).resize(256, 256).png().toFile(join(root, "public/logo-mark.png"));
-await sharp(iconBuffer).resize(512, 512).png().toFile(join(root, "public/brand/logo-symbol-512.png"));
-
 for (const { name, size } of iconSizes) {
-  await sharp(iconBuffer)
+  await sharp(iconSvg, { density: 320 })
     .resize(size, size)
     .png()
     .toFile(join(root, "public/icons", name));
   console.log(`Generated icons/${name}`);
 }
 
-await sharp(iconBuffer).resize(32, 32).png().toFile(join(root, "public/favicon.ico"));
+await sharp(iconSvg, { density: 320 })
+  .resize(32, 32)
+  .png()
+  .toFile(join(root, "public/favicon.ico"));
 
-console.log("Generated logo-mark.png, favicon.ico and brand/logo-symbol-512.png");
+await sharp(iconSvg, { density: 320 })
+  .resize(512, 512)
+  .png()
+  .toFile(join(root, "public/brand/logo-symbol-512.png"));
+
+console.log("Generated favicon.ico and brand/logo-symbol-512.png");

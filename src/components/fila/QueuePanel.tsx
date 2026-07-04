@@ -33,6 +33,7 @@ import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { QueueStatsBar } from "@/components/fila/QueueStatsBar";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
+import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   FieldStaffShell,
@@ -725,17 +726,15 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   if (isEmpilhador) {
     return (
       <FieldStaffShell userName={profile.full_name}>
-        <header className="mb-4">
-          <p className="section-eyebrow">Operação · Descarga</p>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">
-            {permissions.panelTitle}
-          </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            {empilhadorFilter === "aguardando"
+        <PanelPageTitle
+          eyebrow="Operação · Descarga"
+          title={permissions.panelTitle}
+          subtitle={
+            empilhadorFilter === "aguardando"
               ? `${operationalEntries.length} veículo${operationalEntries.length !== 1 ? "s" : ""} no pátio${ausenteEntries.length > 0 ? ` · ${ausenteEntries.length} ausente${ausenteEntries.length !== 1 ? "s" : ""}` : ""}`
-              : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} finalizada${displayedEntries.length !== 1 ? "s" : ""} hoje`}
-          </p>
-        </header>
+              : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} finalizada${displayedEntries.length !== 1 ? "s" : ""} hoje`
+          }
+        />
 
         <QueueMobileSummaryStrip
           waiting={aguardandoCount}

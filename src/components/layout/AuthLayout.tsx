@@ -25,15 +25,16 @@ export function AuthLayout({
     >
       <div className="mb-8 text-center">
         <BrandLogo
-          size="xl"
+          size="lg"
+          variant="stacked"
           inverted={dark}
-          className="mx-auto justify-center"
+          className="mx-auto"
         />
         {subtitle && (
           <p
             className={cn(
-              "mt-4 text-sm font-medium tracking-wide",
-              dark ? "text-white/80" : "text-slate-500"
+              "mt-5 text-sm font-medium tracking-wide",
+              dark ? "text-white/75" : "text-slate-500"
             )}
           >
             {subtitle}

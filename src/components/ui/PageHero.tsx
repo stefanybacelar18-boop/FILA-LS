@@ -1,6 +1,5 @@
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
 
 export function PageHero({
   eyebrow,
@@ -9,7 +8,6 @@ export function PageHero({
   className,
   children,
   variant = "brand",
-  icon: Icon,
 }: {
   eyebrow?: string;
   title: string;
@@ -17,7 +15,6 @@ export function PageHero({
   className?: string;
   children?: React.ReactNode;
   variant?: "brand" | "light";
-  icon?: LucideIcon;
 }) {
   const isLight = variant === "light";
 
@@ -30,18 +27,10 @@ export function PageHero({
         className
       )}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
-          {isLight && Icon ? (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-muted text-brand ring-1 ring-brand/10">
-              <Icon className="h-6 w-6" />
-            </div>
-          ) : (
-            <div className="hidden shrink-0 rounded-xl border border-white/15 bg-white/10 p-2.5 backdrop-blur-sm sm:block">
-              <BrandLogo size="sm" showWordmark={false} inverted />
-            </div>
-          )}
-          <div className="min-w-0">
+          <BrandLogo size="sm" inverted={!isLight} className="shrink-0" />
+          <div className="min-w-0 border-l border-slate-100 pl-4 sm:border-white/15">
             {eyebrow && (
               <p
                 className={cn(
@@ -72,7 +61,7 @@ export function PageHero({
             )}
           </div>
         </div>
-        {children && <div className="shrink-0">{children}</div>}
+        {children && <div className="shrink-0 sm:pt-1">{children}</div>}
       </div>
     </div>
   );

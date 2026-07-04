@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { cn } from "@/lib/utils";
 import { Truck, ClipboardList, ListOrdered, LogOut } from "lucide-react";
 import type { Profile } from "@/lib/types";
@@ -22,9 +23,7 @@ export function MotoristaShell({
 }: {
   profile: Profile;
   children: React.ReactNode;
-  /** false = fora do pátio / GPS — check-in desabilitado */
   checkinNavEnabled?: boolean;
-  /** Mensagem curta no header quando check-in bloqueado */
   checkinBlockHint?: string | null;
 }) {
   const pathname = usePathname();
@@ -39,20 +38,20 @@ export function MotoristaShell({
 
   return (
     <div className="min-h-screen app-canvas-mobile pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-lg">
-        <div className="border-t-[3px] border-brand" aria-hidden />
-        <div className="page-container flex items-center justify-between py-3">
+      <PanelShellHeader
+        logoHref="/motorista"
+        leading={
           <div className="min-w-0">
-            <BrandLogo size="xs" />
-            <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">
-              Olá, {firstName}
-            </p>
+            <BrandLogo size="sm" />
+            <p className="mt-1 truncate text-sm font-semibold text-slate-800">Olá, {firstName}</p>
             {!checkinNavEnabled && checkinBlockHint && (
               <p className="mt-0.5 truncate text-xs font-semibold text-red-600" role="status">
                 {checkinBlockHint}
               </p>
             )}
           </div>
+        }
+        trailing={
           <button
             type="button"
             onClick={logout}
@@ -62,8 +61,8 @@ export function MotoristaShell({
             <LogOut className="h-4 w-4" />
             Sair
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <main className="page-container py-5">{children}</main>
 

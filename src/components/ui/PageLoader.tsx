@@ -22,7 +22,7 @@ export function PageLoader({
         className="app-canvas flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center"
         role="alert"
       >
-        <BrandLogo size="sm" className="opacity-60" />
+        <BrandLogo size="md" variant="stacked" className="opacity-80" />
         <p className="max-w-sm text-sm text-red-600">{error}</p>
         {onRetry && (
           <Button variant="outline" onClick={onRetry}>
@@ -35,11 +35,12 @@ export function PageLoader({
 
   return (
     <div
-      className="app-canvas flex min-h-screen flex-col items-center justify-center gap-3"
+      className="app-canvas flex min-h-screen flex-col items-center justify-center gap-4"
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
+      <BrandLogo size="md" variant="stacked" className="opacity-90" />
       <Spinner size="lg" />
       <p className="section-eyebrow">{message}</p>
     </div>

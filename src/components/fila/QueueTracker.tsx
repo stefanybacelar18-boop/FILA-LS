@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { QueueEntry } from "@/lib/types";
 import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
-import { getStatusLabel, COMPANY_NAME } from "@/lib/constants";
+import { getStatusLabel } from "@/lib/constants";
+import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { maskPlaca } from "@/lib/checkin-rules";
 import { createDebouncedFn } from "@/lib/debounce";
@@ -77,18 +78,19 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
   const placaMasked = maskPlaca(entry.placa_cavalo || entry.placa);
 
   return (
-    <div className="min-h-screen bg-surface-muted">
-      <header className="border-b bg-white px-4 py-4 shadow-sm">
-        <div className="mx-auto flex max-w-lg items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Truck className="h-6 w-6 text-brand" />
-            <span className="font-bold text-brand">{COMPANY_NAME}</span>
-          </div>
-          <button onClick={fetchData} className="rounded-lg p-2 hover:bg-slate-100" aria-label="Atualizar">
+    <div className="min-h-screen app-canvas-mobile">
+      <PanelShellHeader
+        logoHref={false}
+        trailing={
+          <button
+            onClick={fetchData}
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
+            aria-label="Atualizar"
+          >
             <RefreshCw className="h-4 w-4" />
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
         <div className="text-center">

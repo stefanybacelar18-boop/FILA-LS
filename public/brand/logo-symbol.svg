@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="FilaDock">
   <rect width="512" height="512" rx="112" fill="#0D1B2A"/>
   <g stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M104 396V220C104 154 172 108 256 108C340 108 408 154 408 220V396" stroke-width="30"/>
-    <path d="M104 396H408" stroke-width="30"/>
-    <path d="M104 396V424M132 396V424" stroke-width="22"/>
-    <path d="M164 396L236 244H276L348 396" stroke-width="24"/>
-    <path d="M176 348h40M186 304h34" stroke-width="18" opacity="0.9"/>
-    <path d="M296 348h40M292 304h34" stroke-width="18" opacity="0.9"/>
-    <rect x="226" y="182" width="60" height="60" rx="11" stroke-width="22"/>
-    <path d="M256 228V200M256 200l-20 18M256 200l20 18" stroke-width="20"/>
+    <path d="M96 400V216C96 148 168 96 256 96C344 96 416 148 416 216V400" stroke-width="32"/>
+    <path d="M96 400H416" stroke-width="32"/>
+    <path d="M96 400V432M128 400V432" stroke-width="24"/>
+    <path d="M152 400L232 240H280L360 400" stroke-width="26"/>
+    <path d="M168 352h48M180 304h40" stroke-width="20"/>
+    <path d="M296 352h48M292 304h40" stroke-width="20"/>
+    <rect x="226" y="176" width="60" height="60" rx="12" stroke-width="24"/>
+    <path d="M256 224V192M256 192l-20 18M256 192l20 18" stroke-width="22"/>
   </g>
 </svg>

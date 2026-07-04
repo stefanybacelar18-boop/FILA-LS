@@ -8,6 +8,7 @@ import { formatManausDateLabel, isEntryClosedToday } from "@/lib/queue-day";
 import { fetchStaffQueueToday } from "@/lib/queue-fetch";
 import { createDebouncedFn } from "@/lib/debounce";
 import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
+import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
@@ -85,13 +86,11 @@ export function EmpilhadorDashboardPanel({
 
   return (
     <FieldStaffShell userName={profile.full_name}>
-      <header className="mb-4">
-        <p className="section-eyebrow">Operação · Descarga</p>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">Meu desempenho</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Resumo do dia · {formatManausDateLabel(new Date())}
-        </p>
-      </header>
+      <PanelPageTitle
+        eyebrow="Operação · Descarga"
+        title="Meu desempenho"
+        subtitle={`Resumo do dia · ${formatManausDateLabel(new Date())}`}
+      />
 
       {loading ? (
         <div className="flex justify-center py-16">
