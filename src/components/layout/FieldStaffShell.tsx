@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { Button } from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
+import { cn, getProfileDisplayName } from "@/lib/utils";
 import { LogOut, ListOrdered, LayoutDashboard } from "lucide-react";
 
 const BOTTOM_NAV = [
@@ -24,12 +24,12 @@ export function FieldStaffShell({
   userName,
 }: {
   children: React.ReactNode;
-  userName?: string;
+  userName?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
-  const firstName = userName?.split(" ")[0] ?? "Operador";
+  const firstName = getProfileDisplayName(userName).split(" ")[0] ?? "Operador";
 
   async function handleLogout() {
     await supabase.auth.signOut();

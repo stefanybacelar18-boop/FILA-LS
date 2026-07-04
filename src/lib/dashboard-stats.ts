@@ -55,8 +55,8 @@ export function computeDashboardStats(entries: QueueEntry[]): DashboardStats {
 
   const transportadoraCount: Record<string, number> = {};
   todayEntries.forEach((e) => {
-    transportadoraCount[e.transportadora] =
-      (transportadoraCount[e.transportadora] ?? 0) + 1;
+    const key = e.transportadora?.trim() || "—";
+    transportadoraCount[key] = (transportadoraCount[key] ?? 0) + 1;
   });
 
   const rankingTransportadoras = Object.entries(transportadoraCount)

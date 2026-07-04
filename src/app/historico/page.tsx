@@ -83,7 +83,7 @@ export default function HistoricoPage() {
   });
 
   return (
-    <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>
+    <AppShell role={toAppRole(profile.role)} userName={profile.full_name} userEmail={profile.email}>
       <AdminPageHeader
         title="Histórico de movimentações"
         description="Registro completo de alterações"

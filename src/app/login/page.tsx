@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isStaffRole } from "@/lib/auth-profile";
 import { staffHomePath } from "@/lib/role-permissions";
@@ -22,7 +22,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 function LoginContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
   const [email, setEmail] = useState("");
@@ -88,8 +87,10 @@ function LoginContent() {
         searchParams.get("next"),
         staffHomePath(role)
       );
-      router.push(destination);
-      router.refresh();
+
+      // Navegação completa garante cookies de sessão + chunks atualizados (evita crash pós-login).
+      window.location.assign(destination);
+      return;
     } catch {
       setError("Erro inesperado. Verifique sua conexão.");
     } finally {

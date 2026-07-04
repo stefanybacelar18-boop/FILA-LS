@@ -12,6 +12,7 @@ export default function DashboardPage() {
           profile={{
             role: profile.role,
             full_name: profile.full_name,
+            email: profile.email,
           }}
         />
       )}

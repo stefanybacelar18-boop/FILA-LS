@@ -34,7 +34,7 @@ import {
 export function DashboardPanel({
   profile,
 }: {
-  profile: { role: string; full_name: string };
+  profile: { role: string; full_name: string; email?: string | null };
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [entries, setEntries] = useState<QueueEntry[]>([]);
@@ -112,7 +112,7 @@ export function DashboardPanel({
   );
 
   return (
-    <AppShell role={toAppRole(profile.role)} userName={profile.full_name}>
+    <AppShell role={toAppRole(profile.role)} userName={profile.full_name} userEmail={profile.email}>
       <AdminPageHeader
         eyebrow="Dashboard · Operação"
         title={formatManausDateLabel()}

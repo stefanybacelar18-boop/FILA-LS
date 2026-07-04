@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ROLE_LABELS } from "@/lib/constants";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { toAppRole } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, getNameInitial, getProfileDisplayName } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import {
@@ -88,14 +88,17 @@ export function AppShell({
   children,
   role,
   userName,
+  userEmail,
 }: {
   children: React.ReactNode;
   role?: UserRole;
-  userName?: string;
+  userName?: string | null;
+  userEmail?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const displayName = getProfileDisplayName(userName, userEmail);
 
   const visibleNav = role
     ? NAV_ITEMS.filter((item) => item.visible(role)).map((item) => ({
@@ -118,17 +121,17 @@ export function AppShell({
         logoHref="/"
         trailing={
           <>
-            {role && userName && (
+            {role && (
               <div className="hidden items-center gap-2.5 md:flex">
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-800">{userName}</p>
+                  <p className="text-sm font-semibold text-slate-800">{displayName}</p>
                   <span className="role-badge mt-0.5">{ROLE_LABELS[toAppRole(role)]}</span>
                 </div>
                 <div
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-muted text-xs font-bold text-brand"
                   aria-hidden
                 >
-                  {userName.charAt(0).toUpperCase()}
+                  {getNameInitial(displayName)}
                 </div>
               </div>
             )}

@@ -273,7 +273,7 @@ export default function AdminPage() {
       : 0;
 
   return (
-    <AppShell role="administrador" userName={profile.full_name}>
+    <AppShell role="administrador" userName={profile.full_name} userEmail={profile.email}>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <AdminPageHeader title="Administração" className="mb-0" />
         <Button

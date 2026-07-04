@@ -91,5 +91,5 @@ export function assertStatusAllowed(
 
 /** Rota após login staff */
 export function staffHomePath(role: string): string {
-  return toAppRole(role) === "administrador" ? "/admin" : "/empilhador";
+  return toAppRole(role) === "administrador" ? "/admin/fila" : "/empilhador";
 }

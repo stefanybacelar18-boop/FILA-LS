@@ -117,7 +117,7 @@ export default function AdminCheckinsPage() {
   }
 
   return (
-    <AppShell role="administrador" userName={profile.full_name}>
+    <AppShell role="administrador" userName={profile.full_name} userEmail={profile.email}>
       <AdminPageHeader
         eyebrow="Registros · Operação"
         title="Check-ins"

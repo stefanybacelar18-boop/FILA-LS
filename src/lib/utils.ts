@@ -34,6 +34,29 @@ export function getDriverFirstName(nome?: string | null): string {
   return trimmed.split(/\s+/)[0] ?? "—";
 }
 
+/** Nome exibido no shell — fallback para e-mail quando full_name está vazio */
+export function getProfileDisplayName(
+  fullName?: string | null,
+  email?: string | null
+): string {
+  const trimmed = fullName?.trim();
+  if (trimmed) return trimmed;
+  const mail = email?.trim();
+  if (mail) {
+    const local = mail.split("@")[0]?.trim();
+    if (local) return local;
+    return mail;
+  }
+  return "Usuário";
+}
+
+/** Inicial do avatar — seguro para null/undefined */
+export function getNameInitial(name?: string | null): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return "?";
+  return trimmed.charAt(0).toUpperCase();
+}
+
 export function formatPlaca(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
 }

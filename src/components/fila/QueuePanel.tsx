@@ -23,7 +23,7 @@ import {
   assertStatusAllowed,
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
-import { formatPhone, isoToDateInput } from "@/lib/utils";
+import { formatPhone, isoToDateInput, getProfileDisplayName } from "@/lib/utils";
 import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { isEntryClosedToday } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
@@ -112,7 +112,16 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         return;
       }
 
-      setEntries(sortQueueEntries(json.data ?? []));
+      const raw = json.data ?? [];
+      const sanitized = raw.map((entry) => ({
+        ...entry,
+        nome: entry.nome ?? "",
+        telefone: entry.telefone ?? "",
+        transportadora: entry.transportadora ?? "",
+        placa: entry.placa ?? "",
+      }));
+
+      setEntries(sortQueueEntries(sanitized));
       setLoading(false);
     },
     [showFinalizados, isAdmin, isEmpilhador]
@@ -740,7 +749,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   if (isEmpilhador) {
     return (
-      <FieldStaffShell userName={profile.full_name}>
+      <FieldStaffShell
+        userName={getProfileDisplayName(profile.full_name, profile.email)}
+      >
         <PanelPageTitle
           eyebrow="Operação · Descarga"
           title={permissions.panelTitle}
@@ -782,7 +793,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   }
 
   return (
-    <AppShell role={appRole} userName={profile.full_name}>
+    <AppShell
+      role={appRole}
+      userName={profile.full_name}
+      userEmail={profile.email}
+    >
       <AdminPageHeader
         eyebrow="Operação · Descarga"
         title={permissions.panelTitle}

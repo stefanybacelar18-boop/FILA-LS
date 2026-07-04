@@ -42,7 +42,7 @@ export default function AdminMinutasPage() {
   );
 }
 
-function AdminMinutasContent({ profile }: { profile: { full_name: string } }) {
+function AdminMinutasContent({ profile }: { profile: { full_name: string; email?: string | null } }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -203,7 +203,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string } }) {
   }
 
   return (
-    <AppShell role="administrador" userName={profile.full_name}>
+    <AppShell role="administrador" userName={profile.full_name} userEmail={profile.email}>
       <AdminPageHeader
         title="Inteligência de minutas"
         description="Importe Excel, defina expedição e recalcule prioridades e previsões"
