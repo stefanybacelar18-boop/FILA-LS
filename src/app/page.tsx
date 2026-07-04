@@ -10,7 +10,7 @@ export default function HomePage() {
         <div className="text-center text-white">
           <div className="mx-auto mb-6 inline-flex flex-col items-center">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-5 shadow-[var(--shadow-premium)] backdrop-blur-md">
-              <BrandLogo size="lg" showCompany inverted />
+              <BrandLogo size="xl" showCompany inverted />
             </div>
             <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
               {BRANCH_TAGLINE}

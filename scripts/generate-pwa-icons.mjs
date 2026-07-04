@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
-const svg = readFileSync(join(root, "public/icons/icon.svg"));
+const symbolSvg = readFileSync(join(root, "public/brand/logo-symbol.svg"));
+const iconSvg = readFileSync(join(root, "public/icons/icon.svg"));
 
-const sizes = [
+const iconSizes = [
   { name: "icon-24.png", size: 24 },
   { name: "icon-32.png", size: 32 },
   { name: "icon-64.png", size: 64 },
@@ -19,18 +20,24 @@ const sizes = [
 ];
 
 mkdirSync(join(root, "public/icons"), { recursive: true });
+mkdirSync(join(root, "public/brand"), { recursive: true });
 
-for (const { name, size } of sizes) {
-  await sharp(svg, { density: 300 })
+for (const { name, size } of iconSizes) {
+  await sharp(iconSvg, { density: 320 })
     .resize(size, size)
     .png()
     .toFile(join(root, "public/icons", name));
-  console.log(`Generated ${name}`);
+  console.log(`Generated icons/${name}`);
 }
 
-await sharp(svg, { density: 300 })
+await sharp(iconSvg, { density: 320 })
   .resize(32, 32)
   .png()
   .toFile(join(root, "public/favicon.ico"));
 
-console.log("Generated favicon.ico");
+await sharp(symbolSvg, { density: 320 })
+  .resize(512, 512)
+  .png()
+  .toFile(join(root, "public/brand/logo-symbol-512.png"));
+
+console.log("Generated favicon.ico and brand/logo-symbol-512.png");

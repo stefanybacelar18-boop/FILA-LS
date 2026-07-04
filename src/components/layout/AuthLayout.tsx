@@ -27,14 +27,14 @@ export function AuthLayout({
         <div
           className={cn(
             "mx-auto inline-flex rounded-2xl p-1",
-            dark && "border border-white/10 bg-white/5 backdrop-blur-sm"
+            dark && "border border-white/10 bg-white/5 px-1 py-0.5 backdrop-blur-sm"
           )}
         >
           <BrandLogo
-            size="lg"
+            size="xl"
             showCompany
             inverted={dark}
-            className="justify-center px-3 py-2"
+            className="justify-center px-4 py-3"
           />
         </div>
         {subtitle && (

@@ -69,7 +69,14 @@ Gerar ícones a partir do SVG oficial:
 npm run generate:icons
 ```
 
-Assets em `public/logo-mark.svg`, `public/icons/` e `public/brand/logo-full.png`.
+Assets oficiais em `public/brand/`:
+
+| Arquivo | Uso |
+|---------|-----|
+| `logo-symbol.svg` | Símbolo FD (master 512px) |
+| `logo-full.svg` / `logo-full.png` | Logo completa ícone + texto |
+| `logo-mark.svg` | Ícone 64px — cabeçalho, login, cards |
+| `icons/icon-*.png` | PWA, favicon, iOS/Android |
 
 ## Deploy na Vercel (acesso externo / HTTPS)
 

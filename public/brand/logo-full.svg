@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" fill="none" role="img" aria-label="FilaDock">
+  <rect x="8" y="8" width="80" height="80" rx="18" fill="#0D1B2A"/>
+  <g stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M21.5 69.5V42.5C21.5 33.5 29.5 26.5 48 26.5C66.5 26.5 74.5 33.5 74.5 42.5V69.5" stroke-width="4.7"/>
+    <path d="M21.5 69.5H74.5" stroke-width="4.7"/>
+    <path d="M21.5 69.5V73.5M25.5 69.5V73.5" stroke-width="3.4"/>
+    <path d="M30.5 69.5L42.5 42.5H53.5L65.5 69.5" stroke-width="3.75"/>
+    <path d="M32.5 61h6.25M34 53.5h5.3" stroke-width="2.8" opacity="0.9"/>
+    <path d="M61.5 61h6.25M60 53.5h5.3" stroke-width="2.8" opacity="0.9"/>
+    <rect x="44.25" y="32.5" width="9.5" height="9.5" rx="1.75" stroke-width="3.4"/>
+    <path d="M49 40.5V36.5M49 36.5l-3.1 2.8M49 36.5l3.1 2.8" stroke-width="3.1"/>
+  </g>
+  <text x="108" y="58" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-size="42" font-weight="700" letter-spacing="-0.02em">
+    <tspan fill="#0D1B2A">Fila</tspan><tspan fill="#1565C0">Dock</tspan>
+  </text>
+</svg>

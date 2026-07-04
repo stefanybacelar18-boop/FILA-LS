@@ -1,11 +1,9 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
-import { APP_NAME } from "@/lib/constants";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { cn } from "@/lib/utils";
 import { LogOut, ListOrdered, LayoutDashboard } from "lucide-react";
 
@@ -42,17 +40,8 @@ export function FieldStaffShell({
     <div className="flex min-h-screen flex-col app-canvas-mobile">
       <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white shadow-sm">
         <div className="page-container flex h-14 items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Image
-              src="/logo-mark.svg"
-              alt=""
-              width={32}
-              height={32}
-              className="shrink-0 rounded-lg ring-1 ring-slate-200/80"
-            />
-            <span className="truncate text-sm font-bold tracking-tight text-slate-900">
-              {APP_NAME}
-            </span>
+          <div className="flex min-w-0 items-center">
+            <BrandLogo size="sm" className="min-w-0" />
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className="max-w-[7rem] truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
