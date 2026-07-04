@@ -1,4 +1,4 @@
-const CACHE = "filadock-v13";
+const CACHE = "filadock-v14";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

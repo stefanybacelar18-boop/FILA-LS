@@ -18,8 +18,9 @@
 }
 
 :root {
-  --background: #eef2f7;
+  --background: #f4f6f9;
   --foreground: #0f172a;
+  --app-shell-bg: #f4f6f9;
   --brand-primary: #1565c0;
   --brand-secondary: #42a5f5;
   --brand-dark: #0d1b2a;
@@ -28,7 +29,7 @@
 }
 
 body {
-  background: var(--background);
+  background: var(--app-shell-bg);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -44,7 +45,7 @@ body {
 
 /* Fundo admin / web — mais limpo, sem grid */
 .app-canvas-admin {
-  background-color: #f4f6f9;
+  background-color: var(--app-shell-bg);
 }
 
 /* Legado — mantido para compatibilidade */
@@ -264,7 +265,7 @@ body {
   background-size: auto, auto, 32px 32px, 32px 32px, cover;
 }
 
-/* Splash screen — logo + carregamento, fundo neutro */
+/* Splash — ícone FD, fundo igual ao shell do app */
 .app-splash {
   position: fixed;
   inset: 0;
@@ -272,8 +273,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  transition: opacity 0.45s ease, visibility 0.45s ease;
+  background: var(--app-shell-bg);
+  transition: opacity 0.28s ease-out, visibility 0.28s ease-out;
 }
 
 .app-splash--exit {
@@ -286,17 +287,28 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
-  animation: splash-rise 0.55s ease-out both;
+  gap: 1rem;
+  animation: splash-rise 0.32s ease-out both;
+}
+
+.app-splash__mark img {
+  width: 5rem;
+  height: 5rem;
+}
+
+@media (min-width: 640px) {
+  .app-splash__mark img {
+    width: 5.5rem;
+    height: 5.5rem;
+  }
 }
 
 .app-splash__loader {
-  width: 3rem;
-  height: 3px;
-  margin-top: 0.25rem;
+  width: 2.25rem;
+  height: 2px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgb(21 101 192 / 0.12);
+  background: rgb(21 101 192 / 0.1);
 }
 
 .app-splash__loader::after {
@@ -306,17 +318,17 @@ body {
   height: 100%;
   border-radius: inherit;
   background: var(--brand-primary);
-  animation: splash-loader 1.15s ease-in-out infinite;
+  animation: splash-loader 0.9s ease-in-out infinite;
 }
 
 @keyframes splash-rise {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.97);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
 }
 
