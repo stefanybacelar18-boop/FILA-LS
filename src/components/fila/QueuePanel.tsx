@@ -23,7 +23,7 @@ import {
   assertStatusAllowed,
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
-import { formatPhone, isoToDateInput, getProfileDisplayName } from "@/lib/utils";
+import { formatPhone, isoToDateInput, getProfileDisplayName, cn } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { isEntryClosedToday } from "@/lib/queue-day";
@@ -31,7 +31,7 @@ import { createDebouncedFn } from "@/lib/debounce";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
-import { QueueStatsBar } from "@/components/fila/QueueStatsBar";
+import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
@@ -359,14 +359,25 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   function renderQueueList(
     list: QueueEntry[],
-    options?: { sectionLabel?: string; startIndex?: number }
+    options?: { sectionLabel?: string; startIndex?: number; cardVariant?: "default" | "admin" }
   ) {
     const start = options?.startIndex ?? 0;
+    const cardVariant = options?.cardVariant ?? (isAdmin ? "admin" : "default");
 
     return (
-      <div className="space-y-2">
+      <div className={cn("space-y-2", isAdmin && "space-y-2.5")}>
         {options?.sectionLabel && (
-          <p className="section-eyebrow px-0.5 pt-1">{options.sectionLabel}</p>
+          <div
+            className={cn(
+              "flex items-baseline justify-between gap-2 px-0.5",
+              isAdmin ? "pb-0.5 pt-3 first:pt-0" : "pt-1"
+            )}
+          >
+            <p className="section-eyebrow">{options.sectionLabel}</p>
+            <span className="text-[11px] font-medium tabular-nums text-slate-400">
+              {list.length} {list.length === 1 ? "veículo" : "veículos"}
+            </span>
+          </div>
         )}
         {list.map((entry, idx) => (
           <EmpilhadorQueueCard
@@ -376,6 +387,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             selected={selectedId === entry.id}
             isNext={entry.id === nextToCallId && isActiveQueueStatus(entry.status)}
             onClick={() => selectEntry(entry)}
+            variant={cardVariant}
           />
         ))}
       </div>
@@ -410,177 +422,195 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     }
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-lg font-bold text-brand">{selected.minuta || "—"}</p>
-            <p className="mt-1 font-mono text-base font-semibold text-slate-900">
-              {selected.placa_cavalo || selected.placa}
-            </p>
-            <p className="text-sm text-slate-600">
-              {selected.nome || "—"} · {selected.transportadora || "—"}
-            </p>
-            <p className="text-xs text-slate-400">{formatPhone(selected.telefone)}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusBadge status={selected.status} />
-              {entryHasPrioridade(selected) && (
-                <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
-                  <Star className="h-3 w-3" />
-                  Prioridade
-                </span>
-              )}
-              {entryRetornoRacksVazios(selected) && <RacksVaziosBadge />}
-            </div>
-            <QueueEntryBadges entry={selected} showRacks={false} className="mt-2" />
-          </div>
-          {isEmpilhador && (
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
-              aria-label="Fechar"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          )}
-        </div>
-
-        {isAdmin && <QueueEntryDates entry={selected} />}
-
-        {permissions.canSetPrioridade && (
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm">
-            <input
-              type="checkbox"
-              checked={editPrioridade}
-              disabled={saving || selected.prioridade_automatica}
-              onChange={(e) => void savePrioridade(e.target.checked)}
-              className="h-4 w-4 rounded"
-            />
-            <Star className="h-4 w-4 text-amber-600" />
-            <span>
-              {selected.prioridade_automatica
-                ? "Prioridade automática (NF vence amanhã)"
-                : "Prioridade manual na fila"}
-            </span>
-          </label>
-        )}
-
-        {permissions.canEditDoca && (isAdmin || selectedIsActive) && (
-          <Input
-            label="Doca"
-            value={editDoca}
-            onChange={(e) => setEditDoca(e.target.value)}
-            placeholder="Ex: Doca 3"
-          />
-        )}
-
-        {permissions.canChamarWhatsApp && selectedIsActive && (
-          <Button
-            variant="success"
-            className="w-full"
-            size="lg"
-            disabled={saving}
-            onClick={() => chamarMotorista(selected)}
-          >
-            <MessageCircle className="h-4 w-4" />
-            Chamar motorista (WhatsApp)
-          </Button>
-        )}
-
-        {isEmpilhador && selectedIsActive && (
-          <div className="grid gap-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              disabled={saving}
-              onClick={() => applyStatus(selected.id, "ausente")}
-            >
-              <UserX className="h-4 w-4" />
-              Motorista ausente
-            </Button>
-            <Button
-              variant="secondary"
-              className="w-full justify-start"
-              disabled={saving}
-              onClick={() => applyStatus(selected.id, "finalizado")}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Finalizar operação
-            </Button>
-          </div>
-        )}
-
-        {!selectedIsActive && (isAdmin || isEmpilhador) && (
-          <Button
-            variant="outline"
-            className="w-full justify-start border-brand text-brand"
-            disabled={saving}
-            onClick={() =>
-              applyStatus(selected.id, "aguardando_descarregamento", selected.status)
-            }
-          >
-            <RotateCcw className="h-4 w-4" />
-            {isAusenteQueueStatus(selected.status)
-              ? "Motorista voltou — liberar descarga"
-              : "Reativar na fila"}
-          </Button>
-        )}
-
-        {isAusenteQueueStatus(selected.status) && isEmpilhador && (
-          <p className="text-xs leading-relaxed text-slate-500">
-            Ausente permanece no topo da fila até ser descarregado. Os demais passam
-            enquanto ele não retorna.
-          </p>
-        )}
-
-        {isAdmin && statusOptions.length > 0 && (
-          <Select
-            label="Status"
-            value={editStatus}
-            onChange={(e) => setEditStatus(e.target.value as QueueStatus)}
-            options={statusOptions}
-          />
-        )}
-
-        {permissions.canEditPrevisao && isAdmin && (
-          <div>
-            <Input
-              label={
-                selected.previsao_automatica
-                  ? "Previsão automática (capacidade)"
-                  : "Previsão de descarga (data)"
-              }
-              type="date"
-              value={editPrevisao}
-              onChange={(e) => setEditPrevisao(e.target.value)}
-            />
-            {selected.previsao_automatica && (
-              <p className="mt-1 text-xs text-sky-700">
-                Calculada pelo volume da minuta e capacidade restante da expedição.
-                Altere a data para definir manualmente.
+      <div className={cn("space-y-4", isAdmin && "space-y-5")}>
+        <section className={cn(isAdmin && "space-y-3")}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-bold text-brand">{selected.minuta || "—"}</p>
+              <p className="mt-1 font-mono text-base font-semibold text-slate-900">
+                {selected.placa_cavalo || selected.placa}
               </p>
+              <p className="mt-1 text-sm text-slate-600">
+                {selected.nome || "—"}
+                <span className="text-slate-400"> · </span>
+                {selected.transportadora || "—"}
+              </p>
+              <p className="text-xs text-slate-400">{formatPhone(selected.telefone)}</p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <StatusBadge status={selected.status} />
+                {entryHasPrioridade(selected) && (
+                  <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                    <Star className="h-3 w-3" />
+                    Prioridade
+                  </span>
+                )}
+                {entryRetornoRacksVazios(selected) && <RacksVaziosBadge />}
+              </div>
+              <QueueEntryBadges entry={selected} showRacks={false} className="mt-2" />
+            </div>
+            {isEmpilhador && (
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
             )}
           </div>
+        </section>
+
+        {isAdmin && (
+          <section className="border-t border-slate-100 pt-4">
+            <QueueEntryDates entry={selected} />
+          </section>
         )}
 
-        {permissions.canEditRetornoRacks && isAdmin && (
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 p-3.5 text-sm">
-            <input
-              type="checkbox"
-              checked={editRetornoRacks}
-              disabled={saving}
-              onChange={(e) => setEditRetornoRacks(e.target.checked)}
-              className="h-4 w-4 rounded"
+        <section className={cn("space-y-3", isAdmin && "border-t border-slate-100 pt-4")}>
+          {permissions.canSetPrioridade && (
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm">
+              <input
+                type="checkbox"
+                checked={editPrioridade}
+                disabled={saving || selected.prioridade_automatica}
+                onChange={(e) => void savePrioridade(e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <Star className="h-4 w-4 text-amber-600" />
+              <span>
+                {selected.prioridade_automatica
+                  ? "Prioridade automática (NF vence amanhã)"
+                  : "Prioridade manual na fila"}
+              </span>
+            </label>
+          )}
+
+          {permissions.canEditDoca && (isAdmin || selectedIsActive) && (
+            <Input
+              label="Doca"
+              value={editDoca}
+              onChange={(e) => setEditDoca(e.target.value)}
+              placeholder="Ex: Doca 3"
             />
-            <PackageOpen className="h-4 w-4 text-teal-700" />
-            Retorna com racks
-          </label>
-        )}
+          )}
+
+          {permissions.canChamarWhatsApp && selectedIsActive && (
+            <Button
+              variant="success"
+              className="w-full"
+              size="lg"
+              disabled={saving}
+              onClick={() => chamarMotorista(selected)}
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chamar motorista (WhatsApp)
+            </Button>
+          )}
+
+          {isEmpilhador && selectedIsActive && (
+            <div className="grid gap-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                disabled={saving}
+                onClick={() => applyStatus(selected.id, "ausente")}
+              >
+                <UserX className="h-4 w-4" />
+                Motorista ausente
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full justify-start"
+                disabled={saving}
+                onClick={() => applyStatus(selected.id, "finalizado")}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Finalizar operação
+              </Button>
+            </div>
+          )}
+
+          {!selectedIsActive && (isAdmin || isEmpilhador) && (
+            <Button
+              variant="outline"
+              className="w-full justify-start border-brand text-brand"
+              disabled={saving}
+              onClick={() =>
+                applyStatus(selected.id, "aguardando_descarregamento", selected.status)
+              }
+            >
+              <RotateCcw className="h-4 w-4" />
+              {isAusenteQueueStatus(selected.status)
+                ? "Motorista voltou — liberar descarga"
+                : "Reativar na fila"}
+            </Button>
+          )}
+
+          {isAusenteQueueStatus(selected.status) && isEmpilhador && (
+            <p className="text-xs leading-relaxed text-slate-500">
+              Ausente permanece no topo da fila até ser descarregado. Os demais passam
+              enquanto ele não retorna.
+            </p>
+          )}
+
+          {isAdmin && statusOptions.length > 0 && (
+            <Select
+              label="Status"
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value as QueueStatus)}
+              options={statusOptions}
+            />
+          )}
+
+          {permissions.canEditPrevisao && isAdmin && (
+            <div>
+              <Input
+                label={
+                  selected.previsao_automatica
+                    ? "Previsão automática (capacidade)"
+                    : "Previsão de descarga (data)"
+                }
+                type="date"
+                value={editPrevisao}
+                onChange={(e) => setEditPrevisao(e.target.value)}
+              />
+              {selected.previsao_automatica && (
+                <p className="mt-1 text-xs text-sky-700">
+                  Calculada pelo volume da minuta e capacidade restante da expedição.
+                  Altere a data para definir manualmente.
+                </p>
+              )}
+            </div>
+          )}
+
+          {permissions.canEditRetornoRacks && isAdmin && (
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 p-3.5 text-sm">
+              <input
+                type="checkbox"
+                checked={editRetornoRacks}
+                disabled={saving}
+                onChange={(e) => setEditRetornoRacks(e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <PackageOpen className="h-4 w-4 text-teal-700" />
+              Retorna com racks
+            </label>
+          )}
+        </section>
 
         {(isAdmin || (isEmpilhador && selectedIsActive)) && (
-          <Button className="w-full" size="lg" onClick={handleUpdate} disabled={saving}>
-            {saving ? <Spinner size="sm" /> : "Salvar alterações"}
-          </Button>
+          <section className={cn("space-y-3", isAdmin && "border-t border-slate-100 pt-4")}>
+            <Button className="w-full" size="lg" onClick={handleUpdate} disabled={saving}>
+              {saving ? <Spinner size="sm" /> : "Salvar alterações"}
+            </Button>
+
+            {isAdmin && (
+              <p className="rounded-xl bg-brand-muted/80 p-3 text-xs leading-relaxed text-slate-600">
+                Você pode alterar status, prioridade, previsão (data) e retorno com racks.
+              </p>
+            )}
+          </section>
         )}
 
         {isEmpilhador && !selectedIsActive && (
@@ -594,12 +624,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-slate-600">
             Minutas com badge de prioridade e previsões de descarga são definidas pelo
             administrador.
-          </p>
-        )}
-
-        {isAdmin && (
-          <p className="rounded-xl bg-brand-muted p-3 text-xs leading-relaxed text-slate-600">
-            Você pode alterar status, prioridade, previsão (data) e retorno com racks.
           </p>
         )}
       </div>
@@ -628,10 +652,10 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             className={
               isEmpilhador
                 ? "space-y-2 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]"
-                : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]"
+                : "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-6"
             }
           >
-            <div className="space-y-2">
+            <div className={cn(isAdmin ? "space-y-4" : "space-y-2")}>
               {displayedEntries.length === 0 ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>
@@ -642,32 +666,42 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   </p>
                 </Card>
               ) : isAdmin ? (
-                <>
+                <div className="space-y-5">
                   {adminOperationalList.length > 0 &&
                     renderQueueList(adminOperationalList, {
                       sectionLabel: showFinalizados ? "Fila do pátio" : undefined,
+                      cardVariant: "admin",
                     })}
                   {showFinalizados && adminClosedList.length > 0 &&
                     renderQueueList(adminClosedList, {
                       sectionLabel: "Finalizados hoje",
                       startIndex: adminOperationalList.length,
+                      cardVariant: "admin",
                     })}
-                </>
+                </div>
               ) : (
                 renderQueueList(displayedEntries)
               )}
             </div>
 
             {!isEmpilhador && (
-              <Card className="sticky top-28 h-fit overflow-hidden p-0">
-                <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+              <Card className="sticky top-28 h-fit overflow-hidden border-brand/12 p-0 shadow-[var(--shadow-card)]">
+                <div className="border-b border-brand/10 bg-brand-muted/40 px-5 py-4">
                   <h2 className="text-base font-semibold text-slate-900">
                     Gerenciar minuta
                   </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {selected
-                      ? `Minuta ${selected.minuta || "—"} · ${selected.placa_cavalo || selected.placa}`
-                      : "Selecione um veículo na fila ao lado"}
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    {selected ? (
+                      <>
+                        <span className="font-semibold text-brand">{selected.minuta || "—"}</span>
+                        <span className="text-slate-400"> · </span>
+                        <span className="font-mono text-slate-600">
+                          {selected.placa_cavalo || selected.placa}
+                        </span>
+                      </>
+                    ) : (
+                      "Selecione um veículo na fila ao lado"
+                    )}
                   </p>
                 </div>
                 <div className="p-5">{renderEntryDetail()}</div>
@@ -770,38 +804,41 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         title={permissions.panelTitle}
         description="Ordem por check-in e prioridade · atualização em tempo real"
       >
-        {nextToCall && permissions.canChamarWhatsApp && (
-          <Button
-            variant="success"
-            disabled={saving}
-            onClick={() => {
-              selectEntry(nextToCall);
-              chamarMotorista(nextToCall);
-            }}
-          >
-            <Zap className="h-4 w-4" />
-            Chamar próximo (WhatsApp)
-          </Button>
-        )}
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={showFinalizados}
-            onChange={(e) => {
-              setLoading(true);
-              setShowFinalizados(e.target.checked);
-            }}
-            className="rounded border-slate-300 text-brand focus:ring-brand/20"
-          />
-          Mostrar finalizados / ausentes de hoje
-        </label>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[15rem]">
+          {nextToCall && permissions.canChamarWhatsApp && (
+            <Button
+              variant="success"
+              className="w-full sm:w-auto"
+              disabled={saving}
+              onClick={() => {
+                selectEntry(nextToCall);
+                chamarMotorista(nextToCall);
+              }}
+            >
+              <Zap className="h-4 w-4" />
+              Chamar próximo (WhatsApp)
+            </Button>
+          )}
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-brand/12 bg-white px-3.5 py-2.5 text-sm text-slate-600 shadow-[var(--shadow-card)]">
+            <input
+              type="checkbox"
+              checked={showFinalizados}
+              onChange={(e) => {
+                setLoading(true);
+                setShowFinalizados(e.target.checked);
+              }}
+              className="rounded border-slate-300 text-brand focus:ring-brand/20"
+            />
+            Mostrar finalizados / ausentes de hoje
+          </label>
+        </div>
       </AdminPageHeader>
 
-      <QueueStatsBar
+      <QueueAdminSummaryStrip
         waiting={waitingNotCalledCount}
         called={calledCount}
         total={displayedEntries.length}
-        className="mb-6"
+        className="mb-5"
       />
       {queueContent}
     </AppShell>

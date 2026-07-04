@@ -7,7 +7,7 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#0D1B2A",
+  "background_color": "#1565C0",
   "theme_color": "#1565C0",
   "orientation": "portrait-primary",
   "lang": "pt-BR",
@@ -27,7 +27,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

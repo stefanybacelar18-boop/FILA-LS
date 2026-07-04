@@ -20,6 +20,8 @@ type EmpilhadorQueueCardProps = {
   selected?: boolean;
   isNext?: boolean;
   onClick: () => void;
+  /** Ajustes visuais para a lista admin em desktop */
+  variant?: "default" | "admin";
 };
 
 /** Card da fila — layout em grade para celular do empilhador */
@@ -29,44 +31,64 @@ export function EmpilhadorQueueCard({
   selected = false,
   isNext = false,
   onClick,
+  variant = "default",
 }: EmpilhadorQueueCardProps) {
+  const isAdmin = variant === "admin";
   const absent = isAusenteQueueStatus(entry.status);
   const active = isActiveQueueStatus(entry.status);
+  const inactive = !active && !absent;
   const called = active && isDriverCalled(entry);
   const priority = entryHasPrioridade(entry);
   const racks = entryRetornoRacksVazios(entry);
   const firstName = getDriverFirstName(entry.nome);
   const hasMinutaMeta =
     (entry.volume_motos != null && entry.volume_motos > 0) || Boolean(entry.menor_vencimento);
+  const hasFooterBadges = priority || called || racks;
+  const hasPrevisao = Boolean(entry.previsao_descarregamento) && active;
+  const hasFooter = hasPrevisao || (hasFooterBadges && (active || isAdmin));
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "w-full rounded-xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.995]",
+        "w-full rounded-xl border bg-white text-left transition active:scale-[0.995]",
+        isAdmin ? "p-3.5 shadow-[var(--shadow-card)] lg:p-4" : "p-3 shadow-sm",
         selected && "border-brand/40 ring-2 ring-brand/15",
         !selected && isNext && "border-emerald-300 bg-emerald-50/30",
         !selected && !isNext && absent && "border-red-200/90 bg-red-50/40",
         !selected && !isNext && !absent && priority && active && "border-amber-200/80",
-        !selected && !isNext && !absent && !priority && active && "border-slate-200/90"
+        !selected && !isNext && !absent && !priority && active && "border-slate-200/90",
+        !selected && inactive && isAdmin && "border-slate-200/70 bg-slate-50/60 opacity-90"
       )}
     >
-      <div className="grid grid-cols-[2.5rem_1fr_auto] gap-x-3 gap-y-2">
+      <div
+        className={cn(
+          "grid grid-cols-[2.5rem_1fr_auto] gap-x-3 gap-y-2",
+          isAdmin && "lg:grid-cols-[3rem_1fr_auto] lg:gap-x-4"
+        )}
+      >
         <div
           className={cn(
-            "row-span-2 flex h-10 w-10 items-center justify-center self-start rounded-lg text-sm font-bold tabular-nums",
+            "row-span-2 flex items-center justify-center self-start rounded-lg font-bold tabular-nums",
+            isAdmin ? "h-11 w-11 text-sm lg:h-12 lg:w-12" : "h-10 w-10 text-sm",
             absent && "bg-red-100 text-red-800",
             isNext && active && "bg-emerald-600 text-white",
-            !isNext && !absent && priority && active && "bg-amber-100 text-amber-900",
-            !isNext && !absent && !priority && active && "bg-slate-100 text-slate-600"
+            inactive && isAdmin && "bg-slate-100 text-slate-500",
+            !isNext && !absent && !inactive && priority && active && "bg-amber-100 text-amber-900",
+            !isNext && !absent && !inactive && !priority && active && "bg-slate-100 text-slate-600"
           )}
         >
           {position}
         </div>
 
         <div className="min-w-0">
-          <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
+          <p
+            className={cn(
+              "truncate font-bold leading-tight tracking-tight text-brand",
+              isAdmin ? "text-lg lg:text-xl" : "text-lg"
+            )}
+          >
             {entry.minuta || "—"}
           </p>
           <p className="mt-0.5 font-mono text-sm font-medium leading-none tracking-wide text-slate-600">
@@ -74,7 +96,7 @@ export function EmpilhadorQueueCard({
           </p>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1 self-start">
           <StatusBadge status={entry.status} className="shrink-0" />
           {isNext && active && (
             <span className="text-[10px] font-bold uppercase text-emerald-700">Próximo</span>
@@ -84,11 +106,11 @@ export function EmpilhadorQueueCard({
           )}
         </div>
 
-        <div className="col-span-2 min-w-0 space-y-1.5">
+        <div className={cn("col-span-2 min-w-0", isAdmin ? "space-y-1" : "space-y-1.5")}>
           <p className="truncate text-sm text-slate-700">
             <span className="font-semibold text-slate-900">{firstName}</span>
             <span className="text-slate-400"> · </span>
-            <span className="text-slate-500">{entry.transportadora}</span>
+            <span className="text-slate-500">{entry.transportadora || "—"}</span>
           </p>
           {hasMinutaMeta && (
             <MinutaMetaBadge
@@ -100,34 +122,49 @@ export function EmpilhadorQueueCard({
         </div>
       </div>
 
-      {entry.previsao_descarregamento && active && (
-        <div className="mt-2.5 border-t border-slate-100 pt-2.5">
-          <PrevisaoDisplay
-            previsao={entry.previsao_descarregamento}
-            automatic={entry.previsao_automatica}
-            compact={false}
-            className="w-full justify-center py-1.5 text-xs"
-          />
-        </div>
-      )}
+      {hasFooter && (
+        <div
+          className={cn(
+            "mt-2.5 border-t border-slate-100 pt-2.5",
+            isAdmin && "flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between"
+          )}
+        >
+          {hasPrevisao && (
+            <PrevisaoDisplay
+              previsao={entry.previsao_descarregamento!}
+              automatic={entry.previsao_automatica}
+              compact={false}
+              className={cn(
+                "text-xs",
+                isAdmin ? "w-full justify-start py-0 lg:flex-1" : "w-full justify-center py-1.5"
+              )}
+            />
+          )}
 
-      {(priority || called || racks) && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {priority && active && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-              <Star className="h-3 w-3" aria-hidden />
-              {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
-            </span>
-          )}
-          {called && (
-            <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
-              Chamado
-            </span>
-          )}
-          {racks && (
-            <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-900">
-              Retorna racks
-            </span>
+          {hasFooterBadges && (active || isAdmin) && (
+            <div
+              className={cn(
+                "flex flex-wrap gap-1.5",
+                isAdmin && hasPrevisao && "lg:shrink-0 lg:justify-end"
+              )}
+            >
+              {priority && active && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                  <Star className="h-3 w-3" aria-hidden />
+                  {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
+                </span>
+              )}
+              {called && (
+                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+                  Chamado
+                </span>
+              )}
+              {racks && (
+                <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-900">
+                  Retorna racks
+                </span>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const iconSvg = readFileSync(join(root, "public/icons/icon.svg"));
+const maskableSvg = readFileSync(join(root, "public/icons/icon-maskable.svg"));
 
 const iconSizes = [
   { name: "icon-24.png", size: 24 },
@@ -38,5 +39,11 @@ await sharp(iconSvg, { density: 320 })
   .resize(512, 512)
   .png()
   .toFile(join(root, "public/brand/logo-symbol-512.png"));
+
+await sharp(maskableSvg, { density: 320 })
+  .resize(512, 512)
+  .png()
+  .toFile(join(root, "public/icons/icon-512-maskable.png"));
+console.log("Generated icons/icon-512-maskable.png");
 
 console.log("Generated favicon.ico and brand/logo-symbol-512.png");
