@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_GEOFENCE, getTodayStartISO } from "@/lib/constants";
+import { DEFAULT_GEOFENCE } from "@/lib/constants";
 import { getTodayStartISO } from "@/lib/queue-day";
 import type { GeofenceConfig, QueueEntry } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
