@@ -21,7 +21,7 @@ export default function HomePage() {
             </div>
             <div className="min-w-0 flex-1 text-left">
               <p className="font-bold text-slate-900">Motorista</p>
-              <p className="text-sm text-slate-500">Google · Check-in · Fila</p>
+              <p className="text-sm text-slate-500">Faça seu check-in no pátio</p>
             </div>
             <ChevronRight className="h-5 w-5 text-slate-300 transition group-hover:text-brand" />
           </Link>
@@ -35,23 +35,23 @@ export default function HomePage() {
             </div>
             <div className="min-w-0 flex-1 text-left">
               <p className="font-bold text-white">Operacional</p>
-              <p className="text-sm text-white/80">Empilhador · Administrador</p>
+              <p className="text-sm text-white/80">Gerenciar fila e docas</p>
             </div>
             <ChevronRight className="h-5 w-5 text-white/40 transition group-hover:text-white/80" />
           </Link>
 
           <Link
             href={FILA_DESCARGA_PUBLIC}
-            className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/5 p-4 backdrop-blur-sm transition duration-200 hover:bg-white/10"
+            className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 backdrop-blur-sm transition duration-200 hover:bg-white/10"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/10">
-              <ListOrdered className="h-5 w-5 text-white/90" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+              <ListOrdered className="h-6 w-6 text-white/90" />
             </div>
             <div className="min-w-0 flex-1 text-left">
-              <p className="font-semibold text-white/95">Ver fila de descarga</p>
-              <p className="text-xs text-white/65">Sem login · somente leitura</p>
+              <p className="font-bold text-white/95">Ver fila de descarga</p>
+              <p className="text-sm text-white/65">Acompanhe a fila ao vivo · sem login</p>
             </div>
-            <ChevronRight className="h-4 w-4 text-white/35 transition group-hover:text-white/70" />
+            <ChevronRight className="h-5 w-5 text-white/35 transition group-hover:text-white/70" />
           </Link>
         </div>
 
