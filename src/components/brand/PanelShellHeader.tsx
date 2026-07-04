@@ -49,8 +49,8 @@ export function PanelShellHeader({
         sticky && "sticky top-0 z-40",
         "border-b backdrop-blur-lg",
         dark
-          ? "border-slate-800 bg-slate-900/90"
-          : "border-slate-200/70 bg-white/95 shadow-[0_1px_0_rgb(15_23_42/0.03)]",
+          ? "border-brand/30 bg-brand-dark/95"
+          : "border-brand/10 bg-white/95 shadow-[0_1px_0_rgb(21_101_192/0.06)]",
         className
       )}
     >
@@ -66,7 +66,7 @@ export function PanelShellHeader({
       {below && (
         <div
           className={cn(
-            "border-t border-slate-100/80",
+            "border-t border-brand/8",
             dark ? "px-6 pb-3 pt-2 lg:px-8" : cn(containerClass, "pb-3 pt-2")
           )}
         >

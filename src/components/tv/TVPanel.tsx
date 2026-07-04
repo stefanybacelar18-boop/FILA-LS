@@ -49,7 +49,7 @@ export function TVPanel() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen app-canvas-tv text-white">
       <PanelShellHeader
         tone="dark"
         logoSize="md"
@@ -64,11 +64,11 @@ export function TVPanel() {
 
       <div className="grid min-h-[calc(100vh-80px)] grid-rows-2 gap-0 lg:grid-cols-2 lg:grid-rows-1">
         <section
-          className="flex flex-col items-center justify-center border-b border-slate-700 p-8 lg:border-b-0 lg:border-r"
+          className="flex flex-col items-center justify-center border-b border-brand/20 p-8 lg:border-b-0 lg:border-r"
           aria-live="polite"
           aria-atomic="true"
         >
-          <p className="mb-4 text-xl font-medium uppercase tracking-widest text-slate-400">
+          <p className="mb-4 text-xl font-medium uppercase tracking-widest text-brand-light/70">
             Próximo motorista
           </p>
 
@@ -81,7 +81,7 @@ export function TVPanel() {
                 Minuta {nextDriver.minuta || "—"}
               </p>
               {nextDriver.prioridade && (
-                <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-500/20 px-4 py-1 text-lg text-amber-300">
+                <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand/25 px-4 py-1 text-lg text-brand-light">
                   <Star className="h-5 w-5" />
                   Prioridade
                 </p>
@@ -98,7 +98,7 @@ export function TVPanel() {
         </section>
 
         <section className="p-8">
-          <p className="mb-6 text-xl font-medium uppercase tracking-widest text-slate-400">
+          <p className="mb-6 text-xl font-medium uppercase tracking-widest text-brand-light/70">
             Chamados para doca
           </p>
 
@@ -109,7 +109,7 @@ export function TVPanel() {
               {calledDrivers.map((driver) => (
                 <div
                   key={driver.id}
-                  className="flex items-center justify-between rounded-2xl bg-slate-800 px-6 py-4"
+                  className="flex items-center justify-between rounded-2xl border border-brand/20 bg-brand-dark/60 px-6 py-4 backdrop-blur-sm"
                 >
                   <div>
                     <p className="font-mono text-3xl font-bold">

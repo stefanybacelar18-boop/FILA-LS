@@ -47,7 +47,7 @@ export function AuthCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[var(--shadow-premium)] ring-1 ring-slate-900/[0.03]",
+        "rounded-2xl border border-brand/12 bg-white p-6 shadow-[var(--shadow-premium)] ring-1 ring-brand/5",
         className
       )}
     >

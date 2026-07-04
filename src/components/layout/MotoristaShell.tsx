@@ -67,7 +67,7 @@ export function MotoristaShell({
       <main className="page-container shell-main">{children}</main>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200/80 bg-white/95 shadow-[0_-4px_24px_rgb(15_23_42/0.06)] backdrop-blur-lg safe-bottom"
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-brand/10 bg-white/95 shadow-[0_-4px_24px_rgb(21_101_192/0.08)] backdrop-blur-lg safe-bottom"
         aria-label="Navegação principal"
       >
         <div className="page-container flex justify-around gap-1 py-1.5">

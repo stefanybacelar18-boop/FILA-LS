@@ -19,7 +19,7 @@ export function QueueMobileSummaryStrip({
       aria-label={`${waiting} aguardando descarregamento na fila, ${finalized} finalizadas hoje`}
     >
       <div className="stat-strip__cell">
-        <span className="stat-strip__value text-amber-700">{waiting}</span>
+        <span className="stat-strip__value text-brand">{waiting}</span>
         <span className="stat-strip__label">Aguardando</span>
         <span className="stat-strip__hint">Na fila agora</span>
       </div>

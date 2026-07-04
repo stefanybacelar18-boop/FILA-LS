@@ -9,7 +9,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-card)] border border-slate-200/75 bg-white p-5 shadow-[var(--shadow-card)]",
+        "rounded-[var(--radius-card)] border border-brand/12 bg-white p-5 shadow-[var(--shadow-card)]",
         className
       )}
       {...props}
@@ -26,7 +26,7 @@ export function CardHeader({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("mb-4 border-b border-slate-100/80 pb-3", className)}
+      className={cn("mb-4 border-b border-brand/8 pb-3", className)}
       {...props}
     >
       {children}

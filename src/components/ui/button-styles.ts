@@ -14,8 +14,8 @@ const variants: Record<ButtonVariant, string> = {
   primary: "btn-brand active:scale-[0.98] disabled:opacity-50",
   secondary: "bg-slate-800 text-white shadow-sm hover:bg-slate-900 hover:shadow-md",
   outline:
-    "border border-slate-200/90 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50/80",
-  ghost: "bg-transparent text-slate-600 hover:bg-slate-100/80",
+    "border border-brand/15 bg-white text-slate-700 shadow-sm hover:border-brand/30 hover:bg-brand-muted/30",
+  ghost: "bg-transparent text-slate-600 hover:bg-brand-muted/50",
   danger: "bg-red-600 text-white shadow-sm hover:bg-red-700 hover:shadow-md",
   success: "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
 };

@@ -5,25 +5,32 @@
   --color-brand-light: #42a5f5;
   --color-brand-dark: #0d1b2a;
   --color-brand-muted: #e3f2fd;
+  --color-brand-surface: #edf3fa;
+  --color-brand-surface-soft: #f4f8fd;
+  --color-brand-border: rgb(21 101 192 / 0.14);
   --color-surface: #ffffff;
-  --color-surface-muted: #f4f7fb;
-  --color-border: #e2e8f0;
+  --color-surface-muted: #edf3fa;
+  --color-border: rgb(21 101 192 / 0.12);
   --color-success: #2e7d32;
   --color-danger: #d32f2f;
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --radius-card: 0.875rem;
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.03), 0 2px 8px rgb(15 23 42 / 0.04);
-  --shadow-elevated: 0 8px 32px rgb(15 23 42 / 0.1), 0 2px 8px rgb(15 23 42 / 0.06);
-  --shadow-premium: 0 1px 3px rgb(15 23 42 / 0.05), 0 12px 40px rgb(15 23 42 / 0.08);
+  --shadow-card: 0 1px 2px rgb(13 27 42 / 0.04), 0 2px 8px rgb(21 101 192 / 0.06);
+  --shadow-elevated: 0 8px 32px rgb(13 27 42 / 0.1), 0 2px 8px rgb(21 101 192 / 0.08);
+  --shadow-premium: 0 1px 3px rgb(13 27 42 / 0.05), 0 12px 40px rgb(21 101 192 / 0.1);
 }
 
 :root {
-  --background: #f4f6f9;
-  --foreground: #0f172a;
-  --app-shell-bg: #f4f6f9;
+  --background: #edf3fa;
+  --foreground: #0d1b2a;
+  --app-shell-bg: #edf3fa;
   --brand-primary: #1565c0;
   --brand-secondary: #42a5f5;
   --brand-dark: #0d1b2a;
+  --brand-muted: #e3f2fd;
+  --brand-surface: #f4f8fd;
+  --brand-border: rgb(21 101 192 / 0.14);
+  --brand-border-strong: rgb(21 101 192 / 0.22);
   --brand-success: #2e7d32;
   --brand-danger: #d32f2f;
 }
@@ -39,19 +46,20 @@ body {
 
 /* Fundo operacional — mobile (motorista / empilhador) */
 .app-canvas-mobile {
-  background-color: #f8fafc;
-  background-image: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  background-color: var(--brand-surface);
+  background-image: linear-gradient(180deg, #ffffff 0%, #e8f1fb 55%, var(--app-shell-bg) 100%);
 }
 
-/* Fundo admin / web — mais limpo, sem grid */
+/* Fundo admin / web */
 .app-canvas-admin {
   background-color: var(--app-shell-bg);
+  background-image: linear-gradient(180deg, var(--brand-surface) 0%, var(--app-shell-bg) 240px);
 }
 
-/* Legado — mantido para compatibilidade */
+/* Legado — login claro */
 .app-canvas {
   background-color: var(--background);
-  background-image: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  background-image: linear-gradient(180deg, #ffffff 0%, #e8f1fb 100%);
 }
 
 .btn-brand {
@@ -102,7 +110,7 @@ body {
 }
 
 .card-brand {
-  border: 1px solid rgb(226 232 240 / 0.9);
+  border: 1px solid var(--brand-border);
   background: white;
   box-shadow: var(--shadow-card);
   border-radius: var(--radius-card);
@@ -131,7 +139,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgb(100 116 139);
+  color: rgb(21 101 192 / 0.72);
 }
 
 /* Tipografia de página — títulos unificados */
@@ -140,7 +148,7 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.25;
-  color: rgb(15 23 42);
+  color: var(--brand-dark);
 }
 
 @media (min-width: 1024px) {
@@ -329,10 +337,21 @@ body {
   opacity: 0.9;
 }
 
+/* Painel TV — fundo azul marca */
+.app-canvas-tv {
+  background-color: var(--brand-dark);
+  background-image: linear-gradient(
+    160deg,
+    var(--brand-dark) 0%,
+    #0a2744 40%,
+    var(--brand-primary) 100%
+  );
+}
+
 /* Card de painel — estados vazios / call-to-action */
 .panel-card {
   border-radius: var(--radius-card);
-  border: 1px solid rgb(226 232 240 / 0.9);
+  border: 1px solid var(--brand-border);
   background: white;
   padding: 2rem 1.25rem;
   text-align: center;
@@ -371,7 +390,7 @@ body {
   display: flex;
   overflow: hidden;
   border-radius: var(--radius-card);
-  border: 1px solid rgb(226 232 240 / 0.9);
+  border: 1px solid var(--brand-border);
   background: white;
   box-shadow: var(--shadow-card);
 }
@@ -385,7 +404,7 @@ body {
 }
 
 .stat-strip__cell + .stat-strip__cell {
-  border-left: 1px solid rgb(241 245 249);
+  border-left: 1px solid rgb(21 101 192 / 0.08);
 }
 
 .stat-strip__value {
@@ -417,17 +436,17 @@ body {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgb(100 116 139);
-  background: rgb(248 250 252);
+  color: rgb(21 101 192 / 0.75);
+  background: rgb(227 242 253 / 0.55);
 }
 
 .data-table tbody tr {
-  border-bottom: 1px solid rgb(241 245 249);
+  border-bottom: 1px solid rgb(21 101 192 / 0.08);
   transition: background-color 0.15s;
 }
 
 .data-table tbody tr:hover {
-  background: rgb(227 242 253 / 0.35);
+  background: rgb(227 242 253 / 0.45);
 }
 
 .data-table tbody td {

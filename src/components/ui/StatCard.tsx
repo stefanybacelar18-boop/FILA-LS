@@ -30,7 +30,7 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "relative rounded-[var(--radius-card)] border border-slate-200/75 bg-white px-4 py-4 shadow-[var(--shadow-card)]",
+        "relative rounded-[var(--radius-card)] border border-brand/12 bg-white px-4 py-4 shadow-[var(--shadow-card)]",
         className
       )}
       {...props}
@@ -68,7 +68,7 @@ export function AdminToolCard({
   return (
     <Link
       href={href}
-      className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-slate-200/75 bg-white p-4 shadow-[var(--shadow-card)] transition duration-200 hover:border-brand/20 hover:shadow-[var(--shadow-elevated)]"
+      className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-brand/12 bg-white p-4 shadow-[var(--shadow-card)] transition duration-200 hover:border-brand/25 hover:shadow-[var(--shadow-elevated)]"
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-muted/80 text-brand">
         <Icon className="h-4 w-4" />

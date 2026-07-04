@@ -145,7 +145,7 @@ export function AppShell({
       {role && (
         <>
           <nav
-            className="hidden border-b border-slate-200/70 bg-white lg:block"
+            className="hidden border-b border-brand/10 bg-white lg:block"
             aria-label="Navegação principal"
           >
             <div className="page-container-admin flex gap-1 py-1.5">
@@ -173,7 +173,7 @@ export function AppShell({
           </nav>
 
           <nav
-            className="flex gap-1 overflow-x-auto border-b border-slate-200/70 bg-white px-3 py-1.5 lg:hidden"
+            className="flex gap-1 overflow-x-auto border-b border-brand/10 bg-white px-3 py-1.5 lg:hidden"
             aria-label="Navegação principal"
           >
             {visibleNav.map((item) => {

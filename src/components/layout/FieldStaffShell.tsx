@@ -42,7 +42,7 @@ export function FieldStaffShell({
       <PanelShellHeader
         trailing={
           <>
-            <span className="max-w-[7rem] truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+            <span className="max-w-[7rem] truncate rounded-full bg-brand-muted/80 px-3 py-1 text-xs font-semibold text-brand-dark">
               {firstName}
             </span>
             <Button
@@ -63,7 +63,7 @@ export function FieldStaffShell({
       </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 shadow-[0_-8px_30px_rgb(15_23_42/0.08)] backdrop-blur-lg safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-brand/12 bg-white/95 shadow-[0_-8px_30px_rgb(21_101_192/0.1)] backdrop-blur-lg safe-bottom"
         aria-label="Navegação principal"
       >
         <div className="page-container flex">

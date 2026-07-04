@@ -33,8 +33,8 @@ export function MotoristaQueueList({
   }, [sorted]);
 
   return (
-    <section className="overflow-hidden rounded-card border border-slate-200/90 bg-white shadow-[var(--shadow-card)]">
-      <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3.5">
+    <section className="overflow-hidden rounded-card border border-brand/12 bg-white shadow-[var(--shadow-card)]">
+      <div className="border-b border-brand/8 bg-brand-muted/35 px-4 py-3.5">
         <h2 className="flex items-center gap-2 text-base font-bold text-brand">
           <ListOrdered className="h-5 w-5 shrink-0" aria-hidden />
           {title}
