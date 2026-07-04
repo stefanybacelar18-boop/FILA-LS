@@ -16,42 +16,39 @@ export default function HomePage() {
             href="/login/motorista"
             className="group flex items-center gap-4 rounded-2xl border border-white/20 bg-white p-5 shadow-[var(--shadow-premium)] transition duration-200 hover:scale-[1.01] hover:shadow-[var(--shadow-elevated)]"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-muted ring-1 ring-brand/10">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-muted ring-1 ring-brand/10">
               <Truck className="h-6 w-6 text-brand" />
             </div>
-            <div className="min-w-0 flex-1 text-left">
-              <p className="font-bold text-slate-900">Motorista</p>
-              <p className="text-sm text-slate-500">Faça seu check-in no pátio</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-slate-300 transition group-hover:text-brand" />
+            <p className="min-w-0 flex-1 text-left text-base font-bold uppercase tracking-wide text-slate-900">
+              Motorista
+            </p>
+            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-brand" />
           </Link>
 
           <Link
             href="/login"
             className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md transition duration-200 hover:bg-white/15"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/20 bg-white/10">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10">
               <Monitor className="h-6 w-6 text-white" />
             </div>
-            <div className="min-w-0 flex-1 text-left">
-              <p className="font-bold text-white">Operacional</p>
-              <p className="text-sm text-white/80">Gerenciar fila e docas</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-white/40 transition group-hover:text-white/80" />
+            <p className="min-w-0 flex-1 text-left text-base font-bold uppercase tracking-wide text-white">
+              Operacional
+            </p>
+            <ChevronRight className="h-5 w-5 shrink-0 text-white/40 transition group-hover:text-white/80" />
           </Link>
 
           <Link
             href={FILA_DESCARGA_PUBLIC}
             className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/5 p-5 backdrop-blur-sm transition duration-200 hover:bg-white/10"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10">
               <ListOrdered className="h-6 w-6 text-white/90" />
             </div>
-            <div className="min-w-0 flex-1 text-left">
-              <p className="font-bold text-white/95">Ver fila de descarga</p>
-              <p className="text-sm text-white/65">Acompanhe a fila ao vivo · sem login</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-white/35 transition group-hover:text-white/70" />
+            <p className="min-w-0 flex-1 text-left text-base font-bold uppercase tracking-wide text-white/95">
+              Acompanhar fila
+            </p>
+            <ChevronRight className="h-5 w-5 shrink-0 text-white/35 transition group-hover:text-white/70" />
           </Link>
         </div>
 
