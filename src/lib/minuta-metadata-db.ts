@@ -21,6 +21,58 @@ type PrevisaoManualMap = Record<string, true>;
 
 const METADATA_COLUMNS = "minuta,volume_motos,menor_vencimento,updated_at";
 
+export type MinutaImportStats = {
+  created: number;
+  updated: number;
+  unchanged: number;
+  totalInFile: number;
+  /** Novas + atualizadas (gravadas no banco). */
+  upserted: number;
+  error: string | null;
+};
+
+function minutaMetadataEquals(
+  existing: Pick<MinutaMetadata, "volume_motos" | "menor_vencimento">,
+  incoming: Pick<MinutaMetadata, "volume_motos" | "menor_vencimento">
+): boolean {
+  return (
+    existing.volume_motos === incoming.volume_motos &&
+    (existing.menor_vencimento ?? null) === (incoming.menor_vencimento ?? null)
+  );
+}
+
+export async function readMinutaMetadataByKeys(
+  supabase: SupabaseClient,
+  keys: string[]
+): Promise<Map<string, MinutaMetadata>> {
+  const map = new Map<string, MinutaMetadata>();
+  const unique = [...new Set(keys.filter((k) => k.length >= 2))];
+  if (unique.length === 0) return map;
+
+  const chunkSize = 100;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const slice = unique.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("minuta_metadata")
+      .select(METADATA_COLUMNS)
+      .in("minuta", slice);
+
+    if (error) {
+      if (/minuta_metadata|does not exist|Could not find/i.test(error.message)) {
+        return map;
+      }
+      throw new Error(error.message);
+    }
+
+    for (const row of data ?? []) {
+      const meta = row as MinutaMetadata;
+      map.set(meta.minuta, meta);
+    }
+  }
+
+  return map;
+}
+
 export async function readPrevisaoManualIds(
   supabase: SupabaseClient
 ): Promise<Set<string>> {
@@ -281,22 +333,86 @@ export async function syncAutoPriorities(
 export async function upsertMinutaMetadataBatch(
   supabase: SupabaseClient,
   rows: MinutaMetadata[]
-): Promise<{ upserted: number; error: string | null }> {
-  if (rows.length === 0) return { upserted: 0, error: null };
+): Promise<MinutaImportStats> {
+  const empty: MinutaImportStats = {
+    created: 0,
+    updated: 0,
+    unchanged: 0,
+    totalInFile: 0,
+    upserted: 0,
+    error: null,
+  };
 
-  const payload = rows.map((r) => ({
-    minuta: normalizeMinutaKey(r.minuta),
-    volume_motos: r.volume_motos,
-    menor_vencimento: r.menor_vencimento,
-    updated_at: new Date().toISOString(),
-  }));
+  if (rows.length === 0) return empty;
 
-  const { error } = await supabase.from("minuta_metadata").upsert(payload, {
-    onConflict: "minuta",
-  });
+  const normalized = rows
+    .map((r) => ({
+      minuta: normalizeMinutaKey(r.minuta),
+      volume_motos: r.volume_motos,
+      menor_vencimento: r.menor_vencimento ?? null,
+    }))
+    .filter((r) => r.minuta.length >= 2);
 
-  if (error) return { upserted: 0, error: error.message };
-  return { upserted: payload.length, error: null };
+  if (normalized.length === 0) return empty;
+
+  const existingMap = await readMinutaMetadataByKeys(
+    supabase,
+    normalized.map((r) => r.minuta)
+  );
+
+  const now = new Date().toISOString();
+  let created = 0;
+  let updated = 0;
+  let unchanged = 0;
+  const toWrite: Array<{
+    minuta: string;
+    volume_motos: number;
+    menor_vencimento: string | null;
+    updated_at: string;
+  }> = [];
+
+  for (const row of normalized) {
+    const existing = existingMap.get(row.minuta);
+    if (!existing) {
+      created += 1;
+      toWrite.push({ ...row, updated_at: now });
+      continue;
+    }
+
+    if (minutaMetadataEquals(existing, row)) {
+      unchanged += 1;
+      continue;
+    }
+
+    updated += 1;
+    toWrite.push({ ...row, updated_at: now });
+  }
+
+  if (toWrite.length > 0) {
+    const { error } = await supabase.from("minuta_metadata").upsert(toWrite, {
+      onConflict: "minuta",
+    });
+
+    if (error) {
+      return {
+        created: 0,
+        updated: 0,
+        unchanged: 0,
+        totalInFile: normalized.length,
+        upserted: 0,
+        error: error.message,
+      };
+    }
+  }
+
+  return {
+    created,
+    updated,
+    unchanged,
+    totalInFile: normalized.length,
+    upserted: created + updated,
+    error: null,
+  };
 }
 
 export async function getMinutaMetadataByKey(

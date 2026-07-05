@@ -105,44 +105,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { upserted, error: upsertError } = await upsertMinutaMetadataBatch(admin, parsed);
+    const importStats = await upsertMinutaMetadataBatch(admin, parsed);
 
-    if (upsertError) {
-      const missingTable = /minuta_metadata|does not exist/i.test(upsertError);
+    if (importStats.error) {
+      const missingTable = /minuta_metadata|does not exist/i.test(importStats.error);
       return NextResponse.json(
         {
           error: missingTable
             ? "Tabela minuta_metadata não existe. Rode supabase/migracao-minuta-inteligente.sql no Supabase."
-            : upsertError,
+            : importStats.error,
         },
         { status: 500 }
       );
     }
 
-    const { data: queueRows } = await admin
-      .from("queue_entries")
-      .select("*")
-      .is("deleted_at", null)
-      .in("status", [...ACTIVE_QUEUE_DB_STATUSES]);
+    let autoPriorities = 0;
+    let autoPrevisoes = 0;
+    let matchedInQueue = 0;
 
-    const queueEntries = (queueRows ?? []) as QueueEntry[];
-    const enriched = await enrichQueueWithMinutaMetadata(admin, queueEntries);
-    const activeEnriched = enriched.filter((e) => isActiveQueueStatus(e.status));
+    if (importStats.upserted > 0) {
+      const { data: queueRows } = await admin
+        .from("queue_entries")
+        .select("*")
+        .is("deleted_at", null)
+        .in("status", [...ACTIVE_QUEUE_DB_STATUSES]);
 
-    const [autoPriorities, autoPrevisoes] = await Promise.all([
-      syncAutoPriorities(admin, activeEnriched),
-      recalculateQueuePrevisoes(admin, { enriched: activeEnriched }),
-    ]);
+      const queueEntries = (queueRows ?? []) as QueueEntry[];
+      const enriched = await enrichQueueWithMinutaMetadata(admin, queueEntries);
+      const activeEnriched = enriched.filter((e) => isActiveQueueStatus(e.status));
 
-    invalidateEnrichedQueueCache();
+      [autoPriorities, autoPrevisoes] = await Promise.all([
+        syncAutoPriorities(admin, activeEnriched),
+        recalculateQueuePrevisoes(admin, { enriched: activeEnriched }),
+      ]);
 
-    const matchedInQueue = activeEnriched.filter((e) =>
-      parsed.some((p) => normalizeMinutaKey(p.minuta) === normalizeMinutaKey(e.minuta))
-    ).length;
+      matchedInQueue = activeEnriched.filter((e) =>
+        parsed.some((p) => normalizeMinutaKey(p.minuta) === normalizeMinutaKey(e.minuta))
+      ).length;
+
+      invalidateEnrichedQueueCache();
+    } else {
+      matchedInQueue = 0;
+    }
 
     return NextResponse.json({
       ok: true,
-      imported: upserted,
+      imported: importStats.upserted,
+      created: importStats.created,
+      updated: importStats.updated,
+      unchanged: importStats.unchanged,
+      totalInFile: importStats.totalInFile,
       format,
       totalMotos: parsed.reduce((s, p) => s + p.volume_motos, 0),
       skipped: skippedRows,

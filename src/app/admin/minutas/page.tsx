@@ -106,6 +106,10 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
       const { ok, json } = await fetchJson<{
         error?: string;
         imported?: number;
+        created?: number;
+        updated?: number;
+        unchanged?: number;
+        totalInFile?: number;
         totalMotos?: number;
         format?: string;
         preview?: Array<{ minuta: string; volume_motos: number; menor_vencimento: string | null }>;
@@ -129,8 +133,19 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           ? ` Ex.: minuta ${json.preview[0].minuta} com ${json.preview[0].volume_motos} motos.`
           : "";
 
+      const dedupParts = [
+        json.created ? `${json.created} nova(s)` : null,
+        json.updated ? `${json.updated} atualizada(s)` : null,
+        json.unchanged ? `${json.unchanged} já existiam (sem alteração)` : null,
+      ].filter(Boolean);
+
+      const dedupText =
+        dedupParts.length > 0
+          ? dedupParts.join(" · ")
+          : `${json.imported ?? 0} minuta(s) processada(s)`;
+
       setImportResult(
-        `${json.imported ?? 0} minuta(s) importada(s) (${formatLabel}) · ${json.totalMotos ?? 0} motos · ${json.matchedInQueue ?? 0} na fila · ${json.autoPriorities ?? 0} prioridade(s) · ${json.autoPrevisoes ?? 0} previsão(ões)${previewText}`
+        `${dedupText} (${formatLabel}) · ${json.totalMotos ?? 0} motos no arquivo · ${json.matchedInQueue ?? 0} na fila · ${json.autoPriorities ?? 0} prioridade(s) · ${json.autoPrevisoes ?? 0} previsão(ões)${previewText}`
       );
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -253,6 +268,8 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           <p className="mb-4 text-sm text-slate-600">
             Compatível com <strong>ConsultaGeralMotos</strong> (1 linha por moto). Agrupa por{" "}
             <strong>MINUTA</strong>, conta motos e calcula o menor <strong>VENCIMENTO NF</strong>.
+            Pode reenviar o mesmo arquivo: minutas já importadas são reconhecidas pelo número —{" "}
+            <strong>sem duplicar</strong>; só entram novas ou com volume/vencimento alterado.
           </p>
 
           <input
