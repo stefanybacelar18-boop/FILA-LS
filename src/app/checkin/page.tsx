@@ -123,7 +123,7 @@ export default function CheckInPage() {
     setErrors({});
 
     let res: Response;
-    let data: { error?: string; detail?: string; token?: string };
+    let data: { error?: string; detail?: string; token?: string; message?: string };
 
     try {
       res = await fetch("/api/checkin", {
@@ -200,7 +200,7 @@ export default function CheckInPage() {
           subtitle={
             onCooldown
               ? "Aguarde o prazo para um novo check-in na fila."
-              : "Preencha os dados da carga para entrar na fila de descarga."
+              : "Preencha os dados da carga para entrar na fila de descarregamento."
           }
         />
 

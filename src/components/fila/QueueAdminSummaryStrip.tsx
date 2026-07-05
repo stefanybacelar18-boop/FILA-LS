@@ -2,38 +2,38 @@ import { cn } from "@/lib/utils";
 
 type QueueAdminSummaryStripProps = {
   waiting: number;
-  called: number;
-  total: number;
+  finalized: number;
+  absent: number;
   className?: string;
 };
 
-/** Resumo horizontal compacto — admin fila (harmonizado com empilhador) */
+/** Resumo horizontal compacto — admin fila (Aguardando · Finalizado · Ausente) */
 export function QueueAdminSummaryStrip({
   waiting,
-  called,
-  total,
+  finalized,
+  absent,
   className,
 }: QueueAdminSummaryStripProps) {
   return (
     <div
       className={cn("stat-strip", className)}
       role="status"
-      aria-label={`${waiting} aguardando chamada, ${called} chamados, ${total} exibindo na fila`}
+      aria-label={`${waiting} aguardando descarregamento, ${finalized} finalizados hoje, ${absent} ausentes`}
     >
       <div className="stat-strip__cell">
         <span className="stat-strip__value text-amber-700">{waiting}</span>
         <span className="stat-strip__label">Aguardando</span>
-        <span className="stat-strip__hint">Sem chamada</span>
+        <span className="stat-strip__hint">Descarregamento</span>
       </div>
       <div className="stat-strip__cell">
-        <span className="stat-strip__value text-emerald-700">{called}</span>
-        <span className="stat-strip__label">Chamados</span>
-        <span className="stat-strip__hint">WhatsApp enviado</span>
+        <span className="stat-strip__value text-emerald-700">{finalized}</span>
+        <span className="stat-strip__label">Finalizado</span>
+        <span className="stat-strip__hint">Hoje</span>
       </div>
       <div className="stat-strip__cell">
-        <span className="stat-strip__value text-brand">{total}</span>
-        <span className="stat-strip__label">Exibindo</span>
-        <span className="stat-strip__hint">Na lista</span>
+        <span className="stat-strip__value text-slate-600">{absent}</span>
+        <span className="stat-strip__label">Ausente</span>
+        <span className="stat-strip__hint">No pátio</span>
       </div>
     </div>
   );

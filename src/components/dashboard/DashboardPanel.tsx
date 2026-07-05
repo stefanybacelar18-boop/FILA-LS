@@ -145,7 +145,7 @@ export function DashboardPanel({
               accent="slate"
             />
             <StatCard
-              title="Tempo médio descarga"
+              title="Tempo médio descarregamento"
               value={formatDuration(stats.tempoMedioDescargaMin)}
               accent="slate"
             />

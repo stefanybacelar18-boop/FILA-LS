@@ -242,7 +242,7 @@ function MotoristaLoginContent() {
       </AuthCard>
 
       <AuthFooterLink href={FILA_DESCARGA_PUBLIC}>
-        Ver fila de descarga sem entrar →
+        Ver fila de descarregamento sem entrar →
       </AuthFooterLink>
 
       <AuthFooterLink href="/login">Sou empilhador ou admin →</AuthFooterLink>

@@ -11,6 +11,7 @@ import { sortQueueEntries } from "./queue";
 import {
   filterOperationalPanelEntries,
   isOperationalPanelEntry,
+  normalizeQueueStatus,
   OPERATIONAL_PANEL_DB_STATUSES,
 } from "./constants";
 import { isEntryClosedToday } from "./queue-day";
@@ -33,18 +34,32 @@ type EnrichCacheSlot = {
 
 const enrichCache = new Map<string, EnrichCacheSlot>();
 
-function enrichCacheKey(includeInactive: boolean): string {
-  return includeInactive ? "all" : "operational";
+type EnrichScope = "operational" | "all" | "admin";
+
+function enrichCacheKey(scope: EnrichScope): string {
+  return scope;
 }
 
 /** Carrega fila ativa (aguardando até finalizar), enriquece com metadata, prioridade e previsão. */
 export async function loadEnrichedQueueEntries(
   admin: SupabaseClient,
-  options?: { includeInactive?: boolean; bypassCache?: boolean }
+  options?: {
+    includeInactive?: boolean;
+    /** Finalizados recentes sem filtrar só o dia operacional (painel admin). */
+    includeAllClosed?: boolean;
+    bypassCache?: boolean;
+  }
 ): Promise<EnrichedQueueEntry[]> {
-  const includeInactive = options?.includeInactive ?? false;
+  const includeAllClosed = options?.includeAllClosed ?? false;
+  const includeInactive =
+    options?.includeInactive ?? includeAllClosed;
+  const scope: EnrichScope = includeAllClosed
+    ? "admin"
+    : includeInactive
+      ? "all"
+      : "operational";
   const bypassCache = options?.bypassCache ?? false;
-  const cacheKey = enrichCacheKey(includeInactive);
+  const cacheKey = enrichCacheKey(scope);
 
   if (!bypassCache) {
     const slot = enrichCache.get(cacheKey);
@@ -58,7 +73,10 @@ export async function loadEnrichedQueueEntries(
     }
   }
 
-  const inFlight = loadEnrichedQueueEntriesUncached(admin, includeInactive)
+  const inFlight = loadEnrichedQueueEntriesUncached(admin, {
+    includeInactive,
+    includeAllClosed,
+  })
     .then((data) => {
       enrichCache.set(cacheKey, {
         expiresAt: Date.now() + ENRICH_CACHE_MS,
@@ -88,8 +106,9 @@ export function invalidateEnrichedQueueCache(): void {
 
 async function loadEnrichedQueueEntriesUncached(
   admin: SupabaseClient,
-  includeInactive: boolean
+  options: { includeInactive: boolean; includeAllClosed: boolean }
 ): Promise<EnrichedQueueEntry[]> {
+  const { includeInactive, includeAllClosed } = options;
   const activeQuery = admin
     .from("queue_entries")
     .select("*")
@@ -114,11 +133,12 @@ async function loadEnrichedQueueEntriesUncached(
     if (activeResult.error) throw new Error(activeResult.error.message);
     if (closedResult.error) throw new Error(closedResult.error.message);
 
-    const closedToday = ((closedResult.data ?? []) as QueueEntry[]).filter((e) =>
-      isEntryClosedToday(e)
-    );
+    const closedRows = (closedResult.data ?? []) as QueueEntry[];
+    const closedFiltered = includeAllClosed
+      ? closedRows.filter((e) => normalizeQueueStatus(e.status) === "finalizado")
+      : closedRows.filter((e) => isEntryClosedToday(e));
 
-    rows = [...((activeResult.data ?? []) as QueueEntry[]), ...closedToday];
+    rows = [...((activeResult.data ?? []) as QueueEntry[]), ...closedFiltered];
   } else {
     const { data, error } = await activeQuery;
     if (error) throw new Error(error.message);
@@ -147,9 +167,11 @@ async function loadEnrichedQueueEntriesUncached(
       : sortedEnriched;
 
   const filtered = includeInactive
-    ? withPrevisao.filter(
-        (e) => isOperationalPanelEntry(e) || isEntryClosedToday(e)
-      )
+    ? withPrevisao.filter((e) => {
+        if (isOperationalPanelEntry(e)) return true;
+        if (normalizeQueueStatus(e.status) !== "finalizado") return false;
+        return includeAllClosed || isEntryClosedToday(e);
+      })
     : filterOperationalPanelEntries(withPrevisao);
 
   return sortQueueEntries(filtered) as EnrichedQueueEntry[];

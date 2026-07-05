@@ -25,8 +25,7 @@ import {
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
 import { formatPhone, isoToDateInput, getProfileDisplayName, cn } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
-import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
-import { isEntryClosedToday } from "@/lib/queue-day";
+import { countAguardandoDescarregamento, countAusentes, countFinalizadasNoDiaOperacional, countStrictAguardandoDescarregamento, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { createDebouncedFn } from "@/lib/debounce";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
@@ -93,10 +92,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const fetchQueue = useCallback(async () => {
       setFetchError(null);
 
-      const needsFullDay = (isAdmin && showFinalizados) || isEmpilhador;
+      const needsFullDay = isAdmin || isEmpilhador;
 
       const params = new URLSearchParams();
-      if (needsFullDay) params.set("scope", "all");
+      if (isAdmin) params.set("scope", "admin");
+      else if (needsFullDay) params.set("scope", "all");
       params.set("_", String(Date.now()));
       const url = `/api/queue/today?${params.toString()}`;
 
@@ -115,7 +115,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       setEntries(sortQueueEntries(sanitizeQueueEntries(json.data ?? [])));
       setLoading(false);
     },
-    [showFinalizados, isAdmin, isEmpilhador]
+    [isAdmin, isEmpilhador]
   );
 
   async function refreshAfterSave(statusChanged?: QueueStatus) {
@@ -338,9 +338,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
   const ausenteEntries = entries.filter((e) => isAusenteQueueStatus(e.status));
   const operationalEntries = [...activeEntries, ...ausenteEntries];
-  const calledCount = activeEntries.filter((e) => isDriverCalled(e)).length;
+  const adminWaitingCount = countStrictAguardandoDescarregamento(entries);
+  const adminAbsentCount = countAusentes(entries);
   const aguardandoCount = countAguardandoDescarregamento(entries);
-  const waitingNotCalledCount = activeEntries.filter((e) => !isDriverCalled(e)).length;
   const finalizedTodayCount = countFinalizadasNoDiaOperacional(entries);
 
   const displayedEntries = useMemo(() => {
@@ -400,11 +400,15 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       )
     : [];
   const adminClosedList = isAdmin
-    ? displayedEntries.filter(
-        (e) =>
-          normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
+    ? sortClosedEntries(
+        displayedEntries.filter(
+          (e) => normalizeQueueStatus(e.status) === "finalizado"
+        )
       )
     : [];
+  const adminHasVisibleList =
+    adminOperationalList.length > 0 ||
+    (showFinalizados && adminClosedList.length > 0);
 
   function renderEntryDetail() {
     if (!selected) {
@@ -542,7 +546,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             >
               <RotateCcw className="h-4 w-4" />
               {isAusenteQueueStatus(selected.status)
-                ? "Motorista voltou — liberar descarga"
+                ? "Motorista voltou — liberar descarregamento"
                 : "Reativar na fila"}
             </Button>
           )}
@@ -569,7 +573,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 label={
                   selected.previsao_automatica
                     ? "Previsão automática (capacidade)"
-                    : "Previsão de descarga (data)"
+                    : "Previsão de descarregamento (data)"
                 }
                 type="date"
                 value={editPrevisao}
@@ -622,7 +626,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
         {isEmpilhador && selectedIsActive && (
           <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-slate-600">
-            Minutas com badge de prioridade e previsões de descarga são definidas pelo
+            Minutas com badge de prioridade e previsões de descarregamento são definidas pelo
             administrador.
           </p>
         )}
@@ -656,7 +660,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             }
           >
             <div className={cn(isAdmin ? "space-y-4" : "space-y-2")}>
-              {displayedEntries.length === 0 ? (
+              {(isAdmin ? !adminHasVisibleList : displayedEntries.length === 0) ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>
                   <p className="mt-2 text-sm text-slate-500">
@@ -674,7 +678,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                     })}
                   {showFinalizados && adminClosedList.length > 0 &&
                     renderQueueList(adminClosedList, {
-                      sectionLabel: "Finalizados hoje",
+                      sectionLabel: "Finalizados",
                       startIndex: adminOperationalList.length,
                       cardVariant: "admin",
                     })}
@@ -799,7 +803,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       userEmail={profile.email}
     >
       <AdminPageHeader
-        eyebrow="Operação · Descarga"
+        eyebrow="Operação · Descarregamento"
         title={permissions.panelTitle}
         description="Ordem por check-in e prioridade · atualização em tempo real"
       >
@@ -828,15 +832,15 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               }}
               className="rounded border-slate-300 text-brand focus:ring-brand/20"
             />
-            Mostrar finalizados / ausentes de hoje
+            Mostrar finalizados
           </label>
         </div>
       </AdminPageHeader>
 
       <QueueAdminSummaryStrip
-        waiting={waitingNotCalledCount}
-        called={calledCount}
-        total={displayedEntries.length}
+        waiting={adminWaitingCount}
+        finalized={finalizedTodayCount}
+        absent={adminAbsentCount}
         className="mb-5"
       />
       {queueContent}

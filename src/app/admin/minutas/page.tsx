@@ -318,7 +318,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
             </CardTitle>
           </CardHeader>
           <p className="mb-4 text-sm text-slate-600">
-            Quantas motos saem na expedição (ex.: 500). Define a capacidade diária de descarga.
+            Quantas motos saem na expedição (ex.: 500). Define a capacidade diária de descarregamento.
           </p>
           <Input
             label="Motos expedidas (capacidade diária)"
@@ -350,7 +350,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Previsão automática de descarga</CardTitle>
+          <CardTitle>Previsão automática de descarregamento</CardTitle>
         </CardHeader>
         {loading ? (
           <div className="flex justify-center py-8">

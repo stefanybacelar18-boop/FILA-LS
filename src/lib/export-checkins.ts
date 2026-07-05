@@ -36,7 +36,7 @@ export function buildCheckinsExcelCsv(entries: QueueEntry[]): string {
     "Tipo carga",
     "Status",
     "Doca",
-    "Previsão descarga",
+    "Previsão descarregamento",
     "Tipo veículo",
     "Retorno racks vazios",
     "Observações",

@@ -23,7 +23,7 @@ export function getQueuePermissions(role: string): QueuePermissions {
 
   if (appRole === "administrador") {
     return {
-      panelTitle: "Fila de descarga",
+      panelTitle: "Fila de descarregamento",
       panelSubtitle: "Controle total: status, docas, prioridade, previsões e WhatsApp",
       canEditDoca: true,
       canEditPrevisao: true,

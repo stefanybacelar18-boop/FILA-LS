@@ -205,10 +205,10 @@ export const COOLDOWN_MESSAGE =
   "Novo check-in indisponível: aguarde 6 dias após o último check-in ou solicite liberação à administração do pátio.";
 
 export const WHATSAPP_CALL_TEMPLATE =
-  "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início da operação de descarga.\n\nObrigado.";
+  "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início do descarregamento.\n\nObrigado.";
 
 /** Mensagem de chamada para empilhador — sem referência a doca */
 export const WHATSAPP_EMPILHADOR_CALL_TEMPLATE =
-  "PAD SIF · FilaDock\n\nOlá, motorista da minuta {MINUTA}!\n\nVocê foi chamado para descarregamento no pátio.\nPor favor, dirija-se à área de descarga o mais breve possível.\n\nObrigado!";
+  "PAD SIF · FilaDock\n\nOlá, motorista da minuta {MINUTA}!\n\nVocê foi chamado para descarregamento no pátio.\nPor favor, dirija-se à área de descarregamento o mais breve possível.\n\nObrigado!";
 
 export const ALL_QUEUE_STATUSES = QUEUE_STATUSES;

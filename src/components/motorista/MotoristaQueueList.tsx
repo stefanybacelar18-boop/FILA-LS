@@ -18,7 +18,7 @@ type MotoristaQueueListProps = {
 export function MotoristaQueueList({
   entries,
   highlightId,
-  title = "Fila de descarga",
+  title = "Fila de descarregamento",
   showDriverName = false,
 }: MotoristaQueueListProps) {
   const sorted = useMemo(() => {

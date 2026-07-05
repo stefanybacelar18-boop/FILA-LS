@@ -92,7 +92,7 @@ function CheckInSuccessContent() {
           tone="success"
           icon={<CheckCircle2 className="h-14 w-14" strokeWidth={2.5} />}
           title="Check-in realizado!"
-          description="Seus dados foram registrados. Aguarde sua vez na fila de descarga."
+          description="Seus dados foram registrados. Aguarde sua vez na fila de descarregamento."
         />
 
         <Card className="card-brand">

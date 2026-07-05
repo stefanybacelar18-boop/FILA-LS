@@ -29,9 +29,11 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
     const scope = request.nextUrl.searchParams.get("scope");
-    const includeInactive = scope === "all";
+    const includeAllClosed = scope === "admin";
+    const includeInactive = scope === "all" || includeAllClosed;
     const entries = await loadEnrichedQueueEntries(admin, {
       includeInactive,
+      includeAllClosed,
       bypassCache: request.nextUrl.searchParams.has("_"),
     });
 
@@ -39,7 +41,11 @@ export async function GET(request: NextRequest) {
       {
         data: entries,
         meta: {
-          scope: includeInactive ? "active_plus_closed_today" : "operational_active",
+          scope: includeAllClosed
+            ? "active_plus_closed_history"
+            : includeInactive
+              ? "active_plus_closed_today"
+              : "operational_active",
           count: entries.length,
         },
       },

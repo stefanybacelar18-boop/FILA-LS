@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest) {
 
     if (previsao_descarregamento !== undefined && !canAccessAdmin(profile.role)) {
       return NextResponse.json(
-        { error: "Apenas o administrador pode definir previsão de descarga" },
+        { error: "Apenas o administrador pode definir previsão de descarregamento" },
         { status: 403 }
       );
     }
