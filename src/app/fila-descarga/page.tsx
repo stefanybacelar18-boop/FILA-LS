@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PanelShellHeader, PanelPageTitle } from "@/components/brand/PanelShellHeader";
+import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
 import { usePublicQueueData } from "@/hooks/usePublicQueueData";
 import { LinkButton } from "@/components/ui/LinkButton";
@@ -24,10 +24,7 @@ export default function FilaDescargaPage() {
       />
 
       <main className="page-container shell-main">
-        <PanelPageTitle
-          title="Fila de descarga"
-          subtitle="Acompanhe a fila do pátio em tempo real — sem precisar fazer login."
-        >
+        <div className="mb-4 flex justify-end">
           <Button
             variant="ghost"
             size="sm"
@@ -38,7 +35,7 @@ export default function FilaDescargaPage() {
             <RefreshCw className="h-4 w-4" />
             Atualizar
           </Button>
-        </PanelPageTitle>
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-16">
