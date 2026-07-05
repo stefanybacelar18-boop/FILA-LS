@@ -41,6 +41,10 @@ function authErrorRedirect(origin: string, loginPath: string, detail: string): N
   );
 }
 
+function isSafeInternalPath(path: string | null): path is string {
+  return Boolean(path && path.startsWith("/") && !path.startsWith("//"));
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -103,6 +107,11 @@ export async function GET(request: NextRequest) {
   let destination = context === "staff" ? "/empilhador" : "/motorista";
   if (context === "motorista") {
     destination = await resolveMotoristaLandingPath(supabase, user.id);
+  }
+
+  const next = searchParams.get("next");
+  if (isSafeInternalPath(next)) {
+    destination = next;
   }
 
   return redirectWithCookies(`${origin}${destination}`, sessionCookies);

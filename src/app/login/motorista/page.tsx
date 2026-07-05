@@ -3,8 +3,11 @@
 import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { completeMotoristaLogin } from "@/lib/auth-profile";
-import { resolveMotoristaLandingPath } from "@/lib/motorista-routing";
+import {
+  recoverOAuthCodeFromUrl,
+  redirectAuthenticatedMotorista,
+  waitForSupabaseSession,
+} from "@/lib/motorista-auth-redirect";
 import { FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { resolveAppOrigin, oauthRedirectUrl } from "@/lib/app-url";
 import { AuthLayout, AuthCard, AuthFooterLink } from "@/components/layout/AuthLayout";
@@ -75,35 +78,37 @@ function MotoristaLoginContent() {
   useEffect(() => {
     let cancelled = false;
 
+    if (recoverOAuthCodeFromUrl("motorista")) return;
+
     async function checkSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const nextPath = searchParams.get("next");
+      await waitForSupabaseSession(supabase, 6, 350);
+      if (cancelled) return;
 
-      if (!session || cancelled) {
-        if (!cancelled) setChecking(false);
-        return;
-      }
+      const redirected = await redirectAuthenticatedMotorista(supabase, router, {
+        nextPath,
+      });
+      if (redirected || cancelled) return;
 
-      try {
-        const profile = await completeMotoristaLogin();
-        const path = await resolveMotoristaLandingPath(supabase, profile.id);
-        if (!cancelled) router.replace(path);
-      } catch (err) {
-        await supabase.auth.signOut();
-        if (!cancelled) {
-          const code = err instanceof Error ? err.message : "perfil";
-          setError(ERROR_MESSAGES[code === "staff_account" ? "conta_staff" : "perfil"]);
-          setChecking(false);
-        }
-      }
+      setChecking(false);
     }
 
     checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" && !cancelled) {
+        const nextPath = searchParams.get("next");
+        void redirectAuthenticatedMotorista(supabase, router, { nextPath });
+      }
+    });
+
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
-  }, [supabase, router]);
+  }, [supabase, router, searchParams]);
 
   async function signInWithProvider(provider: "google" | "apple") {
     const enabled =

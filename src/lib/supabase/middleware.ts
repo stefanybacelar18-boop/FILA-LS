@@ -57,14 +57,23 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await getUserWithTimeout(() => supabase.auth.getUser());
-
   const requiredRole = requiredRoleForPath(pathname);
 
   if (!requiredRole || isPublicPath(pathname)) {
     return supabaseResponse;
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  let user = session?.user ?? null;
+
+  if (!user) {
+    const {
+      data: { user: validatedUser },
+    } = await getUserWithTimeout(() => supabase.auth.getUser());
+    user = validatedUser ?? null;
   }
 
   if (!user) {

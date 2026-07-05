@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { BrandLogoHero, ENTRY_COLUMN_CLASS } from "@/components/brand/BrandLogoHero";
+import { EntryAuthRedirect } from "@/components/auth/EntryAuthRedirect";
 import { Truck, Monitor, ChevronRight, ListOrdered } from "lucide-react";
 import { APP_NAME, FILA_DESCARGA_PUBLIC, SITE_FOOTER_BRAND } from "@/lib/constants";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-brand-hero hero-pattern">
+      <EntryAuthRedirect />
       <div
         className={`mx-auto flex min-h-screen flex-col items-center justify-center px-6 py-12 ${ENTRY_COLUMN_CLASS}`}
       >
