@@ -202,7 +202,7 @@ export const OUTSIDE_GEOFENCE_MESSAGE =
   "Você ainda não está no pátio da empresa. Aproxime-se da empresa para realizar o check-in.";
 
 export const COOLDOWN_MESSAGE =
-  "Já existe um check-in recente vinculado a este motorista. Um novo check-in somente poderá ser realizado após 6 dias da última operação.";
+  "Novo check-in indisponível: aguarde 6 dias após o último check-in ou solicite liberação à administração do pátio.";
 
 export const WHATSAPP_CALL_TEMPLATE =
   "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início da operação de descarga.\n\nObrigado.";

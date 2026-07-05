@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useMotoristaGuard } from "@/hooks/useAuthGuard";
 import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
-import { hasActiveCheckIn, getDeviceId, getUserAgent } from "@/lib/checkin-rules";
+import { hasActiveCheckIn, getDeviceId, getUserAgent, getCheckinCooldownBlock, formatCheckinCooldownMessage } from "@/lib/checkin-rules";
+import type { CheckinCooldownBlock } from "@/lib/checkin-rules";
 import type { QueueEntry } from "@/lib/types";
 import {
   COOLDOWN_MESSAGE,
@@ -25,6 +26,7 @@ import { PageLoader } from "@/components/ui/PageLoader";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
+import { CheckinCooldownAlert } from "@/components/motorista/CheckinCooldownAlert";
 import { isValidPlaca, PLACA_MERCOSUL_HINT } from "@/lib/checkin-validation";
 
 export default function CheckInPage() {
@@ -35,6 +37,8 @@ export default function CheckInPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [eligibilityLoading, setEligibilityLoading] = useState(true);
+  const [cooldownBlock, setCooldownBlock] = useState<CheckinCooldownBlock | null>(null);
 
   const [form, setForm] = useState({
     minuta: "",
@@ -65,14 +69,22 @@ export default function CheckInPage() {
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(10);
-      const active = hasActiveCheckIn((data as QueueEntry[]) ?? []);
-      if (active && !profile!.checkin_liberado) router.replace(MOTORISTA_HOME);
+      const entries = (data as QueueEntry[]) ?? [];
+      const active = hasActiveCheckIn(entries);
+      if (active && !profile!.checkin_liberado) {
+        router.replace(MOTORISTA_HOME);
+        return;
+      }
+      setCooldownBlock(getCheckinCooldownBlock(entries[0] ?? null, profile!));
+      setEligibilityLoading(false);
     }
+    setEligibilityLoading(true);
     void checkExisting();
   }, [profile, supabase, router]);
 
   const geoLoading = geo.step === "loading" && !geo.skipGeofence;
-  const canSubmit = geo.canCheckIn && !!geo.coords;
+  const onCooldown = cooldownBlock != null;
+  const canSubmit = geo.canCheckIn && !!geo.coords && !onCooldown;
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -140,7 +152,12 @@ export default function CheckInPage() {
       return;
     }
     if (data.error === "cooldown") {
-      setErrors({ form: COOLDOWN_MESSAGE });
+      setErrors({
+        form:
+          cooldownBlock != null
+            ? formatCheckinCooldownMessage(cooldownBlock)
+            : (data.message ?? COOLDOWN_MESSAGE),
+      });
       return;
     }
     if (data.error === "outside_geofence") {
@@ -171,7 +188,7 @@ export default function CheckInPage() {
     return <PageLoader error={authError} onRetry={() => window.location.reload()} />;
   }
 
-  if (checking || !profile || geoLoading) {
+  if (checking || !profile || geoLoading || eligibilityLoading) {
     return <PageLoader message="Verificando localização…" />;
   }
 
@@ -180,8 +197,14 @@ export default function CheckInPage() {
       <div className="space-y-4">
         <PanelPageTitle
           title="Check-in"
-          subtitle="Preencha os dados da carga para entrar na fila de descarga."
+          subtitle={
+            onCooldown
+              ? "Aguarde o prazo para um novo check-in na fila."
+              : "Preencha os dados da carga para entrar na fila de descarga."
+          }
         />
+
+        {cooldownBlock && <CheckinCooldownAlert block={cooldownBlock} />}
 
         <Card className="card-brand">
           <CardHeader>
@@ -233,7 +256,7 @@ export default function CheckInPage() {
             <Textarea label="Observações" value={form.observacoes} onChange={(e) => updateField("observacoes", e.target.value)} />
             </fieldset>
 
-            {!canSubmit && geo.step !== "loading" && (
+            {!canSubmit && geo.step !== "loading" && !onCooldown && (
               <p className="alert-warning">
                 Confirme sua localização no pátio para liberar o formulário.
               </p>
@@ -242,7 +265,13 @@ export default function CheckInPage() {
             {errors.form && <p className="alert-error text-left">{errors.form}</p>}
 
             <Button type="submit" className="w-full py-4 text-lg" size="lg" disabled={!canSubmit || submitting}>
-              {submitting ? <Spinner size="md" className="h-5 w-5" /> : "Confirmar check-in"}
+              {submitting ? (
+                <Spinner size="md" className="h-5 w-5" />
+              ) : onCooldown ? (
+                "Check-in indisponível"
+              ) : (
+                "Confirmar check-in"
+              )}
             </Button>
           </form>
         </Card>
