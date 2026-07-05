@@ -4,11 +4,8 @@ import { memo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { isActiveQueueStatus } from "@/lib/queue";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
+import { getViewerPlaca } from "@/lib/checkin-rules";
 import { cn } from "@/lib/utils";
-
-function getCarretaPlaca(entry: QueueEntry): string {
-  return entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
-}
 
 type MotoristaQueueCardProps = {
   entry: QueueEntry;
@@ -47,7 +44,7 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
             {entry.minuta || "—"}
           </p>
           <p className="mt-0.5 font-mono text-sm font-medium leading-none tracking-wide text-slate-600">
-            {getCarretaPlaca(entry)}
+            {getViewerPlaca(entry, isMine, { preferCarreta: true })}
           </p>
           {showDriverName && isMine && (
             <p className="mt-1 truncate text-sm font-semibold text-slate-900">

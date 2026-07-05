@@ -44,6 +44,9 @@ export function MotoristaQueueList({
         <p className="mt-1 text-xs text-slate-500">
           {sorted.length}{" "}
           {sorted.length === 1 ? "minuta na fila" : "minutas na fila"} · ordem operacional
+          {!showDriverName
+            ? " · placas parcialmente ocultas (LGPD)"
+            : " · sua placa visível; demais ocultas (LGPD)"}
         </p>
       </div>
 

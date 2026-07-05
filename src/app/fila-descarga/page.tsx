@@ -48,6 +48,10 @@ export default function FilaDescargaPage() {
         )}
 
         <p className="mt-6 text-center text-xs text-slate-400">
+          Placas exibidas parcialmente (LGPD) · apenas os 4 últimos caracteres
+        </p>
+
+        <p className="mt-2 text-center text-xs text-slate-400">
           Motorista?{" "}
           <Link href="/login/motorista" className="font-semibold text-brand underline-offset-2 hover:underline">
             Faça login para check-in

@@ -61,7 +61,7 @@ export async function GET() {
       scope === "staff"
         ? entries
         : scope === "motorista"
-          ? entries.map(toMotoristaQueueEntry)
+          ? entries.map((e) => toMotoristaQueueEntry(e, user!.id))
           : toPublicQueueEntries(entries);
 
     return NextResponse.json({

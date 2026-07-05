@@ -51,6 +51,45 @@ export function maskPlaca(placa?: string | null): string {
   return `****${clean.slice(-4)}`;
 }
 
+export function shouldRevealPlacaForViewer(
+  entry: Pick<QueueEntry, "driver_user_id">,
+  viewerUserId?: string | null
+): boolean {
+  return Boolean(viewerUserId && entry.driver_user_id === viewerUserId);
+}
+
+type PlacaFields = Pick<
+  QueueEntry,
+  "placa" | "placa_cavalo" | "placa_carreta" | "placa_segunda_carreta"
+>;
+
+/** Oculta placas (LGPD) — use reveal=true só para o próprio motorista logado. */
+export function maskQueueEntryPlacas<T extends PlacaFields>(entry: T, reveal: boolean): T {
+  if (reveal) return entry;
+  return {
+    ...entry,
+    placa: maskPlaca(entry.placa),
+    placa_cavalo: entry.placa_cavalo ? maskPlaca(entry.placa_cavalo) : entry.placa_cavalo,
+    placa_carreta: entry.placa_carreta ? maskPlaca(entry.placa_carreta) : entry.placa_carreta,
+    placa_segunda_carreta: entry.placa_segunda_carreta
+      ? maskPlaca(entry.placa_segunda_carreta)
+      : entry.placa_segunda_carreta,
+  };
+}
+
+export function getViewerPlaca(
+  entry: Pick<QueueEntry, "placa_cavalo" | "placa" | "placa_carreta">,
+  reveal: boolean,
+  options?: { preferCarreta?: boolean }
+): string {
+  const preferCarreta = options?.preferCarreta ?? true;
+  const raw = preferCarreta
+    ? entry.placa_carreta?.trim() || entry.placa?.trim() || entry.placa_cavalo?.trim() || ""
+    : entry.placa_cavalo?.trim() || entry.placa?.trim() || "";
+  if (!raw) return "—";
+  return reveal ? raw : maskPlaca(raw);
+}
+
 export function getDisplayPlaca(entry: Pick<QueueEntry, "placa_cavalo" | "placa">): string {
   return entry.placa_cavalo?.trim() || entry.placa?.trim() || "—";
 }
