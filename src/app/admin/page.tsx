@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_GEOFENCE } from "@/lib/constants";
-import { getTodayStartISO } from "@/lib/queue-day";
 import type { GeofenceConfig, QueueEntry } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -157,15 +156,11 @@ export default function AdminPage() {
   const appUrl = usePublicAppUrl();
 
   const loadOverview = useCallback(async () => {
-    const todayIso = getTodayStartISO();
+    const params = new URLSearchParams({ scope: "all", _: String(Date.now()) });
+    const res = await fetch(`/api/queue/today?${params.toString()}`, { cache: "no-store" });
+    const json = (await res.json().catch(() => ({}))) as { data?: QueueEntry[] };
 
-    const { data: entriesToday } = await supabase
-      .from("queue_entries")
-      .select("*")
-      .is("deleted_at", null)
-      .gte("created_at", todayIso);
-
-    const entries = sanitizeQueueEntries((entriesToday ?? []) as QueueEntry[]);
+    const entries = res.ok ? sanitizeQueueEntries(json.data ?? []) : [];
     const stats = computeDashboardStats(entries);
     setDayStats(stats);
     setQueueAtivos(stats.veiculosAguardando);

@@ -36,6 +36,8 @@ export function buildCheckinsExcelCsv(entries: QueueEntry[]): string {
     "Tipo carga",
     "Status",
     "Doca",
+    "Volume (motos)",
+    "Menor vencimento NF",
     "Previsão descarregamento",
     "Tipo veículo",
     "Retorno racks vazios",
@@ -62,6 +64,8 @@ export function buildCheckinsExcelCsv(entries: QueueEntry[]): string {
       entry.tipo_carga,
       getStatusLabel(entry.status),
       entry.doca ?? "—",
+      entry.volume_motos != null && entry.volume_motos > 0 ? String(entry.volume_motos) : "—",
+      entry.menor_vencimento ? formatPrevisaoDate(entry.menor_vencimento) : "—",
       entry.previsao_descarregamento
         ? formatPrevisaoDate(entry.previsao_descarregamento)
         : "—",

@@ -32,21 +32,24 @@ export interface HourlyBucket {
 export function computeDashboardStats(entries: QueueEntry[]): DashboardStats {
   const todayEntries = entries.filter((e) => isQueueEntryFromToday(e.created_at));
 
-  const finished = todayEntries.filter(
-    (e) => normalizeQueueStatus(e.status) === "finalizado"
+  const activeInQueue = entries.filter((e) => isActiveQueueStatus(e.status));
+  const calledInQueue = activeInQueue.filter((e) => isDriverCalled(e));
+  const ausenteInQueue = entries.filter((e) => isAusenteQueueStatus(e.status));
+
+  const finishedToday = entries.filter(
+    (e) =>
+      normalizeQueueStatus(e.status) === "finalizado" && isEntryClosedToday(e)
   );
-  const waiting = todayEntries.filter((e) => isActiveQueueStatus(e.status));
-  const called = todayEntries.filter((e) => isDriverCalled(e));
   const retornoRacksSim = todayEntries.filter((e) => e.retorno_racks_vazios === true);
 
-  const waitTimes = finished
+  const waitTimes = finishedToday
     .filter((e) => e.started_unload_at)
     .map(
       (e) =>
         (new Date(e.started_unload_at!).getTime() - new Date(e.created_at).getTime()) / 60000
     );
 
-  const unloadTimes = finished
+  const unloadTimes = finishedToday
     .filter((e) => e.started_unload_at && e.finished_at)
     .map(
       (e) =>
@@ -66,16 +69,14 @@ export function computeDashboardStats(entries: QueueEntry[]): DashboardStats {
 
   return {
     veiculosHoje: todayEntries.length,
-    veiculosAusentes: todayEntries.filter(
-      (e) => normalizeQueueStatus(e.status) === "ausente"
-    ).length,
+    veiculosAusentes: ausenteInQueue.length,
     tempoMedioEsperaMin:
       waitTimes.length > 0 ? waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length : 0,
     tempoMedioDescargaMin:
       unloadTimes.length > 0 ? unloadTimes.reduce((a, b) => a + b, 0) / unloadTimes.length : 0,
-    veiculosFinalizados: finished.length,
-    veiculosAguardando: waiting.length,
-    veiculosEmDescarga: called.length,
+    veiculosFinalizados: finishedToday.length,
+    veiculosAguardando: activeInQueue.length,
+    veiculosEmDescarga: calledInQueue.length,
     retornoRacksSim: retornoRacksSim.length,
     rankingTransportadoras,
   };

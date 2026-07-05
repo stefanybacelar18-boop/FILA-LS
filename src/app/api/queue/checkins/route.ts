@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAccessAdmin } from "@/lib/role-permissions";
 import { enrichEntriesWithFinishedAt } from "@/lib/queue-finished-at";
+import { enrichQueueWithMinutaMetadata } from "@/lib/minuta-metadata-db";
 import { buildCheckinsExcelCsv } from "@/lib/export-checkins";
 import type { QueueEntry } from "@/lib/types";
 
@@ -45,7 +46,8 @@ async function loadCheckins(
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  return enrichEntriesWithFinishedAt(admin, (data ?? []) as QueueEntry[]);
+  const withFinished = await enrichEntriesWithFinishedAt(admin, (data ?? []) as QueueEntry[]);
+  return enrichQueueWithMinutaMetadata(admin, withFinished);
 }
 
 export async function GET(request: NextRequest) {

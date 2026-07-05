@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
 import type { QueueEntry } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
 import { computeDashboardStats, computeHourlyBuckets } from "@/lib/dashboard-stats";
 import { formatDuration, formatQueueTime } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
-import { formatManausDateLabel, getTodayStartISO } from "@/lib/queue-day";
+import { formatManausDateLabel } from "@/lib/queue-day";
 import { createDebouncedFn } from "@/lib/debounce";
 import { AppShell } from "@/components/layout/AppShell";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
@@ -18,17 +17,14 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   Trophy,
   BarChart3,
-  CheckCircle2,
   Clock,
-  PhoneCall,
-  Timer,
-  UserX,
   Activity,
-  LayoutDashboard,
 } from "lucide-react";
 import {
   QUEUE_STATUSES,
   STATUS_LABELS,
+  isActiveQueueStatus,
+  isAusenteQueueStatus,
   normalizeQueueStatus,
 } from "@/lib/constants";
 
@@ -37,39 +33,30 @@ export function DashboardPanel({
 }: {
   profile: { role: string; full_name: string; email?: string | null };
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const { data } = await supabase
-      .from("queue_entries")
-      .select("*")
-      .is("deleted_at", null)
-      .gte("created_at", getTodayStartISO());
+    const params = new URLSearchParams({ scope: "all", _: String(Date.now()) });
+    const res = await fetch(`/api/queue/today?${params.toString()}`, { cache: "no-store" });
+    const json = (await res.json().catch(() => ({}))) as { data?: QueueEntry[] };
 
-    setEntries(sanitizeQueueEntries((data as QueueEntry[]) ?? []));
+    if (res.ok) {
+      setEntries(sanitizeQueueEntries(json.data ?? []));
+    }
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchData();
     const debounced = createDebouncedFn(() => fetchData(), 400);
-
-    const channel = supabase
-      .channel("dashboard")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "queue_entries" },
-        () => debounced.call()
-      )
-      .subscribe();
+    const interval = setInterval(fetchData, 60_000);
 
     return () => {
       debounced.cancel();
-      supabase.removeChannel(channel);
+      clearInterval(interval);
     };
-  }, [supabase, fetchData]);
+  }, [fetchData]);
 
   const stats = useMemo(() => computeDashboardStats(entries), [entries]);
   const hourlyBuckets = useMemo(() => computeHourlyBuckets(entries), [entries]);
@@ -78,15 +65,23 @@ export function DashboardPanel({
     [hourlyBuckets]
   );
 
+  const queueSnapshot = useMemo(
+    () =>
+      entries.filter(
+        (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
+      ),
+    [entries]
+  );
+
   const statusCounts = useMemo(
     () =>
       Object.fromEntries(
         QUEUE_STATUSES.map((status) => [
           status,
-          entries.filter((e) => normalizeQueueStatus(e.status) === status).length,
+          queueSnapshot.filter((e) => normalizeQueueStatus(e.status) === status).length,
         ])
       ) as Record<(typeof QUEUE_STATUSES)[number], number>,
-    [entries]
+    [queueSnapshot]
   );
 
   const maxStatusCount = useMemo(
@@ -117,7 +112,7 @@ export function DashboardPanel({
       <AdminPageHeader
         eyebrow="Dashboard · Operação"
         title={formatManausDateLabel()}
-        description="Indicadores do dia · atualização em tempo real"
+        description="Fila ativa no pátio · indicadores do dia em tempo real"
       />
 
       {loading ? (
@@ -127,13 +122,23 @@ export function DashboardPanel({
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Na fila agora" value={stats.veiculosAguardando} accent="brand" />
-            <StatCard title="Chamados p/ doca" value={stats.veiculosEmDescarga} accent="blue" />
-            <StatCard title="Finalizados" value={stats.veiculosFinalizados} accent="green" />
+            <StatCard
+              title="Na fila agora"
+              value={stats.veiculosAguardando}
+              subtitle="Minutas ativas aguardando"
+              accent="brand"
+            />
+            <StatCard
+              title="Chamados p/ doca"
+              value={stats.veiculosEmDescarga}
+              subtitle="Motorista acionado"
+              accent="blue"
+            />
+            <StatCard title="Finalizados hoje" value={stats.veiculosFinalizados} accent="green" />
             <StatCard
               title="Taxa de conclusão"
               value={`${taxaConclusao}%`}
-              subtitle={`${stats.veiculosFinalizados} de ${stats.veiculosHoje} hoje`}
+              subtitle={`${stats.veiculosFinalizados} de ${stats.veiculosHoje} check-ins hoje`}
               accent="green"
             />
           </div>
@@ -149,7 +154,11 @@ export function DashboardPanel({
               value={formatDuration(stats.tempoMedioDescargaMin)}
               accent="slate"
             />
-            <StatCard title="Ausentes" value={stats.veiculosAusentes} accent="amber" />
+            <StatCard
+              title="Ausentes no pátio"
+              value={stats.veiculosAusentes}
+              accent="amber"
+            />
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -157,7 +166,7 @@ export function DashboardPanel({
               <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-4">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <BarChart3 className="h-5 w-5 text-brand" />
-                  Distribuição por status
+                  Fila ativa por status
                 </CardTitle>
               </CardHeader>
               <div className="space-y-3 p-5">
@@ -179,7 +188,7 @@ export function DashboardPanel({
                   );
                 })}
                 {Object.values(statusCounts).every((c) => c === 0) && (
-                  <p className="text-sm text-slate-500">Sem movimentação hoje.</p>
+                  <p className="text-sm text-slate-500">Nenhuma minuta ativa na fila.</p>
                 )}
               </div>
             </Card>
@@ -193,7 +202,7 @@ export function DashboardPanel({
               </CardHeader>
               <div className="p-5">
               {stats.rankingTransportadoras.length === 0 ? (
-                <p className="text-sm text-slate-500">Sem dados hoje.</p>
+                <p className="text-sm text-slate-500">Sem check-ins hoje.</p>
               ) : (
                 <div className="space-y-3">
                   {stats.rankingTransportadoras.slice(0, 6).map((item, idx) => {
@@ -267,7 +276,7 @@ export function DashboardPanel({
               </CardHeader>
               <div className="p-0">
               {recentActivity.length === 0 ? (
-                <p className="p-5 text-sm text-slate-500">Sem movimentação hoje.</p>
+                <p className="p-5 text-sm text-slate-500">Sem movimentação recente.</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {recentActivity.map((entry) => (

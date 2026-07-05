@@ -32,7 +32,17 @@ export function manausDayStartISO(ymd: string): string {
 /** Início do dia civil no fuso operacional (meia-noite São Paulo). */
 export function getTodayStartISO(timeZone = OPERATIONAL_TIMEZONE): string {
   const ymd = getManausDateYmd(new Date(), timeZone);
+  return ymdToDayStartISO(ymd);
+}
+
+/** Início do dia YYYY-MM-DD no fuso operacional. */
+export function ymdToDayStartISO(ymd: string): string {
   return new Date(`${ymd}T00:00:00${OPERATIONAL_UTC_OFFSET}`).toISOString();
+}
+
+/** Fim do dia YYYY-MM-DD no fuso operacional. */
+export function ymdToDayEndISO(ymd: string): string {
+  return new Date(`${ymd}T23:59:59.999${OPERATIONAL_UTC_OFFSET}`).toISOString();
 }
 
 /** Entrada pertence ao dia operacional atual. */
