@@ -22,10 +22,14 @@ Confirme que não existem políticas `"Public read by token"` nem `"Public check
 
 O código **ignora** esses bypasses quando `NODE_ENV=production`.
 
-## 3. Contas de teste
+## 3. Contas operacionais (obrigatório)
 
-- Remova ou troque senhas de `@lsl.com` no Supabase Auth se existirem.
-- Não use senhas documentadas em repositórios.
+Mantenha **sempre 1 administrador + 1 empilhador** com senhas fortes no Supabase Auth.
+
+- Guia: `docs/CONTAS-OPERACIONAIS.md`
+- SQL: `supabase/contas-operacionais-producao.sql`
+
+Remova ou desative contas de **teste** não usadas (ex.: motorista de homologação). **Não** apague admin/empilhador de produção.
 
 ## 4. Google Maps (admin)
 
