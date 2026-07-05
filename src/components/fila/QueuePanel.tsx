@@ -754,7 +754,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         userName={getProfileDisplayName(profile.full_name, profile.email)}
       >
         <PanelPageTitle
-          eyebrow="Operação · Descarga"
           title={permissions.panelTitle}
           subtitle={
             empilhadorFilter === "aguardando"

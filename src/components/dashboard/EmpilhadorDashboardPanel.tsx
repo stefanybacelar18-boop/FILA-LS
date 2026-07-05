@@ -88,7 +88,6 @@ export function EmpilhadorDashboardPanel({
   return (
     <FieldStaffShell userName={getProfileDisplayName(profile.full_name, profile.email)}>
       <PanelPageTitle
-        eyebrow="Operação · Descarga"
         title="Meu desempenho"
         subtitle={`Resumo do dia · ${formatManausDateLabel(new Date())}`}
       />
