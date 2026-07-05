@@ -408,7 +408,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     : [];
   const adminHasVisibleList =
     adminOperationalList.length > 0 ||
-    (showFinalizados && adminClosedList.length > 0);
+    showFinalizados;
 
   function renderEntryDetail() {
     if (!selected) {
@@ -682,6 +682,13 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                       startIndex: adminOperationalList.length,
                       cardVariant: "admin",
                     })}
+                  {showFinalizados && adminClosedList.length === 0 && (
+                    <Card className="py-8 text-center">
+                      <p className="text-sm text-slate-500">
+                        Nenhuma minuta finalizada no histórico carregado.
+                      </p>
+                    </Card>
+                  )}
                 </div>
               ) : (
                 renderQueueList(displayedEntries)
@@ -826,10 +833,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             <input
               type="checkbox"
               checked={showFinalizados}
-              onChange={(e) => {
-                setLoading(true);
-                setShowFinalizados(e.target.checked);
-              }}
+              onChange={(e) => setShowFinalizados(e.target.checked)}
               className="rounded border-slate-300 text-brand focus:ring-brand/20"
             />
             Mostrar finalizados
