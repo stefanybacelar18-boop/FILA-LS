@@ -1,8 +1,7 @@
 -- Usuários fixos LSL — motorista, empilhador, admin (sem operador)
 -- 1) Crie os usuários em Authentication → Users (Auto Confirm User)
---    motorista@lsl.com   / Motorista@2024
---    empilhador@lsl.com  / Empilhador@2024
---    admin@lsl.com       / Admin@2024
+--    Use senhas fortes definidas só no Supabase — não documente senhas no repositório.
+--    motorista@lsl.com · empilhador@lsl.com · admin@lsl.com
 -- 2) Rode este SQL
 
 INSERT INTO public.profiles (id, email, full_name, role)

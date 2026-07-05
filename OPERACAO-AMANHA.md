@@ -54,7 +54,7 @@ Salve. Sem isso, login Google dos motoristas pode falhar.
 ### 3. Admin — geofence do pátio
 
 1. Notebook → `http://SEU_IP:3000/login`
-2. Entrar como **admin@lsl.com** / **Admin@2024**
+2. Entrar como **admin@lsl.com** *(senha configurada no Supabase)*
 3. Em **Administração** → **Perímetro Geográfico**
 4. Ajuste latitude, longitude e raio (metros) do pátio LSL
 5. Clique **Salvar Configurações**
@@ -78,7 +78,7 @@ Motoristas escaneiam → login Google → check-in.
 | **Administrador** | Notebook | `/login` | admin@lsl.com |
 | **Painel TV** | TV/monitor | `/tv` | Sem login |
 
-**Senhas operacionais:** `Empilhador@2024` / `Admin@2024`
+**Senhas operacionais:** definidas no Supabase Auth (não versionar no git).
 
 ---
 
@@ -167,8 +167,8 @@ Criadas no Supabase Auth (Authentication → Users):
 
 | E-mail | Papel | Senha |
 |--------|-------|-------|
-| empilhador@lsl.com | empilhador | Empilhador@2024 |
-| admin@lsl.com | administrador | Admin@2024 |
+| empilhador@lsl.com | empilhador | *(Supabase Auth)* |
+| admin@lsl.com | administrador | *(Supabase Auth)* |
 
 Motoristas **não** usam essas contas — entram com Google.
 

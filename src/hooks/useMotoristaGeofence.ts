@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_GEOFENCE } from "@/lib/constants";
+import { skipGeofence } from "@/lib/dev-flags";
 import type { GeofenceConfig } from "@/lib/types";
 import {
   formatDistance,
@@ -23,7 +24,7 @@ export type GeofenceStep =
 
 export function useMotoristaGeofence(enabled = true) {
   const supabase = createClient();
-  const skipGeofence = process.env.NEXT_PUBLIC_SKIP_GEOFENCE === "true";
+  const skipGeofenceDev = skipGeofence();
   const [geofence, setGeofence] = useState<GeofenceConfig>(DEFAULT_GEOFENCE);
   const [step, setStep] = useState<GeofenceStep>("loading");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -49,7 +50,7 @@ export function useMotoristaGeofence(enabled = true) {
       setStep("skipped");
       return;
     }
-    if (skipGeofence) {
+    if (skipGeofenceDev) {
       setCoords({ lat: geofence.lat, lng: geofence.lng });
       setStep("skipped");
       return;
@@ -77,7 +78,7 @@ export function useMotoristaGeofence(enabled = true) {
         setStep(error.code === 1 ? "denied" : "error");
       }
     }
-  }, [enabled, geofence, skipGeofence]);
+  }, [enabled, geofence, skipGeofenceDev]);
 
   useEffect(() => {
     void validateLocation();
@@ -94,7 +95,7 @@ export function useMotoristaGeofence(enabled = true) {
     distanceLabel: distance != null ? formatDistance(distance) : null,
     canCheckIn,
     isOutside,
-    skipGeofence,
+    skipGeofence: skipGeofenceDev,
     retry: validateLocation,
   };
 }

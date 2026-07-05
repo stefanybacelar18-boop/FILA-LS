@@ -24,10 +24,10 @@ Rode **cada arquivo em uma NOVA aba**, **na ordem**, clicando **Run**:
 
 | E-mail | Senha |
 |--------|-------|
-| motorista@lsl.com | Motorista@2024 |
+| motorista@lsl.com | *(senha definida no Supabase Auth)* |
 | operador@lsl.com | Operador@2024 |
-| empilhador@lsl.com | Empilhador@2024 |
-| admin@lsl.com | Admin@2024 |
+| empilhador@lsl.com | *(senha definida no Supabase Auth)* |
+| admin@lsl.com | *(senha definida no Supabase Auth)* |
 
 Depois rode **`criar-usuarios-fixos.sql`** e **`fix-roles-teste.sql`**.
 

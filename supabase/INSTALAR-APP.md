@@ -37,9 +37,9 @@ Crie no **Authentication → Users** (Auto Confirm):
 
 | E-mail | Senha |
 |--------|-------|
-| motorista@lsl.com | Motorista@2024 |
-| empilhador@lsl.com | Empilhador@2024 |
-| admin@lsl.com | Admin@2024 |
+| motorista@lsl.com | *(senha no Supabase Auth)* |
+| empilhador@lsl.com | *(senha no Supabase Auth)* |
+| admin@lsl.com | *(senha no Supabase Auth)* |
 
 ```sql
 -- supabase/fix-roles-teste.sql

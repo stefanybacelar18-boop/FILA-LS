@@ -121,8 +121,8 @@ Supabase → **SQL Editor** → execute **nesta ordem**:
 |---|-------|-----|----------|
 | 1 | Home pública | `https://SUA-URL.vercel.app/` | Página inicial carrega |
 | 2 | Painel TV | `/tv` | Fila em tempo real |
-| 3 | Admin | `/login` → `admin@lsl.com` / `Admin@2024` | Painel admin |
-| 4 | Empilhador | `/login` → `empilhador@lsl.com` / `Empilhador@2024` | Fila operacional |
+| 3 | Admin | `/login` → `admin@lsl.com` | Painel admin |
+| 4 | Empilhador | `/login` → `empilhador@lsl.com` | Fila operacional |
 | 5 | Motorista | `/login/motorista` → Google | Login e redirecionamento |
 | 6 | Geofence | Admin → salvar lat/lng do pátio | Mapa ou coordenadas manuais |
 | 7 | QR Code | Admin → QR Codes | Aponta para URL Vercel |
@@ -132,8 +132,8 @@ Supabase → **SQL Editor** → execute **nesta ordem**:
 
 | E-mail | Senha | Papel |
 |--------|-------|-------|
-| admin@lsl.com | Admin@2024 | administrador |
-| empilhador@lsl.com | Empilhador@2024 | empilhador |
+| admin@lsl.com | *(Supabase Auth)* | administrador |
+| empilhador@lsl.com | *(Supabase Auth)* | empilhador |
 
 Motoristas: **Google OAuth** (não usam @lsl.com).
 

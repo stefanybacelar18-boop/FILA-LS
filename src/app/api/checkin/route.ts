@@ -5,6 +5,8 @@ import { isWithinGeofence } from "@/lib/geofence";
 import { canCheckInAgain, hasActiveCheckIn } from "@/lib/checkin-rules";
 import { validateCheckInBody } from "@/lib/checkin-validation";
 import { COOLDOWN_MESSAGE, DEFAULT_GEOFENCE, skipCheckinLimits } from "@/lib/constants";
+import { skipGeofence } from "@/lib/dev-flags";
+import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import { insertQueueEntry } from "@/lib/queue-db";
 import { applyAutoPriorityForMinuta, recalculateQueuePrevisoes } from "@/lib/minuta-metadata-db";
 import type { GeofenceConfig, Profile, QueueEntry } from "@/lib/types";
@@ -25,6 +27,18 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  const ip = getClientIp(request);
+  const rateKey = `checkin:${user.id}:${ip}`;
+  if (!rateLimitAllow(rateKey, 8, 60_000)) {
+    return NextResponse.json(
+      { error: "rate_limit", message: "Muitas tentativas. Aguarde um momento." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimitRetryAfterSec(rateKey, 60_000)) },
+      }
+    );
   }
 
   const body = await request.json();
@@ -51,10 +65,9 @@ export async function POST(request: NextRequest) {
     .single();
 
   const geofence = (geofenceSetting?.value as GeofenceConfig) ?? DEFAULT_GEOFENCE;
-  const skipGeofence = process.env.NEXT_PUBLIC_SKIP_GEOFENCE === "true";
 
   if (
-    !skipGeofence &&
+    !skipGeofence() &&
     (!form.checkin_lat ||
       !form.checkin_lng ||
       !isWithinGeofence(form.checkin_lat, form.checkin_lng, geofence))
@@ -87,7 +100,7 @@ export async function POST(request: NextRequest) {
 
   const lastEntry = entries[0] ?? null;
   const cooldown = canCheckInAgain(lastEntry, profile as Profile);
-  if (!cooldown.allowed) {
+  if (!skipCheckinLimits() && !cooldown.allowed) {
     return NextResponse.json(
       { error: "cooldown", message: COOLDOWN_MESSAGE },
       { status: 403 }
@@ -95,7 +108,6 @@ export async function POST(request: NextRequest) {
   }
 
   const placaDisplay = form.placa_cavalo;
-  const ip = getClientIp(request);
 
   let admin;
   try {

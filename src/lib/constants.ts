@@ -193,10 +193,7 @@ export const DEFAULT_GEOFENCE = {
 
 export const CHECKIN_COOLDOWN_DAYS = 6;
 
-/** Dev/testes — ignora cooldown de 6 dias e bloqueio de check-in ativo (NÃO use em produção) */
-export function skipCheckinLimits(): boolean {
-  return process.env.NEXT_PUBLIC_SKIP_CHECKIN_LIMITS === "true";
-}
+export { skipCheckinLimits } from "@/lib/dev-flags";
 
 export const OUTSIDE_GEOFENCE_MESSAGE =
   "Você ainda não está no pátio da empresa. Aproxime-se da empresa para realizar o check-in.";

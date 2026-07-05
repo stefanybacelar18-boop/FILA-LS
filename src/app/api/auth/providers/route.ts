@@ -3,6 +3,15 @@ import { fetchAuthProviderSettings, getSupabaseProjectRef, supabaseDashboardUrl 
 
 export async function GET() {
   const settings = await fetchAuthProviderSettings();
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (isProd) {
+    return NextResponse.json(
+      { settings },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
+  }
+
   const ref = getSupabaseProjectRef();
 
   return NextResponse.json({
