@@ -25,53 +25,65 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
   showDriverName = false,
   showStatus = false,
 }: MotoristaQueueCardProps) {
+  const showPrevisao =
+    isActiveQueueStatus(entry.status) && Boolean(entry.previsao_descarregamento);
+
   return (
     <div
       className={cn(
-        "w-full rounded-xl border bg-white p-3 text-left shadow-sm",
+        "flex gap-3 rounded-xl border bg-white p-3 text-left shadow-sm",
         isMine && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15"
       )}
     >
-      <div className="grid grid-cols-[2.5rem_1fr] gap-x-3 gap-y-1">
-        <div
-          className={cn(
-            "flex h-10 w-10 items-center justify-center self-start rounded-lg text-sm font-bold tabular-nums",
-            isMine ? "bg-brand text-white" : "bg-slate-100 text-slate-600"
-          )}
-        >
-          {position}
-        </div>
-
-        <div className="min-w-0">
-          <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
-            {entry.minuta || "—"}
-          </p>
-          {showStatus && (
-            <div className="mt-1.5">
-              <StatusBadge status={entry.status} />
-            </div>
-          )}
-          {showDriverName && isMine && (
-            <p className="mt-1 truncate text-sm font-semibold text-slate-900">
-              {entry.nome?.trim() || "—"}
-            </p>
-          )}
-          {isMine && (
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-brand">Você</p>
-          )}
-        </div>
+      <div
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums",
+          isMine ? "bg-brand text-white shadow-sm" : "bg-slate-100 text-slate-600"
+        )}
+      >
+        {position}
       </div>
 
-      {isActiveQueueStatus(entry.status) && entry.previsao_descarregamento && (
-        <div className="mt-2.5 border-t border-slate-100 pt-2.5">
-          <PrevisaoDisplay
-            previsao={entry.previsao_descarregamento}
-            automatic={entry.previsao_automatica}
-            compact={false}
-            className="w-full justify-start text-xs"
-          />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Minuta
+            </p>
+            <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
+              {entry.minuta || "—"}
+            </p>
+          </div>
+          {showStatus && (
+            <StatusBadge status={entry.status} compact className="mt-0.5 shrink-0" />
+          )}
         </div>
-      )}
+
+        {(showDriverName && isMine) || isMine ? (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {showDriverName && isMine && (
+              <p className="truncate text-sm font-semibold text-slate-800">
+                {entry.nome?.trim() || "—"}
+              </p>
+            )}
+            {isMine && (
+              <span className="text-[10px] font-bold uppercase tracking-wide text-brand">
+                Você
+              </span>
+            )}
+          </div>
+        ) : null}
+
+        {showPrevisao && (
+          <div className="mt-2">
+            <PrevisaoDisplay
+              previsao={entry.previsao_descarregamento}
+              automatic={entry.previsao_automatica}
+              compact
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 });

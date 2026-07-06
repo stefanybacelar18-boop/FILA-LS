@@ -94,7 +94,7 @@ export function MotoristaQueueList({
             : "Nenhuma minuta ativa na fila agora."}
         </p>
       ) : (
-        <div className="space-y-2 p-3">
+        <div className="space-y-1.5 p-3">
           {sorted.map((entry) => (
             <MotoristaQueueCard
               key={entry.id}

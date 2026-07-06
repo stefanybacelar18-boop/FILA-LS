@@ -66,6 +66,21 @@ export function getStatusLabel(status: string): string {
   return status;
 }
 
+const STATUS_SHORT_LABELS: Record<QueueStatus, string> = {
+  aguardando_descarregamento: "Aguardando",
+  ausente: "Ausente",
+  finalizado: "Finalizado",
+};
+
+export function getStatusShortLabel(status: string): string {
+  const normalized = normalizeQueueStatus(status);
+  if (normalized in STATUS_SHORT_LABELS) {
+    return STATUS_SHORT_LABELS[normalized as QueueStatus];
+  }
+  if (status === "cancelado") return "Cancelado";
+  return getStatusLabel(status);
+}
+
 export function normalizeQueueStatus(status: string): QueueStatus {
   if (status === "ausente" || status === "finalizado") return status;
   if (status === "aguardando_descarregamento") return status;
