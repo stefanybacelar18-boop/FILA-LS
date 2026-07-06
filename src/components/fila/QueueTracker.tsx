@@ -9,12 +9,11 @@ import { getStatusLabel } from "@/lib/constants";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { formatPrevisaoDate, getDriverFirstName } from "@/lib/utils";
 import { sanitizeQueueEntry } from "@/lib/sanitize-queue-entry";
-import { maskPlaca } from "@/lib/checkin-rules";
 import { createDebouncedFn } from "@/lib/debounce";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { Truck, Clock, Users, RefreshCw } from "lucide-react";
+import { Clock, Users, RefreshCw } from "lucide-react";
 
 /** Painel público LGPD — sem dados pessoais */
 export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boolean }) {
@@ -76,7 +75,6 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
 
   const veiculosAFrente = Math.max(0, countVehiclesAhead(entry, allEntries));
   const posicao = resolveQueuePosition(entry, allEntries) ?? veiculosAFrente + 1;
-  const placaMasked = maskPlaca(entry.placa_cavalo || entry.placa || "");
 
   return (
     <div className="min-h-screen app-canvas-mobile">
@@ -97,10 +95,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
         <div className="text-center">
           <p className="text-sm text-slate-500">Acompanhamento da Fila</p>
           {lgpd ? (
-            <>
-              <p className="mt-1 text-lg font-mono font-bold text-brand">{placaMasked}</p>
-              <p className="text-sm text-slate-600">Minuta: {entry.minuta || "—"}</p>
-            </>
+            <p className="mt-1 text-2xl font-bold text-brand">Minuta {entry.minuta || "—"}</p>
           ) : (
             <h1 className="mt-1 text-2xl font-bold">{getDriverFirstName(entry.nome)}</h1>
           )}

@@ -8,6 +8,10 @@ import {
   loadEnrichedQueueEntries,
 } from "@/lib/queue-enrich";
 import { toMotoristaQueueEntry, toPublicQueueEntries } from "@/lib/queue-public-dto";
+import {
+  computePublicQueueStats,
+  loadFinalizadosHojeForStats,
+} from "@/lib/public-queue-stats";
 import { withTimeout } from "@/lib/async-timeout";
 
 export const maxDuration = 30;
@@ -61,12 +65,24 @@ export async function GET() {
       scope === "staff"
         ? entries
         : scope === "motorista"
-          ? entries.map((e) => toMotoristaQueueEntry(e, user!.id))
+          ? entries.map((e) => toMotoristaQueueEntry(e))
           : toPublicQueueEntries(entries);
+
+    const meta: {
+      scope: string;
+      fallback: boolean;
+      visibility: typeof scope;
+      stats?: ReturnType<typeof computePublicQueueStats>;
+    } = { scope: "operational_active", fallback, visibility: scope };
+
+    if (scope === "public") {
+      const finalizadosHoje = await loadFinalizadosHojeForStats(admin);
+      meta.stats = computePublicQueueStats(entries, finalizadosHoje);
+    }
 
     return NextResponse.json({
       data,
-      meta: { scope: "operational_active", fallback, visibility: scope },
+      meta,
     });
   } catch (err) {
     invalidateEnrichedQueueCache();

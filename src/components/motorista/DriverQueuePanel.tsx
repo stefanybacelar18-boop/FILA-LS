@@ -7,7 +7,6 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueData } from "@/hooks/useDriverQueueData";
 import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import { resolveQueuePosition } from "@/lib/queue";
-import { getDisplayPlaca } from "@/lib/checkin-rules";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Card } from "@/components/ui/Card";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
@@ -103,7 +102,6 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
               <StatusBadge status={entry.status} className="px-4 py-1 text-sm" />
             </div>
             <p className="mt-4 text-lg font-bold text-brand">{entry.minuta || "—"}</p>
-            <p className="mt-1 font-mono text-sm text-slate-600">{getDisplayPlaca(entry)}</p>
             {entry.nome?.trim() && (
               <p className="mt-2 text-sm font-semibold text-slate-700">{entry.nome.trim()}</p>
             )}
@@ -114,6 +112,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
             highlightId={entry.id}
             title="Fila do pátio"
             showDriverName
+            showStatus
           />
 
           <p className="text-center text-xs text-slate-400">Atualização em tempo real</p>

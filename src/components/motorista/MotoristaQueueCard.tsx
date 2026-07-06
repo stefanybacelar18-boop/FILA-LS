@@ -4,7 +4,7 @@ import { memo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { isActiveQueueStatus } from "@/lib/queue";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
-import { getViewerPlaca } from "@/lib/checkin-rules";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/utils";
 
 type MotoristaQueueCardProps = {
@@ -13,14 +13,17 @@ type MotoristaQueueCardProps = {
   isMine?: boolean;
   /** Exibe nome do motorista — área logada do motorista */
   showDriverName?: boolean;
+  /** Exibe badge de status (fila pública) */
+  showStatus?: boolean;
 };
 
-/** Card somente leitura — minuta, placa e dados do motorista */
+/** Card somente leitura — minuta e status */
 export const MotoristaQueueCard = memo(function MotoristaQueueCard({
   entry,
   position,
   isMine = false,
   showDriverName = false,
+  showStatus = false,
 }: MotoristaQueueCardProps) {
   return (
     <div
@@ -43,9 +46,11 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
           <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
             {entry.minuta || "—"}
           </p>
-          <p className="mt-0.5 font-mono text-sm font-medium leading-none tracking-wide text-slate-600">
-            {getViewerPlaca(entry, isMine, { preferCarreta: true })}
-          </p>
+          {showStatus && (
+            <div className="mt-1.5">
+              <StatusBadge status={entry.status} />
+            </div>
+          )}
           {showDriverName && isMine && (
             <p className="mt-1 truncate text-sm font-semibold text-slate-900">
               {entry.nome?.trim() || "—"}

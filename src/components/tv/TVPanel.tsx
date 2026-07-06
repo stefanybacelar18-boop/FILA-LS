@@ -7,7 +7,6 @@ import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
 import { createClient } from "@/lib/supabase/client";
 import { isActiveQueueStatus } from "@/lib/constants";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
-import { maskPlaca } from "@/lib/checkin-rules";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Star } from "lucide-react";
 import { OPERATIONAL_TIMEZONE } from "@/lib/queue-day";
@@ -69,19 +68,16 @@ export function TVPanel() {
           aria-atomic="true"
         >
           <p className="mb-4 text-xl font-medium uppercase tracking-widest text-brand-light/70">
-            Próximo motorista
+            Próxima minuta
           </p>
 
           {nextDriver ? (
             <div className="text-center">
               <p className="text-8xl font-black text-white lg:text-9xl">
-                {maskPlaca(nextDriver.placa_cavalo || nextDriver.placa || "")}
-              </p>
-              <p className="mt-4 text-3xl font-semibold text-brand-light">
-                Minuta {nextDriver.minuta || "—"}
+                {nextDriver.minuta || "—"}
               </p>
               {nextDriver.prioridade && (
-                <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand/25 px-4 py-1 text-lg text-brand-light">
+                <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand/25 px-4 py-1 text-lg text-brand-light">
                   <Star className="h-5 w-5" />
                   Prioridade
                 </p>
@@ -93,7 +89,7 @@ export function TVPanel() {
               )}
             </div>
           ) : (
-            <p className="text-4xl text-slate-500">Aguardando veículos...</p>
+            <p className="text-4xl text-slate-500">Aguardando minutas...</p>
           )}
         </section>
 
@@ -112,10 +108,7 @@ export function TVPanel() {
                   className="flex items-center justify-between rounded-2xl border border-brand/20 bg-brand-dark/60 px-6 py-4 backdrop-blur-sm"
                 >
                   <div>
-                    <p className="font-mono text-3xl font-bold">
-                      {maskPlaca(driver.placa_cavalo || driver.placa || "")}
-                    </p>
-                    <p className="text-lg text-slate-400">Minuta {driver.minuta || "—"}</p>
+                    <p className="text-3xl font-bold">Minuta {driver.minuta || "—"}</p>
                   </div>
                   {driver.doca && (
                     <p className="text-4xl font-black text-green-400">{driver.doca}</p>

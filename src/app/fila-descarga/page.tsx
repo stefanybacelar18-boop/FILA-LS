@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
+import { PublicQueueStatsBar } from "@/components/fila/PublicQueueStats";
 import { usePublicQueueData } from "@/hooks/usePublicQueueData";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +12,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { RefreshCw } from "lucide-react";
 
 export default function FilaDescargaPage() {
-  const { entries, loading, error, refresh } = usePublicQueueData();
+  const { entries, stats, loading, error, refresh } = usePublicQueueData();
+  const [searchQuery, setSearchQuery] = useState("");
 
   return (
     <div className="min-h-screen app-canvas-mobile pb-8">
@@ -44,14 +47,19 @@ export default function FilaDescargaPage() {
         ) : error ? (
           <p className="alert-error">{error}</p>
         ) : (
-          <MotoristaQueueList entries={entries} title="Fila do pátio" />
+          <>
+            <PublicQueueStatsBar stats={stats} />
+            <MotoristaQueueList
+              entries={entries}
+              title="Fila do pátio"
+              showStatus
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
+          </>
         )}
 
         <p className="mt-6 text-center text-xs text-slate-400">
-          Placas exibidas parcialmente (LGPD) · apenas os 4 últimos caracteres
-        </p>
-
-        <p className="mt-2 text-center text-xs text-slate-400">
           Motorista?{" "}
           <Link href="/login/motorista" className="font-semibold text-brand underline-offset-2 hover:underline">
             Faça login para check-in

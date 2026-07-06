@@ -1,12 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueEntry } from "@/lib/types";
 import { filterOperationalPanelEntries, OPERATIONAL_PANEL_DB_STATUSES } from "@/lib/constants";
-import { maskQueueEntryPlacas } from "@/lib/checkin-rules";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
-
-function maskPublicQueueEntries(entries: QueueEntry[]): QueueEntry[] {
-  return entries.map((entry) => maskQueueEntryPlacas(entry, false));
-}
 
 const FETCH_TIMEOUT_MS = 25_000;
 let inFlight: Promise<QueueEntry[]> | null = null;
@@ -61,7 +56,7 @@ export async function fetchActiveQueueToday(
 
   if (!rpcError && rpcData != null) {
     return sanitizeQueueEntries(
-      maskPublicQueueEntries(filterOperationalPanelEntries(rpcData as QueueEntry[]))
+      filterOperationalPanelEntries(rpcData as QueueEntry[])
     );
   }
 
@@ -78,7 +73,7 @@ export async function fetchActiveQueueToday(
   }
 
   return sanitizeQueueEntries(
-    maskPublicQueueEntries(filterOperationalPanelEntries((data as QueueEntry[]) ?? []))
+    filterOperationalPanelEntries((data as QueueEntry[]) ?? [])
   );
 }
 
