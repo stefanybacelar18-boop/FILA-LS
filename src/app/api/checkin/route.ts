@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isWithinGeofence } from "@/lib/geofence";
+import { isWithinGeofence, normalizeGeofenceConfig } from "@/lib/geofence";
 import { canCheckInAgain, hasActiveCheckIn } from "@/lib/checkin-rules";
 import { validateCheckInBody } from "@/lib/checkin-validation";
 import { COOLDOWN_MESSAGE, DEFAULT_GEOFENCE, skipCheckinLimits } from "@/lib/constants";
@@ -64,7 +64,9 @@ export async function POST(request: NextRequest) {
     .eq("key", "geofence")
     .single();
 
-  const geofence = (geofenceSetting?.value as GeofenceConfig) ?? DEFAULT_GEOFENCE;
+  const geofence = normalizeGeofenceConfig(
+    geofenceSetting?.value ?? DEFAULT_GEOFENCE
+  );
 
   if (
     !skipGeofence() &&

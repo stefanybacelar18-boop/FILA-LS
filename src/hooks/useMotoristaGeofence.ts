@@ -11,6 +11,7 @@ import {
   haversineDistance,
   isSecureGeolocationContext,
   isWithinGeofence,
+  normalizeGeofenceConfig,
 } from "@/lib/geofence";
 
 export type GeofenceStep =
@@ -39,7 +40,7 @@ export function useMotoristaGeofence(enabled = true) {
         .eq("key", "geofence")
         .single();
       if (data?.value && typeof data.value === "object") {
-        setGeofence(data.value as GeofenceConfig);
+        setGeofence(normalizeGeofenceConfig(data.value));
       }
     }
     void loadGeofence();

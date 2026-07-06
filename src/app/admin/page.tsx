@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_GEOFENCE } from "@/lib/constants";
+import {
+  clampGeofenceRadius,
+  normalizeGeofenceConfig,
+} from "@/lib/geofence";
 import type { GeofenceConfig, QueueEntry } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -15,6 +19,7 @@ import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
+import { GeofenceMapEditor } from "@/components/admin/GeofenceMapEditor";
 import {
   MapPin,
   QrCode,
@@ -22,121 +27,6 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { usePublicAppUrl } from "@/hooks/usePublicAppUrl";
-
-declare global {
-  interface Window {
-    google?: typeof google;
-    initGoogleMap?: () => void;
-  }
-}
-
-function GeofenceMapEditor({
-  geofence,
-  onChange,
-  enabled,
-}: {
-  geofence: GeofenceConfig;
-  onChange: (g: GeofenceConfig) => void;
-  enabled: boolean;
-}) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
-  const circleRef = useRef<google.maps.Circle | null>(null);
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-  const initMap = useCallback(() => {
-    if (!mapRef.current || !window.google) return;
-
-    const center = { lat: geofence.lat, lng: geofence.lng };
-
-    if (!mapInstance.current) {
-      mapInstance.current = new window.google.maps.Map(mapRef.current, {
-        center,
-        zoom: 15,
-        mapTypeControl: false,
-        streetViewControl: false,
-      });
-
-      mapInstance.current.addListener("click", (e: google.maps.MapMouseEvent) => {
-        if (e.latLng) {
-          onChange({
-            ...geofence,
-            lat: e.latLng.lat(),
-            lng: e.latLng.lng(),
-          });
-        }
-      });
-    }
-
-    if (markerRef.current) markerRef.current.setMap(null);
-    markerRef.current = new window.google.maps.Marker({
-      position: center,
-      map: mapInstance.current,
-      draggable: true,
-    });
-    markerRef.current.addListener("dragend", () => {
-      const pos = markerRef.current!.getPosition()!;
-      onChange({ ...geofence, lat: pos.lat(), lng: pos.lng() });
-    });
-
-    if (circleRef.current) circleRef.current.setMap(null);
-    circleRef.current = new window.google.maps.Circle({
-      map: mapInstance.current,
-      center,
-      radius: geofence.radius_meters,
-      fillColor: "#2563eb",
-      fillOpacity: 0.15,
-      strokeColor: "#2563eb",
-      strokeWeight: 2,
-    });
-
-    mapInstance.current.setCenter(center);
-  }, [geofence, onChange]);
-
-  useEffect(() => {
-    if (!enabled || !apiKey) return;
-
-    if (window.google) {
-      initMap();
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap`;
-    script.async = true;
-    window.initGoogleMap = initMap;
-    document.head.appendChild(script);
-
-    return () => {
-      delete window.initGoogleMap;
-    };
-  }, [apiKey, initMap, enabled]);
-
-  useEffect(() => {
-    if (window.google && mapInstance.current) initMap();
-  }, [geofence.lat, geofence.lng, geofence.radius_meters, initMap]);
-
-  if (!enabled) {
-    return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
-        Clique em &quot;Mostrar mapa&quot; para carregar o Google Maps.
-      </div>
-    );
-  }
-
-  if (!apiKey) {
-    return (
-      <div className="flex h-64 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-500">
-        Configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para exibir o mapa.
-        <br />
-        Lat: {geofence.lat}, Lng: {geofence.lng}, Raio: {geofence.radius_meters}m
-      </div>
-    );
-  }
-
-  return <div ref={mapRef} className="h-64 w-full rounded-lg" />;
-}
 
 export default function AdminPage() {
   const { profile, checking, authError } = useAuthGuard(["administrador"]);
@@ -194,7 +84,7 @@ export default function AdminPage() {
         .single();
 
       if (data?.value && typeof data.value === "object") {
-        setGeofence(data.value as GeofenceConfig);
+        setGeofence(normalizeGeofenceConfig(data.value));
       }
     }
     load();
@@ -244,10 +134,12 @@ export default function AdminPage() {
   }
 
   async function saveGeofence() {
+    const normalized = normalizeGeofenceConfig(geofence);
+    setGeofence(normalized);
     setSaving(true);
     await supabase
       .from("settings")
-      .upsert({ key: "geofence", value: geofence }, { onConflict: "key" });
+      .upsert({ key: "geofence", value: normalized }, { onConflict: "key" });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -359,11 +251,15 @@ export default function AdminPage() {
             <Input
               label="Raio (metros)"
               type="number"
+              min={50}
+              max={5000}
               value={geofence.radius_meters}
               onChange={(e) =>
                 setGeofence({
                   ...geofence,
-                  radius_meters: parseInt(e.target.value) || 100,
+                  radius_meters: clampGeofenceRadius(
+                    parseInt(e.target.value, 10)
+                  ),
                 })
               }
             />

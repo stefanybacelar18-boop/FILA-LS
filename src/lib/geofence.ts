@@ -1,6 +1,46 @@
+import { DEFAULT_GEOFENCE } from "./constants";
 import type { GeofenceConfig } from "./types";
 
 const EARTH_RADIUS_METERS = 6371000;
+
+export const GEOFENCE_RADIUS_MIN = 50;
+export const GEOFENCE_RADIUS_MAX = 5000;
+
+export function clampGeofenceRadius(radius: unknown): number {
+  const n = typeof radius === "number" ? radius : Number(radius);
+  if (!Number.isFinite(n)) return DEFAULT_GEOFENCE.radius_meters;
+  return Math.min(
+    GEOFENCE_RADIUS_MAX,
+    Math.max(GEOFENCE_RADIUS_MIN, Math.round(n))
+  );
+}
+
+export function normalizeGeofenceConfig(raw: unknown): GeofenceConfig {
+  const base =
+    typeof raw === "object" && raw !== null
+      ? (raw as Partial<GeofenceConfig>)
+      : {};
+
+  const lat =
+    typeof base.lat === "number" && Number.isFinite(base.lat)
+      ? base.lat
+      : DEFAULT_GEOFENCE.lat;
+  const lng =
+    typeof base.lng === "number" && Number.isFinite(base.lng)
+      ? base.lng
+      : DEFAULT_GEOFENCE.lng;
+  const name =
+    typeof base.name === "string" && base.name.trim()
+      ? base.name.trim()
+      : DEFAULT_GEOFENCE.name;
+
+  return {
+    lat,
+    lng,
+    name,
+    radius_meters: clampGeofenceRadius(base.radius_meters),
+  };
+}
 
 function toRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
