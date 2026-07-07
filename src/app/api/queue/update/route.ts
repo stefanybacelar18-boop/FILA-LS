@@ -9,8 +9,19 @@ import {
   canAccessAdmin,
   isStaffQueueRole,
 } from "@/lib/role-permissions";
-import { saveEntryPrioridade, mergePrioritiesIntoEntries, readPriorityMap, setEntryPriorityFallback } from "@/lib/queue-priorities";
-import { recalculateQueuePrevisoes, setPrevisaoManual } from "@/lib/minuta-metadata-db";
+import {
+  saveEntryPrioridade,
+  mergePrioritiesIntoEntries,
+  readPriorityMap,
+  setEntryPriorityFallback,
+  setAutoPriorityDismissed,
+} from "@/lib/queue-priorities";
+import {
+  recalculateQueuePrevisoes,
+  setPrevisaoManual,
+  getMinutaMetadataByKey,
+} from "@/lib/minuta-metadata-db";
+import { shouldAutoPrioritize } from "@/lib/minuta-intelligence";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
 
@@ -105,6 +116,17 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: prResult.error }, { status: 500 });
       }
       await setEntryPriorityFallback(admin, entryId, prioridade);
+
+      const meta = await getMinutaMetadataByKey(admin, currentRow.minuta as string);
+      if (shouldAutoPrioritize(meta?.menor_vencimento)) {
+        const dismissResult = await setAutoPriorityDismissed(admin, entryId, !prioridade);
+        if (dismissResult.error) {
+          return NextResponse.json({ error: dismissResult.error }, { status: 500 });
+        }
+      } else if (prioridade) {
+        await setAutoPriorityDismissed(admin, entryId, false);
+      }
+
       savedPrioridade = prResult.prioridade;
     }
 

@@ -397,19 +397,23 @@ export function buildMetadataMap(rows: MinutaMetadata[]): Map<string, MinutaMeta
 export function mergeMetadataIntoEntries<T extends QueueEntry>(
   entries: T[],
   metadataMap: Map<string, MinutaMetadata>,
-  manualPriorityIds: ReadonlySet<string> = new Set()
+  manualPriorityIds: ReadonlySet<string> = new Set(),
+  dismissedAutoPriorityIds: ReadonlySet<string> = new Set()
 ): (T & {
   volume_motos: number | null;
   menor_vencimento: string | null;
   prioridade_automatica: boolean;
+  prioridade_automatica_dispensada?: boolean;
 })[] {
   return entries.map((entry) => {
     const meta = metadataMap.get(normalizeMinutaKey(entry.minuta));
     const menor_vencimento = meta?.menor_vencimento ?? null;
     const prioridade_automatica = shouldAutoPrioritize(menor_vencimento);
+    const prioridadeAutomaticaDispensada =
+      prioridade_automatica && dismissedAutoPriorityIds.has(entry.id);
     const prioridadeManual = manualPriorityIds.has(entry.id);
     const prioridade =
-      prioridade_automatica ||
+      (prioridade_automatica && !prioridadeAutomaticaDispensada) ||
       prioridadeManual ||
       Boolean(entry.prioridade);
 
@@ -419,6 +423,7 @@ export function mergeMetadataIntoEntries<T extends QueueEntry>(
       menor_vencimento,
       prioridade,
       prioridade_automatica,
+      prioridade_automatica_dispensada: prioridadeAutomaticaDispensada,
     };
   });
 }

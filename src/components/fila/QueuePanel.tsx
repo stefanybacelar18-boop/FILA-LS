@@ -208,7 +208,19 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     if (data) {
       setEntries((prev) =>
-        sortQueueEntries(prev.map((e) => (e.id === selectedId ? { ...e, ...data, prioridade: saved } : e)))
+        sortQueueEntries(
+          prev.map((e) =>
+            e.id === selectedId
+              ? {
+                  ...e,
+                  ...data,
+                  prioridade: saved,
+                  prioridade_automatica_dispensada:
+                    Boolean(e.prioridade_automatica) && !saved,
+                }
+              : e
+          )
+        )
       );
     }
   }
@@ -517,17 +529,24 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               <input
                 type="checkbox"
                 checked={editPrioridade}
-                disabled={saving || selected.prioridade_automatica}
+                disabled={saving}
                 onChange={(e) => void savePrioridade(e.target.checked)}
                 className="h-4 w-4 rounded"
               />
               <Star className="h-4 w-4 text-amber-600" />
               <span>
                 {selected.prioridade_automatica
-                  ? "Prioridade automática (NF vence amanhã)"
+                  ? editPrioridade
+                    ? "Prioridade automática (NF vence amanhã)"
+                    : "Prioridade automática dispensada — ordem de check-in"
                   : "Prioridade manual na fila"}
               </span>
             </label>
+          )}
+          {permissions.canSetPrioridade && selected.prioridade_automatica_dispensada && (
+            <p className="text-xs text-amber-800">
+              NF ainda vence amanhã, mas sem prioridade na fila. Marque de novo para reativar.
+            </p>
           )}
 
           {permissions.canEditDoca && (isAdmin || selectedIsActive) && (

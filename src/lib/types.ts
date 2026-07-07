@@ -81,6 +81,8 @@ export interface QueueEntry {
   volume_motos?: number | null;
   menor_vencimento?: string | null;
   prioridade_automatica?: boolean;
+  /** Admin dispensou prioridade automática (NF vence amanhã) — volta à ordem de check-in. */
+  prioridade_automatica_dispensada?: boolean;
   previsao_automatica?: boolean;
   ultrapassa_capacidade?: boolean;
   empurrada_por_capacidade?: boolean;

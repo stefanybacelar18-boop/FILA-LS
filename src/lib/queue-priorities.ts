@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueEntry } from "./types";
 
 const SETTINGS_KEY = "queue_priorities";
+export const AUTO_PRIORITY_DISMISSED_KEY = "priority_auto_dismissed_ids";
 
 export type PriorityMap = Record<string, boolean>;
 
@@ -48,6 +49,42 @@ export async function setEntryPriorityFallback(
     delete map[entryId];
   }
   return writePriorityMap(supabase, map);
+}
+
+export async function readDismissedAutoPriorityIds(
+  supabase: SupabaseClient
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", AUTO_PRIORITY_DISMISSED_KEY)
+    .maybeSingle();
+
+  if (error || !Array.isArray(data?.value)) return new Set();
+  return new Set(data.value.filter((id): id is string => typeof id === "string"));
+}
+
+export async function setAutoPriorityDismissed(
+  supabase: SupabaseClient,
+  entryId: string,
+  dismissed: boolean
+): Promise<{ error: string | null }> {
+  const current = await readDismissedAutoPriorityIds(supabase);
+  if (dismissed) {
+    current.add(entryId);
+  } else {
+    current.delete(entryId);
+  }
+
+  const { error } = await supabase.from("settings").upsert(
+    {
+      key: AUTO_PRIORITY_DISMISSED_KEY,
+      value: [...current],
+    },
+    { onConflict: "key" }
+  );
+
+  return { error: error?.message ?? null };
 }
 
 export function mergePrioritiesIntoEntries(

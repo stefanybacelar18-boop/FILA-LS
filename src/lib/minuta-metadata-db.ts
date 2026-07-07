@@ -14,7 +14,11 @@ import {
 } from "./minuta-intelligence";
 import type { QueueEntry } from "./types";
 import { isActiveQueueStatus, ACTIVE_QUEUE_DB_STATUSES } from "./constants";
-import { readPriorityMap, saveEntryPrioridade } from "./queue-priorities";
+import {
+  readPriorityMap,
+  readDismissedAutoPriorityIds,
+  saveEntryPrioridade,
+} from "./queue-priorities";
 import { getManausDateYmd } from "./queue-day";
 import { sortQueueEntries } from "./queue";
 
@@ -328,9 +332,10 @@ export async function enrichQueueWithMinutaMetadata(
   entries: QueueEntry[],
   prefetched?: { metadata?: MinutaMetadata[]; priorityMap?: Awaited<ReturnType<typeof readPriorityMap>> }
 ): Promise<ReturnType<typeof mergeMetadataIntoEntries<QueueEntry>>> {
-  const [metadata, priorityMap] = await Promise.all([
+  const [metadata, priorityMap, dismissedAutoIds] = await Promise.all([
     prefetched?.metadata ?? readMinutaMetadataForEntries(supabase, entries),
     prefetched?.priorityMap ?? readPriorityMap(supabase),
+    readDismissedAutoPriorityIds(supabase),
   ]);
 
   const map = buildMetadataMap(metadata);
@@ -339,7 +344,7 @@ export async function enrichQueueWithMinutaMetadata(
       .filter(([, enabled]) => enabled)
       .map(([id]) => id)
   );
-  return mergeMetadataIntoEntries(entries, map, manualPriorityIds);
+  return mergeMetadataIntoEntries(entries, map, manualPriorityIds, dismissedAutoIds);
 }
 
 /** Sincroniza prioridade no banco conforme vencimento (amanhã) para minutas importadas. */
@@ -352,12 +357,16 @@ export async function syncAutoPriorities(
     }
   >
 ): Promise<number> {
-  const manualMap = await readPriorityMap(supabase);
+  const [manualMap, dismissedAutoIds] = await Promise.all([
+    readPriorityMap(supabase),
+    readDismissedAutoPriorityIds(supabase),
+  ]);
 
   const toSync = entries.filter((entry) => {
     if (!isActiveQueueStatus(entry.status)) return false;
     if (entry.volume_motos == null) return false;
     if (manualMap[entry.id]) return false;
+    if (dismissedAutoIds.has(entry.id)) return false;
     const should = Boolean(entry.prioridade_automatica);
     return Boolean(entry.prioridade) !== should;
   });
