@@ -25,6 +25,7 @@ import {
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
 import { formatPhone, isoToDateInput, getProfileDisplayName, cn, formatPrevisaoDate } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
+import { isNfVencida } from "@/lib/minuta-intelligence";
 import { countAguardandoDescarregamento, countAusentes, countFinalizadasNoDiaOperacional, countStrictAguardandoDescarregamento, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { createDebouncedFn } from "@/lib/debounce";
 import { QUEUE_REALTIME_DEBOUNCE_MS } from "@/lib/queue-refresh";
@@ -482,6 +483,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   </span>
                 </p>
               )}
+              {selectedIsActive &&
+                isNfVencida(selected.menor_vencimento) &&
+                !entryHasPrioridade(selected) && (
+                  <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                    NF vencida — não entra em prioridade automática. Defina prioridade manual
+                    se necessário.
+                  </p>
+                )}
             </div>
             {isEmpilhador && (
               <button

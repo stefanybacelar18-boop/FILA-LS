@@ -423,11 +423,17 @@ export function mergeMetadataIntoEntries<T extends QueueEntry>(
   });
 }
 
-/** Prioridade automática: NF vence amanhã (1 dia). Demais seguem ordem de check-in. */
+/** Prioridade automática: NF vence amanhã (1 dia). Vencidas não entram — prioridade manual pelo admin. */
 export function shouldAutoPrioritize(vencimento: string | null | undefined): boolean {
   const days = daysUntilVencimento(vencimento);
   if (days == null) return false;
   return days === 1;
+}
+
+/** NF já passou do vencimento (check-in com data no passado). */
+export function isNfVencida(vencimento: string | null | undefined): boolean {
+  const days = daysUntilVencimento(vencimento);
+  return days != null && days < 0;
 }
 
 export function daysUntilVencimento(vencimento: string | null | undefined): number | null {

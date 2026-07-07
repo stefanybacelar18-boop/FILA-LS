@@ -36,6 +36,7 @@ export function QueueEntryBadges({
     >
       <MinutaMetaBadge
         compact={compact}
+        staffView
         volumeMotos={entry.volume_motos}
         menorVencimento={entry.menor_vencimento}
       />

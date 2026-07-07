@@ -5,6 +5,7 @@ import { isDriverCalled, isActiveQueueStatus, isAusenteQueueStatus } from "@/lib
 import { entryHasPrioridade } from "@/lib/queue-priorities";
 import { entryRetornoRacksVazios } from "@/lib/queue-badges";
 import { MinutaMetaBadge } from "@/components/fila/MinutaMetaBadge";
+import { isNfVencida } from "@/lib/minuta-intelligence";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { cn, getDriverFirstName } from "@/lib/utils";
@@ -46,6 +47,7 @@ export function EmpilhadorQueueCard({
   const hasFooterBadges = priority || called || racks;
   const hasPrevisao = Boolean(entry.previsao_descarregamento) && active;
   const hasCapacidadeAviso = Boolean(entry.capacidade_aviso) && active;
+  const nfVencida = isNfVencida(entry.menor_vencimento) && active && !priority;
   const hasFooter = hasPrevisao || hasCapacidadeAviso || (hasFooterBadges && (active || isAdmin));
 
   return (
@@ -58,9 +60,10 @@ export function EmpilhadorQueueCard({
         selected && "border-brand/40 ring-2 ring-brand/15",
         !selected && isNext && "border-emerald-300 bg-emerald-50/30",
         !selected && !isNext && absent && "border-red-200/90 bg-red-50/40",
-        !selected && !isNext && !absent && priority && active && "border-amber-200/80",
+        !selected && !isNext && !absent && nfVencida && "border-red-200/80 bg-red-50/15",
+        !selected && !isNext && !absent && priority && active && !nfVencida && "border-amber-200/80",
         !selected && !isNext && !absent && !priority && active && hasCapacidadeAviso && "border-amber-200/80 bg-amber-50/20",
-        !selected && !isNext && !absent && !priority && active && !hasCapacidadeAviso && "border-slate-200/90",
+        !selected && !isNext && !absent && !priority && active && !hasCapacidadeAviso && !nfVencida && "border-slate-200/90",
         !selected && inactive && isAdmin && "border-slate-200/70 bg-slate-50/60 opacity-90"
       )}
     >
@@ -77,8 +80,9 @@ export function EmpilhadorQueueCard({
             absent && "bg-red-100 text-red-800",
             isNext && active && "bg-emerald-600 text-white",
             inactive && isAdmin && "bg-slate-100 text-slate-500",
-            !isNext && !absent && !inactive && priority && active && "bg-amber-100 text-amber-900",
-            !isNext && !absent && !inactive && !priority && active && "bg-slate-100 text-slate-600"
+            !isNext && !absent && !inactive && nfVencida && "bg-red-100 text-red-900",
+            !isNext && !absent && !inactive && priority && active && !nfVencida && "bg-amber-100 text-amber-900",
+            !isNext && !absent && !inactive && !priority && active && !nfVencida && "bg-slate-100 text-slate-600"
           )}
         >
           {position}
@@ -117,6 +121,7 @@ export function EmpilhadorQueueCard({
           {hasMinutaMeta && (
             <MinutaMetaBadge
               compact
+              staffView
               volumeMotos={entry.volume_motos}
               menorVencimento={entry.menor_vencimento}
             />

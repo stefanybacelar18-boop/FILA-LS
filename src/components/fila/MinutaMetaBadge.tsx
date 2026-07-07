@@ -1,5 +1,9 @@
 import { cn } from "@/lib/utils";
-import { formatVencimentoLabel, daysUntilVencimento } from "@/lib/minuta-intelligence";
+import {
+  formatVencimentoLabel,
+  daysUntilVencimento,
+  isNfVencida,
+} from "@/lib/minuta-intelligence";
 import { Bike } from "lucide-react";
 
 export function MinutaMetaBadge({
@@ -7,17 +11,21 @@ export function MinutaMetaBadge({
   menorVencimento,
   compact = false,
   className,
+  /** Destaque operacional (empilhador/admin): NF vencida em vermelho. */
+  staffView = false,
 }: {
   volumeMotos?: number | null;
   menorVencimento?: string | null;
   compact?: boolean;
   className?: string;
+  staffView?: boolean;
 }) {
   if (volumeMotos == null && !menorVencimento) return null;
 
   const vencLabel = formatVencimentoLabel(menorVencimento);
   const days = daysUntilVencimento(menorVencimento);
-  const urgent = days === 1;
+  const vencida = staffView && isNfVencida(menorVencimento);
+  const venceAmanha = days === 1;
 
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
@@ -37,9 +45,19 @@ export function MinutaMetaBadge({
         <span
           className={cn(
             "rounded-md font-medium",
-            urgent ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-500",
+            vencida &&
+              "border border-red-200 bg-red-50 font-semibold text-red-800",
+            !vencida && venceAmanha && "bg-amber-50 text-amber-800",
+            !vencida && !venceAmanha && "bg-slate-50 text-slate-500",
             compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs"
           )}
+          title={
+            vencida
+              ? "NF vencida — sem prioridade automática; admin pode definir prioridade manual"
+              : venceAmanha
+                ? "NF vence amanhã — prioridade automática na fila"
+                : undefined
+          }
         >
           {vencLabel}
         </span>
