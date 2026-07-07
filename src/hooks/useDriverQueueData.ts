@@ -6,10 +6,12 @@ import type { Profile, QueueEntry } from "@/lib/types";
 import { hasActiveCheckIn } from "@/lib/checkin-rules";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
 import { createDebouncedFn } from "@/lib/debounce";
+import {
+  MOTORISTA_QUEUE_POLL_MS,
+  QUEUE_REALTIME_DEBOUNCE_MS,
+} from "@/lib/queue-refresh";
 
-const REALTIME_DEBOUNCE_MS = 1200;
-
-/** Fila do motorista — dados enriquecidos (prioridade, minuta, previsão). */
+/** Fila do motorista — polling + Realtime na própria linha (RLS limita o restante). */
 export function useDriverQueueData(profile: Profile | null) {
   const supabase = useMemo(() => createClient(), []);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
@@ -37,7 +39,10 @@ export function useDriverQueueData(profile: Profile | null) {
     setLoading(true);
     void fetchRef.current();
 
-    const debounced = createDebouncedFn(() => fetchRef.current(), REALTIME_DEBOUNCE_MS);
+    const debounced = createDebouncedFn(
+      () => fetchRef.current(),
+      QUEUE_REALTIME_DEBOUNCE_MS
+    );
 
     const channel = supabase
       .channel("motorista-queue-shared")
@@ -48,8 +53,22 @@ export function useDriverQueueData(profile: Profile | null) {
       )
       .subscribe();
 
+    const pollTimer = window.setInterval(
+      () => void fetchRef.current(),
+      MOTORISTA_QUEUE_POLL_MS
+    );
+
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        void fetchRef.current();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       debounced.cancel();
+      window.clearInterval(pollTimer);
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, [supabase, profileId]);

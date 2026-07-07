@@ -163,14 +163,11 @@ export async function PATCH(request: NextRequest) {
       previsao_descarregamento !== undefined ||
       status !== undefined;
 
-    if (shouldRecalcPrevisao || status !== undefined) {
-      if (status !== undefined) {
-        invalidateEnrichedQueueCache();
-      }
-      if (shouldRecalcPrevisao) {
-        await recalculateQueuePrevisoes(admin).catch(() => {});
-      }
+    if (shouldRecalcPrevisao) {
+      await recalculateQueuePrevisoes(admin).catch(() => {});
     }
+
+    invalidateEnrichedQueueCache();
 
     const { data: updated, error: fetchError } = await admin
       .from("queue_entries")

@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { QueueEntry } from "@/lib/types";
 import type { PublicQueueStats } from "@/lib/public-queue-stats";
-
-const POLL_MS = 15_000;
+import { PUBLIC_QUEUE_POLL_MS } from "@/lib/queue-refresh";
 
 const EMPTY_STATS: PublicQueueStats = {
   aguardando: 0,
@@ -12,7 +11,7 @@ const EMPTY_STATS: PublicQueueStats = {
   finalizados: 0,
 };
 
-/** Fila operacional pública — sem autenticação */
+/** Fila operacional pública — polling (anon não recebe Realtime por RLS). */
 export function usePublicQueueData() {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [stats, setStats] = useState<PublicQueueStats>(EMPTY_STATS);
@@ -23,7 +22,7 @@ export function usePublicQueueData() {
     try {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), 25_000);
-      const res = await fetch("/api/queue/operational", {
+      const res = await fetch(`/api/queue/operational?_=${Date.now()}`, {
         cache: "no-store",
         signal: controller.signal,
       });
@@ -54,8 +53,19 @@ export function usePublicQueueData() {
 
   useEffect(() => {
     void fetchRef.current();
-    const timer = window.setInterval(() => void fetchRef.current(), POLL_MS);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => void fetchRef.current(), PUBLIC_QUEUE_POLL_MS);
+
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        void fetchRef.current();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   return { entries, stats, loading, error, refresh: fetchData };

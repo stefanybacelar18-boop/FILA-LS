@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffRole } from "@/lib/auth-profile";
@@ -20,8 +20,9 @@ export const dynamic = "force-dynamic";
 const LOAD_TIMEOUT_MS = 18_000;
 
 /** Fila operacional enriquecida — escopo conforme autenticação */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const bustCache = request.nextUrl.searchParams.has("_");
     const supabase = await createClient();
     const {
       data: { user },
@@ -46,7 +47,7 @@ export async function GET() {
 
     try {
       entries = await withTimeout(
-        loadEnrichedQueueEntries(admin),
+        loadEnrichedQueueEntries(admin, { bypassCache: bustCache }),
         LOAD_TIMEOUT_MS,
         "Carregar fila"
       );
@@ -80,10 +81,17 @@ export async function GET() {
       meta.stats = computePublicQueueStats(entries, finalizadosHoje);
     }
 
-    return NextResponse.json({
-      data,
-      meta,
-    });
+    return NextResponse.json(
+      {
+        data,
+        meta,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    );
   } catch (err) {
     invalidateEnrichedQueueCache();
     console.error("[queue/operational]", err);

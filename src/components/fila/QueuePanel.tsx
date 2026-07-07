@@ -27,6 +27,7 @@ import { formatPhone, isoToDateInput, getProfileDisplayName, cn } from "@/lib/ut
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { countAguardandoDescarregamento, countAusentes, countFinalizadasNoDiaOperacional, countStrictAguardandoDescarregamento, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { createDebouncedFn } from "@/lib/debounce";
+import { QUEUE_REALTIME_DEBOUNCE_MS } from "@/lib/queue-refresh";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
@@ -142,7 +143,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     fetchQueue();
-    const debounced = createDebouncedFn(() => fetchQueue(), 400);
+    const debounced = createDebouncedFn(() => fetchQueue(), QUEUE_REALTIME_DEBOUNCE_MS);
     const channel = supabase
       .channel(`queue-${profile.role}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () =>

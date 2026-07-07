@@ -10,6 +10,7 @@ import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Star } from "lucide-react";
 import { OPERATIONAL_TIMEZONE } from "@/lib/queue-day";
+import { TV_QUEUE_POLL_MS } from "@/lib/queue-refresh";
 
 export function TVPanel() {
   const supabase = createClient();
@@ -27,7 +28,7 @@ export function TVPanel() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(() => void fetchData(), 12_000);
+    const interval = setInterval(() => void fetchData(), TV_QUEUE_POLL_MS);
     return () => clearInterval(interval);
   }, [fetchData]);
 

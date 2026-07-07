@@ -4,46 +4,42 @@ import { filterOperationalPanelEntries, OPERATIONAL_PANEL_DB_STATUSES } from "@/
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 
 const FETCH_TIMEOUT_MS = 25_000;
-let inFlight: Promise<QueueEntry[]> | null = null;
+
+function operationalQueueUrl(): string {
+  return `/api/queue/operational?_=${Date.now()}`;
+}
 
 /** Fila operacional enriquecida via API (prioridade, minuta, previsão). */
 export async function fetchEnrichedOperationalQueue(
   supabaseFallback?: SupabaseClient
 ): Promise<QueueEntry[]> {
-  if (inFlight) return inFlight;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  inFlight = (async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(operationalQueueUrl(), {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      data?: QueueEntry[];
+    };
 
-    try {
-      const res = await fetch("/api/queue/operational", {
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        data?: QueueEntry[];
-      };
-
-      if (!res.ok) {
-        throw new Error(json.error ?? `HTTP ${res.status}`);
-      }
-
-      return sanitizeQueueEntries(json.data ?? []);
-    } catch (err) {
-      console.warn("[fetchEnrichedOperationalQueue]", err);
-      if (supabaseFallback) {
-        return fetchActiveQueueToday(supabaseFallback);
-      }
-      return [];
-    } finally {
-      clearTimeout(timer);
-      inFlight = null;
+    if (!res.ok) {
+      throw new Error(json.error ?? `HTTP ${res.status}`);
     }
-  })();
 
-  return inFlight;
+    return sanitizeQueueEntries(json.data ?? []);
+  } catch (err) {
+    console.warn("[fetchEnrichedOperationalQueue]", err);
+    if (supabaseFallback) {
+      return fetchActiveQueueToday(supabaseFallback);
+    }
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Leitura direta no Supabase (sem enriquecimento) — fila ativa até finalizar. */

@@ -24,7 +24,7 @@ export type EnrichedQueueEntry = QueueEntry & {
   previsao_automatica?: boolean;
 };
 
-const ENRICH_CACHE_MS = 10_000;
+const ENRICH_CACHE_MS = 4_000;
 
 type EnrichCacheSlot = {
   expiresAt: number;
