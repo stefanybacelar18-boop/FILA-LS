@@ -31,7 +31,7 @@ import { QUEUE_REALTIME_DEBOUNCE_MS } from "@/lib/queue-refresh";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
-import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
+import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEditor";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
@@ -573,7 +573,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               <Input
                 label={
                   selected.previsao_automatica
-                    ? "Previsão automática (capacidade)"
+                    ? "Previsão automática (estoque)"
                     : "Previsão de descarregamento (data)"
                 }
                 type="date"
@@ -582,7 +582,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               />
               {selected.previsao_automatica && (
                 <p className="mt-1 text-xs text-sky-700">
-                  Calculada pelo volume da minuta e capacidade restante da expedição.
+                  Calculada por: capacidade total − expedição (o que cabe hoje) e volume da minuta.
                   Altere a data para definir manualmente.
                 </p>
               )}
@@ -847,6 +847,10 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         finalized={finalizedTodayCount}
         absent={adminAbsentCount}
         className="mb-5"
+      />
+      <EstoqueExpedicaoEditor
+        variant="compact"
+        onSaved={() => void fetchQueue()}
       />
       {queueContent}
     </AppShell>

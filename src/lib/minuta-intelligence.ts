@@ -11,12 +11,80 @@ export interface MinutaMetadata {
   updated_at?: string;
 }
 
-export interface ExpedicaoDiaria {
-  motos: number;
+/** Configuração diária: teto físico do estoque + expedição que libera espaço. */
+export interface EstoqueExpedicaoConfig {
+  capacidade_estoque: number;
+  expedicao: number;
+  /** Motos já no pátio antes dos descarregamentos do dia (opcional). */
+  motos_no_estoque?: number;
   updated_at: string;
 }
 
+/** @deprecated Use EstoqueExpedicaoConfig — mantido para leitura legada `{ motos }`. */
+export interface ExpedicaoDiaria extends EstoqueExpedicaoConfig {
+  motos?: number;
+}
+
 export const EXPEDICAO_SETTINGS_KEY = "expedicao_diaria";
+
+export interface StockPlanningInput {
+  capacidadeEstoque: number;
+  expedicao: number;
+  motosNoEstoque?: number;
+}
+
+export function normalizeEstoqueExpedicaoConfig(
+  raw: Record<string, unknown> | null | undefined
+): EstoqueExpedicaoConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const updated_at =
+    typeof raw.updated_at === "string" ? raw.updated_at : new Date().toISOString();
+
+  if (typeof raw.capacidade_estoque === "number" && typeof raw.expedicao === "number") {
+    const capacidade_estoque = Math.max(0, Math.round(raw.capacidade_estoque));
+    const expedicao = Math.max(0, Math.round(raw.expedicao));
+    const motos_no_estoque =
+      typeof raw.motos_no_estoque === "number"
+        ? Math.max(0, Math.round(raw.motos_no_estoque))
+        : 0;
+    if (capacidade_estoque <= 0) return null;
+    return { capacidade_estoque, expedicao, motos_no_estoque, updated_at };
+  }
+
+  if (typeof raw.motos === "number") {
+    const motos = Math.max(0, Math.round(raw.motos));
+    if (motos <= 0) return null;
+    return {
+      capacidade_estoque: motos,
+      expedicao: motos,
+      motos_no_estoque: 0,
+      updated_at,
+    };
+  }
+
+  return null;
+}
+
+export function computeEspacoDisponivel(
+  capacidadeTotal: number,
+  expedicao: number
+): number {
+  return Math.max(0, capacidadeTotal - expedicao);
+}
+
+export function toStockPlanningInput(
+  config: EstoqueExpedicaoConfig
+): StockPlanningInput {
+  const capacidadeEstoque = config.capacidade_estoque;
+  const expedicao = Math.min(config.expedicao, capacidadeEstoque);
+  // Expedição = motos já no galpão → espaço hoje = capacidade − expedição.
+  return {
+    capacidadeEstoque,
+    expedicao,
+    motosNoEstoque: expedicao,
+  };
+}
 
 /** Cidades cujo vencimento de NF não entra no menor vencimento da minuta. */
 export const CIDADES_EXCLUIDAS_VENCIMENTO_NF = [
@@ -380,7 +448,10 @@ export interface CapacityAllocation {
 }
 
 export interface CapacityPlan {
-  motosExpedicao: number;
+  capacidadeEstoque: number;
+  expedicao: number;
+  motosNoEstoque: number;
+  espacoLivreHoje: number;
   motosNaFila: number;
   motosCabeHoje: number;
   minutasNaFila: number;
@@ -396,40 +467,67 @@ export interface CapacityPlan {
   }>;
 }
 
-/** Distribui minutas nos dias conforme volume e capacidade diária (expedição). */
-export function allocateQueueByCapacity(
-  entries: Array<
-    QueueEntry & {
-      volume_motos?: number | null;
-      menor_vencimento?: string | null;
-      prioridade?: boolean;
-    }
-  >,
-  motosExpedicao: number,
+type QueueEntryWithVolume = QueueEntry & {
+  volume_motos?: number | null;
+  menor_vencimento?: string | null;
+  prioridade?: boolean;
+};
+
+/**
+ * Distribui minutas nos dias conforme:
+ * - capacidade total do galpão (ex.: 950 cheio);
+ * - expedição (motos no estoque → o que cabe hoje = capacidade − expedição);
+ * - a mesma expedição libera espaço nos dias seguintes;
+ * - volume de cada minuta na ordem da fila.
+ */
+export function allocateQueueByStock(
+  entries: QueueEntryWithVolume[],
+  input: StockPlanningInput,
   baseYmd?: string
 ): CapacityAllocation[] {
-  if (motosExpedicao <= 0) return [];
+  const C = input.capacidadeEstoque;
+  const E = input.expedicao;
+  if (C <= 0) return [];
 
   const active = entries.filter((e) => isActiveQueueStatus(e.status));
   const sorted = [...active].sort(compareQueueOrder);
   const todayYmd = baseYmd ?? getManausDateYmd();
 
+  let occupied = Math.max(0, Math.min(input.motosNoEstoque ?? 0, C));
+  let currentDay = 0;
   const result: CapacityAllocation[] = [];
-  let capacidadeRestante = motosExpedicao;
-  let diaOffset = 0;
 
   for (const entry of sorted) {
     const vol = entry.volume_motos ?? 0;
     if (vol <= 0) continue;
 
-    while (vol > capacidadeRestante) {
-      diaOffset += 1;
-      capacidadeRestante = motosExpedicao;
-      // Minuta maior que a expedição diária: inicia no próximo dia útil sem loop infinito.
-      if (vol > motosExpedicao) break;
+    if (vol > C) {
+      const previsaoYmd = addManausDays(todayYmd, currentDay);
+      result.push({
+        id: entry.id,
+        minuta: entry.minuta,
+        volume_motos: vol,
+        menor_vencimento: entry.menor_vencimento ?? null,
+        prioridade: Boolean(entry.prioridade),
+        previsao_descarregamento: manausDayStartISO(previsaoYmd),
+        diaOffset: currentDay,
+      });
+      continue;
     }
 
-    const previsaoYmd = addManausDays(todayYmd, diaOffset);
+    let day = currentDay;
+    let simOccupied = occupied;
+
+    while (simOccupied + vol > C) {
+      day += 1;
+      if (E > 0) {
+        simOccupied = Math.max(0, simOccupied - E);
+      } else if (day > currentDay + 400) {
+        break;
+      }
+    }
+
+    const previsaoYmd = addManausDays(todayYmd, day);
     result.push({
       id: entry.id,
       minuta: entry.minuta,
@@ -437,54 +535,72 @@ export function allocateQueueByCapacity(
       menor_vencimento: entry.menor_vencimento ?? null,
       prioridade: Boolean(entry.prioridade),
       previsao_descarregamento: manausDayStartISO(previsaoYmd),
-      diaOffset,
+      diaOffset: day,
     });
 
-    capacidadeRestante -= vol;
-    while (capacidadeRestante < 0) {
-      diaOffset += 1;
-      capacidadeRestante += motosExpedicao;
-    }
+    occupied = simOccupied + vol;
+    currentDay = day;
   }
 
   return result;
 }
 
+/** @deprecated Use allocateQueueByStock — mantido para compatibilidade interna. */
+export function allocateQueueByCapacity(
+  entries: QueueEntryWithVolume[],
+  motosExpedicao: number,
+  baseYmd?: string
+): CapacityAllocation[] {
+  return allocateQueueByStock(
+    entries,
+    {
+      capacidadeEstoque: motosExpedicao,
+      expedicao: motosExpedicao,
+      motosNoEstoque: 0,
+    },
+    baseYmd
+  );
+}
+
 export function computePrevisoesDescarregamento(
-  entries: Array<
-    QueueEntry & {
-      volume_motos?: number | null;
-      menor_vencimento?: string | null;
-      prioridade?: boolean;
-    }
-  >,
-  motosExpedicao: number
+  entries: QueueEntryWithVolume[],
+  config: EstoqueExpedicaoConfig | StockPlanningInput
 ): Map<string, string> {
+  const input =
+    "capacidadeEstoque" in config
+      ? config
+      : toStockPlanningInput(config);
   const map = new Map<string, string>();
-  for (const item of allocateQueueByCapacity(entries, motosExpedicao)) {
+  for (const item of allocateQueueByStock(entries, input)) {
     map.set(item.id, item.previsao_descarregamento);
   }
   return map;
 }
 
 export function computeCapacityPlan(
-  entries: Array<
-    QueueEntry & {
-      volume_motos?: number | null;
-      menor_vencimento?: string | null;
-      prioridade?: boolean;
-    }
-  >,
-  motosExpedicao: number
+  entries: QueueEntryWithVolume[],
+  config: EstoqueExpedicaoConfig | StockPlanningInput
 ): CapacityPlan {
-  const allocations = allocateQueueByCapacity(entries, motosExpedicao);
+  const input =
+    "capacidadeEstoque" in config
+      ? config
+      : toStockPlanningInput(config);
+  const allocations = allocateQueueByStock(entries, input);
   const active = entries.filter((e) => isActiveQueueStatus(e.status));
   const sorted = [...active].sort(compareQueueOrder);
   const motosNaFila = sorted.reduce((sum, e) => sum + (e.volume_motos ?? 0), 0);
   const hoje = allocations.filter((a) => a.diaOffset === 0);
+  const motosNoEstoque = Math.min(input.motosNoEstoque ?? input.expedicao, input.capacidadeEstoque);
+  const espacoLivreHoje = computeEspacoDisponivel(
+    input.capacidadeEstoque,
+    input.expedicao
+  );
 
   return {
-    motosExpedicao,
+    capacidadeEstoque: input.capacidadeEstoque,
+    expedicao: input.expedicao,
+    motosNoEstoque,
+    espacoLivreHoje,
     motosNaFila,
     motosCabeHoje: hoje.reduce((sum, a) => sum + a.volume_motos, 0),
     minutasNaFila: sorted.filter((e) => (e.volume_motos ?? 0) > 0).length,

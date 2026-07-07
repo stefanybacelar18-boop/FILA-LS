@@ -5,16 +5,16 @@ import { AppShell } from "@/components/layout/AppShell";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
-import type { CapacityPlan, ExpedicaoDiaria } from "@/lib/minuta-intelligence";
+import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEditor";
+import type { CapacityPlan, EstoqueExpedicaoConfig } from "@/lib/minuta-intelligence";
+import { computeEspacoDisponivel } from "@/lib/minuta-intelligence";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Spinner } from "@/components/ui/Spinner";
 import {
   Upload,
   FileSpreadsheet,
-  Bike,
   AlertTriangle,
   CheckCircle2,
   Package,
@@ -48,11 +48,8 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [expedicaoMotos, setExpedicaoMotos] = useState("");
-  const [savingExpedicao, setSavingExpedicao] = useState(false);
-  const [expedicaoSaved, setExpedicaoSaved] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [expedicao, setExpedicao] = useState<ExpedicaoDiaria | null>(null);
+  const [estoqueConfig, setEstoqueConfig] = useState<EstoqueExpedicaoConfig | null>(null);
   const [plan, setPlan] = useState<CapacityPlan | null>(null);
   const [totalImportadas, setTotalImportadas] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -66,7 +63,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
     try {
       const { ok, json } = await fetchJson<{
         error?: string;
-        expedicao?: ExpedicaoDiaria | null;
+        expedicao?: EstoqueExpedicaoConfig | null;
         plan?: CapacityPlan | null;
         totalImportadas?: number;
       }>("/api/admin/minutas/capacity");
@@ -76,12 +73,9 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
         return;
       }
 
-      setExpedicao(json.expedicao ?? null);
+      setEstoqueConfig(json.expedicao ?? null);
       setPlan(json.plan ?? null);
       setTotalImportadas(json.totalImportadas ?? 0);
-      if (json.expedicao?.motos != null) {
-        setExpedicaoMotos(String(json.expedicao.motos));
-      }
     } catch {
       setLoadError("Tempo esgotado ao carregar. Verifique se o servidor está respondendo.");
     } finally {
@@ -159,37 +153,6 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
     }
   }
 
-  async function saveExpedicao() {
-    setSavingExpedicao(true);
-    setExpedicaoSaved(null);
-    const motos = Math.max(0, parseInt(expedicaoMotos, 10) || 0);
-
-    try {
-      const { ok, json } = await fetchJson<{ error?: string; autoPrevisoes?: number }>(
-        "/api/admin/minutas/capacity",
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ motos }),
-        }
-      );
-
-      if (!ok) {
-        alert(json.error ?? "Erro ao salvar expedição.");
-        return;
-      }
-
-      setExpedicaoSaved(
-        `Expedição salva: ${motos} motos · ${json.autoPrevisoes ?? 0} previsão(ões) atualizada(s)`
-      );
-      await loadCapacity();
-    } catch {
-      alert("Tempo esgotado ao salvar. Reinicie o servidor e tente novamente.");
-    } finally {
-      setSavingExpedicao(false);
-    }
-  }
-
   async function handleSync() {
     setSyncing(true);
     setSyncResult(null);
@@ -221,7 +184,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
     <AppShell role="administrador" userName={profile.full_name} userEmail={profile.email}>
       <AdminPageHeader
         title="Inteligência de minutas"
-        description="Importe Excel, defina expedição e recalcule prioridades e previsões"
+        description="Importe Excel, defina estoque/expedição e recalcule prioridades e previsões"
       />
 
       {loadError && (
@@ -238,22 +201,33 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Minutas importadas" value={totalImportadas} accent="brand" />
         <StatCard
-          title="Expedição (motos)"
-          value={expedicao?.motos ?? "—"}
-          subtitle="Capacidade diária"
+          title="Capacidade total"
+          value={estoqueConfig?.capacidade_estoque ?? "—"}
+          subtitle="Galpão cheio (ex.: 950)"
           accent="blue"
         />
         <StatCard
-          title="Minutas cabem hoje"
-          value={plan?.minutasCabeHoje ?? "—"}
-          subtitle={plan ? `${plan.motosCabeHoje} de ${plan.motosExpedicao} motos` : "Informe expedição"}
-          accent="green"
+          title="Expedição"
+          value={estoqueConfig?.expedicao ?? "—"}
+          subtitle="Informada no dia"
+          accent="slate"
         />
         <StatCard
-          title="Motos na fila"
-          value={plan?.motosNaFila ?? "—"}
-          subtitle={plan ? `${plan.minutasNaFila} minuta(s) c/ volume` : undefined}
-          accent="amber"
+          title="Cabe hoje"
+          value={
+            estoqueConfig
+              ? computeEspacoDisponivel(
+                  estoqueConfig.capacidade_estoque,
+                  estoqueConfig.expedicao
+                )
+              : "—"
+          }
+          subtitle={
+            estoqueConfig
+              ? `${estoqueConfig.capacidade_estoque} − ${estoqueConfig.expedicao}`
+              : "Capacidade − expedição"
+          }
+          accent="green"
         />
       </div>
 
@@ -327,42 +301,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           )}
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bike className="h-5 w-5 text-brand" />
-              Expedição da noite
-            </CardTitle>
-          </CardHeader>
-          <p className="mb-4 text-sm text-slate-600">
-            Quantas motos saem na expedição (ex.: 500). Define a capacidade diária de descarregamento.
-          </p>
-          <Input
-            label="Motos expedidas (capacidade diária)"
-            type="number"
-            min={0}
-            value={expedicaoMotos}
-            onChange={(e) => setExpedicaoMotos(e.target.value)}
-            placeholder="Ex: 500"
-          />
-          <Button
-            className="mt-4 w-full"
-            disabled={savingExpedicao}
-            onClick={() => void saveExpedicao()}
-          >
-            {savingExpedicao ? (
-              <>
-                <Spinner size="sm" />
-                Salvando…
-              </>
-            ) : (
-              "Salvar expedição"
-            )}
-          </Button>
-          {expedicaoSaved && (
-            <p className="mt-3 text-sm text-green-700">{expedicaoSaved}</p>
-          )}
-        </Card>
+        <EstoqueExpedicaoEditor variant="card" onSaved={() => void loadCapacity()} />
       </div>
 
       <Card className="mt-6">
@@ -373,9 +312,10 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           <div className="flex justify-center py-8">
             <Spinner size="md" />
           </div>
-        ) : !plan || plan.motosExpedicao <= 0 ? (
+        ) : !plan || plan.capacidadeEstoque <= 0 ? (
           <p className="text-sm text-slate-500">
-            Informe a expedição e importe a planilha. Minutas na fila precisam bater com as importadas.
+            Informe a capacidade do estoque, a expedição e importe a planilha. Minutas na fila
+            precisam bater com as importadas.
           </p>
         ) : plan.minutasSugeridas.length === 0 ? (
           <p className="text-sm text-slate-500">

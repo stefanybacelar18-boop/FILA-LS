@@ -4,9 +4,10 @@ import {
   computePrevisoesDescarregamento,
   EXPEDICAO_SETTINGS_KEY,
   mergeMetadataIntoEntries,
+  normalizeEstoqueExpedicaoConfig,
   normalizeMinutaKey,
   shouldAutoPrioritize,
-  type ExpedicaoDiaria,
+  type EstoqueExpedicaoConfig,
   type MinutaMetadata,
 } from "./minuta-intelligence";
 import type { QueueEntry } from "./types";
@@ -181,12 +182,12 @@ export async function recalculateQueuePrevisoes(
   prefetched?: {
     entries?: QueueEntry[];
     enriched?: ReturnType<typeof mergeMetadataIntoEntries<QueueEntry>>;
-    expedicao?: ExpedicaoDiaria | null;
+    expedicao?: EstoqueExpedicaoConfig | null;
     manualIds?: Set<string>;
   }
 ): Promise<number> {
   const expedicao = prefetched?.expedicao ?? (await readExpedicaoDiaria(supabase));
-  if (!expedicao || expedicao.motos <= 0) return 0;
+  if (!expedicao || expedicao.capacidade_estoque <= 0) return 0;
 
   let enriched = prefetched?.enriched;
   if (!enriched) {
@@ -208,7 +209,7 @@ export async function recalculateQueuePrevisoes(
 
   const sorted = sortQueueEntries(enriched);
   const active = sorted.filter((e) => isActiveQueueStatus(e.status));
-  const previsoes = computePrevisoesDescarregamento(active, expedicao.motos);
+  const previsoes = computePrevisoesDescarregamento(active, expedicao);
   const manualIds = prefetched?.manualIds ?? (await readPrevisaoManualIds(supabase));
 
   const updates = active.filter((entry) => {
@@ -253,7 +254,7 @@ export function overlayAutoPrevisoes<T extends QueueEntry>(
 
 export async function readExpedicaoDiaria(
   supabase: SupabaseClient
-): Promise<ExpedicaoDiaria | null> {
+): Promise<EstoqueExpedicaoConfig | null> {
   const { data, error } = await supabase
     .from("settings")
     .select("value")
@@ -261,19 +262,32 @@ export async function readExpedicaoDiaria(
     .maybeSingle();
 
   if (error || !data?.value || typeof data.value !== "object") return null;
-  const v = data.value as { motos?: number; updated_at?: string };
-  if (typeof v.motos !== "number") return null;
-  return { motos: v.motos, updated_at: v.updated_at ?? new Date().toISOString() };
+  return normalizeEstoqueExpedicaoConfig(data.value as Record<string, unknown>);
 }
 
 export async function saveExpedicaoDiaria(
   supabase: SupabaseClient,
-  motos: number
+  config: {
+    capacidade_estoque: number;
+    expedicao: number;
+    motos_no_estoque?: number;
+  }
 ): Promise<{ error: string | null }> {
+  const capacidade_estoque = Math.max(0, Math.round(config.capacidade_estoque));
+  const expedicao = Math.max(0, Math.round(config.expedicao));
+  const motos_no_estoque = Math.min(expedicao, capacidade_estoque);
+
+  const value: Record<string, unknown> = {
+    capacidade_estoque,
+    expedicao,
+    motos_no_estoque,
+    updated_at: new Date().toISOString(),
+  };
+
   const { error } = await supabase.from("settings").upsert(
     {
       key: EXPEDICAO_SETTINGS_KEY,
-      value: { motos, updated_at: new Date().toISOString() },
+      value,
     },
     { onConflict: "key" }
   );

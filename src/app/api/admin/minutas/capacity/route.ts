@@ -71,9 +71,11 @@ export async function GET() {
     });
     const sorted = sortQueueEntries(enriched);
 
-    const motosExpedicao = expedicao?.motos ?? 0;
+    const motosExpedicao = expedicao?.capacidade_estoque ?? 0;
     const plan =
-      motosExpedicao > 0 ? computeCapacityPlan(sorted, motosExpedicao) : null;
+      motosExpedicao > 0 && expedicao
+        ? computeCapacityPlan(sorted, expedicao)
+        : null;
 
     return NextResponse.json({
       expedicao,
@@ -107,23 +109,75 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { motos?: number };
-    const motos = Math.max(0, Math.round(Number(body.motos) || 0));
+    const body = (await request.json()) as {
+      capacidade_estoque?: number;
+      expedicao?: number;
+      motos_no_estoque?: number;
+      /** Legado: um único campo preenchia os dois valores. */
+      motos?: number;
+    };
+
+    const legacyMotos =
+      body.motos != null ? Math.max(0, Math.round(Number(body.motos) || 0)) : null;
+    const capacidade_estoque = Math.max(
+      0,
+      Math.round(
+        Number(body.capacidade_estoque ?? legacyMotos ?? 0) || 0
+      )
+    );
+    const expedicao = Math.max(
+      0,
+      Math.round(Number(body.expedicao ?? legacyMotos ?? 0) || 0)
+    );
+    const motos_no_estoque = Math.min(expedicao, capacidade_estoque);
+
+    if (capacidade_estoque <= 0) {
+      return NextResponse.json(
+        { error: "Informe a capacidade total do galpão (ex.: 950)." },
+        { status: 400 }
+      );
+    }
+
+    if (expedicao > capacidade_estoque) {
+      return NextResponse.json(
+        {
+          error:
+            "A expedição não pode ser maior que a capacidade total (cabe hoje = capacidade − expedição).",
+        },
+        { status: 400 }
+      );
+    }
 
     const admin = createAdminClient();
-    const { error } = await saveExpedicaoDiaria(admin, motos);
+    const { error } = await saveExpedicaoDiaria(admin, {
+      capacidade_estoque,
+      expedicao,
+      motos_no_estoque,
+    });
 
     if (error) {
       return NextResponse.json({ error }, { status: 500 });
     }
 
+    const savedConfig = {
+      capacidade_estoque,
+      expedicao,
+      motos_no_estoque,
+      updated_at: new Date().toISOString(),
+    };
     const autoPrevisoes = await recalculateQueuePrevisoes(admin, {
-      expedicao: { motos, updated_at: new Date().toISOString() },
+      expedicao: savedConfig,
     });
 
     invalidateEnrichedQueueCache();
 
-    return NextResponse.json({ ok: true, motos, autoPrevisoes });
+    return NextResponse.json({
+      ok: true,
+      capacidade_estoque,
+      expedicao,
+      motos_no_estoque,
+      autoPrevisoes,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro interno";
     return NextResponse.json({ error: message }, { status: 500 });

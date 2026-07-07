@@ -158,10 +158,10 @@ async function loadEnrichedQueueEntriesUncached(
   const sortedEnriched = sortQueueEntries(enriched);
 
   const withPrevisao =
-    expedicao && expedicao.motos > 0
+    expedicao && expedicao.capacidade_estoque > 0
       ? overlayAutoPrevisoes(
           sortedEnriched,
-          computePrevisoesDescarregamento(sortedEnriched, expedicao.motos),
+          computePrevisoesDescarregamento(sortedEnriched, expedicao),
           manualPrevisaoIds
         )
       : sortedEnriched;
