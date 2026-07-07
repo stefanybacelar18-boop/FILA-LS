@@ -11,16 +11,13 @@ import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEdito
 import type { CapacityPlan, EstoqueExpedicaoConfig } from "@/lib/minuta-intelligence";
 import {
   computeMotosComportamDiaSeguinte,
-  computeMotosNoEstoque,
 } from "@/lib/minuta-intelligence";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Spinner } from "@/components/ui/Spinner";
 import {
   Upload,
-  FileSpreadsheet,
   AlertTriangle,
   CheckCircle2,
-  Package,
 } from "lucide-react";
 
 const API_TIMEOUT_MS = 90_000;
@@ -185,10 +182,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
 
   return (
     <AppShell role="administrador" userName={profile.full_name} userEmail={profile.email}>
-      <AdminPageHeader
-        title="Inteligência de minutas"
-        description="Importe Excel, defina estoque/expedição e recalcule prioridades e previsões"
-      />
+      <AdminPageHeader title="Inteligência de minutas" />
 
       {loadError && (
         <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>
@@ -204,15 +198,13 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Minutas importadas" value={totalImportadas} accent="brand" />
         <StatCard
-          title="Estoque cheio"
+          title="Capacidade do estoque"
           value={estoqueConfig?.capacidade_estoque ?? "—"}
-          subtitle="Capacidade total (ex.: 950)"
           accent="blue"
         />
         <StatCard
           title="Motos expedidas"
           value={estoqueConfig?.expedicao ?? "—"}
-          subtitle="Informado após expedição LSL"
           accent="slate"
         />
         <StatCard
@@ -224,11 +216,6 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
                   estoqueConfig.expedicao
                 )
               : "—"
-          }
-          subtitle={
-            estoqueConfig
-              ? `Estoque ${computeMotosNoEstoque(estoqueConfig.capacidade_estoque, estoqueConfig.expedicao)}/${estoqueConfig.capacidade_estoque} após expedição`
-              : "= motos expedidas"
           }
           accent="green"
         />
@@ -242,12 +229,6 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
               Importar planilha Excel
             </CardTitle>
           </CardHeader>
-          <p className="mb-4 text-sm text-slate-600">
-            Compatível com <strong>ConsultaGeralMotos</strong> (1 linha por moto). Agrupa por{" "}
-            <strong>MINUTA</strong>, conta motos e calcula o menor <strong>VENCIMENTO NF</strong>.
-            Pode reenviar o mesmo arquivo: minutas já importadas são reconhecidas pelo número —{" "}
-            <strong>sem duplicar</strong>; só entram novas ou com volume/vencimento alterado.
-          </p>
 
           <input
             ref={fileInputRef}
@@ -316,14 +297,9 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
             <Spinner size="md" />
           </div>
         ) : !plan || plan.capacidadeEstoque <= 0 ? (
-          <p className="text-sm text-slate-500">
-            Informe a capacidade do estoque, a expedição e importe a planilha. Minutas na fila
-            precisam bater com as importadas.
-          </p>
+          <p className="text-sm text-slate-500">Configure estoque e expedição.</p>
         ) : plan.minutasSugeridas.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Nenhuma minuta na fila hoje com volume importado. Confira se os números das minutas coincidem.
-          </p>
+          <p className="text-sm text-slate-500">Nenhuma minuta na fila com volume importado.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {plan.minutasSugeridas.map((item, idx) => (

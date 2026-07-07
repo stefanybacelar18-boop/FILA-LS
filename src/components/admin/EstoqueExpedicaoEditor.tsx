@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import {
   computeMotosComportamDiaSeguinte,
-  computeMotosNoEstoque,
   type EstoqueExpedicaoConfig,
 } from "@/lib/minuta-intelligence";
 import { cn } from "@/lib/utils";
@@ -43,7 +42,6 @@ export function EstoqueExpedicaoEditor({
 }) {
   const [capacidadeTotal, setCapacidadeTotal] = useState("");
   const [motosExpedidas, setMotosExpedidas] = useState("");
-  const [savedConfig, setSavedConfig] = useState<EstoqueExpedicaoConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -51,10 +49,6 @@ export function EstoqueExpedicaoEditor({
 
   const capacidadeNum = Math.max(0, parseInt(capacidadeTotal, 10) || 0);
   const expedidasNum = Math.max(0, parseInt(motosExpedidas, 10) || 0);
-  const motosNoEstoque = useMemo(
-    () => computeMotosNoEstoque(capacidadeNum, expedidasNum),
-    [capacidadeNum, expedidasNum]
-  );
   const comportamAmanha = useMemo(
     () => computeMotosComportamDiaSeguinte(capacidadeNum, expedidasNum),
     [capacidadeNum, expedidasNum]
@@ -70,12 +64,11 @@ export function EstoqueExpedicaoEditor({
       }>("/api/admin/minutas/capacity");
 
       if (!ok) {
-        setLoadError((json as { error?: string }).error ?? "Erro ao carregar estoque.");
+        setLoadError((json as { error?: string }).error ?? "Erro ao carregar.");
         return;
       }
 
       const config = json.expedicao ?? null;
-      setSavedConfig(config);
       if (config?.capacidade_estoque != null) {
         setCapacidadeTotal(String(config.capacidade_estoque));
       }
@@ -83,7 +76,7 @@ export function EstoqueExpedicaoEditor({
         setMotosExpedidas(String(config.expedicao));
       }
     } catch {
-      setLoadError("Tempo esgotado ao carregar configuração.");
+      setLoadError("Erro ao carregar.");
     } finally {
       setLoading(false);
     }
@@ -95,7 +88,7 @@ export function EstoqueExpedicaoEditor({
 
   async function handleSave() {
     if (capacidadeNum <= 0) {
-      alert("Informe a capacidade do estoque cheio (ex.: 950).");
+      alert("Informe a capacidade do estoque.");
       return;
     }
 
@@ -125,18 +118,16 @@ export function EstoqueExpedicaoEditor({
         return;
       }
 
-      const config: EstoqueExpedicaoConfig = {
+      setSavedMsg(
+        `Salvo · ${json.autoPrevisoes ?? 0} previsão(ões) atualizada(s)`
+      );
+      onSaved?.({
         capacidade_estoque: capacidadeNum,
         expedicao: expedidasNum,
         updated_at: new Date().toISOString(),
-      };
-      setSavedConfig(config);
-      setSavedMsg(
-        `Comportam ${comportamAmanha} motos amanhã · ${json.autoPrevisoes ?? 0} previsão(ões) recalculada(s)`
-      );
-      onSaved?.(config);
+      });
     } catch {
-      alert("Tempo esgotado ao salvar. Tente novamente.");
+      alert("Erro ao salvar.");
     } finally {
       setSaving(false);
     }
@@ -145,67 +136,62 @@ export function EstoqueExpedicaoEditor({
   const resultadoBox = (
     <div
       className={cn(
-        "rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3",
-        variant === "compact" && "px-3 py-2.5"
+        "flex h-full min-h-[4.5rem] flex-col justify-center rounded-xl border border-emerald-200/80 bg-emerald-50 px-4 py-3",
+        variant === "compact" && "min-h-0 px-3 py-2.5"
       )}
     >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-        Comportam no dia seguinte
+        Comportam amanhã
       </p>
       <p className={cn("font-bold text-emerald-950", variant === "compact" ? "text-xl" : "text-2xl")}>
         {capacidadeNum > 0 ? comportamAmanha : "—"}
         <span className="ml-1 text-sm font-semibold text-emerald-800">motos</span>
       </p>
-      <p className="mt-0.5 text-xs text-emerald-700">
-        {capacidadeNum > 0
-          ? `Expedidas ${expedidasNum} → comportam ${comportamAmanha} · estoque ${motosNoEstoque}/${capacidadeNum}`
-          : "Informe estoque cheio e motos expedidas"}
-      </p>
     </div>
   );
 
   const fields = (
-    <div
-      className={cn(
-        "grid gap-3",
-        variant === "compact" ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2"
-      )}
-    >
-      <Input
-        label="Estoque cheio (capacidade total)"
-        type="number"
-        min={0}
-        value={capacidadeTotal}
-        onChange={(e) => setCapacidadeTotal(e.target.value)}
-        placeholder="Ex: 950"
-        disabled={loading || saving}
-      />
-      <Input
-        label="Motos expedidas (após LSL)"
-        type="number"
-        min={0}
-        value={motosExpedidas}
-        onChange={(e) => setMotosExpedidas(e.target.value)}
-        placeholder="Ex: 50"
-        disabled={loading || saving}
-      />
-      {variant === "compact" && resultadoBox}
-      <div className="flex items-end">
-        <Button
-          className="w-full"
+    <div className="space-y-3">
+      <div
+        className={cn(
+          "grid gap-3",
+          variant === "card" ? "sm:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4"
+        )}
+      >
+        <Input
+          label="Capacidade do estoque"
+          type="number"
+          min={0}
+          value={capacidadeTotal}
+          onChange={(e) => setCapacidadeTotal(e.target.value)}
+          placeholder="950"
           disabled={loading || saving}
-          onClick={() => void handleSave()}
-        >
-          {saving ? (
-            <>
-              <Spinner size="sm" />
-              Salvando…
-            </>
-          ) : (
-            "Salvar e recalcular"
-          )}
-        </Button>
+        />
+        <Input
+          label="Motos expedidas"
+          type="number"
+          min={0}
+          value={motosExpedidas}
+          onChange={(e) => setMotosExpedidas(e.target.value)}
+          placeholder="0"
+          disabled={loading || saving}
+        />
+        {variant === "card" ? resultadoBox : variant === "compact" && resultadoBox}
       </div>
+      <Button
+        className="w-full"
+        disabled={loading || saving}
+        onClick={() => void handleSave()}
+      >
+        {saving ? (
+          <>
+            <Spinner size="sm" />
+            Salvando…
+          </>
+        ) : (
+          "Salvar e recalcular"
+        )}
+      </Button>
     </div>
   );
 
@@ -217,28 +203,6 @@ export function EstoqueExpedicaoEditor({
           className
         )}
       >
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Expedição LSL → FilaDock
-            </p>
-            <p className="text-sm text-slate-600">
-              Após finalizar a expedição no LSL, informe <strong>quantas motos expediu</strong>.
-              Esse número é quantas o estoque <strong>comporta no dia seguinte</strong>.
-            </p>
-          </div>
-          {savedConfig && (
-            <p className="text-xs text-slate-500">
-              Estoque {savedConfig.capacidade_estoque} · expedidas {savedConfig.expedicao} ·
-              comportam{" "}
-              {computeMotosComportamDiaSeguinte(
-                savedConfig.capacidade_estoque,
-                savedConfig.expedicao
-              )}{" "}
-              amanhã
-            </p>
-          )}
-        </div>
         {loadError && (
           <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>
         )}
@@ -256,17 +220,10 @@ export function EstoqueExpedicaoEditor({
           Estoque e expedição
         </CardTitle>
       </CardHeader>
-      <p className="mb-4 text-sm text-slate-600">
-        O estoque cheio comporta <strong>950 motos</strong> (ajuste se necessário). Sempre que
-        finalizar a expedição no <strong>sistema LSL</strong>, informe aqui{" "}
-        <strong>quantas motos foram expedidas</strong>. Esse valor define quantas motos o estoque{" "}
-        <strong>comporta no dia seguinte</strong> para calcular as previsões da fila.
-      </p>
       {loadError && (
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>
       )}
       {fields}
-      {variant === "card" && <div className="mt-4">{resultadoBox}</div>}
       {savedMsg && <p className="mt-3 text-sm text-green-700">{savedMsg}</p>}
     </Card>
   );
