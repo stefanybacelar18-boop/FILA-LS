@@ -32,6 +32,7 @@ import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEditor";
+import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
