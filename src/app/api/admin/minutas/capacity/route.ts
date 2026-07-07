@@ -129,7 +129,7 @@ export async function PATCH(request: NextRequest) {
       0,
       Math.round(Number(body.expedicao ?? legacyMotos ?? 0) || 0)
     );
-    const motos_no_estoque = Math.min(expedicao, capacidade_estoque);
+    const motos_no_estoque = Math.max(0, capacidade_estoque - expedicao);
 
     if (capacidade_estoque <= 0) {
       return NextResponse.json(
@@ -142,7 +142,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "A expedição não pode ser maior que a capacidade total (cabe hoje = capacidade − expedição).",
+            "A expedição (motos que cabem hoje) não pode ser maior que a capacidade total.",
         },
         { status: 400 }
       );

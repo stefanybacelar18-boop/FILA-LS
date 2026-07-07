@@ -9,7 +9,7 @@ import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEditor";
 import type { CapacityPlan, EstoqueExpedicaoConfig } from "@/lib/minuta-intelligence";
-import { computeEspacoDisponivel } from "@/lib/minuta-intelligence";
+import { computeEspacoDisponivel, computeMotosNoEstoque } from "@/lib/minuta-intelligence";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Spinner } from "@/components/ui/Spinner";
 import {
@@ -209,7 +209,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
         <StatCard
           title="Expedição"
           value={estoqueConfig?.expedicao ?? "—"}
-          subtitle="Informada no dia"
+          subtitle="Motos que cabem hoje"
           accent="slate"
         />
         <StatCard
@@ -224,8 +224,8 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           }
           subtitle={
             estoqueConfig
-              ? `${estoqueConfig.capacidade_estoque} − ${estoqueConfig.expedicao}`
-              : "Capacidade − expedição"
+              ? `${estoqueConfig.capacidade_estoque} − ${computeMotosNoEstoque(estoqueConfig.capacidade_estoque, estoqueConfig.expedicao)}`
+              : "Capacidade − no estoque"
           }
           accent="green"
         />

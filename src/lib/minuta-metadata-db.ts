@@ -275,7 +275,7 @@ export async function saveExpedicaoDiaria(
 ): Promise<{ error: string | null }> {
   const capacidade_estoque = Math.max(0, Math.round(config.capacidade_estoque));
   const expedicao = Math.max(0, Math.round(config.expedicao));
-  const motos_no_estoque = Math.min(expedicao, capacidade_estoque);
+  const motos_no_estoque = Math.max(0, capacidade_estoque - expedicao);
 
   const value: Record<string, unknown> = {
     capacidade_estoque,

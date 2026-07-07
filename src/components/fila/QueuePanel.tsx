@@ -583,7 +583,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               />
               {selected.previsao_automatica && (
                 <p className="mt-1 text-xs text-sky-700">
-                  Calculada por: capacidade total − expedição (o que cabe hoje) e volume da minuta.
+                  Calculada pela capacidade total, expedição do dia e volume da minuta.
                   Altere a data para definir manualmente.
                 </p>
               )}

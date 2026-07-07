@@ -66,11 +66,20 @@ export function normalizeEstoqueExpedicaoConfig(
   return null;
 }
 
+/** Motos já ocupando o galpão = capacidade total − expedição do dia. */
+export function computeMotosNoEstoque(
+  capacidadeTotal: number,
+  expedicaoDia: number
+): number {
+  return Math.max(0, capacidadeTotal - Math.max(0, expedicaoDia));
+}
+
+/** O que cabe hoje = expedição informada (volume que o estoque comporta no dia). */
 export function computeEspacoDisponivel(
   capacidadeTotal: number,
-  expedicao: number
+  expedicaoDia: number
 ): number {
-  return Math.max(0, capacidadeTotal - expedicao);
+  return Math.max(0, Math.min(Math.max(0, expedicaoDia), capacidadeTotal));
 }
 
 export function toStockPlanningInput(
@@ -78,11 +87,11 @@ export function toStockPlanningInput(
 ): StockPlanningInput {
   const capacidadeEstoque = config.capacidade_estoque;
   const expedicao = Math.min(config.expedicao, capacidadeEstoque);
-  // Expedição = motos já no galpão → espaço hoje = capacidade − expedição.
+  const motosNoEstoque = computeMotosNoEstoque(capacidadeEstoque, expedicao);
   return {
     capacidadeEstoque,
     expedicao,
-    motosNoEstoque: expedicao,
+    motosNoEstoque,
   };
 }
 
@@ -590,7 +599,10 @@ export function computeCapacityPlan(
   const sorted = [...active].sort(compareQueueOrder);
   const motosNaFila = sorted.reduce((sum, e) => sum + (e.volume_motos ?? 0), 0);
   const hoje = allocations.filter((a) => a.diaOffset === 0);
-  const motosNoEstoque = Math.min(input.motosNoEstoque ?? input.expedicao, input.capacidadeEstoque);
+  const motosNoEstoque = computeMotosNoEstoque(
+    input.capacidadeEstoque,
+    input.expedicao
+  );
   const espacoLivreHoje = computeEspacoDisponivel(
     input.capacidadeEstoque,
     input.expedicao

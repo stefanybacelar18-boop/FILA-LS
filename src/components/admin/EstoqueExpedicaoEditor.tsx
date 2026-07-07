@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import {
   computeEspacoDisponivel,
+  computeMotosNoEstoque,
   type EstoqueExpedicaoConfig,
 } from "@/lib/minuta-intelligence";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,10 @@ export function EstoqueExpedicaoEditor({
 
   const capacidadeNum = Math.max(0, parseInt(capacidadeTotal, 10) || 0);
   const expedicaoNum = Math.max(0, parseInt(expedicao, 10) || 0);
+  const motosNoEstoque = useMemo(
+    () => computeMotosNoEstoque(capacidadeNum, expedicaoNum),
+    [capacidadeNum, expedicaoNum]
+  );
   const cabeHoje = useMemo(
     () => computeEspacoDisponivel(capacidadeNum, expedicaoNum),
     [capacidadeNum, expedicaoNum]
@@ -95,7 +100,7 @@ export function EstoqueExpedicaoEditor({
     }
 
     if (expedicaoNum > capacidadeNum) {
-      alert("A expedição não pode ser maior que a capacidade total.");
+      alert("A expedição (motos que cabem hoje) não pode ser maior que a capacidade total.");
       return;
     }
 
@@ -153,8 +158,8 @@ export function EstoqueExpedicaoEditor({
       </p>
       <p className="mt-0.5 text-xs text-emerald-700">
         {capacidadeNum > 0
-          ? `${capacidadeNum} − ${expedicaoNum} = ${cabeHoje}`
-          : "Capacidade total − expedição"}
+          ? `${capacidadeNum} − ${motosNoEstoque} = ${cabeHoje}`
+          : "Capacidade total − motos no estoque"}
       </p>
     </div>
   );
@@ -176,12 +181,12 @@ export function EstoqueExpedicaoEditor({
         disabled={loading || saving}
       />
       <Input
-        label="Expedição"
+        label="Expedição (motos que cabem hoje)"
         type="number"
         min={0}
         value={expedicao}
         onChange={(e) => setExpedicao(e.target.value)}
-        placeholder="Ex: 500"
+        placeholder="Ex: 50"
         disabled={loading || saving}
       />
       {variant === "compact" && cabeHojeBox}
@@ -218,16 +223,18 @@ export function EstoqueExpedicaoEditor({
               Capacidade do estoque
             </p>
             <p className="text-sm text-slate-600">
-              <strong>Cabe hoje</strong> = capacidade total − expedição.
+              Informe a <strong>capacidade total</strong> e a <strong>expedição</strong> (motos que
+              cabem hoje). Ex.: 950 − 900 no estoque = <strong>50</strong> motos.
             </p>
           </div>
           {savedConfig && (
             <p className="text-xs text-slate-500">
-              Salvo: {savedConfig.capacidade_estoque} − {savedConfig.expedicao} ={" "}
-              {computeEspacoDisponivel(
+              Salvo: {savedConfig.capacidade_estoque} −{" "}
+              {computeMotosNoEstoque(
                 savedConfig.capacidade_estoque,
                 savedConfig.expedicao
               )}{" "}
+              = {computeEspacoDisponivel(savedConfig.capacidade_estoque, savedConfig.expedicao)}{" "}
               motos
             </p>
           )}
@@ -251,9 +258,9 @@ export function EstoqueExpedicaoEditor({
       </CardHeader>
       <p className="mb-4 text-sm text-slate-600">
         Informe a <strong>capacidade total</strong> do galpão (ex.: 950 cheio) e a{" "}
-        <strong>expedição</strong>. O que o estoque comporta hoje é simples:{" "}
-        <strong>Capacidade − Expedição</strong>. Se a expedição foi 950 e o galpão cabe 950, amanhã
-        cabem mais 950. Se não encheu o galpão, informe a expedição menor.
+        <strong>expedição do dia</strong> — quantas motos cabem hoje (ex.: 50). O sistema mostra{" "}
+        <strong>950 − 900 no estoque = 50 motos</strong>. Se expediu 950 com galpão cheio, amanhã
+        cabem 950 de novo.
       </p>
       {loadError && (
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>
