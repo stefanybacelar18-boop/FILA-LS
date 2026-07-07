@@ -31,7 +31,6 @@ import { QUEUE_REALTIME_DEBOUNCE_MS } from "@/lib/queue-refresh";
 import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
 import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
-import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEditor";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
@@ -49,7 +48,6 @@ import { Spinner } from "@/components/ui/Spinner";
 import {
   MessageCircle,
   AlertCircle,
-  AlertTriangle,
   CheckCircle2,
   UserX,
   Star,
@@ -575,7 +573,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               <Input
                 label={
                   selected.previsao_automatica
-                    ? "Previsão automática (estoque)"
+                    ? "Previsão automática (capacidade)"
                     : "Previsão de descarregamento (data)"
                 }
                 type="date"
@@ -584,14 +582,8 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               />
               {selected.previsao_automatica && (
                 <p className="mt-1 text-xs text-sky-700">
-                  Após informar as motos expedidas no LSL, o sistema calcula quantas comportam no dia seguinte.
+                  Calculada pelo volume da minuta e capacidade de expedição (aba Minutas).
                   Altere a data para definir manualmente.
-                </p>
-              )}
-              {selected.capacidade_aviso && (
-                <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {selected.capacidade_aviso}
                 </p>
               )}
             </div>
@@ -855,10 +847,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         finalized={finalizedTodayCount}
         absent={adminAbsentCount}
         className="mb-5"
-      />
-      <EstoqueExpedicaoEditor
-        variant="compact"
-        onSaved={() => void fetchQueue()}
       />
       {queueContent}
     </AppShell>
