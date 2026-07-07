@@ -13,10 +13,10 @@ type MotoristaQueueCardProps = {
   entry: QueueEntry;
   position: number;
   isMine?: boolean;
-  /** Exibe nome do motorista — área logada do motorista */
   showDriverName?: boolean;
-  /** Exibe badge de status (fila pública) */
   showStatus?: boolean;
+  /** Calculado na lista — prioridade ou subiu vs. ordem de check-in */
+  emVencimento?: boolean;
 };
 
 /** Card somente leitura — minuta e status */
@@ -26,10 +26,11 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
   isMine = false,
   showDriverName = false,
   showStatus = false,
+  emVencimento = false,
 }: MotoristaQueueCardProps) {
   const active = isActiveQueueStatus(entry.status);
   const showPrevisao = active && Boolean(entry.previsao_descarregamento);
-  const prioridadeVencimento = shouldShowEmVencimentoBadge(entry);
+  const prioridadeVencimento = emVencimento || shouldShowEmVencimentoBadge(entry);
 
   return (
     <div
@@ -52,7 +53,7 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               Minuta
@@ -61,16 +62,11 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
               {entry.minuta || "—"}
             </p>
           </div>
-          {showStatus && (
-            <StatusBadge status={entry.status} compact className="mt-0.5 shrink-0" />
-          )}
-        </div>
-
-        {prioridadeVencimento && (
-          <div className="mt-1.5">
-            <PrioridadeVencimentoBadge />
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {prioridadeVencimento && <PrioridadeVencimentoBadge />}
+            {showStatus && <StatusBadge status={entry.status} compact />}
           </div>
-        )}
+        </div>
 
         {(showDriverName && isMine) || isMine ? (
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { compareQueueOrder } from "@/lib/queue";
 import { filterOperationalPanelEntries } from "@/lib/constants";
+import { computeEmVencimentoEntryIds } from "@/lib/queue-vencimento-badge";
 import { MotoristaQueueCard } from "@/components/motorista/MotoristaQueueCard";
 import { Input } from "@/components/ui/Input";
 import { ListOrdered, Search } from "lucide-react";
@@ -36,6 +37,11 @@ export function MotoristaQueueList({
   onSearchChange,
   searchPlaceholder = "Buscar minuta…",
 }: MotoristaQueueListProps) {
+  const emVencimentoIds = useMemo(
+    () => computeEmVencimentoEntryIds(entries),
+    [entries]
+  );
+
   const sorted = useMemo(() => {
     const operational = filterOperationalPanelEntries(entries);
     const filtered = searchQuery.trim()
@@ -69,10 +75,11 @@ export function MotoristaQueueList({
         <p className="mt-1 text-xs text-slate-500">
           {totalOperational}{" "}
           {totalOperational === 1 ? "minuta na fila" : "minutas na fila"} · ordem operacional
-          {showStatus && (
+          {(showStatus || emVencimentoIds.size > 0) && (
             <span className="text-slate-400">
               {" "}
-              · <span className="text-amber-800">Em vencimento</span> = subiu por prioridade da NF
+              · <span className="font-semibold text-amber-800">Em vencimento</span> = subiu por
+              prioridade da NF
             </span>
           )}
         </p>
@@ -109,6 +116,7 @@ export function MotoristaQueueList({
               isMine={entry.id === highlightId}
               showDriverName={showDriverName}
               showStatus={showStatus}
+              emVencimento={emVencimentoIds.has(entry.id)}
             />
           ))}
         </div>

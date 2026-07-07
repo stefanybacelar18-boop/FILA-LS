@@ -7,6 +7,7 @@ import {
   loadBasicOperationalQueue,
   loadEnrichedQueueEntries,
 } from "@/lib/queue-enrich";
+import { mergePrioritiesIntoEntries, readPriorityMap } from "@/lib/queue-priorities";
 import { toMotoristaQueueEntry, toPublicQueueEntries } from "@/lib/queue-public-dto";
 import {
   computePublicQueueStats,
@@ -61,6 +62,9 @@ export async function GET(request: NextRequest) {
       );
       fallback = true;
     }
+
+    const priorityMap = await readPriorityMap(admin);
+    entries = mergePrioritiesIntoEntries(entries, priorityMap);
 
     const data =
       scope === "staff"

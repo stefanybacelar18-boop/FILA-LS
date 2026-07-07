@@ -63,7 +63,7 @@ export function mergePrioritiesIntoEntries(
 export function entryHasPrioridade(entry: {
   prioridade?: boolean | null;
 }): boolean {
-  return entry.prioridade === true;
+  return Boolean(entry.prioridade);
 }
 
 export async function saveEntryPrioridade(
