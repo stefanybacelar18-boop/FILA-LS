@@ -8,7 +8,7 @@ import { MinutaMetaBadge } from "@/components/fila/MinutaMetaBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { cn, getDriverFirstName } from "@/lib/utils";
-import { Star } from "lucide-react";
+import { Star, AlertTriangle } from "lucide-react";
 
 function getCarretaPlaca(entry: QueueEntry): string {
   return entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
@@ -45,7 +45,8 @@ export function EmpilhadorQueueCard({
     (entry.volume_motos != null && entry.volume_motos > 0) || Boolean(entry.menor_vencimento);
   const hasFooterBadges = priority || called || racks;
   const hasPrevisao = Boolean(entry.previsao_descarregamento) && active;
-  const hasFooter = hasPrevisao || (hasFooterBadges && (active || isAdmin));
+  const hasCapacidadeAviso = Boolean(entry.capacidade_aviso) && active;
+  const hasFooter = hasPrevisao || hasCapacidadeAviso || (hasFooterBadges && (active || isAdmin));
 
   return (
     <button
@@ -58,7 +59,8 @@ export function EmpilhadorQueueCard({
         !selected && isNext && "border-emerald-300 bg-emerald-50/30",
         !selected && !isNext && absent && "border-red-200/90 bg-red-50/40",
         !selected && !isNext && !absent && priority && active && "border-amber-200/80",
-        !selected && !isNext && !absent && !priority && active && "border-slate-200/90",
+        !selected && !isNext && !absent && !priority && active && hasCapacidadeAviso && "border-amber-200/80 bg-amber-50/20",
+        !selected && !isNext && !absent && !priority && active && !hasCapacidadeAviso && "border-slate-200/90",
         !selected && inactive && isAdmin && "border-slate-200/70 bg-slate-50/60 opacity-90"
       )}
     >
@@ -118,6 +120,12 @@ export function EmpilhadorQueueCard({
               volumeMotos={entry.volume_motos}
               menorVencimento={entry.menor_vencimento}
             />
+          )}
+          {hasCapacidadeAviso && (
+            <p className="flex items-start gap-1 text-xs font-semibold text-amber-800">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              {entry.capacidade_aviso}
+            </p>
           )}
         </div>
       </div>

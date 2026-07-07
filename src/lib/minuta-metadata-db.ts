@@ -243,6 +243,7 @@ export function overlayAutoPrevisoes<T extends QueueEntry>(
 ): (T & {
   previsao_automatica?: boolean;
   ultrapassa_capacidade?: boolean;
+  empurrada_por_capacidade?: boolean;
   motos_com_espaco?: number;
   capacidade_aviso?: string | null;
 })[] {
@@ -255,13 +256,16 @@ export function overlayAutoPrevisoes<T extends QueueEntry>(
 
     const allocation = allocations?.get(entry.id);
     const ultrapassa = allocation?.ultrapassa_capacidade ?? false;
+    const empurrada = allocation?.empurrada_por_capacidade ?? false;
     const motosComEspaco = allocation?.motos_com_espaco;
     const capacidadeAviso =
       allocation != null
         ? formatMinutaCapacidadeAviso(
             allocation.volume_motos,
             allocation.motos_com_espaco,
-            allocation.ultrapassa_capacidade
+            allocation.ultrapassa_capacidade,
+            allocation.empurrada_por_capacidade,
+            allocation.vagas_no_dia_recusado
           )
         : null;
 
@@ -270,6 +274,7 @@ export function overlayAutoPrevisoes<T extends QueueEntry>(
       previsao_descarregamento: auto,
       previsao_automatica: true,
       ultrapassa_capacidade: ultrapassa,
+      empurrada_por_capacidade: empurrada,
       motos_com_espaco: motosComEspaco,
       capacidade_aviso: capacidadeAviso,
     };

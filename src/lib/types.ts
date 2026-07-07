@@ -83,6 +83,7 @@ export interface QueueEntry {
   prioridade_automatica?: boolean;
   previsao_automatica?: boolean;
   ultrapassa_capacidade?: boolean;
+  empurrada_por_capacidade?: boolean;
   motos_com_espaco?: number;
   capacidade_aviso?: string | null;
 }

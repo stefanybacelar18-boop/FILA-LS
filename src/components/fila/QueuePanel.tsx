@@ -23,7 +23,7 @@ import {
   assertStatusAllowed,
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
-import { formatPhone, isoToDateInput, getProfileDisplayName, cn } from "@/lib/utils";
+import { formatPhone, isoToDateInput, getProfileDisplayName, cn, formatPrevisaoDate } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { countAguardandoDescarregamento, countAusentes, countFinalizadasNoDiaOperacional, countStrictAguardandoDescarregamento, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
 import { createDebouncedFn } from "@/lib/debounce";
@@ -48,6 +48,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import {
   MessageCircle,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   UserX,
   Star,
@@ -358,6 +359,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const nextToCall = getNextToCall(activeEntries);
   const nextToCallId = nextToCall?.id ?? null;
 
+  const capacityAlerts = useMemo(
+    () =>
+      activeEntries.filter(
+        (e) => Boolean(e.capacidade_aviso) && (e.volume_motos ?? 0) > 0
+      ),
+    [activeEntries]
+  );
+
   function renderQueueList(
     list: QueueEntry[],
     options?: { sectionLabel?: string; startIndex?: number; cardVariant?: "default" | "admin" }
@@ -443,6 +452,12 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               <p className="text-xs text-slate-400">{formatPhone(selected.telefone)}</p>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <StatusBadge status={selected.status} />
+                {selected.capacidade_aviso && selectedIsActive && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                    <AlertCircle className="h-3 w-3" />
+                    Capacidade
+                  </span>
+                )}
                 {entryHasPrioridade(selected) && (
                   <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
                     <Star className="h-3 w-3" />
@@ -452,6 +467,21 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 {entryRetornoRacksVazios(selected) && <RacksVaziosBadge />}
               </div>
               <QueueEntryBadges entry={selected} showRacks={false} className="mt-2" />
+              {selected.capacidade_aviso && selectedIsActive && (
+                <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {selected.capacidade_aviso}
+                    {selected.previsao_automatica && selected.previsao_descarregamento && (
+                      <>
+                        {" "}
+                        · Previsão automática para{" "}
+                        {formatPrevisaoDate(selected.previsao_descarregamento)}
+                      </>
+                    )}
+                  </span>
+                </p>
+              )}
             </div>
             {isEmpilhador && (
               <button
@@ -661,6 +691,29 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             }
           >
             <div className={cn(isAdmin ? "space-y-4" : "space-y-2")}>
+              {capacityAlerts.length > 0 &&
+                (isAdmin || isEmpilhador) &&
+                empilhadorFilter === "aguardando" && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    <p className="flex items-center gap-2 font-semibold">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      Estoque sem espaço para algumas minutas hoje
+                    </p>
+                    <ul className="mt-2 space-y-1.5 text-xs">
+                      {capacityAlerts.map((entry) => (
+                        <li key={entry.id}>
+                          <span className="font-semibold">{entry.minuta ?? "—"}</span>
+                          {" — "}
+                          {entry.capacidade_aviso}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs text-amber-800">
+                      Previsão automática vai para o próximo dia útil. Se descarregar parcial,
+                      finalize a operação da minuta.
+                    </p>
+                  </div>
+                )}
               {(isAdmin ? !adminHasVisibleList : displayedEntries.length === 0) ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>

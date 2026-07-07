@@ -312,12 +312,17 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
                         PRIORIDADE
                       </span>
                     )}
-                    {item.diaOffset === 0 && (
+                    {item.diaOffset === 0 && !item.empurrada_por_capacidade && (
                       <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-800">
                         HOJE
                       </span>
                     )}
-                    {item.ultrapassa_capacidade && (
+                    {item.empurrada_por_capacidade && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        NÃO CABE HOJE
+                      </span>
+                    )}
+                    {!item.empurrada_por_capacidade && item.ultrapassa_capacidade && (
                       <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
                         CAPACIDADE
                       </span>

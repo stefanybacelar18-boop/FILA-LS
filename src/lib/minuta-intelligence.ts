@@ -1,7 +1,7 @@
 import type { QueueEntry } from "./types";
 import { isActiveQueueStatus } from "./constants";
 import { compareQueueOrder } from "./queue";
-import { addManausDays, getManausDateYmd, manausDayStartISO } from "./queue-day";
+import { manausDayStartISO, getOperationalPlanningBaseYmd, businessDayOffsetToYmd } from "./queue-day";
 
 export interface MinutaMetadata {
   minuta: string;
@@ -469,6 +469,10 @@ export interface CapacityAllocation {
   espaco_disponivel_no_dia: number;
   /** Volume da minuta excede o espaço disponível no dia da previsão. */
   ultrapassa_capacidade: boolean;
+  /** Minuta não coube no dia operacional atual e foi empurrada para dia útil seguinte. */
+  empurrada_por_capacidade: boolean;
+  /** Vagas no dia em que foi recusada (para aviso operacional). */
+  vagas_no_dia_recusado?: number;
   /** Quantas motos da minuta cabem no espaço disponível (quando ultrapassa). */
   motos_com_espaco: number;
 }
@@ -476,8 +480,13 @@ export interface CapacityAllocation {
 export function formatMinutaCapacidadeAviso(
   volumeMotos: number,
   motosComEspaco: number,
-  ultrapassa: boolean
+  ultrapassa: boolean,
+  empurradaPorCapacidade?: boolean,
+  vagasNoDiaRecusado?: number
 ): string | null {
+  if (empurradaPorCapacidade && vagasNoDiaRecusado != null) {
+    return `Não cabe hoje — minuta com ${volumeMotos} motos, só ${vagasNoDiaRecusado} vagas`;
+  }
   if (!ultrapassa) return null;
   if (motosComEspaco <= 0) {
     return `Sem espaço no estoque neste dia (minuta com ${volumeMotos} motos)`;
@@ -504,6 +513,7 @@ export interface CapacityPlan {
     diaOffset: number;
     espaco_disponivel_no_dia: number;
     ultrapassa_capacidade: boolean;
+    empurrada_por_capacidade: boolean;
     motos_com_espaco: number;
     capacidade_aviso: string | null;
   }>;
@@ -516,11 +526,12 @@ type QueueEntryWithVolume = QueueEntry & {
 };
 
 /**
- * Distribui minutas nos dias conforme:
+ * Distribui minutas nos dias úteis (seg–sex) conforme:
  * - capacidade total do estoque cheio (ex.: 950);
  * - motos expedidas (informadas após expedição no LSL) = volume que comporta no dia seguinte;
  * - ocupação inicial = capacidade − expedidas;
  * - volume de cada minuta na ordem da fila.
+ * Minutas que não cabem no dia atual são empurradas para o próximo dia útil com aviso.
  */
 export function allocateQueueByStock(
   entries: QueueEntryWithVolume[],
@@ -533,22 +544,37 @@ export function allocateQueueByStock(
 
   const active = entries.filter((e) => isActiveQueueStatus(e.status));
   const sorted = [...active].sort(compareQueueOrder);
-  const todayYmd = baseYmd ?? getManausDateYmd();
+  const planningBaseYmd = baseYmd ?? getOperationalPlanningBaseYmd();
 
-  let occupied = Math.max(0, Math.min(input.motosNoEstoque ?? 0, C));
-  let currentDay = 0;
+  let occupied = Math.max(
+    0,
+    Math.min(input.motosNoEstoque ?? computeMotosNoEstoque(C, E), C)
+  );
+  let currentSlot = 0;
   const result: CapacityAllocation[] = [];
+
+  function advanceBusinessSlot(slot: number, simOccupied: number) {
+    const nextOccupied = E > 0 ? Math.max(0, simOccupied - E) : simOccupied;
+    return { slot: slot + 1, simOccupied: nextOccupied };
+  }
+
+  function fitsInSlot(simOccupied: number, vol: number): boolean {
+    return simOccupied + vol <= C;
+  }
 
   function pushAllocation(
     entry: QueueEntryWithVolume,
     vol: number,
-    day: number,
-    simOccupied: number
+    slot: number,
+    simOccupied: number,
+    empurradaPorCapacidade: boolean,
+    vagasNoDiaRecusado?: number
   ) {
     const espacoDisponivelNoDia = Math.max(0, C - simOccupied);
-    const ultrapassaCapacidade = vol > espacoDisponivelNoDia;
+    const ultrapassaCapacidade =
+      empurradaPorCapacidade || vol > espacoDisponivelNoDia;
     const motosComEspaco = ultrapassaCapacidade ? espacoDisponivelNoDia : vol;
-    const previsaoYmd = addManausDays(todayYmd, day);
+    const previsaoYmd = businessDayOffsetToYmd(planningBaseYmd, slot);
 
     result.push({
       id: entry.id,
@@ -557,11 +583,45 @@ export function allocateQueueByStock(
       menor_vencimento: entry.menor_vencimento ?? null,
       prioridade: Boolean(entry.prioridade),
       previsao_descarregamento: manausDayStartISO(previsaoYmd),
-      diaOffset: day,
+      diaOffset: slot,
       espaco_disponivel_no_dia: espacoDisponivelNoDia,
       ultrapassa_capacidade: ultrapassaCapacidade,
+      empurrada_por_capacidade: empurradaPorCapacidade,
+      vagas_no_dia_recusado: vagasNoDiaRecusado,
       motos_com_espaco: motosComEspaco,
     });
+  }
+
+  function resolveSlot(
+    startSlot: number,
+    startOccupied: number,
+    vol: number
+  ): {
+    slot: number;
+    simOccupied: number;
+    empurradaPorCapacidade: boolean;
+    vagasNoDiaRecusado?: number;
+  } {
+    let slot = startSlot;
+    let simOccupied = startOccupied;
+    const vagasIniciais = Math.max(0, C - simOccupied);
+    let empurradaPorCapacidade = false;
+    let vagasNoDiaRecusado: number | undefined;
+
+    if (!fitsInSlot(simOccupied, vol)) {
+      empurradaPorCapacidade = slot === currentSlot;
+      vagasNoDiaRecusado = vagasIniciais;
+
+      let guard = 0;
+      while (!fitsInSlot(simOccupied, vol) && guard < 400) {
+        const next = advanceBusinessSlot(slot, simOccupied);
+        slot = next.slot;
+        simOccupied = next.simOccupied;
+        guard += 1;
+      }
+    }
+
+    return { slot, simOccupied, empurradaPorCapacidade, vagasNoDiaRecusado };
   }
 
   for (const entry of sorted) {
@@ -569,25 +629,22 @@ export function allocateQueueByStock(
     if (vol <= 0) continue;
 
     if (vol > C) {
-      pushAllocation(entry, vol, currentDay, occupied);
+      const vagas = Math.max(0, C - occupied);
+      pushAllocation(entry, vol, currentSlot, occupied, true, vagas);
       continue;
     }
 
-    let day = currentDay;
-    let simOccupied = occupied;
-
-    while (simOccupied + vol > C) {
-      day += 1;
-      if (E > 0) {
-        simOccupied = Math.max(0, simOccupied - E);
-      } else if (day > currentDay + 400) {
-        break;
-      }
-    }
-
-    pushAllocation(entry, vol, day, simOccupied);
-    occupied = simOccupied + vol;
-    currentDay = day;
+    const resolved = resolveSlot(currentSlot, occupied, vol);
+    pushAllocation(
+      entry,
+      vol,
+      resolved.slot,
+      resolved.simOccupied,
+      resolved.empurradaPorCapacidade,
+      resolved.vagasNoDiaRecusado
+    );
+    occupied = resolved.simOccupied + vol;
+    currentSlot = resolved.slot;
   }
 
   return result;
@@ -648,7 +705,12 @@ export function computeCapacityPlan(
   const active = entries.filter((e) => isActiveQueueStatus(e.status));
   const sorted = [...active].sort(compareQueueOrder);
   const motosNaFila = sorted.reduce((sum, e) => sum + (e.volume_motos ?? 0), 0);
-  const hoje = allocations.filter((a) => a.diaOffset === 0);
+  const planningBaseYmd = getOperationalPlanningBaseYmd();
+  const hoje = allocations.filter(
+    (a) =>
+      !a.empurrada_por_capacidade &&
+      businessDayOffsetToYmd(planningBaseYmd, a.diaOffset) === planningBaseYmd
+  );
   const motosNoEstoque = computeMotosNoEstoque(
     input.capacidadeEstoque,
     input.expedicao
@@ -677,11 +739,14 @@ export function computeCapacityPlan(
       diaOffset: a.diaOffset,
       espaco_disponivel_no_dia: a.espaco_disponivel_no_dia,
       ultrapassa_capacidade: a.ultrapassa_capacidade,
+      empurrada_por_capacidade: a.empurrada_por_capacidade,
       motos_com_espaco: a.motos_com_espaco,
       capacidade_aviso: formatMinutaCapacidadeAviso(
         a.volume_motos,
         a.motos_com_espaco,
-        a.ultrapassa_capacidade
+        a.ultrapassa_capacidade,
+        a.empurrada_por_capacidade,
+        a.vagas_no_dia_recusado
       ),
     })),
   };
