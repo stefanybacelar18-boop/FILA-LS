@@ -320,9 +320,10 @@ export function mergeMetadataIntoEntries<T extends QueueEntry>(
     const menor_vencimento = meta?.menor_vencimento ?? null;
     const prioridade_automatica = shouldAutoPrioritize(menor_vencimento);
     const prioridadeManual = manualPriorityIds.has(entry.id);
-    const prioridade = meta
-      ? prioridade_automatica || prioridadeManual
-      : prioridade_automatica || prioridadeManual || Boolean(entry.prioridade);
+    const prioridade =
+      prioridade_automatica ||
+      prioridadeManual ||
+      Boolean(entry.prioridade);
 
     return {
       ...entry,

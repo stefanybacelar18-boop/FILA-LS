@@ -69,6 +69,12 @@ export function MotoristaQueueList({
         <p className="mt-1 text-xs text-slate-500">
           {totalOperational}{" "}
           {totalOperational === 1 ? "minuta na fila" : "minutas na fila"} · ordem operacional
+          {showStatus && (
+            <span className="text-slate-400">
+              {" "}
+              · <span className="text-amber-800">Em vencimento</span> = subiu por prioridade da NF
+            </span>
+          )}
         </p>
         {onSearchChange && (
           <div className="relative mt-3">

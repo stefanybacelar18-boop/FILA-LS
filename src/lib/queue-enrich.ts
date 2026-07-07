@@ -190,5 +190,7 @@ export async function loadBasicOperationalQueue(
 
   if (error) throw new Error(error.message);
 
-  return filterOperationalPanelEntries((data ?? []) as QueueEntry[]);
+  const rows = filterOperationalPanelEntries((data ?? []) as QueueEntry[]);
+  const priorityMap = await readPriorityMap(admin);
+  return mergePrioritiesIntoEntries(rows, priorityMap);
 }

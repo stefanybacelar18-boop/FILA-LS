@@ -5,6 +5,7 @@ import type { QueueEntry } from "@/lib/types";
 import { isActiveQueueStatus } from "@/lib/queue";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { PrioridadeVencimentoBadge } from "@/components/fila/PrioridadeVencimentoBadge";
+import { shouldShowEmVencimentoBadge } from "@/lib/queue-vencimento-badge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,7 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
 }: MotoristaQueueCardProps) {
   const active = isActiveQueueStatus(entry.status);
   const showPrevisao = active && Boolean(entry.previsao_descarregamento);
-  const prioridadeVencimento = active && Boolean(entry.prioridade_automatica);
+  const prioridadeVencimento = shouldShowEmVencimentoBadge(entry);
 
   return (
     <div
