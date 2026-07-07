@@ -583,7 +583,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               />
               {selected.previsao_automatica && (
                 <p className="mt-1 text-xs text-sky-700">
-                  Calculada pela capacidade total, expedição do dia e volume da minuta.
+                  Após informar as motos expedidas no LSL, o sistema calcula quantas comportam no dia seguinte.
                   Altere a data para definir manualmente.
                 </p>
               )}

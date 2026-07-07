@@ -133,7 +133,7 @@ export async function PATCH(request: NextRequest) {
 
     if (capacidade_estoque <= 0) {
       return NextResponse.json(
-        { error: "Informe a capacidade total do galpão (ex.: 950)." },
+        { error: "Informe a capacidade do estoque cheio (ex.: 950)." },
         { status: 400 }
       );
     }
@@ -142,7 +142,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "A expedição (motos que cabem hoje) não pode ser maior que a capacidade total.",
+            "Motos expedidas não pode ser maior que a capacidade do estoque cheio.",
         },
         { status: 400 }
       );

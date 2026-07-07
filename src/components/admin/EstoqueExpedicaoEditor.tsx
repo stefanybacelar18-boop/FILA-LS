@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import {
-  computeEspacoDisponivel,
+  computeMotosComportamDiaSeguinte,
   computeMotosNoEstoque,
   type EstoqueExpedicaoConfig,
 } from "@/lib/minuta-intelligence";
@@ -42,7 +42,7 @@ export function EstoqueExpedicaoEditor({
   onSaved?: (config: EstoqueExpedicaoConfig) => void;
 }) {
   const [capacidadeTotal, setCapacidadeTotal] = useState("");
-  const [expedicao, setExpedicao] = useState("");
+  const [motosExpedidas, setMotosExpedidas] = useState("");
   const [savedConfig, setSavedConfig] = useState<EstoqueExpedicaoConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,14 +50,14 @@ export function EstoqueExpedicaoEditor({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const capacidadeNum = Math.max(0, parseInt(capacidadeTotal, 10) || 0);
-  const expedicaoNum = Math.max(0, parseInt(expedicao, 10) || 0);
+  const expedidasNum = Math.max(0, parseInt(motosExpedidas, 10) || 0);
   const motosNoEstoque = useMemo(
-    () => computeMotosNoEstoque(capacidadeNum, expedicaoNum),
-    [capacidadeNum, expedicaoNum]
+    () => computeMotosNoEstoque(capacidadeNum, expedidasNum),
+    [capacidadeNum, expedidasNum]
   );
-  const cabeHoje = useMemo(
-    () => computeEspacoDisponivel(capacidadeNum, expedicaoNum),
-    [capacidadeNum, expedicaoNum]
+  const comportamAmanha = useMemo(
+    () => computeMotosComportamDiaSeguinte(capacidadeNum, expedidasNum),
+    [capacidadeNum, expedidasNum]
   );
 
   const loadConfig = useCallback(async () => {
@@ -80,7 +80,7 @@ export function EstoqueExpedicaoEditor({
         setCapacidadeTotal(String(config.capacidade_estoque));
       }
       if (config?.expedicao != null) {
-        setExpedicao(String(config.expedicao));
+        setMotosExpedidas(String(config.expedicao));
       }
     } catch {
       setLoadError("Tempo esgotado ao carregar configuração.");
@@ -95,12 +95,12 @@ export function EstoqueExpedicaoEditor({
 
   async function handleSave() {
     if (capacidadeNum <= 0) {
-      alert("Informe a capacidade total do galpão (ex.: 950).");
+      alert("Informe a capacidade do estoque cheio (ex.: 950).");
       return;
     }
 
-    if (expedicaoNum > capacidadeNum) {
-      alert("A expedição (motos que cabem hoje) não pode ser maior que a capacidade total.");
+    if (expedidasNum > capacidadeNum) {
+      alert("Motos expedidas não pode ser maior que a capacidade do estoque.");
       return;
     }
 
@@ -116,7 +116,7 @@ export function EstoqueExpedicaoEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           capacidade_estoque: capacidadeNum,
-          expedicao: expedicaoNum,
+          expedicao: expedidasNum,
         }),
       });
 
@@ -127,12 +127,12 @@ export function EstoqueExpedicaoEditor({
 
       const config: EstoqueExpedicaoConfig = {
         capacidade_estoque: capacidadeNum,
-        expedicao: expedicaoNum,
+        expedicao: expedidasNum,
         updated_at: new Date().toISOString(),
       };
       setSavedConfig(config);
       setSavedMsg(
-        `Cabe hoje: ${cabeHoje} motos · ${json.autoPrevisoes ?? 0} previsão(ões) recalculada(s)`
+        `Comportam ${comportamAmanha} motos amanhã · ${json.autoPrevisoes ?? 0} previsão(ões) recalculada(s)`
       );
       onSaved?.(config);
     } catch {
@@ -142,7 +142,7 @@ export function EstoqueExpedicaoEditor({
     }
   }
 
-  const cabeHojeBox = (
+  const resultadoBox = (
     <div
       className={cn(
         "rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3",
@@ -150,16 +150,16 @@ export function EstoqueExpedicaoEditor({
       )}
     >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-        O que cabe de motos hoje
+        Comportam no dia seguinte
       </p>
       <p className={cn("font-bold text-emerald-950", variant === "compact" ? "text-xl" : "text-2xl")}>
-        {capacidadeNum > 0 ? cabeHoje : "—"}
+        {capacidadeNum > 0 ? comportamAmanha : "—"}
         <span className="ml-1 text-sm font-semibold text-emerald-800">motos</span>
       </p>
       <p className="mt-0.5 text-xs text-emerald-700">
         {capacidadeNum > 0
-          ? `${capacidadeNum} − ${motosNoEstoque} = ${cabeHoje}`
-          : "Capacidade total − motos no estoque"}
+          ? `Expedidas ${expedidasNum} → comportam ${comportamAmanha} · estoque ${motosNoEstoque}/${capacidadeNum}`
+          : "Informe estoque cheio e motos expedidas"}
       </p>
     </div>
   );
@@ -172,7 +172,7 @@ export function EstoqueExpedicaoEditor({
       )}
     >
       <Input
-        label="Capacidade total (galpão cheio)"
+        label="Estoque cheio (capacidade total)"
         type="number"
         min={0}
         value={capacidadeTotal}
@@ -181,15 +181,15 @@ export function EstoqueExpedicaoEditor({
         disabled={loading || saving}
       />
       <Input
-        label="Expedição (motos que cabem hoje)"
+        label="Motos expedidas (após LSL)"
         type="number"
         min={0}
-        value={expedicao}
-        onChange={(e) => setExpedicao(e.target.value)}
+        value={motosExpedidas}
+        onChange={(e) => setMotosExpedidas(e.target.value)}
         placeholder="Ex: 50"
         disabled={loading || saving}
       />
-      {variant === "compact" && cabeHojeBox}
+      {variant === "compact" && resultadoBox}
       <div className="flex items-end">
         <Button
           className="w-full"
@@ -220,22 +220,22 @@ export function EstoqueExpedicaoEditor({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Capacidade do estoque
+              Expedição LSL → FilaDock
             </p>
             <p className="text-sm text-slate-600">
-              Informe a <strong>capacidade total</strong> e a <strong>expedição</strong> (motos que
-              cabem hoje). Ex.: 950 − 900 no estoque = <strong>50</strong> motos.
+              Após finalizar a expedição no LSL, informe <strong>quantas motos expediu</strong>.
+              Esse número é quantas o estoque <strong>comporta no dia seguinte</strong>.
             </p>
           </div>
           {savedConfig && (
             <p className="text-xs text-slate-500">
-              Salvo: {savedConfig.capacidade_estoque} −{" "}
-              {computeMotosNoEstoque(
+              Estoque {savedConfig.capacidade_estoque} · expedidas {savedConfig.expedicao} ·
+              comportam{" "}
+              {computeMotosComportamDiaSeguinte(
                 savedConfig.capacidade_estoque,
                 savedConfig.expedicao
               )}{" "}
-              = {computeEspacoDisponivel(savedConfig.capacidade_estoque, savedConfig.expedicao)}{" "}
-              motos
+              amanhã
             </p>
           )}
         </div>
@@ -253,20 +253,20 @@ export function EstoqueExpedicaoEditor({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Warehouse className="h-5 w-5 text-brand" />
-          Capacidade e expedição
+          Estoque e expedição
         </CardTitle>
       </CardHeader>
       <p className="mb-4 text-sm text-slate-600">
-        Informe a <strong>capacidade total</strong> do galpão (ex.: 950 cheio) e a{" "}
-        <strong>expedição do dia</strong> — quantas motos cabem hoje (ex.: 50). O sistema mostra{" "}
-        <strong>950 − 900 no estoque = 50 motos</strong>. Se expediu 950 com galpão cheio, amanhã
-        cabem 950 de novo.
+        O estoque cheio comporta <strong>950 motos</strong> (ajuste se necessário). Sempre que
+        finalizar a expedição no <strong>sistema LSL</strong>, informe aqui{" "}
+        <strong>quantas motos foram expedidas</strong>. Esse valor define quantas motos o estoque{" "}
+        <strong>comporta no dia seguinte</strong> para calcular as previsões da fila.
       </p>
       {loadError && (
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>
       )}
       {fields}
-      {variant === "card" && <div className="mt-4">{cabeHojeBox}</div>}
+      {variant === "card" && <div className="mt-4">{resultadoBox}</div>}
       {savedMsg && <p className="mt-3 text-sm text-green-700">{savedMsg}</p>}
     </Card>
   );

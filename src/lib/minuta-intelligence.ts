@@ -66,20 +66,31 @@ export function normalizeEstoqueExpedicaoConfig(
   return null;
 }
 
-/** Motos já ocupando o galpão = capacidade total − expedição do dia. */
+/** Motos que permanecem no galpão após a expedição. */
 export function computeMotosNoEstoque(
   capacidadeTotal: number,
-  expedicaoDia: number
+  motosExpedidas: number
 ): number {
-  return Math.max(0, capacidadeTotal - Math.max(0, expedicaoDia));
+  return Math.max(0, capacidadeTotal - Math.max(0, motosExpedidas));
 }
 
-/** O que cabe hoje = expedição informada (volume que o estoque comporta no dia). */
+/**
+ * Motos que o estoque comporta no dia seguinte = motos expedidas.
+ * Ex.: estoque cheio 950, expediu 50 → comportam 50; expediu 950 → comportam 950.
+ */
+export function computeMotosComportamDiaSeguinte(
+  capacidadeTotal: number,
+  motosExpedidas: number
+): number {
+  return Math.max(0, Math.min(Math.max(0, motosExpedidas), capacidadeTotal));
+}
+
+/** @deprecated Use computeMotosComportamDiaSeguinte */
 export function computeEspacoDisponivel(
   capacidadeTotal: number,
-  expedicaoDia: number
+  motosExpedidas: number
 ): number {
-  return Math.max(0, Math.min(Math.max(0, expedicaoDia), capacidadeTotal));
+  return computeMotosComportamDiaSeguinte(capacidadeTotal, motosExpedidas);
 }
 
 export function toStockPlanningInput(
@@ -484,9 +495,9 @@ type QueueEntryWithVolume = QueueEntry & {
 
 /**
  * Distribui minutas nos dias conforme:
- * - capacidade total do galpão (ex.: 950 cheio);
- * - expedição (motos no estoque → o que cabe hoje = capacidade − expedição);
- * - a mesma expedição libera espaço nos dias seguintes;
+ * - capacidade total do estoque cheio (ex.: 950);
+ * - motos expedidas (informadas após expedição no LSL) = volume que comporta no dia seguinte;
+ * - ocupação inicial = capacidade − expedidas;
  * - volume de cada minuta na ordem da fila.
  */
 export function allocateQueueByStock(
@@ -603,7 +614,7 @@ export function computeCapacityPlan(
     input.capacidadeEstoque,
     input.expedicao
   );
-  const espacoLivreHoje = computeEspacoDisponivel(
+  const espacoLivreHoje = computeMotosComportamDiaSeguinte(
     input.capacidadeEstoque,
     input.expedicao
   );

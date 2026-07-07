@@ -9,7 +9,10 @@ import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { EstoqueExpedicaoEditor } from "@/components/admin/EstoqueExpedicaoEditor";
 import type { CapacityPlan, EstoqueExpedicaoConfig } from "@/lib/minuta-intelligence";
-import { computeEspacoDisponivel, computeMotosNoEstoque } from "@/lib/minuta-intelligence";
+import {
+  computeMotosComportamDiaSeguinte,
+  computeMotosNoEstoque,
+} from "@/lib/minuta-intelligence";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { Spinner } from "@/components/ui/Spinner";
 import {
@@ -201,22 +204,22 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Minutas importadas" value={totalImportadas} accent="brand" />
         <StatCard
-          title="Capacidade total"
+          title="Estoque cheio"
           value={estoqueConfig?.capacidade_estoque ?? "—"}
-          subtitle="Galpão cheio (ex.: 950)"
+          subtitle="Capacidade total (ex.: 950)"
           accent="blue"
         />
         <StatCard
-          title="Expedição"
+          title="Motos expedidas"
           value={estoqueConfig?.expedicao ?? "—"}
-          subtitle="Motos que cabem hoje"
+          subtitle="Informado após expedição LSL"
           accent="slate"
         />
         <StatCard
-          title="Cabe hoje"
+          title="Comportam amanhã"
           value={
             estoqueConfig
-              ? computeEspacoDisponivel(
+              ? computeMotosComportamDiaSeguinte(
                   estoqueConfig.capacidade_estoque,
                   estoqueConfig.expedicao
                 )
@@ -224,8 +227,8 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           }
           subtitle={
             estoqueConfig
-              ? `${estoqueConfig.capacidade_estoque} − ${computeMotosNoEstoque(estoqueConfig.capacidade_estoque, estoqueConfig.expedicao)}`
-              : "Capacidade − no estoque"
+              ? `Estoque ${computeMotosNoEstoque(estoqueConfig.capacidade_estoque, estoqueConfig.expedicao)}/${estoqueConfig.capacidade_estoque} após expedição`
+              : "= motos expedidas"
           }
           accent="green"
         />
