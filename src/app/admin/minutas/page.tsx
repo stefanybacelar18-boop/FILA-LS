@@ -341,6 +341,11 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
                         HOJE
                       </span>
                     )}
+                    {item.ultrapassa_capacidade && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        CAPACIDADE
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-slate-500">
                     {item.volume_motos} motos
@@ -348,6 +353,12 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
                       ? ` · Venc. ${formatPrevisaoDate(item.menor_vencimento)}`
                       : ""}
                   </p>
+                  {item.capacidade_aviso && (
+                    <p className="mt-1 flex items-start gap-1 text-xs font-medium text-amber-800">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {item.capacidade_aviso}
+                    </p>
+                  )}
                 </div>
                 <span className="shrink-0 rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
                   {formatPrevisaoDate(item.previsao_descarregamento)}

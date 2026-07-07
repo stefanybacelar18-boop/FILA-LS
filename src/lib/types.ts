@@ -82,6 +82,9 @@ export interface QueueEntry {
   menor_vencimento?: string | null;
   prioridade_automatica?: boolean;
   previsao_automatica?: boolean;
+  ultrapassa_capacidade?: boolean;
+  motos_com_espaco?: number;
+  capacidade_aviso?: string | null;
 }
 
 export interface QueueHistory {

@@ -3,10 +3,12 @@ import {
   buildMetadataMap,
   computePrevisoesDescarregamento,
   EXPEDICAO_SETTINGS_KEY,
+  formatMinutaCapacidadeAviso,
   mergeMetadataIntoEntries,
   normalizeEstoqueExpedicaoConfig,
   normalizeMinutaKey,
   shouldAutoPrioritize,
+  type CapacityAllocation,
   type EstoqueExpedicaoConfig,
   type MinutaMetadata,
 } from "./minuta-intelligence";
@@ -236,18 +238,40 @@ export async function recalculateQueuePrevisoes(
 export function overlayAutoPrevisoes<T extends QueueEntry>(
   entries: T[],
   previsoes: Map<string, string>,
-  manualIds: ReadonlySet<string>
-): (T & { previsao_automatica?: boolean })[] {
+  manualIds: ReadonlySet<string>,
+  allocations?: Map<string, CapacityAllocation>
+): (T & {
+  previsao_automatica?: boolean;
+  ultrapassa_capacidade?: boolean;
+  motos_com_espaco?: number;
+  capacidade_aviso?: string | null;
+})[] {
   return entries.map((entry) => {
     if (manualIds.has(entry.id) || (entry.volume_motos ?? 0) <= 0) {
       return { ...entry, previsao_automatica: false };
     }
     const auto = previsoes.get(entry.id);
     if (!auto) return { ...entry, previsao_automatica: false };
+
+    const allocation = allocations?.get(entry.id);
+    const ultrapassa = allocation?.ultrapassa_capacidade ?? false;
+    const motosComEspaco = allocation?.motos_com_espaco;
+    const capacidadeAviso =
+      allocation != null
+        ? formatMinutaCapacidadeAviso(
+            allocation.volume_motos,
+            allocation.motos_com_espaco,
+            allocation.ultrapassa_capacidade
+          )
+        : null;
+
     return {
       ...entry,
       previsao_descarregamento: auto,
       previsao_automatica: true,
+      ultrapassa_capacidade: ultrapassa,
+      motos_com_espaco: motosComEspaco,
+      capacidade_aviso: capacidadeAviso,
     };
   });
 }

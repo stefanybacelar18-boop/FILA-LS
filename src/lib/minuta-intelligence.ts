@@ -465,6 +465,24 @@ export interface CapacityAllocation {
   prioridade: boolean;
   previsao_descarregamento: string;
   diaOffset: number;
+  /** Espaço livre no dia em que a minuta foi encaixada (antes de descarregar). */
+  espaco_disponivel_no_dia: number;
+  /** Volume da minuta excede o espaço disponível no dia da previsão. */
+  ultrapassa_capacidade: boolean;
+  /** Quantas motos da minuta cabem no espaço disponível (quando ultrapassa). */
+  motos_com_espaco: number;
+}
+
+export function formatMinutaCapacidadeAviso(
+  volumeMotos: number,
+  motosComEspaco: number,
+  ultrapassa: boolean
+): string | null {
+  if (!ultrapassa) return null;
+  if (motosComEspaco <= 0) {
+    return `Sem espaço no estoque neste dia (minuta com ${volumeMotos} motos)`;
+  }
+  return `Só tem espaço para ${motosComEspaco} motos (minuta com ${volumeMotos})`;
 }
 
 export interface CapacityPlan {
@@ -484,6 +502,10 @@ export interface CapacityPlan {
     prioridade: boolean;
     previsao_descarregamento: string;
     diaOffset: number;
+    espaco_disponivel_no_dia: number;
+    ultrapassa_capacidade: boolean;
+    motos_com_espaco: number;
+    capacidade_aviso: string | null;
   }>;
 }
 
@@ -517,21 +539,37 @@ export function allocateQueueByStock(
   let currentDay = 0;
   const result: CapacityAllocation[] = [];
 
+  function pushAllocation(
+    entry: QueueEntryWithVolume,
+    vol: number,
+    day: number,
+    simOccupied: number
+  ) {
+    const espacoDisponivelNoDia = Math.max(0, C - simOccupied);
+    const ultrapassaCapacidade = vol > espacoDisponivelNoDia;
+    const motosComEspaco = ultrapassaCapacidade ? espacoDisponivelNoDia : vol;
+    const previsaoYmd = addManausDays(todayYmd, day);
+
+    result.push({
+      id: entry.id,
+      minuta: entry.minuta,
+      volume_motos: vol,
+      menor_vencimento: entry.menor_vencimento ?? null,
+      prioridade: Boolean(entry.prioridade),
+      previsao_descarregamento: manausDayStartISO(previsaoYmd),
+      diaOffset: day,
+      espaco_disponivel_no_dia: espacoDisponivelNoDia,
+      ultrapassa_capacidade: ultrapassaCapacidade,
+      motos_com_espaco: motosComEspaco,
+    });
+  }
+
   for (const entry of sorted) {
     const vol = entry.volume_motos ?? 0;
     if (vol <= 0) continue;
 
     if (vol > C) {
-      const previsaoYmd = addManausDays(todayYmd, currentDay);
-      result.push({
-        id: entry.id,
-        minuta: entry.minuta,
-        volume_motos: vol,
-        menor_vencimento: entry.menor_vencimento ?? null,
-        prioridade: Boolean(entry.prioridade),
-        previsao_descarregamento: manausDayStartISO(previsaoYmd),
-        diaOffset: currentDay,
-      });
+      pushAllocation(entry, vol, currentDay, occupied);
       continue;
     }
 
@@ -547,17 +585,7 @@ export function allocateQueueByStock(
       }
     }
 
-    const previsaoYmd = addManausDays(todayYmd, day);
-    result.push({
-      id: entry.id,
-      minuta: entry.minuta,
-      volume_motos: vol,
-      menor_vencimento: entry.menor_vencimento ?? null,
-      prioridade: Boolean(entry.prioridade),
-      previsao_descarregamento: manausDayStartISO(previsaoYmd),
-      diaOffset: day,
-    });
-
+    pushAllocation(entry, vol, day, simOccupied);
     occupied = simOccupied + vol;
     currentDay = day;
   }
@@ -582,17 +610,28 @@ export function allocateQueueByCapacity(
   );
 }
 
-export function computePrevisoesDescarregamento(
+export function computeCapacityAllocationMap(
   entries: QueueEntryWithVolume[],
   config: EstoqueExpedicaoConfig | StockPlanningInput
-): Map<string, string> {
+): Map<string, CapacityAllocation> {
   const input =
     "capacidadeEstoque" in config
       ? config
       : toStockPlanningInput(config);
-  const map = new Map<string, string>();
+  const map = new Map<string, CapacityAllocation>();
   for (const item of allocateQueueByStock(entries, input)) {
-    map.set(item.id, item.previsao_descarregamento);
+    map.set(item.id, item);
+  }
+  return map;
+}
+
+export function computePrevisoesDescarregamento(
+  entries: QueueEntryWithVolume[],
+  config: EstoqueExpedicaoConfig | StockPlanningInput
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const [id, item] of computeCapacityAllocationMap(entries, config)) {
+    map.set(id, item.previsao_descarregamento);
   }
   return map;
 }
@@ -636,6 +675,14 @@ export function computeCapacityPlan(
       prioridade: a.prioridade,
       previsao_descarregamento: a.previsao_descarregamento,
       diaOffset: a.diaOffset,
+      espaco_disponivel_no_dia: a.espaco_disponivel_no_dia,
+      ultrapassa_capacidade: a.ultrapassa_capacidade,
+      motos_com_espaco: a.motos_com_espaco,
+      capacidade_aviso: formatMinutaCapacidadeAviso(
+        a.volume_motos,
+        a.motos_com_espaco,
+        a.ultrapassa_capacidade
+      ),
     })),
   };
 }

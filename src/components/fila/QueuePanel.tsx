@@ -49,6 +49,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import {
   MessageCircle,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   UserX,
   Star,
@@ -585,6 +586,12 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 <p className="mt-1 text-xs text-sky-700">
                   Após informar as motos expedidas no LSL, o sistema calcula quantas comportam no dia seguinte.
                   Altere a data para definir manualmente.
+                </p>
+              )}
+              {selected.capacidade_aviso && (
+                <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {selected.capacidade_aviso}
                 </p>
               )}
             </div>

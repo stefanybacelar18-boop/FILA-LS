@@ -6,7 +6,7 @@ import {
   readExpedicaoDiaria,
   readPrevisaoManualIds,
 } from "./minuta-metadata-db";
-import { computePrevisoesDescarregamento } from "./minuta-intelligence";
+import { computeCapacityAllocationMap } from "./minuta-intelligence";
 import { sortQueueEntries } from "./queue";
 import {
   filterOperationalPanelEntries,
@@ -159,11 +159,17 @@ async function loadEnrichedQueueEntriesUncached(
 
   const withPrevisao =
     expedicao && expedicao.capacidade_estoque > 0
-      ? overlayAutoPrevisoes(
-          sortedEnriched,
-          computePrevisoesDescarregamento(sortedEnriched, expedicao),
-          manualPrevisaoIds
-        )
+      ? (() => {
+          const allocations = computeCapacityAllocationMap(sortedEnriched, expedicao);
+          return overlayAutoPrevisoes(
+            sortedEnriched,
+            new Map(
+              [...allocations.entries()].map(([id, a]) => [id, a.previsao_descarregamento])
+            ),
+            manualPrevisaoIds,
+            allocations
+          );
+        })()
       : sortedEnriched;
 
   const filtered = includeInactive
