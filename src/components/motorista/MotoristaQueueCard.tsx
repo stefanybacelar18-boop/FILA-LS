@@ -4,6 +4,7 @@ import { memo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { isActiveQueueStatus } from "@/lib/queue";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
+import { PrioridadeVencimentoBadge } from "@/components/fila/PrioridadeVencimentoBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/utils";
 
@@ -25,20 +26,25 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
   showDriverName = false,
   showStatus = false,
 }: MotoristaQueueCardProps) {
-  const showPrevisao =
-    isActiveQueueStatus(entry.status) && Boolean(entry.previsao_descarregamento);
+  const active = isActiveQueueStatus(entry.status);
+  const showPrevisao = active && Boolean(entry.previsao_descarregamento);
+  const prioridadeVencimento = active && Boolean(entry.prioridade_automatica);
 
   return (
     <div
       className={cn(
         "flex gap-3 rounded-xl border bg-white p-3 text-left shadow-sm",
-        isMine && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15"
+        prioridadeVencimento && !isMine && "border-amber-200/90",
+        isMine && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15",
+        isMine && prioridadeVencimento && "border-amber-300/80"
       )}
     >
       <div
         className={cn(
           "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums",
-          isMine ? "bg-brand text-white shadow-sm" : "bg-slate-100 text-slate-600"
+          prioridadeVencimento && !isMine && "bg-amber-100 text-amber-900",
+          isMine && "bg-brand text-white shadow-sm",
+          !isMine && !prioridadeVencimento && "bg-slate-100 text-slate-600"
         )}
       >
         {position}
@@ -58,6 +64,12 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
             <StatusBadge status={entry.status} compact className="mt-0.5 shrink-0" />
           )}
         </div>
+
+        {prioridadeVencimento && (
+          <div className="mt-1.5">
+            <PrioridadeVencimentoBadge />
+          </div>
+        )}
 
         {(showDriverName && isMine) || isMine ? (
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
