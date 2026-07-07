@@ -78,8 +78,8 @@ export function MotoristaQueueList({
           {(showStatus || emVencimentoIds.size > 0) && (
             <span className="text-slate-400">
               {" "}
-              · <span className="font-semibold text-amber-800">Em vencimento</span> = subiu por
-              prioridade da NF
+              · <span className="font-semibold text-red-700">Prioridade vencimento</span> = subiu
+              na fila por vencimento da NF
             </span>
           )}
         </p>

@@ -36,15 +36,15 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
     <div
       className={cn(
         "flex gap-3 rounded-xl border bg-white p-3 text-left shadow-sm",
-        prioridadeVencimento && !isMine && "border-amber-200/90",
+        prioridadeVencimento && !isMine && "border-red-200/90",
         isMine && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15",
-        isMine && prioridadeVencimento && "border-amber-300/80"
+        isMine && prioridadeVencimento && "border-red-300/80"
       )}
     >
       <div
         className={cn(
           "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums",
-          prioridadeVencimento && !isMine && "bg-amber-100 text-amber-900",
+          prioridadeVencimento && !isMine && "bg-red-100 text-red-900",
           isMine && "bg-brand text-white shadow-sm",
           !isMine && !prioridadeVencimento && "bg-slate-100 text-slate-600"
         )}
