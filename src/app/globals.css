@@ -430,6 +430,100 @@ body {
   color: rgb(148 163 184);
 }
 
+/* Indicador visual de capacidade do estoque — fila admin/empilhador */
+.estoque-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid rgb(21 101 192 / 0.1);
+  background: linear-gradient(180deg, rgb(255 255 255) 0%, rgb(248 250 252) 100%);
+  padding: 0.625rem 0.75rem;
+  box-shadow: var(--shadow-card);
+}
+
+.estoque-gauge__track {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgb(226 232 240 / 0.85);
+}
+
+.estoque-gauge__track--primary {
+  height: 0.5rem;
+}
+
+.estoque-gauge__track--secondary {
+  height: 0.25rem;
+  opacity: 0.92;
+}
+
+.estoque-gauge__fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: width;
+}
+
+.estoque-gauge__fill--ok {
+  background: linear-gradient(90deg, rgb(59 130 246), rgb(21 101 192));
+}
+
+.estoque-gauge__fill--warn {
+  background: linear-gradient(90deg, rgb(251 191 36), rgb(245 158 11));
+}
+
+.estoque-gauge__fill--critical {
+  background: linear-gradient(90deg, rgb(248 113 113), rgb(220 38 38));
+  animation: estoque-gauge-pulse 2.4s ease-in-out infinite;
+}
+
+.estoque-gauge__fill--secondary.estoque-gauge__fill--ok {
+  background: linear-gradient(90deg, rgb(96 165 250), rgb(37 99 235));
+}
+
+.estoque-gauge__fill--secondary.estoque-gauge__fill--warn {
+  background: linear-gradient(90deg, rgb(252 211 77), rgb(217 119 6));
+}
+
+.estoque-gauge__fill--secondary.estoque-gauge__fill--critical {
+  background: linear-gradient(90deg, rgb(252 165 165), rgb(239 68 68));
+}
+
+.estoque-gauge__shine {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.35) 45%,
+    transparent 70%
+  );
+  animation: estoque-gauge-shine 3.6s ease-in-out infinite;
+}
+
+@keyframes estoque-gauge-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes estoque-gauge-shine {
+  0% {
+    transform: translateX(-120%);
+  }
+  55%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
 .table-head-cell {
   padding: 0.75rem 1rem;
   font-size: 0.6875rem;

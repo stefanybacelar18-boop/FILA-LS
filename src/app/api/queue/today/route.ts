@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffQueueRole } from "@/lib/role-permissions";
 import { loadEnrichedQueueEntries } from "@/lib/queue-enrich";
+import { readExpedicaoDiaria } from "@/lib/minuta-metadata-db";
+import { buildEstoqueCapacitySummary } from "@/lib/estoque-capacity-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,9 @@ export async function GET(request: NextRequest) {
       bypassCache: request.nextUrl.searchParams.has("_"),
     });
 
+    const expedicao = await readExpedicaoDiaria(admin);
+    const estoque = buildEstoqueCapacitySummary(entries, expedicao);
+
     return NextResponse.json(
       {
         data: entries,
@@ -47,6 +52,7 @@ export async function GET(request: NextRequest) {
               ? "active_plus_closed_today"
               : "operational_active",
           count: entries.length,
+          estoque,
         },
       },
       {

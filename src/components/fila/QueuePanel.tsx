@@ -34,6 +34,8 @@ import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
+import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
+import type { EstoqueCapacitySummary } from "@/lib/estoque-capacity-summary";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { AppShell } from "@/components/layout/AppShell";
@@ -91,6 +93,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [saving, setSaving] = useState(false);
   const [showFinalizados, setShowFinalizados] = useState(false);
   const [empilhadorFilter, setEmpilhadorFilter] = useState<EmpilhadorFilter>("aguardando");
+  const [estoqueSummary, setEstoqueSummary] = useState<EstoqueCapacitySummary | null>(
+    null
+  );
 
   const fetchQueue = useCallback(async () => {
       setFetchError(null);
@@ -107,15 +112,18 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         data?: QueueEntry[];
+        meta?: { estoque?: EstoqueCapacitySummary | null };
       };
 
       if (!res.ok) {
         setFetchError(json.error ?? "Erro ao carregar fila");
+        setEstoqueSummary(null);
         setLoading(false);
         return;
       }
 
       setEntries(sortQueueEntries(sanitizeQueueEntries(json.data ?? [])));
+      setEstoqueSummary(json.meta?.estoque ?? null);
       setLoading(false);
     },
     [isAdmin, isEmpilhador]
@@ -858,8 +866,10 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         <QueueMobileSummaryStrip
           waiting={aguardandoCount}
           finalized={finalizedTodayCount}
-          className="mb-4"
+          className="mb-3"
         />
+
+        <EstoqueCapacityGauge summary={estoqueSummary} className="mb-4" />
 
         <EmpilhadorQueueTabs
           className="mb-4"
@@ -927,8 +937,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         waiting={adminWaitingCount}
         finalized={finalizedTodayCount}
         absent={adminAbsentCount}
-        className="mb-5"
+        className="mb-3"
       />
+
+      <EstoqueCapacityGauge summary={estoqueSummary} className="mb-5" />
+
       {queueContent}
     </AppShell>
   );
