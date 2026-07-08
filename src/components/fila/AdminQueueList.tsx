@@ -56,7 +56,7 @@ export function AdminQueueList({
     const positionMap = new Map<string, number>();
     sorted.forEach((entry, index) => positionMap.set(entry.id, index + 1));
     return { entries: sorted, positions: positionMap };
-  }, [operationalList, closedList, filter, searchQuery, onFinalizados]);
+  }, [operationalList, closedList, searchQuery, onFinalizados]);
 
   const hasSearch = searchQuery.trim().length > 0;
 

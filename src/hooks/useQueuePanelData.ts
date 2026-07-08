@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { sortQueueEntries } from "@/lib/queue";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
@@ -21,36 +21,43 @@ export function useQueuePanelData({ role, isAdmin, isEmpilhador }: UseQueuePanel
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [estoqueSummary, setEstoqueSummary] = useState<EstoqueCapacitySummary | null>(null);
+  const fetchInFlightRef = useRef(false);
 
   const fetchQueue = useCallback(
     async (fresh = false) => {
+      if (fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
       setFetchError(null);
 
-      const needsFullDay = isAdmin || isEmpilhador;
+      try {
+        const needsFullDay = isAdmin || isEmpilhador;
 
-      const params = new URLSearchParams();
-      if (isAdmin) params.set("scope", "admin");
-      else if (needsFullDay) params.set("scope", "all");
-      if (fresh) params.set("_", String(Date.now()));
-      const url = `/api/queue/today?${params.toString()}`;
+        const params = new URLSearchParams();
+        if (isAdmin) params.set("scope", "admin");
+        else if (needsFullDay) params.set("scope", "all");
+        if (fresh) params.set("_", String(Date.now()));
+        const url = `/api/queue/today?${params.toString()}`;
 
-      const res = await fetch(url, { cache: "no-store" });
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        data?: QueueEntry[];
-        meta?: { estoque?: EstoqueCapacitySummary | null };
-      };
+        const res = await fetch(url, { cache: "no-store" });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          data?: QueueEntry[];
+          meta?: { estoque?: EstoqueCapacitySummary | null };
+        };
 
-      if (!res.ok) {
-        setFetchError(json.error ?? "Erro ao carregar fila");
-        setEstoqueSummary(null);
+        if (!res.ok) {
+          setFetchError(json.error ?? "Erro ao carregar fila");
+          setEstoqueSummary(null);
+          setLoading(false);
+          return;
+        }
+
+        setEntries(sortQueueEntries(sanitizeQueueEntries(json.data ?? [])));
+        setEstoqueSummary(json.meta?.estoque ?? null);
         setLoading(false);
-        return;
+      } finally {
+        fetchInFlightRef.current = false;
       }
-
-      setEntries(sortQueueEntries(sanitizeQueueEntries(json.data ?? [])));
-      setEstoqueSummary(json.meta?.estoque ?? null);
-      setLoading(false);
     },
     [isAdmin, isEmpilhador]
   );

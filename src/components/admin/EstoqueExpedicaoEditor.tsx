@@ -35,10 +35,16 @@ export function EstoqueExpedicaoEditor({
   variant = "card",
   className,
   onSaved,
+  initialConfig,
+  deferLoad = false,
 }: {
   variant?: Variant;
   className?: string;
   onSaved?: (config: EstoqueExpedicaoConfig) => void;
+  /** Dados já carregados pelo pai — evita fetch duplicado. */
+  initialConfig?: EstoqueExpedicaoConfig | null;
+  /** Aguarda o pai terminar de carregar antes de inicializar. */
+  deferLoad?: boolean;
 }) {
   const [capacidadeTotal, setCapacidadeTotal] = useState("");
   const [motosExpedidas, setMotosExpedidas] = useState("");
@@ -56,6 +62,15 @@ export function EstoqueExpedicaoEditor({
     [capacidadeNum, expedidasNum]
   );
 
+  const applyConfig = useCallback((config: EstoqueExpedicaoConfig | null) => {
+    if (config?.capacidade_estoque != null) {
+      setCapacidadeTotal(String(config.capacidade_estoque));
+    }
+    if (config?.expedicao != null) {
+      setMotosExpedidas(String(config.expedicao));
+    }
+  }, []);
+
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -70,23 +85,23 @@ export function EstoqueExpedicaoEditor({
         return;
       }
 
-      const config = json.expedicao ?? null;
-      if (config?.capacidade_estoque != null) {
-        setCapacidadeTotal(String(config.capacidade_estoque));
-      }
-      if (config?.expedicao != null) {
-        setMotosExpedidas(String(config.expedicao));
-      }
+      applyConfig(json.expedicao ?? null);
     } catch {
       setLoadError("Erro ao carregar.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyConfig]);
 
   useEffect(() => {
+    if (deferLoad) return;
+    if (initialConfig !== undefined) {
+      applyConfig(initialConfig);
+      setLoading(false);
+      return;
+    }
     void loadConfig();
-  }, [loadConfig]);
+  }, [deferLoad, initialConfig, applyConfig, loadConfig]);
 
   async function handleSave() {
     setValidationError(null);

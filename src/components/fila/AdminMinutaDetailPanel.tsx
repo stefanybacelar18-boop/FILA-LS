@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
 import type { QueuePermissions } from "@/lib/role-permissions";
 import { isAusenteQueueStatus, isDriverCalled, isActiveQueueStatus } from "@/lib/queue";
@@ -41,13 +41,11 @@ export type AdminMinutaDetailPanelProps = {
   permissions: QueuePermissions;
   selectedIsActive: boolean;
   editPrioridade: boolean;
-  editDoca: string;
   editStatus: QueueStatus;
   editPrevisao: string;
   editRetornoRacks: boolean;
   saving: boolean;
   statusOptions: { value: string; label: string }[];
-  onEditDoca: (value: string) => void;
   onEditStatus: (status: QueueStatus) => void;
   onEditPrevisao: (value: string) => void;
   onEditRetornoRacks: (value: boolean) => void;
@@ -114,18 +112,16 @@ function CollapsibleSection({
 }
 
 /** Painel lateral admin — seções editoriais com hierarquia visual clara */
-export function AdminMinutaDetailPanel({
+export const AdminMinutaDetailPanel = memo(function AdminMinutaDetailPanel({
   selected,
   permissions,
   selectedIsActive,
   editPrioridade,
-  editDoca: _editDoca,
   editStatus,
   editPrevisao,
   editRetornoRacks,
   saving,
   statusOptions,
-  onEditDoca: _onEditDoca,
   onEditStatus,
   onEditPrevisao,
   onEditRetornoRacks,
@@ -417,4 +413,4 @@ export function AdminMinutaDetailPanel({
       </CollapsibleSection>
     </div>
   );
-}
+});

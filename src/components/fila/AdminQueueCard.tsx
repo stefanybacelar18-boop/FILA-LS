@@ -72,7 +72,7 @@ export const AdminQueueCard = memo(function AdminQueueCard({
     <button
       type="button"
       onClick={onClick}
-      aria-selected={selected}
+      aria-current={selected ? "true" : undefined}
       className={cn(
         "admin-queue-card group w-full text-left transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",

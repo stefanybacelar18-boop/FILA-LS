@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { MinutaSearchField } from "@/components/ui/MinutaSearchField";
 import { Button } from "@/components/ui/Button";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
@@ -23,7 +24,7 @@ type AdminQueueActionBarProps = {
 };
 
 /** Barra unificada — busca, atualizar, chamar próximo e filtros */
-export function AdminQueueActionBar({
+export const AdminQueueActionBar = memo(function AdminQueueActionBar({
   searchQuery,
   onSearchChange,
   onRefresh,
@@ -91,4 +92,4 @@ export function AdminQueueActionBar({
       </div>
     </div>
   );
-}
+});

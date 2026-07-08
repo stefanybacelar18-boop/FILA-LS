@@ -56,7 +56,11 @@ export function usePublicQueueData() {
 
   useEffect(() => {
     void fetchRef.current();
-    const timer = window.setInterval(() => void fetchRef.current(), PUBLIC_QUEUE_POLL_MS);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchRef.current();
+      }
+    }, PUBLIC_QUEUE_POLL_MS);
 
     function onVisible() {
       if (document.visibilityState === "visible") {

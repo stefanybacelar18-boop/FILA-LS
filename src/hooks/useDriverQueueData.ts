@@ -64,7 +64,11 @@ export function useDriverQueueData(profile: Profile | null) {
 
     function startPoll(ms: number) {
       if (pollTimer) window.clearInterval(pollTimer);
-      pollTimer = window.setInterval(() => void fetchRoutineRef.current(), ms);
+      pollTimer = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+          void fetchRoutineRef.current();
+        }
+      }, ms);
     }
 
     startPoll(MOTORISTA_QUEUE_POLL_MS);

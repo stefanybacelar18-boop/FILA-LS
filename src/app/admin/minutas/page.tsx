@@ -293,7 +293,12 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
           )}
         </Card>
 
-        <EstoqueExpedicaoEditor variant="card" onSaved={() => void loadCapacity()} />
+        <EstoqueExpedicaoEditor
+          variant="card"
+          deferLoad={loading}
+          initialConfig={estoqueConfig}
+          onSaved={() => void loadCapacity()}
+        />
       </div>
 
       <Card className="mt-6">

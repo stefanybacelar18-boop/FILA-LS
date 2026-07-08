@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_GEOFENCE } from "@/lib/constants";
 import {
@@ -23,12 +24,23 @@ import {
   QrCode,
   RefreshCw,
 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { usePublicAppUrl } from "@/hooks/usePublicAppUrl";
+
+const QRCodeSVG = dynamic(
+  () => import("qrcode.react").then((mod) => mod.QRCodeSVG),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-40 w-40 items-center justify-center rounded-xl bg-slate-50">
+        <Spinner size="sm" />
+      </div>
+    ),
+  }
+);
 
 export default function AdminPage() {
   const { profile, checking, authError } = useAuthGuard(["administrador"]);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [geofence, setGeofence] = useState<GeofenceConfig>(DEFAULT_GEOFENCE);
   const [showGeofenceMap, setShowGeofenceMap] = useState(false);
   const [saving, setSaving] = useState(false);

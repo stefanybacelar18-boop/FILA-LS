@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import type { QueueEntry, QueueStatus, Profile } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
 import {
@@ -49,8 +49,8 @@ type AdminQueueFilter = "ativos" | "finalizados";
 
 export function QueuePanel({ profile }: { profile: Profile }) {
   const appRole = toAppRole(profile.role);
-  const permissions = getQueuePermissions(profile.role);
-  const statusOptions = statusOptionsForRole(profile.role);
+  const permissions = useMemo(() => getQueuePermissions(profile.role), [profile.role]);
+  const statusOptions = useMemo(() => statusOptionsForRole(profile.role), [profile.role]);
   const isEmpilhador = appRole === "empilhador";
   const isAdmin = appRole === "administrador";
 
@@ -73,27 +73,42 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [minutaSearch, setMinutaSearch] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
-  async function refreshAfterSave(statusChanged?: QueueStatus) {
-    if (statusChanged === "finalizado") {
-      setSelectedId(null);
-      if ((isAdmin && adminFilter === "finalizados") || (isEmpilhador && empilhadorFilter !== "aguardando")) {
+  const patchEntry = useCallback(
+    (entryId: string, data: QueueEntry) => {
+      setEntries((prev) =>
+        sortQueueEntries(prev.map((e) => (e.id === entryId ? { ...e, ...data } : e)))
+      );
+    },
+    [setEntries]
+  );
+
+  const refreshAfterSave = useCallback(
+    async (statusChanged?: QueueStatus) => {
+      if (statusChanged === "finalizado") {
+        setSelectedId(null);
+        if (
+          (isAdmin && adminFilter === "finalizados") ||
+          (isEmpilhador && empilhadorFilter !== "aguardando")
+        ) {
+          await fetchQueue(true);
+          return;
+        }
+      }
+      if (statusChanged === "ausente") {
         await fetchQueue(true);
         return;
       }
-    }
-    if (statusChanged === "ausente") {
+      if (statusChanged === "aguardando_descarregamento" && isEmpilhador) {
+        setSelectedId(null);
+        if (empilhadorFilter !== "aguardando") {
+          await fetchQueue(true);
+          return;
+        }
+      }
       await fetchQueue(true);
-      return;
-    }
-    if (statusChanged === "aguardando_descarregamento" && isEmpilhador) {
-      setSelectedId(null);
-      if (empilhadorFilter !== "aguardando") {
-        await fetchQueue(true);
-        return;
-      }
-    }
-    await fetchQueue(true);
-  }
+    },
+    [adminFilter, empilhadorFilter, fetchQueue, isAdmin, isEmpilhador]
+  );
 
   const selected = useMemo(
     () => (selectedId ? entries.find((e) => e.id === selectedId) ?? null : null),
@@ -106,80 +121,90 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     }
   }, [selected]);
 
-  function selectEntry(entry: QueueEntry) {
-    setSelectedId(entry.id);
-    const normalized = normalizeQueueStatus(entry.status);
-    setEditStatus(
-      permissions.editableStatuses.includes(normalized)
-        ? normalized
-        : permissions.editableStatuses[0] ?? normalized
-    );
-    setEditDoca(entry.doca ?? "");
-    setEditPrevisao(isoToDateInput(entry.previsao_descarregamento));
-    setEditRetornoRacks(entryRetornoRacksVazios(entry));
-    setEditPrioridade(entryHasPrioridade(entry));
-  }
-
-  async function savePrioridade(checked: boolean) {
-    if (!selectedId || !permissions.canSetPrioridade) return;
-
-    const previous = editPrioridade;
-    setEditPrioridade(checked);
-    setSaving(true);
-
-    const { error, data } = await updateQueueEntryViaApi({
-      entryId: selectedId,
-      prioridade: checked,
-    });
-
-    setSaving(false);
-
-    if (error) {
-      setEditPrioridade(previous);
-      setActionError(`Erro ao salvar prioridade: ${error}`);
-      return;
-    }
-
-    const saved = data ? entryHasPrioridade(data) : checked;
-    setEditPrioridade(saved);
-
-    if (data) {
-      setEntries((prev) =>
-        sortQueueEntries(
-          prev.map((e) =>
-            e.id === selectedId
-              ? {
-                  ...e,
-                  ...data,
-                  prioridade: saved,
-                  prioridade_automatica_dispensada:
-                    Boolean(e.prioridade_automatica) && !saved,
-                }
-              : e
-          )
-        )
+  const selectEntry = useCallback(
+    (entry: QueueEntry) => {
+      setSelectedId(entry.id);
+      const normalized = normalizeQueueStatus(entry.status);
+      setEditStatus(
+        permissions.editableStatuses.includes(normalized)
+          ? normalized
+          : permissions.editableStatuses[0] ?? normalized
       );
-    }
-  }
+      setEditDoca(entry.doca ?? "");
+      setEditPrevisao(isoToDateInput(entry.previsao_descarregamento));
+      setEditRetornoRacks(entryRetornoRacksVazios(entry));
+      setEditPrioridade(entryHasPrioridade(entry));
+    },
+    [permissions.editableStatuses]
+  );
 
-  async function applyStatus(entryId: string, status: QueueStatus, fromStatus?: string) {
-    if (!assertStatusAllowed(profile.role, status, fromStatus)) {
-      setActionError("Seu perfil não pode alterar para este status.");
-      return;
-    }
+  const savePrioridade = useCallback(
+    async (checked: boolean) => {
+      if (!selectedId || !permissions.canSetPrioridade) return;
 
-    setSaving(true);
-    const { error } = await updateQueueEntryViaApi({ entryId, status });
+      const previous = editPrioridade;
+      setEditPrioridade(checked);
+      setSaving(true);
 
-    setSaving(false);
-    if (error) {
-      setActionError(`Erro ao salvar: ${error}`);
-      return;
-    }
-    await refreshAfterSave(status);
-  }
+      const { error, data } = await updateQueueEntryViaApi({
+        entryId: selectedId,
+        prioridade: checked,
+      });
 
-  async function handleUpdate() {
+      setSaving(false);
+
+      if (error) {
+        setEditPrioridade(previous);
+        setActionError(`Erro ao salvar prioridade: ${error}`);
+        return;
+      }
+
+      const saved = data ? entryHasPrioridade(data) : checked;
+      setEditPrioridade(saved);
+
+      if (data) {
+        setEntries((prev) =>
+          sortQueueEntries(
+            prev.map((e) =>
+              e.id === selectedId
+                ? {
+                    ...e,
+                    ...data,
+                    prioridade: saved,
+                    prioridade_automatica_dispensada:
+                      Boolean(e.prioridade_automatica) && !saved,
+                  }
+                : e
+            )
+          )
+        );
+      }
+    },
+    [editPrioridade, permissions.canSetPrioridade, selectedId, setEntries]
+  );
+
+  const applyStatus = useCallback(
+    async (entryId: string, status: QueueStatus, fromStatus?: string) => {
+      if (!assertStatusAllowed(profile.role, status, fromStatus)) {
+        setActionError("Seu perfil não pode alterar para este status.");
+        return;
+      }
+
+      setSaving(true);
+      const { error, data } = await updateQueueEntryViaApi({ entryId, status });
+
+      setSaving(false);
+      if (error) {
+        setActionError(`Erro ao salvar: ${error}`);
+        return;
+      }
+      if (data) patchEntry(entryId, data);
+      await refreshAfterSave(status);
+    },
+    [patchEntry, profile.role, refreshAfterSave]
+  );
+
+  const handleUpdate = useCallback(async () => {
     if (!selectedId) return;
     const entry = entries.find((e) => e.id === selectedId);
     if (!entry) return;
@@ -200,7 +225,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     const statusChanged = normalizeQueueStatus(entry.status) !== editStatus;
 
-    const { error: statusError } = await updateQueueEntryViaApi({
+    const { error: statusError, data } = await updateQueueEntryViaApi({
       entryId: selectedId,
       ...(statusChanged ? { status: editStatus } : {}),
       doca: permissions.canEditDoca ? editDoca || null : undefined,
@@ -220,71 +245,118 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       setActionError(`Erro ao salvar: ${statusError}`);
       return;
     }
+    if (data) patchEntry(selectedId, data);
     await refreshAfterSave(editStatus);
-  }
+  }, [
+    editDoca,
+    editPrevisao,
+    editPrioridade,
+    editRetornoRacks,
+    editStatus,
+    entries,
+    isEmpilhador,
+    patchEntry,
+    permissions.canEditDoca,
+    permissions.canEditPrevisao,
+    permissions.canEditRetornoRacks,
+    permissions.canSetPrioridade,
+    profile.role,
+    refreshAfterSave,
+    selectedId,
+  ]);
 
-  async function chamarMotorista(entry: QueueEntry) {
-    if (!permissions.canChamarWhatsApp) return;
+  const chamarMotorista = useCallback(
+    async (entry: QueueEntry) => {
+      if (!permissions.canChamarWhatsApp) return;
 
-    if (!entry.telefone?.replace(/\D/g, "").trim()) {
-      setActionError("Telefone do motorista não disponível para WhatsApp.");
-      return;
-    }
+      if (!entry.telefone?.replace(/\D/g, "").trim()) {
+        setActionError("Telefone do motorista não disponível para WhatsApp.");
+        return;
+      }
 
-    setSaving(true);
+      setSaving(true);
 
-    const payload: {
-      entryId: string;
-      called_at: string;
-      doca?: string | null;
-      previsao_descarregamento?: string | null;
-    } = {
-      entryId: entry.id,
-      called_at: new Date().toISOString(),
-    };
+      const payload: {
+        entryId: string;
+        called_at: string;
+        doca?: string | null;
+        previsao_descarregamento?: string | null;
+      } = {
+        entryId: entry.id,
+        called_at: new Date().toISOString(),
+      };
 
-    if (permissions.canEditDoca) {
-      const doca = editDoca.trim() || entry.doca?.trim() || null;
-      payload.doca = doca;
-    }
+      if (permissions.canEditDoca) {
+        const doca = editDoca.trim() || entry.doca?.trim() || null;
+        payload.doca = doca;
+      }
 
-    if (
-      permissions.canEditPrevisao &&
-      selectedId === entry.id &&
-      isActiveQueueStatus(entry.status)
-    ) {
-      payload.previsao_descarregamento = editPrevisao ? editPrevisao : null;
-    }
+      if (
+        permissions.canEditPrevisao &&
+        selectedId === entry.id &&
+        isActiveQueueStatus(entry.status)
+      ) {
+        payload.previsao_descarregamento = editPrevisao ? editPrevisao : null;
+      }
 
-    const { error } = await updateQueueEntryViaApi(payload);
+      const { error, data } = await updateQueueEntryViaApi(payload);
 
-    setSaving(false);
+      setSaving(false);
 
-    if (error) {
-      setActionError(`Erro ao registrar chamada: ${error}`);
-      return;
-    }
+      if (error) {
+        setActionError(`Erro ao registrar chamada: ${error}`);
+        return;
+      }
 
-    const minuta = entry.minuta || entry.placa;
-    const link = permissions.canEditDoca
-      ? getCallDriverWhatsAppLink(entry.telefone, minuta, payload.doca ?? entry.doca)
-      : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
+      if (data) patchEntry(entry.id, data);
 
-    if (!link) {
-      setActionError("Telefone do motorista inválido para WhatsApp.");
-      return;
-    }
+      const minuta = entry.minuta || entry.placa;
+      const link = permissions.canEditDoca
+        ? getCallDriverWhatsAppLink(entry.telefone, minuta, payload.doca ?? entry.doca)
+        : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
 
-    window.open(link, "_blank", "noopener,noreferrer");
-    fetchQueue();
-  }
+      if (!link) {
+        setActionError("Telefone do motorista inválido para WhatsApp.");
+        return;
+      }
 
-  const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
-  const ausenteEntries = entries.filter((e) => isAusenteQueueStatus(e.status));
-  const operationalEntries = [...activeEntries, ...ausenteEntries];
-  const adminWaitingCount = countStrictAguardandoDescarregamento(entries);
-  const aguardandoCount = countAguardandoDescarregamento(entries);
-  const finalizedTodayCount = countFinalizadasNoDiaOperacional(entries);
+      window.open(link, "_blank", "noopener,noreferrer");
+    },
+    [
+      editDoca,
+      editPrevisao,
+      patchEntry,
+      permissions.canChamarWhatsApp,
+      permissions.canEditDoca,
+      permissions.canEditPrevisao,
+      selectedId,
+    ]
+  );
+
+  const activeEntries = useMemo(
+    () => entries.filter((e) => isActiveQueueStatus(e.status)),
+    [entries]
+  );
+  const ausenteEntries = useMemo(
+    () => entries.filter((e) => isAusenteQueueStatus(e.status)),
+    [entries]
+  );
+  const operationalEntries = useMemo(
+    () => [...activeEntries, ...ausenteEntries],
+    [activeEntries, ausenteEntries]
+  );
+  const adminWaitingCount = useMemo(
+    () => countStrictAguardandoDescarregamento(entries),
+    [entries]
+  );
+  const aguardandoCount = useMemo(
+    () => countAguardandoDescarregamento(entries),
+    [entries]
+  );
+  const finalizedTodayCount = useMemo(
+    () => countFinalizadasNoDiaOperacional(entries),
+    [entries]
+  );
 
   const displayedEntries = useMemo(() => {
     if (!isEmpilhador) return entries;
@@ -315,37 +387,75 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     [activeEntries]
   );
 
-  const adminOperationalList = isAdmin
-    ? displayedEntries.filter(
-        (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
-      )
-    : [];
-  const adminClosedList = isAdmin
-    ? sortClosedEntries(
-        displayedEntries.filter((e) => normalizeQueueStatus(e.status) === "finalizado")
-      )
-    : [];
-  const adminDetailProps = {
-    selected,
-    permissions,
-    selectedIsActive,
-    editPrioridade,
-    editDoca,
-    editStatus,
-    editPrevisao,
-    editRetornoRacks,
-    saving,
-    statusOptions,
-    onEditDoca: setEditDoca,
-    onEditStatus: setEditStatus,
-    onEditPrevisao: setEditPrevisao,
-    onEditRetornoRacks: setEditRetornoRacks,
-    onSavePrioridade: (checked: boolean) => void savePrioridade(checked),
-    onChamarMotorista: (entry: QueueEntry) => void chamarMotorista(entry),
-    onApplyStatus: (entryId: string, status: QueueStatus, fromStatus?: string) =>
-      void applyStatus(entryId, status, fromStatus),
-    onSave: () => void handleUpdate(),
-  };
+  const adminOperationalList = useMemo(
+    () =>
+      isAdmin
+        ? displayedEntries.filter(
+            (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
+          )
+        : [],
+    [displayedEntries, isAdmin]
+  );
+  const adminClosedList = useMemo(
+    () =>
+      isAdmin
+        ? sortClosedEntries(
+            displayedEntries.filter((e) => normalizeQueueStatus(e.status) === "finalizado")
+          )
+        : [],
+    [displayedEntries, isAdmin]
+  );
+
+  const handleEmpilhadorFilterChange = useCallback((filter: EmpilhadorFilter) => {
+    setEmpilhadorFilter(filter);
+    setSelectedId(null);
+    setMinutaSearch("");
+  }, []);
+
+  const handleAdminFilterChange = useCallback((filter: AdminQueueFilter) => {
+    setAdminFilter(filter);
+    setSelectedId(null);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    void fetchQueue(true);
+  }, [fetchQueue]);
+
+  const adminDetailProps = useMemo(
+    () => ({
+      selected,
+      permissions,
+      selectedIsActive,
+      editPrioridade,
+      editStatus,
+      editPrevisao,
+      editRetornoRacks,
+      saving,
+      statusOptions,
+      onEditStatus: setEditStatus,
+      onEditPrevisao: setEditPrevisao,
+      onEditRetornoRacks: setEditRetornoRacks,
+      onSavePrioridade: savePrioridade,
+      onChamarMotorista: chamarMotorista,
+      onApplyStatus: applyStatus,
+      onSave: handleUpdate,
+    }),
+    [
+      selected,
+      permissions,
+      selectedIsActive,
+      editPrioridade,
+      editStatus,
+      editPrevisao,
+      editRetornoRacks,
+      saving,
+      statusOptions,
+      savePrioridade,
+      chamarMotorista,
+      applyStatus,
+      handleUpdate,
+    ]
+  );
 
   const queueContent = (
     <>
@@ -472,14 +582,10 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           finalizedCount={finalizedTodayCount}
           absentCount={ausenteEntries.length}
           estoqueSummary={estoqueSummary}
-          onFilterChange={(filter) => {
-            setEmpilhadorFilter(filter);
-            setSelectedId(null);
-            setMinutaSearch("");
-          }}
+          onFilterChange={handleEmpilhadorFilterChange}
           trailing={
             <RefreshIconButton
-              onRefresh={() => fetchQueue(true)}
+              onRefresh={handleRefresh}
               label="Atualizar fila"
             />
           }
@@ -495,12 +601,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       <AdminQueueActionBar
         searchQuery={minutaSearch}
         onSearchChange={setMinutaSearch}
-        onRefresh={() => fetchQueue(true)}
+        onRefresh={handleRefresh}
         filter={adminFilter}
-        onFilterChange={(filter) => {
-          setAdminFilter(filter);
-          setSelectedId(null);
-        }}
+        onFilterChange={handleAdminFilterChange}
         aguardandoCount={adminWaitingCount}
         finalizedCount={finalizedTodayCount}
         showChamarProximo={
