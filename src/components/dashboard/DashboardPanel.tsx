@@ -6,9 +6,7 @@ import { toAppRole } from "@/lib/types";
 import { computeDashboardStats, computeHourlyBuckets } from "@/lib/dashboard-stats";
 import { formatDuration, formatQueueTime } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
-import { formatManausDateLabel } from "@/lib/queue-day";
 import { AppShell } from "@/components/layout/AppShell";
-import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
@@ -114,12 +112,6 @@ export function DashboardPanel({
 
   return (
     <AppShell role={toAppRole(profile.role)} userName={profile.full_name} userEmail={profile.email}>
-      <AdminPageHeader
-        eyebrow="Dashboard · Operação"
-        title={formatManausDateLabel()}
-        description="Fila ativa no pátio · indicadores do dia em tempo real"
-      />
-
       {fetchError ? (
         <div className="rounded-card border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
           {fetchError}
