@@ -6,7 +6,6 @@ import type { QueueEntry, QueueStatus, Profile } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
 import {
   sortQueueEntries,
-  isDriverCalled,
   isActiveQueueStatus,
   isAusenteQueueStatus,
   normalizeQueueStatus,
@@ -96,6 +95,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [estoqueSummary, setEstoqueSummary] = useState<EstoqueCapacitySummary | null>(
     null
   );
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchQueue = useCallback(async (fresh = false) => {
       setFetchError(null);
@@ -207,7 +207,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     if (error) {
       setEditPrioridade(previous);
-      alert(`Erro ao salvar prioridade: ${error}`);
+      setActionError(`Erro ao salvar prioridade: ${error}`);
       return;
     }
 
@@ -239,7 +239,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     fromStatus?: string
   ) {
     if (!assertStatusAllowed(profile.role, status, fromStatus)) {
-      alert("Seu perfil não pode alterar para este status.");
+      setActionError("Seu perfil não pode alterar para este status.");
       return;
     }
 
@@ -248,7 +248,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     setSaving(false);
     if (error) {
-      alert(`Erro ao salvar: ${error}`);
+      setActionError(`Erro ao salvar: ${error}`);
       return;
     }
     await refreshAfterSave(status);
@@ -263,13 +263,13 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     if (isEmpilhador && isActiveQueueStatus(entry.status)) {
       setSaving(false);
-      alert("Use o botão WhatsApp para chamar o motorista ou altere o status.");
+      setActionError("Use o botão WhatsApp para chamar o motorista ou altere o status.");
       return;
     }
 
     if (!assertStatusAllowed(profile.role, editStatus, entry.status)) {
       setSaving(false);
-      alert("Status não permitido para seu perfil.");
+      setActionError("Status não permitido para seu perfil.");
       return;
     }
 
@@ -292,7 +292,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     setSaving(false);
     if (statusError) {
-      alert(`Erro ao salvar: ${statusError}`);
+      setActionError(`Erro ao salvar: ${statusError}`);
       return;
     }
     await refreshAfterSave(editStatus);
@@ -302,7 +302,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     if (!permissions.canChamarWhatsApp) return;
 
     if (!entry.telefone?.replace(/\D/g, "").trim()) {
-      alert("Telefone do motorista não disponível para WhatsApp.");
+      setActionError("Telefone do motorista não disponível para WhatsApp.");
       return;
     }
 
@@ -336,7 +336,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     setSaving(false);
 
     if (error) {
-      alert(`Erro ao registrar chamada: ${error}`);
+      setActionError(`Erro ao registrar chamada: ${error}`);
       return;
     }
 
@@ -350,7 +350,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
 
     if (!link) {
-      alert("Telefone do motorista inválido para WhatsApp.");
+      setActionError("Telefone do motorista inválido para WhatsApp.");
       return;
     }
 
@@ -710,6 +710,26 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             <p className="font-semibold">Erro ao carregar fila</p>
             <p>{fetchError}</p>
           </div>
+        </div>
+      )}
+
+      {actionError && (
+        <div
+          className="mb-4 flex items-start justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+          role="alert"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <p>{actionError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 rounded-lg p-1 hover:bg-amber-100"
+            aria-label="Fechar aviso"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 

@@ -113,7 +113,6 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
             entries={allEntries as QueueEntry[]}
             highlightId={entry.id}
             title="Fila do pátio"
-            showDriverName
             showStatus
           />
 
@@ -130,7 +129,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           />
 
           {allEntries.length > 0 ? (
-            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" showDriverName />
+            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" />
           ) : (
             <p className="text-center text-sm text-slate-500">Nenhum veículo na fila no momento.</p>
           )}
@@ -152,7 +151,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           </div>
 
           {allEntries.length > 0 && (
-            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" showDriverName />
+            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" />
           )}
         </div>
       )}

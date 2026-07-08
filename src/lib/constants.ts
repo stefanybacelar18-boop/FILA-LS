@@ -117,14 +117,6 @@ export function isActiveQueueStatus(status: string): boolean {
   return (LEGACY_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
-export function shouldShowInQueuePanel(entry: { status: string }, showFinalizados: boolean): boolean {
-  if (showFinalizados) {
-    const normalized = normalizeQueueStatus(entry.status);
-    return isActiveQueueStatus(entry.status) || normalized === "ausente" || normalized === "finalizado";
-  }
-  return isActiveQueueStatus(entry.status);
-}
-
 /** Painéis operacionais (motorista, empilhador, TV): fila ativa + ausentes aguardando retorno. */
 export function isOperationalPanelEntry(entry: { status: string }): boolean {
   return isActiveQueueStatus(entry.status) || isAusenteQueueStatus(entry.status);

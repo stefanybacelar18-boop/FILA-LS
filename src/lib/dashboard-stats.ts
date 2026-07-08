@@ -5,11 +5,8 @@ import {
   normalizeQueueStatus,
 } from "./constants";
 import { countAguardandoDescarregamento, countFinalizadasNoDiaOperacional } from "./queue-counters";
+import { isDriverCalled } from "./queue";
 import { isEntryClosedToday, isQueueEntryFromToday } from "./queue-day";
-
-function isDriverCalled(entry: QueueEntry): boolean {
-  return isActiveQueueStatus(entry.status) && Boolean(entry.called_at);
-}
 
 export interface EmpilhadorDashboardStats {
   aguardando: number;
@@ -88,8 +85,6 @@ export function computeEmpilhadorStats(
 ): EmpilhadorDashboardStats {
   const activeEntries = entries.filter((e) => isActiveQueueStatus(e.status));
   const closedToday = entries.filter((e) => isEntryClosedToday(e));
-
-  const finalizadosHoje = countFinalizadasNoDiaOperacional(entries);
 
   const ausentesHoje = entries.filter((e) => isAusenteQueueStatus(e.status)).length;
 

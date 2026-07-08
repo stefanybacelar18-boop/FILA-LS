@@ -130,7 +130,13 @@ export default function CheckInPage() {
     setErrors({});
 
     let res: Response;
-    let data: { error?: string; detail?: string; token?: string; message?: string };
+    let data: {
+      error?: string;
+      detail?: string;
+      token?: string;
+      message?: string;
+      warning?: string;
+    };
 
     try {
       res = await fetch("/api/checkin", {
@@ -189,7 +195,10 @@ export default function CheckInPage() {
       return;
     }
 
-    router.push(`${CHECKIN_SUCCESS}?token=${encodeURIComponent(data.token ?? "")}`);
+    const successParams = new URLSearchParams();
+    if (data.token) successParams.set("token", data.token);
+    if (data.warning) successParams.set("warning", data.warning);
+    router.push(`${CHECKIN_SUCCESS}?${successParams.toString()}`);
   }
 
   async function handleSubmit(e: React.FormEvent) {

@@ -216,5 +216,21 @@ export async function POST(request: NextRequest) {
   invalidateEnrichedQueueCache();
   void recalculateQueuePrevisoes(admin).catch(() => {});
 
-  return NextResponse.json({ token: entry.token });
+  let warning: string | undefined;
+  const { count: metadataCount } = await admin
+    .from("minuta_metadata")
+    .select("*", { count: "exact", head: true });
+  if ((metadataCount ?? 0) > 0) {
+    const minutaKey = form.minuta.trim();
+    const { data: metaRow } = await admin
+      .from("minuta_metadata")
+      .select("minuta")
+      .eq("minuta", minutaKey)
+      .maybeSingle();
+    if (!metaRow) {
+      warning = "minuta_nao_importada";
+    }
+  }
+
+  return NextResponse.json({ token: entry.token, warning });
 }

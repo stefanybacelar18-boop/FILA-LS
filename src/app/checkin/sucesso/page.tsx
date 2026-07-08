@@ -19,6 +19,7 @@ function CheckInSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const importWarning = searchParams.get("warning");
   const supabase = createClient();
   const { profile, checking, authError } = useMotoristaGuard();
   const [entry, setEntry] = useState<QueueEntry | null>(null);
@@ -102,6 +103,16 @@ function CheckInSuccessContent() {
           description="Seus dados foram registrados. Aguarde sua vez na fila de descarregamento."
         />
 
+        {importWarning === "minuta_nao_importada" && (
+          <div
+            className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            role="status"
+          >
+            Minuta não encontrada na base importada pelo admin. Confirme o número ou avise a
+            operação — seu check-in foi registrado normalmente.
+          </div>
+        )}
+
         <Card className="card-brand">
           <CardHeader>
             <CardTitle className="text-brand">Resumo do check-in</CardTitle>
@@ -135,6 +146,12 @@ function CheckInSuccessContent() {
         <p className="text-center text-sm text-slate-500">
           Você receberá atualizações quando for chamado para a doca.
         </p>
+
+        {entry.token && (
+          <LinkButton href={`/fila/${entry.token}`} variant="secondary" className="w-full py-3">
+            Acompanhar posição (link privado)
+          </LinkButton>
+        )}
 
         <LinkButton href="/motorista" className="w-full py-3.5 text-base">
           <ListOrdered className="h-5 w-5" />

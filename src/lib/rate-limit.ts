@@ -18,7 +18,8 @@ export function rateLimitAllow(key: string, limit: number, windowMs: number): bo
   return true;
 }
 
-export function rateLimitRetryAfterSec(key: string, windowMs: number): number {
+export function rateLimitRetryAfterSec(key: string, _windowMs = 60_000): number {
+  void _windowMs;
   const bucket = store.get(key);
   if (!bucket) return 0;
   return Math.max(1, Math.ceil((bucket.resetAt - Date.now()) / 1000));

@@ -10,6 +10,8 @@
     "start:lan": "next start -H 0.0.0.0 -p 3000",
     "prod:lan": "npm run build && npm run start:lan",
     "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "generate:icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
@@ -36,6 +38,7 @@
     "eslint-config-next": "^15.3.3",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.8",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }
