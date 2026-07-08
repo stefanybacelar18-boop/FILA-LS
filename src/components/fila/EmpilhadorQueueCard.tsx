@@ -22,11 +22,10 @@ type EmpilhadorQueueCardProps = {
   selected?: boolean;
   isNext?: boolean;
   onClick: () => void;
-  /** Ajustes visuais para a lista admin em desktop */
   variant?: "default" | "admin";
 };
 
-/** Card da fila — mobile limpo; vermelho só para NF vencida/vencendo */
+/** Card mobile — espelha MotoristaQueueCard; detalhes no sheet ao tocar */
 export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   entry,
   position,
@@ -60,9 +59,9 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
           "touch-target flex w-full gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.995]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25",
           "border-slate-200/90",
-          selected && "border-brand/40 bg-brand-muted/20 ring-2 ring-brand/15",
-          !selected && isNext && active && "border-brand/30 bg-brand-muted/15",
-          !selected && nfUrgente && "border-red-200/90 bg-red-50/30"
+          selected && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15",
+          !selected && isNext && active && "border-brand/35 bg-brand-muted/25 ring-1 ring-brand/20",
+          !selected && nfUrgente && "border-red-200/90 bg-red-50/25"
         )}
       >
         <div
@@ -85,77 +84,24 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
               <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
                 {entry.minuta || "—"}
               </p>
-              <p className="mt-0.5 truncate font-mono text-sm font-medium text-slate-600">
-                {getCarretaPlaca(entry)}
-              </p>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <StatusBadge status={entry.status} compact className="shrink-0" />
-              {isNext && active && (
-                <span className="text-[10px] font-bold uppercase tracking-wide text-brand">
-                  Próximo
-                </span>
-              )}
-            </div>
+            <StatusBadge status={entry.status} compact className="mt-0.5 shrink-0" />
           </div>
 
-          <p className="truncate text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">{firstName}</span>
-            <span className="text-slate-400"> · </span>
-            <span>{entry.transportadora || "—"}</span>
-          </p>
-
-          {hasMinutaMeta && (
-            <MinutaMetaBadge
-              compact
-              staffView
-              volumeMotos={entry.volume_motos}
-              menorVencimento={entry.menor_vencimento}
-            />
-          )}
-
-          {hasCapacidadeAviso && (
-            <p className="flex items-start gap-1 text-xs font-medium text-amber-800">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              {entry.capacidade_aviso}
-            </p>
-          )}
-
-          {(showPrevisao || hasFooterBadges) && active && (
+          {(nfUrgente || showPrevisao) && (
             <div className="flex flex-col gap-1.5">
+              {nfUrgente && (
+                <MinutaMetaBadge compact staffView menorVencimento={entry.menor_vencimento} />
+              )}
               {showPrevisao && (
                 <PrevisaoDisplay
-                  previsao={entry.previsao_descarregamento!}
+                  previsao={entry.previsao_descarregamento}
                   automatic={entry.previsao_automatica}
                   compact
                   className="w-fit max-w-full"
                 />
               )}
-              {hasFooterBadges && (
-                <div className="flex flex-wrap gap-1.5">
-                  {priority && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-                      <Star className="h-3 w-3" aria-hidden />
-                      {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
-                    </span>
-                  )}
-                  {called && (
-                    <span className="rounded-md bg-brand-muted px-2 py-0.5 text-[10px] font-bold text-brand-dark">
-                      Chamado
-                    </span>
-                  )}
-                  {racks && (
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-                      Retorna racks
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
-          )}
-
-          {absent && (
-            <p className="text-[10px] font-medium text-slate-500">Ausente · aguardando retorno</p>
           )}
         </div>
       </button>
@@ -196,8 +142,7 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
       <div className="grid grid-cols-[2.5rem_1fr_auto] gap-x-3 gap-y-2 lg:grid-cols-[3rem_1fr_auto] lg:gap-x-4">
         <div
           className={cn(
-            "row-span-2 flex items-center justify-center self-start rounded-lg font-bold tabular-nums",
-            "h-11 w-11 text-sm lg:h-12 lg:w-12",
+            "row-span-2 flex h-11 w-11 items-center justify-center self-start rounded-lg text-sm font-bold tabular-nums lg:h-12 lg:w-12",
             absent && "bg-red-100 text-red-800",
             isNext && active && "bg-emerald-600 text-white",
             inactive && "bg-slate-100 text-slate-500",
@@ -223,12 +168,9 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
           {isNext && active && (
             <span className="text-[10px] font-bold uppercase text-emerald-700">Próximo</span>
           )}
-          {absent && (
-            <span className="text-[10px] font-semibold text-red-700">No topo · aguardando</span>
-          )}
         </div>
 
-        <div className="col-span-2 min-w-0 space-y-1 lg:space-y-1">
+        <div className="col-span-2 min-w-0 space-y-1">
           <p className="truncate text-sm text-slate-700">
             <span className="font-semibold text-slate-900">{firstName}</span>
             <span className="text-slate-400"> · </span>
@@ -261,15 +203,14 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
               className="w-full justify-start py-0 text-xs lg:flex-1"
             />
           )}
-
-          {hasFooterBadges && (active || isAdmin) && (
+          {hasFooterBadges && active && (
             <div
               className={cn(
                 "flex flex-wrap gap-1.5",
                 showPrevisao && "lg:shrink-0 lg:justify-end"
               )}
             >
-              {priority && active && (
+              {priority && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
                   <Star className="h-3 w-3" aria-hidden />
                   {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}

@@ -31,6 +31,8 @@ import {
 import { useQueuePanelData } from "@/hooks/useQueuePanelData";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { EmpilhadorQueueSummary } from "@/components/fila/EmpilhadorQueueSummary";
+import { EmpilhadorQueueList } from "@/components/fila/EmpilhadorQueueList";
+import { EmpilhadorMinutaSheet } from "@/components/fila/EmpilhadorMinutaSheet";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
 import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
@@ -71,6 +73,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [saving, setSaving] = useState(false);
   const [showFinalizados, setShowFinalizados] = useState(false);
   const [empilhadorFilter, setEmpilhadorFilter] = useState<EmpilhadorFilter>("aguardando");
+  const [minutaSearch, setMinutaSearch] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function refreshAfterSave(statusChanged?: QueueStatus) {
@@ -374,13 +377,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 empilhadorFilter === "aguardando" && (
                   <QueueCapacityAlertsBanner entries={capacityAlerts} />
                 )}
-              {(isAdmin ? !adminHasVisibleList : displayedEntries.length === 0) ? (
+              {isAdmin && !adminHasVisibleList ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>
                   <p className="mt-2 text-sm text-slate-500">
-                    {isEmpilhador && empilhadorFilter === "finalizadas"
-                      ? "Nenhuma minuta encerrada hoje."
-                      : "Nenhum veículo aguardando na fila."}
+                    Nenhum veículo aguardando na fila.
                   </p>
                 </Card>
               ) : isAdmin ? (
@@ -417,11 +418,12 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   )}
                 </div>
               ) : (
-                <QueuePanelListSection
-                  list={displayedEntries}
+                <EmpilhadorQueueList
+                  entries={displayedEntries}
                   selectedId={selectedId}
                   nextToCallId={nextToCallId}
-                  isAdmin={isAdmin}
+                  searchQuery={minutaSearch}
+                  onSearchChange={setMinutaSearch}
                   onSelect={selectEntry}
                 />
               )}
@@ -469,7 +471,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   }}
                 >
                   <Zap className="h-5 w-5" />
-                  Chamar próximo · Minuta {nextToCall.minuta || "—"}
+                  Chamar próximo
                 </Button>
               </div>
             )}
@@ -483,11 +485,20 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 onClick={() => setSelectedId(null)}
               />
               <div className="animate-slide-up fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-2xl bg-white shadow-[var(--shadow-elevated)] safe-bottom">
-                <div className="sticky top-0 bg-white px-4 pb-2 pt-3">
-                  <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
+                <div className="sticky top-0 z-10 bg-white px-4 pb-1 pt-3">
+                  <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200" />
                 </div>
-                <div className="page-container pb-6">
-                  <QueueEntryDetailPanel {...entryDetailProps} />
+                <div className="page-container pb-8 pt-1">
+                  <EmpilhadorMinutaSheet
+                    entry={selected}
+                    saving={saving}
+                    canChamarWhatsApp={permissions.canChamarWhatsApp}
+                    onClose={() => setSelectedId(null)}
+                    onChamarMotorista={chamarMotorista}
+                    onApplyStatus={(entryId, status, fromStatus) =>
+                      void applyStatus(entryId, status, fromStatus)
+                    }
+                  />
                 </div>
               </div>
             </>
@@ -506,7 +517,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           operationalCount={operationalEntries.length}
           finalizedCount={finalizedTodayCount}
           absentCount={ausenteEntries.length}
-          nextMinuta={nextToCall?.minuta}
           estoqueSummary={estoqueSummary}
           trailing={
             <RefreshIconButton
@@ -520,6 +530,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               onChange={(filter) => {
                 setEmpilhadorFilter(filter);
                 setSelectedId(null);
+                setMinutaSearch("");
               }}
               tabs={[
                 { id: "aguardando", label: "Aguardando", icon: Clock },
