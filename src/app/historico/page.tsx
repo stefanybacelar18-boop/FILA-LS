@@ -24,17 +24,24 @@ export default function HistoricoPage() {
   const supabase = useMemo(() => createClient(), []);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
 
   const fetchHistory = useCallback(async () => {
-    const { data } = await supabase
+    setFetchError(null);
+    const { data, error } = await supabase
       .from("queue_history")
       .select("*, queue_entries(placa, nome, transportadora, minuta)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(200);
 
-    setHistory((data as HistoryRow[]) ?? []);
+    if (error) {
+      setFetchError("Não foi possível carregar o histórico.");
+      setHistory([]);
+    } else {
+      setHistory((data as HistoryRow[]) ?? []);
+    }
     setLoading(false);
   }, [supabase]);
 
@@ -96,9 +103,15 @@ export default function HistoricoPage() {
         />
       </AdminPageHeader>
 
+      {fetchError && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {fetchError}
+        </p>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-12">
-          <Spinner />
+          <Spinner label="Carregando histórico…" />
         </div>
       ) : (
         <Card className="overflow-x-auto p-0">

@@ -62,4 +62,11 @@ describe("toMotoristaQueueEntry", () => {
     expect(isMotoristaOwnEntry(mine)).toBe(true);
     expect(isMotoristaOwnEntry(other)).toBe(false);
   });
+
+  it("não expõe driver_user_id nem coordenadas", () => {
+    const mine = toMotoristaQueueEntry(base, "driver-a");
+    expect("driver_user_id" in mine).toBe(false);
+    expect("checkin_lat" in mine).toBe(false);
+    expect("ip_address" in mine).toBe(false);
+  });
 });

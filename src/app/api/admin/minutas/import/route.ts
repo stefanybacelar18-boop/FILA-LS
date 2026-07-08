@@ -17,6 +17,7 @@ import {
 import { ACTIVE_QUEUE_DB_STATUSES } from "@/lib/constants";
 import { isActiveQueueStatus } from "@/lib/constants";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
+import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import type { QueueEntry } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -41,6 +42,17 @@ export async function POST(request: NextRequest) {
 
     if (!profile?.role || !canAccessAdmin(profile.role)) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    const rateKey = `minutas-import:${user.id}`;
+    if (!rateLimitAllow(rateKey, 5, 10 * 60_000)) {
+      return NextResponse.json(
+        { error: "rate_limit", message: "Aguarde antes de importar novamente." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimitRetryAfterSec(rateKey, 10 * 60_000)) },
+        }
+      );
     }
 
     const form = await request.formData();

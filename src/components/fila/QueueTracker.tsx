@@ -67,7 +67,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-muted">
-        <Spinner />
+        <Spinner label="Carregando fila…" />
       </div>
     );
   }
@@ -75,7 +75,11 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
   if (error || !entry) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-muted p-4">
-        <Card className="max-w-md text-center"><p className="text-danger">{error}</p></Card>
+        <Card className="max-w-md text-center">
+          <p className="text-danger" role="alert">
+            {error}
+          </p>
+        </Card>
       </div>
     );
   }

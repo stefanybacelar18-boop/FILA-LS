@@ -23,6 +23,7 @@ import {
 } from "@/lib/minuta-metadata-db";
 import { shouldAutoPrioritize } from "@/lib/minuta-intelligence";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
+import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
 
 type UpdateBody = {
@@ -54,6 +55,17 @@ export async function PATCH(request: NextRequest) {
 
     if (!profile?.role || !isStaffQueueRole(profile.role)) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    const rateKey = `queue-update:${user.id}`;
+    if (!rateLimitAllow(rateKey, 120, 60_000)) {
+      return NextResponse.json(
+        { error: "rate_limit", message: "Muitas alterações em sequência. Aguarde um momento." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimitRetryAfterSec(rateKey, 60_000)) },
+        }
+      );
     }
 
     let body: UpdateBody;
