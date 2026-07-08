@@ -14,6 +14,8 @@ type AdminQueueActionBarProps = {
   onRefresh: () => void;
   filter: AdminQueueFilter;
   onFilterChange: (filter: AdminQueueFilter) => void;
+  aguardandoCount: number;
+  finalizedCount: number;
   showChamarProximo: boolean;
   onChamarProximo?: () => void;
   saving?: boolean;
@@ -27,6 +29,8 @@ export function AdminQueueActionBar({
   onRefresh,
   filter,
   onFilterChange,
+  aguardandoCount,
+  finalizedCount,
   showChamarProximo,
   onChamarProximo,
   saving = false,
@@ -69,6 +73,7 @@ export function AdminQueueActionBar({
             onClick={() => onFilterChange("ativos")}
           >
             Aguardando
+            <span className="admin-filter-chip__count">{aguardandoCount}</span>
           </button>
           <button
             type="button"
@@ -80,6 +85,7 @@ export function AdminQueueActionBar({
             onClick={() => onFilterChange("finalizados")}
           >
             Finalizados
+            <span className="admin-filter-chip__count">{finalizedCount}</span>
           </button>
         </div>
       </div>

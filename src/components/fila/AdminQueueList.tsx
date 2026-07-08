@@ -62,11 +62,6 @@ export function AdminQueueList({
 
   return (
     <div className={cn("admin-queue-list", className)}>
-      <p className="admin-queue-list__heading">
-        {onFinalizados ? "Finalizados no dia" : "Aguardando descarregamento"}
-        <span className="admin-queue-list__count">{entries.length}</span>
-      </p>
-
       {entries.length === 0 ? (
         <Card className="admin-queue-list__empty">
           <p className="text-sm text-slate-500">

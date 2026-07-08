@@ -23,7 +23,6 @@ import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/
 import { isoToDateInput, getProfileDisplayName, cn } from "@/lib/utils";
 import {
   countAguardandoDescarregamento,
-  countAusentes,
   countFinalizadasNoDiaOperacional,
   countStrictAguardandoDescarregamento,
   isFinalizadaNoDiaOperacional,
@@ -33,7 +32,6 @@ import { EmpilhadorQueueSummary } from "@/components/fila/EmpilhadorQueueSummary
 import { EmpilhadorQueueList } from "@/components/fila/EmpilhadorQueueList";
 import { EmpilhadorMinutaSheet } from "@/components/fila/EmpilhadorMinutaSheet";
 import { AdminQueueActionBar } from "@/components/fila/AdminQueueActionBar";
-import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlertsBanner";
 import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
 import { AdminMinutaDetailPanel } from "@/components/fila/AdminMinutaDetailPanel";
@@ -285,7 +283,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const ausenteEntries = entries.filter((e) => isAusenteQueueStatus(e.status));
   const operationalEntries = [...activeEntries, ...ausenteEntries];
   const adminWaitingCount = countStrictAguardandoDescarregamento(entries);
-  const adminAbsentCount = countAusentes(entries);
   const aguardandoCount = countAguardandoDescarregamento(entries);
   const finalizedTodayCount = countFinalizadasNoDiaOperacional(entries);
 
@@ -495,14 +492,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   return (
     <AppShell role={appRole} userName={profile.full_name} userEmail={profile.email}>
-      <QueueAdminSummaryStrip
-        waiting={adminWaitingCount}
-        finalized={finalizedTodayCount}
-        absent={adminAbsentCount}
-        estoqueSummary={estoqueSummary}
-        className="mb-4"
-      />
-
       <AdminQueueActionBar
         searchQuery={minutaSearch}
         onSearchChange={setMinutaSearch}
@@ -512,6 +501,8 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           setAdminFilter(filter);
           setSelectedId(null);
         }}
+        aguardandoCount={adminWaitingCount}
+        finalizedCount={finalizedTodayCount}
         showChamarProximo={
           Boolean(nextToCall && permissions.canChamarWhatsApp && adminFilter === "ativos")
         }

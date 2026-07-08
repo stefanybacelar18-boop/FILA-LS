@@ -7,15 +7,13 @@ import {
   clampGeofenceRadius,
   normalizeGeofenceConfig,
 } from "@/lib/geofence";
-import type { GeofenceConfig, QueueEntry } from "@/lib/types";
+import type { GeofenceConfig } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard, SectionHeader } from "@/components/ui/StatCard";
-import { computeDashboardStats } from "@/lib/dashboard-stats";
-import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
@@ -39,23 +37,11 @@ export default function AdminPage() {
   const [liberarMsg, setLiberarMsg] = useState("");
   const [liberarError, setLiberarError] = useState("");
   const [liberando, setLiberando] = useState(false);
-  const [queueAtivos, setQueueAtivos] = useState(0);
-  const [dayStats, setDayStats] = useState<ReturnType<typeof computeDashboardStats> | null>(null);
   const [roleCounts, setRoleCounts] = useState<Record<string, number>>({});
   const [refreshing, setRefreshing] = useState(false);
   const appUrl = usePublicAppUrl();
 
-  const loadOverview = useCallback(async (fresh = false) => {
-    const params = new URLSearchParams({ scope: "all" });
-    if (fresh) params.set("_", String(Date.now()));
-    const res = await fetch(`/api/queue/today?${params.toString()}`, { cache: "no-store" });
-    const json = (await res.json().catch(() => ({}))) as { data?: QueueEntry[] };
-
-    const entries = res.ok ? sanitizeQueueEntries(json.data ?? []) : [];
-    const stats = computeDashboardStats(entries);
-    setDayStats(stats);
-    setQueueAtivos(stats.veiculosAguardando);
-
+  const loadRoleCounts = useCallback(async () => {
     const { data: profiles } = await supabase
       .from("profiles")
       .select("role, email")
@@ -70,7 +56,7 @@ export default function AdminPage() {
 
   async function handleRefreshOverview() {
     setRefreshing(true);
-    await loadOverview(true);
+    await loadRoleCounts();
     setRefreshing(false);
   }
 
@@ -89,11 +75,8 @@ export default function AdminPage() {
       }
     }
     load();
-    loadOverview();
-
-    const interval = setInterval(loadOverview, 60_000);
-    return () => clearInterval(interval);
-  }, [supabase, loadOverview, profile]);
+    void loadRoleCounts();
+  }, [supabase, loadRoleCounts, profile]);
 
   async function liberarCheckin() {
     const email = liberarEmail.trim();
@@ -156,11 +139,6 @@ export default function AdminPage() {
     return <PageLoader message="Verificando sessão…" />;
   }
 
-  const taxaConclusao =
-    dayStats && dayStats.veiculosHoje > 0
-      ? Math.round((dayStats.veiculosFinalizados / dayStats.veiculosHoje) * 100)
-      : 0;
-
   return (
     <AppShell role="administrador" userName={profile.full_name} userEmail={profile.email}>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -176,31 +154,6 @@ export default function AdminPage() {
           {refreshing ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}
           <span className="ml-1.5">Atualizar</span>
         </Button>
-      </div>
-
-      <SectionHeader title="Hoje" />
-      <div className="mb-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Ativos na fila" value={queueAtivos} accent="brand" />
-        <StatCard
-          title="Finalizados"
-          value={dayStats?.veiculosFinalizados ?? "—"}
-          accent="green"
-        />
-        <StatCard
-          title="Taxa conclusão"
-          value={dayStats ? `${taxaConclusao}%` : "—"}
-          subtitle={
-            dayStats
-              ? `${dayStats.veiculosFinalizados} de ${dayStats.veiculosHoje}`
-              : undefined
-          }
-          accent="green"
-        />
-        <StatCard
-          title="Ausentes"
-          value={dayStats?.veiculosAusentes ?? "—"}
-          accent="amber"
-        />
       </div>
 
       <SectionHeader title="Equipe" />
