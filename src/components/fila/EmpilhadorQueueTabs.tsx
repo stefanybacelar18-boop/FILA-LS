@@ -1,47 +1,46 @@
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
+import { CheckCircle2, ListOrdered } from "lucide-react";
 
 export type EmpilhadorTabId = "aguardando" | "finalizadas";
 
-type EmpilhadorQueueTabsProps = {
-  value: EmpilhadorTabId;
+type EmpilhadorFinalizadasToggleProps = {
+  filter: EmpilhadorTabId;
+  finalizedCount: number;
   onChange: (value: EmpilhadorTabId) => void;
-  tabs: { id: EmpilhadorTabId; label: string; icon: LucideIcon }[];
   className?: string;
 };
 
-/** Abas segmentadas — padrão mobile alinhado ao motorista */
-export function EmpilhadorQueueTabs({
-  value,
+/** Alterna entre fila ativa e finalizadas — sem aba redundante de aguardando */
+export function EmpilhadorFinalizadasToggle({
+  filter,
+  finalizedCount,
   onChange,
-  tabs,
   className,
-}: EmpilhadorQueueTabsProps) {
+}: EmpilhadorFinalizadasToggleProps) {
+  const onFinalizadas = filter === "finalizadas";
+
   return (
-    <div
-      className={cn("empilhador-segmented-tabs", className)}
-      role="tablist"
-      aria-label="Filtrar fila"
+    <button
+      type="button"
+      onClick={() => onChange(onFinalizadas ? "aguardando" : "finalizadas")}
+      className={cn("empilhador-finalizadas-toggle", className)}
+      aria-pressed={onFinalizadas}
     >
-      {tabs.map(({ id, label, icon: Icon }) => {
-        const active = value === id;
-        return (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(id)}
-            className={cn(
-              "empilhador-segmented-tabs__item",
-              active && "empilhador-segmented-tabs__item--active"
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" aria-hidden />
-            {label}
-          </button>
-        );
-      })}
-    </div>
+      {onFinalizadas ? (
+        <>
+          <ListOrdered className="h-4 w-4 shrink-0" aria-hidden />
+          Voltar à fila
+        </>
+      ) : (
+        <>
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+          Finalizadas hoje
+          <span className="empilhador-finalizadas-toggle__count">{finalizedCount}</span>
+        </>
+      )}
+    </button>
   );
 }
+
+/** @deprecated Use EmpilhadorFinalizadasToggle */
+export { EmpilhadorFinalizadasToggle as EmpilhadorQueueTabs };

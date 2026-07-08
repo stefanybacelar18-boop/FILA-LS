@@ -6,6 +6,8 @@ import type { EstoqueCapacitySummary } from "@/lib/estoque-capacity-summary";
 type EstoqueCapacityGaugeProps = {
   summary: EstoqueCapacitySummary | null;
   className?: string;
+  /** Barra fina sem caixa — mobile empilhador */
+  compact?: boolean;
 };
 
 function toneClass(pct: number): string {
@@ -17,11 +19,36 @@ function toneClass(pct: number): string {
 export function EstoqueCapacityGauge({
   summary,
   className,
+  compact = false,
 }: EstoqueCapacityGaugeProps) {
   if (!summary || summary.capacidade <= 0) return null;
 
   const ocupadoTone = toneClass(summary.pctOcupado);
   const vagasTone = toneClass(summary.pctVagasHoje);
+
+  if (compact) {
+    return (
+      <div
+        className={cn("estoque-gauge estoque-gauge--compact", className)}
+        role="meter"
+        aria-valuenow={summary.pctOcupado}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Ocupação do estoque ${summary.pctOcupado} por cento`}
+      >
+        <div className="estoque-gauge__compact-header">
+          <span className="estoque-gauge__compact-label">Estoque</span>
+          <span className="estoque-gauge__compact-value">{summary.pctOcupado}% ocupado</span>
+        </div>
+        <div className="estoque-gauge__track estoque-gauge__track--compact">
+          <div
+            className={cn("estoque-gauge__fill", ocupadoTone)}
+            style={{ width: `${summary.pctOcupado}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

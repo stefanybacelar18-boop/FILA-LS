@@ -69,7 +69,7 @@ export function EmpilhadorQueueSummary({
       {tabsSlot}
 
       {filter === "aguardando" && estoqueSummary && (
-        <EstoqueCapacityGauge summary={estoqueSummary} />
+        <EstoqueCapacityGauge summary={estoqueSummary} compact />
       )}
     </div>
   );

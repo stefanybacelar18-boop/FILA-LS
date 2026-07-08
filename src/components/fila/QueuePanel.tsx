@@ -29,7 +29,7 @@ import {
   isFinalizadaNoDiaOperacional,
 } from "@/lib/queue-counters";
 import { useQueuePanelData } from "@/hooks/useQueuePanelData";
-import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
+import { EmpilhadorFinalizadasToggle } from "@/components/fila/EmpilhadorQueueTabs";
 import { EmpilhadorQueueSummary } from "@/components/fila/EmpilhadorQueueSummary";
 import { EmpilhadorQueueList } from "@/components/fila/EmpilhadorQueueList";
 import { EmpilhadorMinutaSheet } from "@/components/fila/EmpilhadorMinutaSheet";
@@ -46,7 +46,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
-import { CheckCircle2, Clock, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 
 type EmpilhadorFilter = "aguardando" | "finalizadas";
 
@@ -525,17 +525,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             />
           }
           tabsSlot={
-            <EmpilhadorQueueTabs
-              value={empilhadorFilter}
+            <EmpilhadorFinalizadasToggle
+              filter={empilhadorFilter}
+              finalizedCount={finalizedTodayCount}
               onChange={(filter) => {
                 setEmpilhadorFilter(filter);
                 setSelectedId(null);
                 setMinutaSearch("");
               }}
-              tabs={[
-                { id: "aguardando", label: "Aguardando", icon: Clock },
-                { id: "finalizadas", label: "Finalizadas", icon: CheckCircle2 },
-              ]}
             />
           }
         />

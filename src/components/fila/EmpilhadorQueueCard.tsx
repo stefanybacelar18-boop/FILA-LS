@@ -10,7 +10,7 @@ import { isNfVencidaOuVencendo } from "@/lib/minuta-intelligence";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { cn, getDriverFirstName } from "@/lib/utils";
-import { Star, AlertTriangle } from "lucide-react";
+import { Star, AlertTriangle, PackageOpen, PhoneCall } from "lucide-react";
 
 function getCarretaPlaca(entry: QueueEntry): string {
   return entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
@@ -25,7 +25,157 @@ type EmpilhadorQueueCardProps = {
   variant?: "default" | "admin";
 };
 
-/** Card mobile — espelha MotoristaQueueCard; detalhes no sheet ao tocar */
+function OpsChip({
+  children,
+  tone = "neutral",
+  icon,
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "brand" | "priority";
+  icon?: React.ReactNode;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase",
+        tone === "neutral" && "bg-slate-100 text-slate-700",
+        tone === "brand" && "bg-brand-muted text-brand-dark",
+        tone === "priority" && "bg-amber-100 text-amber-900"
+      )}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+/** Card mobile — visão operacional completa à primeira vista */
+function EmpilhadorQueueCardMobile({
+  entry,
+  position,
+  selected,
+  isNext,
+  onClick,
+}: Omit<EmpilhadorQueueCardProps, "variant">) {
+  const absent = isAusenteQueueStatus(entry.status);
+  const active = isActiveQueueStatus(entry.status);
+  const called = active && isDriverCalled(entry);
+  const priority = entryHasPrioridade(entry);
+  const racks = entryRetornoRacksVazios(entry);
+  const firstName = getDriverFirstName(entry.nome);
+  const showPrevisao = Boolean(entry.previsao_descarregamento) && active;
+  const hasCapacidadeAviso = Boolean(entry.capacidade_aviso) && active;
+  const nfUrgente = active && isNfVencidaOuVencendo(entry.menor_vencimento);
+  const hasMinutaMeta =
+    (entry.volume_motos != null && entry.volume_motos > 0) || Boolean(entry.menor_vencimento);
+  const hasOpsChips = priority || called || racks;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "touch-target flex w-full gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.995]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25",
+        "border-slate-200/90",
+        selected && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15",
+        !selected && isNext && active && "border-brand/35 bg-brand-muted/25 ring-1 ring-brand/20",
+        !selected && nfUrgente && "border-red-200/90 bg-red-50/25"
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-11 w-11 shrink-0 self-start items-center justify-center rounded-xl text-sm font-bold tabular-nums",
+          nfUrgente && "bg-red-100 text-red-900",
+          !nfUrgente && isNext && active && "bg-brand text-white shadow-sm",
+          !nfUrgente && !isNext && "bg-slate-100 text-slate-600"
+        )}
+      >
+        {position}
+      </div>
+
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Minuta
+            </p>
+            <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
+              {entry.minuta || "—"}
+            </p>
+            <p className="mt-0.5 truncate font-mono text-sm font-medium text-slate-600">
+              {getCarretaPlaca(entry)}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <StatusBadge status={entry.status} compact className="shrink-0" />
+            {isNext && active && (
+              <span className="text-[10px] font-bold uppercase tracking-wide text-brand">
+                Próximo
+              </span>
+            )}
+          </div>
+        </div>
+
+        <p className="truncate text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">{firstName}</span>
+          <span className="text-slate-400"> · </span>
+          <span>{entry.transportadora || "—"}</span>
+        </p>
+
+        {hasMinutaMeta && (
+          <MinutaMetaBadge
+            compact
+            staffView
+            volumeMotos={entry.volume_motos}
+            menorVencimento={entry.menor_vencimento}
+          />
+        )}
+
+        {hasOpsChips && active && (
+          <div className="flex flex-wrap gap-1.5">
+            {priority && (
+              <OpsChip tone="priority" icon={<Star className="h-3 w-3" aria-hidden />}>
+                {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
+              </OpsChip>
+            )}
+            {called && (
+              <OpsChip tone="brand" icon={<PhoneCall className="h-3 w-3" aria-hidden />}>
+                Chamado
+              </OpsChip>
+            )}
+            {racks && (
+              <OpsChip tone="neutral" icon={<PackageOpen className="h-3 w-3" aria-hidden />}>
+                Retorna racks
+              </OpsChip>
+            )}
+          </div>
+        )}
+
+        {showPrevisao && (
+          <PrevisaoDisplay
+            previsao={entry.previsao_descarregamento}
+            automatic={entry.previsao_automatica}
+            compact
+            className="w-fit max-w-full"
+          />
+        )}
+
+        {hasCapacidadeAviso && (
+          <p className="flex items-start gap-1 text-xs font-medium text-amber-800">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="line-clamp-2">{entry.capacidade_aviso}</span>
+          </p>
+        )}
+
+        {absent && (
+          <p className="text-[10px] font-medium text-slate-500">Ausente · aguardando retorno</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
 export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   entry,
   position,
@@ -35,6 +185,19 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   variant = "default",
 }: EmpilhadorQueueCardProps) {
   const isAdmin = variant === "admin";
+
+  if (!isAdmin) {
+    return (
+      <EmpilhadorQueueCardMobile
+        entry={entry}
+        position={position}
+        selected={selected}
+        isNext={isNext}
+        onClick={onClick}
+      />
+    );
+  }
+
   const absent = isAusenteQueueStatus(entry.status);
   const active = isActiveQueueStatus(entry.status);
   const inactive = !active && !absent;
@@ -48,65 +211,7 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   const showPrevisao = Boolean(entry.previsao_descarregamento) && active;
   const hasCapacidadeAviso = Boolean(entry.capacidade_aviso) && active;
   const nfUrgente = active && isNfVencidaOuVencendo(entry.menor_vencimento);
-  const hasFooter = showPrevisao || hasCapacidadeAviso || (hasFooterBadges && (active || isAdmin));
-
-  if (!isAdmin) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "touch-target flex w-full gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.995]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25",
-          "border-slate-200/90",
-          selected && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15",
-          !selected && isNext && active && "border-brand/35 bg-brand-muted/25 ring-1 ring-brand/20",
-          !selected && nfUrgente && "border-red-200/90 bg-red-50/25"
-        )}
-      >
-        <div
-          className={cn(
-            "flex h-11 w-11 shrink-0 self-start items-center justify-center rounded-xl text-sm font-bold tabular-nums",
-            nfUrgente && "bg-red-100 text-red-900",
-            !nfUrgente && isNext && active && "bg-brand text-white shadow-sm",
-            !nfUrgente && !isNext && "bg-slate-100 text-slate-600"
-          )}
-        >
-          {position}
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                Minuta
-              </p>
-              <p className="truncate text-lg font-bold leading-tight tracking-tight text-brand">
-                {entry.minuta || "—"}
-              </p>
-            </div>
-            <StatusBadge status={entry.status} compact className="mt-0.5 shrink-0" />
-          </div>
-
-          {(nfUrgente || showPrevisao) && (
-            <div className="flex flex-col gap-1.5">
-              {nfUrgente && (
-                <MinutaMetaBadge compact staffView menorVencimento={entry.menor_vencimento} />
-              )}
-              {showPrevisao && (
-                <PrevisaoDisplay
-                  previsao={entry.previsao_descarregamento}
-                  automatic={entry.previsao_automatica}
-                  compact
-                  className="w-fit max-w-full"
-                />
-              )}
-            </div>
-          )}
-        </div>
-      </button>
-    );
-  }
+  const hasFooter = showPrevisao || hasCapacidadeAviso || (hasFooterBadges && active);
 
   return (
     <button
@@ -211,20 +316,19 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
               )}
             >
               {priority && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-                  <Star className="h-3 w-3" aria-hidden />
+                <OpsChip tone="priority" icon={<Star className="h-3 w-3" aria-hidden />}>
                   {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
-                </span>
+                </OpsChip>
               )}
               {called && (
-                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+                <OpsChip tone="brand" icon={<PhoneCall className="h-3 w-3" aria-hidden />}>
                   Chamado
-                </span>
+                </OpsChip>
               )}
               {racks && (
-                <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-900">
+                <OpsChip tone="neutral" icon={<PackageOpen className="h-3 w-3" aria-hidden />}>
                   Retorna racks
-                </span>
+                </OpsChip>
               )}
             </div>
           )}

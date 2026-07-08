@@ -1,13 +1,10 @@
 "use client";
 
 import type { QueueEntry, QueueStatus } from "@/lib/types";
-import { isAusenteQueueStatus, isActiveQueueStatus, isDriverCalled } from "@/lib/queue";
+import { isAusenteQueueStatus, isActiveQueueStatus } from "@/lib/queue";
 import { entryHasPrioridade } from "@/lib/queue-priorities";
-import { entryRetornoRacksVazios } from "@/lib/queue-badges";
-import { isNfVencida, isNfVencidaOuVencendo } from "@/lib/minuta-intelligence";
-import { formatPhone, formatPrevisaoDate } from "@/lib/utils";
-import { MinutaMetaBadge } from "@/components/fila/MinutaMetaBadge";
-import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
+import { isNfVencida } from "@/lib/minuta-intelligence";
+import { formatPhone } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -15,8 +12,6 @@ import {
   MessageCircle,
   Phone,
   RotateCcw,
-  Star,
-  Truck,
   User,
   UserX,
   X,
@@ -52,10 +47,7 @@ export function EmpilhadorMinutaSheet({
 }: EmpilhadorMinutaSheetProps) {
   const active = isActiveQueueStatus(entry.status);
   const absent = isAusenteQueueStatus(entry.status);
-  const called = active && isDriverCalled(entry);
   const priority = entryHasPrioridade(entry);
-  const racks = entryRetornoRacksVazios(entry);
-  const nfUrgente = active && isNfVencidaOuVencendo(entry.menor_vencimento);
   const placa = entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
   const telefone = formatPhone(entry.telefone);
 
@@ -99,59 +91,7 @@ export function EmpilhadorMinutaSheet({
           />
         )}
         {entry.doca?.trim() && <FactRow label="Doca" value={entry.doca.trim()} />}
-        {entry.volume_motos != null && entry.volume_motos > 0 && (
-          <FactRow label="Volume" value={`${entry.volume_motos} motos`} />
-        )}
-        {entry.previsao_descarregamento && active && (
-          <div className="flex items-center justify-between gap-3 py-2">
-            <dt className="text-xs font-medium text-slate-500">Previsão</dt>
-            <dd>
-              <PrevisaoDisplay
-                previsao={entry.previsao_descarregamento}
-                automatic={entry.previsao_automatica}
-                compact
-              />
-            </dd>
-          </div>
-        )}
       </dl>
-
-      {(nfUrgente || priority || called || racks) && (
-        <div className="flex flex-wrap gap-1.5">
-          {nfUrgente && (
-            <MinutaMetaBadge compact staffView menorVencimento={entry.menor_vencimento} />
-          )}
-          {priority && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-              <Star className="h-3 w-3" aria-hidden />
-              {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
-            </span>
-          )}
-          {called && (
-            <span className="rounded-md bg-brand-muted px-2 py-0.5 text-[10px] font-bold text-brand-dark">
-              Chamado
-            </span>
-          )}
-          {racks && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-              <Truck className="h-3 w-3" aria-hidden />
-              Retorna racks
-            </span>
-          )}
-        </div>
-      )}
-
-      {entry.capacidade_aviso && active && (
-        <p className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-900">
-          {entry.capacidade_aviso}
-          {entry.previsao_automatica && entry.previsao_descarregamento && (
-            <>
-              {" "}
-              · Previsão automática {formatPrevisaoDate(entry.previsao_descarregamento)}
-            </>
-          )}
-        </p>
-      )}
 
       {active &&
         isNfVencida(entry.menor_vencimento) &&
