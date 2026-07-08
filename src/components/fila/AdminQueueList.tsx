@@ -3,8 +3,7 @@
 import { useMemo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { compareQueueOrder } from "@/lib/queue";
-import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
-import { MinutaSearchField } from "@/components/ui/MinutaSearchField";
+import { AdminQueueCard } from "@/components/fila/AdminQueueCard";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 
@@ -30,12 +29,11 @@ type AdminQueueListProps = {
   selectedId: string | null;
   nextToCallId: string | null;
   searchQuery: string;
-  onSearchChange: (value: string) => void;
   onSelect: (entry: QueueEntry) => void;
   className?: string;
 };
 
-/** Lista desktop da fila admin — busca + seções operacional e finalizados */
+/** Lista desktop da fila admin — cards minimalistas */
 export function AdminQueueList({
   operationalList,
   closedList,
@@ -43,7 +41,6 @@ export function AdminQueueList({
   selectedId,
   nextToCallId,
   searchQuery,
-  onSearchChange,
   onSelect,
   className,
 }: AdminQueueListProps) {
@@ -73,15 +70,9 @@ export function AdminQueueList({
   const hasSearch = searchQuery.trim().length > 0;
 
   return (
-    <div className={cn("space-y-4", className)}>
-      <MinutaSearchField
-        value={searchQuery}
-        onChange={onSearchChange}
-        placeholder="Buscar minuta, placa, motorista ou transportadora…"
-      />
-
+    <div className={cn("admin-queue-list", className)}>
       {totalVisible === 0 ? (
-        <Card className="py-12 text-center">
+        <Card className="admin-queue-list__empty">
           <p className="text-sm text-slate-500">
             {hasSearch
               ? "Nenhuma minuta encontrada para esta busca."
@@ -89,22 +80,21 @@ export function AdminQueueList({
           </p>
         </Card>
       ) : (
-        <div className="space-y-5">
+        <div className="admin-queue-list__sections">
           {operational.length > 0 && (
             <section>
               {showClosed && (
-                <p className="section-eyebrow mb-2.5">Fila do pátio</p>
+                <p className="admin-queue-list__section-label">Fila do pátio</p>
               )}
-              <div className="space-y-2.5">
+              <div className="admin-queue-list__items">
                 {operational.map((entry) => (
-                  <EmpilhadorQueueCard
+                  <AdminQueueCard
                     key={entry.id}
                     entry={entry}
                     position={operationalPositions.get(entry.id) ?? 0}
                     selected={selectedId === entry.id}
                     isNext={entry.id === nextToCallId}
                     onClick={() => onSelect(entry)}
-                    variant="admin"
                   />
                 ))}
               </div>
@@ -113,17 +103,16 @@ export function AdminQueueList({
 
           {showClosed && closed.length > 0 && (
             <section>
-              <p className="section-eyebrow mb-2.5">Finalizados</p>
-              <div className="space-y-2.5">
+              <p className="admin-queue-list__section-label">Finalizados</p>
+              <div className="admin-queue-list__items">
                 {closed.map((entry) => (
-                  <EmpilhadorQueueCard
+                  <AdminQueueCard
                     key={entry.id}
                     entry={entry}
                     position={operational.length + (closedPositions.get(entry.id) ?? 0)}
                     selected={selectedId === entry.id}
                     isNext={false}
                     onClick={() => onSelect(entry)}
-                    variant="admin"
                   />
                 ))}
               </div>
@@ -131,7 +120,7 @@ export function AdminQueueList({
           )}
 
           {showClosed && closed.length === 0 && operational.length > 0 && !hasSearch && (
-            <Card className="py-6 text-center">
+            <Card className="admin-queue-list__empty admin-queue-list__empty--compact">
               <p className="text-sm text-slate-500">
                 Nenhuma minuta finalizada no histórico carregado.
               </p>

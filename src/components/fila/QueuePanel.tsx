@@ -32,9 +32,8 @@ import { useQueuePanelData } from "@/hooks/useQueuePanelData";
 import { EmpilhadorQueueSummary } from "@/components/fila/EmpilhadorQueueSummary";
 import { EmpilhadorQueueList } from "@/components/fila/EmpilhadorQueueList";
 import { EmpilhadorMinutaSheet } from "@/components/fila/EmpilhadorMinutaSheet";
+import { AdminQueueActionBar } from "@/components/fila/AdminQueueActionBar";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
-import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
-import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
 import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlertsBanner";
 import { AdminMinutaDetailPanel } from "@/components/fila/AdminMinutaDetailPanel";
 import { AdminQueueList } from "@/components/fila/AdminQueueList";
@@ -371,7 +370,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                     "space-y-2",
                     showEmpilhadorCta && "pb-[var(--mobile-queue-cta-height)]"
                   )
-                : "grid items-start gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(26rem,1fr)] xl:gap-8 2xl:grid-cols-[minmax(0,1fr)_40rem]"
+                : "admin-queue-layout grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,28rem)] xl:grid-cols-[minmax(0,1fr)_minmax(24rem,32rem)] 2xl:grid-cols-[minmax(0,1fr)_36rem]"
             }
           >
             <div className={isAdmin ? "space-y-4" : "space-y-2"}>
@@ -387,7 +386,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   selectedId={selectedId}
                   nextToCallId={nextToCallId}
                   searchQuery={minutaSearch}
-                  onSearchChange={setMinutaSearch}
                   onSelect={selectEntry}
                 />
               ) : (
@@ -403,13 +401,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             </div>
 
             {!isEmpilhador && (
-              <Card className="sticky top-24 flex max-h-[calc(100vh-6.5rem)] flex-col overflow-hidden border-brand/12 p-0 shadow-[var(--shadow-card)]">
-                <div className="shrink-0 border-b border-brand/10 bg-brand-muted/40 px-5 py-4 xl:px-6">
-                  <h2 className="text-base font-semibold text-slate-900">Gerenciar minuta</h2>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    {selected
-                      ? "Check-in completo e gestão operacional"
-                      : "Selecione um veículo na fila ao lado"}
+              <Card className="admin-detail-shell sticky top-24 flex max-h-[calc(100vh-6.5rem)] flex-col overflow-hidden p-0">
+                <div className="admin-detail-shell__header shrink-0">
+                  <h2 className="text-sm font-semibold text-slate-900">Detalhes da minuta</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {selected ? selected.minuta || "—" : "Selecione um item na fila"}
                   </p>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-5 xl:p-6">
@@ -500,47 +496,29 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         eyebrow="Operação · Descarregamento"
         title={permissions.panelTitle}
         description="Ordem por check-in e prioridade · atualização em tempo real"
-      >
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[15rem]">
-          <RefreshIconButton
-            onRefresh={() => fetchQueue(true)}
-            label="Atualizar fila"
-            className="self-end sm:self-auto"
-          />
-          {nextToCall && permissions.canChamarWhatsApp && (
-            <Button
-              variant="success"
-              className="w-full sm:w-auto"
-              disabled={saving}
-              onClick={() => {
-                selectEntry(nextToCall);
-                chamarMotorista(nextToCall);
-              }}
-            >
-              <Zap className="h-4 w-4" />
-              Chamar próximo (WhatsApp)
-            </Button>
-          )}
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-brand/12 bg-white px-3.5 py-2.5 text-sm text-slate-600 shadow-[var(--shadow-card)]">
-            <input
-              type="checkbox"
-              checked={showFinalizados}
-              onChange={(e) => setShowFinalizados(e.target.checked)}
-              className="rounded border-slate-300 text-brand focus:ring-brand/20"
-            />
-            Mostrar finalizados
-          </label>
-        </div>
-      </AdminPageHeader>
+      />
 
       <QueueAdminSummaryStrip
         waiting={adminWaitingCount}
         finalized={finalizedTodayCount}
         absent={adminAbsentCount}
-        className="mb-3"
+        estoqueSummary={estoqueSummary}
+        className="mb-4"
       />
 
-      <EstoqueCapacityGauge summary={estoqueSummary} className="mb-5" />
+      <AdminQueueActionBar
+        searchQuery={minutaSearch}
+        onSearchChange={setMinutaSearch}
+        onRefresh={() => fetchQueue(true)}
+        showFinalizados={showFinalizados}
+        onShowFinalizadosChange={setShowFinalizados}
+        showChamarProximo={Boolean(nextToCall && permissions.canChamarWhatsApp)}
+        onChamarProximo={
+          nextToCall ? () => chamarMotorista(nextToCall) : undefined
+        }
+        saving={saving}
+        className="mb-5"
+      />
 
       {queueContent}
     </AppShell>

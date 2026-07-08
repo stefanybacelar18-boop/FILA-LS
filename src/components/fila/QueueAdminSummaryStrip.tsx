@@ -1,40 +1,58 @@
+import type { EstoqueCapacitySummary } from "@/lib/estoque-capacity-summary";
 import { cn } from "@/lib/utils";
 
 type QueueAdminSummaryStripProps = {
   waiting: number;
   finalized: number;
   absent: number;
+  estoqueSummary?: EstoqueCapacitySummary | null;
   className?: string;
 };
 
-/** Resumo horizontal compacto — admin fila (Aguardando · Finalizado · Ausente) */
+function KpiCard({
+  value,
+  label,
+  className,
+}: {
+  value: string | number;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("admin-kpi-card", className)}>
+      <p className="admin-kpi-card__value tabular-nums">{value}</p>
+      <p className="admin-kpi-card__label">{label}</p>
+    </div>
+  );
+}
+
+/** Dashboard superior — indicadores uniformes e discretos */
 export function QueueAdminSummaryStrip({
   waiting,
   finalized,
   absent,
+  estoqueSummary,
   className,
 }: QueueAdminSummaryStripProps) {
+  const estoqueLabel =
+    estoqueSummary && estoqueSummary.capacidade > 0
+      ? `${estoqueSummary.pctOcupado}%`
+      : "—";
+
   return (
     <div
-      className={cn("stat-strip", className)}
+      className={cn("admin-kpi-grid", className)}
       role="status"
-      aria-label={`${waiting} aguardando descarregamento, ${finalized} finalizados hoje, ${absent} ausentes`}
+      aria-label={`${waiting} aguardando, ${finalized} finalizados hoje, ${absent} ausentes`}
     >
-      <div className="stat-strip__cell">
-        <span className="stat-strip__value text-amber-700">{waiting}</span>
-        <span className="stat-strip__label">Aguardando</span>
-        <span className="stat-strip__hint">Descarregamento</span>
-      </div>
-      <div className="stat-strip__cell">
-        <span className="stat-strip__value text-emerald-700">{finalized}</span>
-        <span className="stat-strip__label">Finalizado</span>
-        <span className="stat-strip__hint">Hoje</span>
-      </div>
-      <div className="stat-strip__cell">
-        <span className="stat-strip__value text-slate-600">{absent}</span>
-        <span className="stat-strip__label">Ausente</span>
-        <span className="stat-strip__hint">No pátio</span>
-      </div>
+      <KpiCard value={waiting} label="Aguardando" />
+      <KpiCard value={finalized} label="Finalizados hoje" />
+      <KpiCard value={absent} label="Ausentes" />
+      <KpiCard
+        value={estoqueLabel}
+        label="Estoque ocupado"
+        className={estoqueSummary ? undefined : "opacity-60"}
+      />
     </div>
   );
 }
