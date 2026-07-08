@@ -6,12 +6,14 @@ import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { cn } from "@/lib/utils";
 import { Zap } from "lucide-react";
 
+export type AdminQueueFilter = "ativos" | "finalizados";
+
 type AdminQueueActionBarProps = {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   onRefresh: () => void;
-  showFinalizados: boolean;
-  onShowFinalizadosChange: (value: boolean) => void;
+  filter: AdminQueueFilter;
+  onFilterChange: (filter: AdminQueueFilter) => void;
   showChamarProximo: boolean;
   onChamarProximo?: () => void;
   saving?: boolean;
@@ -23,8 +25,8 @@ export function AdminQueueActionBar({
   searchQuery,
   onSearchChange,
   onRefresh,
-  showFinalizados,
-  onShowFinalizadosChange,
+  filter,
+  onFilterChange,
   showChamarProximo,
   onChamarProximo,
   saving = false,
@@ -61,23 +63,23 @@ export function AdminQueueActionBar({
             type="button"
             className={cn(
               "admin-filter-chip",
-              !showFinalizados && "admin-filter-chip--active"
+              filter === "ativos" && "admin-filter-chip--active"
             )}
-            aria-pressed={!showFinalizados}
-            onClick={() => onShowFinalizadosChange(false)}
+            aria-pressed={filter === "ativos"}
+            onClick={() => onFilterChange("ativos")}
           >
-            Ativos
+            Aguardando
           </button>
           <button
             type="button"
             className={cn(
               "admin-filter-chip",
-              showFinalizados && "admin-filter-chip--active"
+              filter === "finalizados" && "admin-filter-chip--active"
             )}
-            aria-pressed={showFinalizados}
-            onClick={() => onShowFinalizadosChange(true)}
+            aria-pressed={filter === "finalizados"}
+            onClick={() => onFilterChange("finalizados")}
           >
-            + Finalizados
+            Finalizados
           </button>
         </div>
       </div>

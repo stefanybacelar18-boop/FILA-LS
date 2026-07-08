@@ -38,7 +38,6 @@ import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlerts
 import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
 import { AdminMinutaDetailPanel } from "@/components/fila/AdminMinutaDetailPanel";
 import { AdminQueueList } from "@/components/fila/AdminQueueList";
-import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { AppShell } from "@/components/layout/AppShell";
 import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +47,7 @@ import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { Zap } from "lucide-react";
 
 type EmpilhadorFilter = "aguardando" | "finalizadas";
+type AdminQueueFilter = "ativos" | "finalizados";
 
 export function QueuePanel({ profile }: { profile: Profile }) {
   const appRole = toAppRole(profile.role);
@@ -70,7 +70,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [editRetornoRacks, setEditRetornoRacks] = useState(false);
   const [editPrioridade, setEditPrioridade] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showFinalizados, setShowFinalizados] = useState(false);
+  const [adminFilter, setAdminFilter] = useState<AdminQueueFilter>("ativos");
   const [empilhadorFilter, setEmpilhadorFilter] = useState<EmpilhadorFilter>("aguardando");
   const [minutaSearch, setMinutaSearch] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -78,7 +78,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   async function refreshAfterSave(statusChanged?: QueueStatus) {
     if (statusChanged === "finalizado") {
       setSelectedId(null);
-      if ((isAdmin && showFinalizados) || (isEmpilhador && empilhadorFilter !== "aguardando")) {
+      if ((isAdmin && adminFilter === "finalizados") || (isEmpilhador && empilhadorFilter !== "aguardando")) {
         await fetchQueue(true);
         return;
       }
@@ -376,14 +376,16 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           >
             <div className={isAdmin ? "space-y-4" : "space-y-2"}>
               {capacityAlerts.length > 0 &&
-                (isAdmin || (isEmpilhador && empilhadorFilter === "aguardando")) && (
+                (isAdmin
+                  ? adminFilter === "ativos"
+                  : isEmpilhador && empilhadorFilter === "aguardando") && (
                   <QueueCapacityAlertsBanner entries={capacityAlerts} />
                 )}
               {isAdmin ? (
                 <AdminQueueList
                   operationalList={adminOperationalList}
                   closedList={adminClosedList}
-                  showClosed={showFinalizados}
+                  filter={adminFilter}
                   selectedId={selectedId}
                   nextToCallId={nextToCallId}
                   searchQuery={minutaSearch}
@@ -493,12 +495,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   return (
     <AppShell role={appRole} userName={profile.full_name} userEmail={profile.email}>
-      <AdminPageHeader
-        eyebrow="Operação · Descarregamento"
-        title={permissions.panelTitle}
-        description="Ordem por check-in e prioridade · atualização em tempo real"
-      />
-
       <QueueAdminSummaryStrip
         waiting={adminWaitingCount}
         finalized={finalizedTodayCount}
@@ -511,9 +507,14 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         searchQuery={minutaSearch}
         onSearchChange={setMinutaSearch}
         onRefresh={() => fetchQueue(true)}
-        showFinalizados={showFinalizados}
-        onShowFinalizadosChange={setShowFinalizados}
-        showChamarProximo={Boolean(nextToCall && permissions.canChamarWhatsApp)}
+        filter={adminFilter}
+        onFilterChange={(filter) => {
+          setAdminFilter(filter);
+          setSelectedId(null);
+        }}
+        showChamarProximo={
+          Boolean(nextToCall && permissions.canChamarWhatsApp && adminFilter === "ativos")
+        }
         onChamarProximo={
           nextToCall ? () => chamarMotorista(nextToCall) : undefined
         }
