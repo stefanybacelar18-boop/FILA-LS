@@ -11,7 +11,7 @@ export function MinutaMetaBadge({
   menorVencimento,
   compact = false,
   className,
-  /** Destaque operacional (empilhador/admin): NF vencida em vermelho. */
+  /** Destaque operacional (empilhador/admin): NF vencida ou vencendo em vermelho. */
   staffView = false,
 }: {
   volumeMotos?: number | null;
@@ -25,7 +25,8 @@ export function MinutaMetaBadge({
   const vencLabel = formatVencimentoLabel(menorVencimento);
   const days = daysUntilVencimento(menorVencimento);
   const vencida = staffView && isNfVencida(menorVencimento);
-  const venceAmanha = days === 1;
+  const vencendo = staffView && !vencida && days != null && days >= 0 && days <= 1;
+  const nfUrgente = vencida || vencendo;
 
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
@@ -45,17 +46,15 @@ export function MinutaMetaBadge({
         <span
           className={cn(
             "rounded-md font-medium",
-            vencida &&
-              "border border-red-200 bg-red-50 font-semibold text-red-800",
-            !vencida && venceAmanha && "bg-amber-50 text-amber-800",
-            !vencida && !venceAmanha && "bg-slate-50 text-slate-500",
+            nfUrgente && "border border-red-200 bg-red-50 font-semibold text-red-800",
+            !nfUrgente && "bg-slate-50 text-slate-500",
             compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs"
           )}
           title={
             vencida
               ? "NF vencida — sem prioridade automática; admin pode definir prioridade manual"
-              : venceAmanha
-                ? "NF vence amanhã — prioridade automática na fila"
+              : vencendo
+                ? "NF vence em breve — prioridade na fila"
                 : undefined
           }
         >

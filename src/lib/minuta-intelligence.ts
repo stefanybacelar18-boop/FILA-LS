@@ -446,6 +446,12 @@ export function isNfVencida(vencimento: string | null | undefined): boolean {
   return days != null && days < 0;
 }
 
+/** NF vencida ou vencendo (hoje/amanhã) — destaque vermelho nos cards do empilhador. */
+export function isNfVencidaOuVencendo(vencimento: string | null | undefined): boolean {
+  const days = daysUntilVencimento(vencimento);
+  return days != null && days <= 1;
+}
+
 /** Dias civis até o vencimento no fuso operacional (0 = hoje, 1 = amanhã). */
 export function daysUntilVencimento(vencimento: string | null | undefined): number | null {
   if (!vencimento) return null;

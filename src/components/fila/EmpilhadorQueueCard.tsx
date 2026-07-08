@@ -6,7 +6,7 @@ import { isDriverCalled, isActiveQueueStatus, isAusenteQueueStatus } from "@/lib
 import { entryHasPrioridade } from "@/lib/queue-priorities";
 import { entryRetornoRacksVazios } from "@/lib/queue-badges";
 import { MinutaMetaBadge } from "@/components/fila/MinutaMetaBadge";
-import { isNfVencida } from "@/lib/minuta-intelligence";
+import { isNfVencidaOuVencendo } from "@/lib/minuta-intelligence";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PrevisaoDisplay } from "@/components/fila/PrevisaoDisplay";
 import { cn, getDriverFirstName } from "@/lib/utils";
@@ -26,7 +26,7 @@ type EmpilhadorQueueCardProps = {
   variant?: "default" | "admin";
 };
 
-/** Card da fila — mobile alinhado ao MotoristaQueueCard; admin mantém layout expandido */
+/** Card da fila — mobile limpo; vermelho só para NF vencida/vencendo */
 export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   entry,
   position,
@@ -48,7 +48,7 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   const hasFooterBadges = priority || called || racks;
   const showPrevisao = Boolean(entry.previsao_descarregamento) && active;
   const hasCapacidadeAviso = Boolean(entry.capacidade_aviso) && active;
-  const nfVencida = isNfVencida(entry.menor_vencimento) && active && !priority;
+  const nfUrgente = active && isNfVencidaOuVencendo(entry.menor_vencimento);
   const hasFooter = showPrevisao || hasCapacidadeAviso || (hasFooterBadges && (active || isAdmin));
 
   if (!isAdmin) {
@@ -59,29 +59,18 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
         className={cn(
           "touch-target flex w-full gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.995]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25",
-          selected && "border-brand/40 bg-brand-muted/30 ring-2 ring-brand/15",
-          !selected && isNext && active && "border-brand/35 bg-brand-muted/25 ring-1 ring-brand/20",
-          !selected && !isNext && absent && "border-red-200/90 bg-red-50/40",
-          !selected && !isNext && !absent && nfVencida && "border-red-200/80",
-          !selected && !isNext && !absent && !nfVencida && priority && active && "border-amber-200/80",
-          !selected &&
-            !isNext &&
-            !absent &&
-            !priority &&
-            active &&
-            hasCapacidadeAviso &&
-            "border-amber-200/80 bg-amber-50/20",
-          !selected && !isNext && !absent && !priority && active && !hasCapacidadeAviso && !nfVencida && "border-slate-200/90"
+          "border-slate-200/90",
+          selected && "border-brand/40 bg-brand-muted/20 ring-2 ring-brand/15",
+          !selected && isNext && active && "border-brand/30 bg-brand-muted/15",
+          !selected && nfUrgente && "border-red-200/90 bg-red-50/30"
         )}
       >
         <div
           className={cn(
             "flex h-11 w-11 shrink-0 self-start items-center justify-center rounded-xl text-sm font-bold tabular-nums",
-            absent && "bg-red-100 text-red-800",
-            isNext && active && "bg-brand text-white shadow-sm",
-            !isNext && !absent && nfVencida && "bg-red-100 text-red-900",
-            !isNext && !absent && priority && active && !nfVencida && "bg-amber-100 text-amber-900",
-            !isNext && !absent && !priority && active && !nfVencida && "bg-slate-100 text-slate-600"
+            nfUrgente && "bg-red-100 text-red-900",
+            !nfUrgente && isNext && active && "bg-brand text-white shadow-sm",
+            !nfUrgente && !isNext && "bg-slate-100 text-slate-600"
           )}
         >
           {position}
@@ -126,7 +115,7 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
           )}
 
           {hasCapacidadeAviso && (
-            <p className="flex items-start gap-1 text-xs font-semibold text-amber-800">
+            <p className="flex items-start gap-1 text-xs font-medium text-amber-800">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {entry.capacidade_aviso}
             </p>
@@ -145,18 +134,18 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
               {hasFooterBadges && (
                 <div className="flex flex-wrap gap-1.5">
                   {priority && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                       <Star className="h-3 w-3" aria-hidden />
                       {entry.prioridade_automatica ? "Prioridade NF" : "Prioridade"}
                     </span>
                   )}
                   {called && (
-                    <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+                    <span className="rounded-md bg-brand-muted px-2 py-0.5 text-[10px] font-bold text-brand-dark">
                       Chamado
                     </span>
                   )}
                   {racks && (
-                    <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase text-teal-900">
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                       Retorna racks
                     </span>
                   )}
@@ -166,7 +155,7 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
           )}
 
           {absent && (
-            <p className="text-[10px] font-semibold text-red-700">No topo · aguardando retorno</p>
+            <p className="text-[10px] font-medium text-slate-500">Ausente · aguardando retorno</p>
           )}
         </div>
       </button>
@@ -184,8 +173,8 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
         selected && "border-brand/40 ring-2 ring-brand/15",
         !selected && isNext && "border-emerald-300 bg-emerald-50/30",
         !selected && !isNext && absent && "border-red-200/90 bg-red-50/40",
-        !selected && !isNext && !absent && nfVencida && "border-red-200/80 bg-red-50/15",
-        !selected && !isNext && !absent && priority && active && !nfVencida && "border-amber-200/80",
+        !selected && !isNext && !absent && nfUrgente && "border-red-200/80 bg-red-50/15",
+        !selected && !isNext && !absent && priority && active && !nfUrgente && "border-amber-200/80",
         !selected &&
           !isNext &&
           !absent &&
@@ -199,7 +188,7 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
           !priority &&
           active &&
           !hasCapacidadeAviso &&
-          !nfVencida &&
+          !nfUrgente &&
           "border-slate-200/90",
         !selected && inactive && "border-slate-200/70 bg-slate-50/60 opacity-90"
       )}
@@ -212,9 +201,9 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
             absent && "bg-red-100 text-red-800",
             isNext && active && "bg-emerald-600 text-white",
             inactive && "bg-slate-100 text-slate-500",
-            !isNext && !absent && !inactive && nfVencida && "bg-red-100 text-red-900",
-            !isNext && !absent && !inactive && priority && active && !nfVencida && "bg-amber-100 text-amber-900",
-            !isNext && !absent && !inactive && !priority && active && !nfVencida && "bg-slate-100 text-slate-600"
+            !isNext && !absent && !inactive && nfUrgente && "bg-red-100 text-red-900",
+            !isNext && !absent && !inactive && priority && active && !nfUrgente && "bg-amber-100 text-amber-900",
+            !isNext && !absent && !inactive && !priority && active && !nfUrgente && "bg-slate-100 text-slate-600"
           )}
         >
           {position}

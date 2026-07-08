@@ -30,7 +30,7 @@ import {
 } from "@/lib/queue-counters";
 import { useQueuePanelData } from "@/hooks/useQueuePanelData";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
-import { EmpilhadorQueueHero } from "@/components/fila/EmpilhadorQueueHero";
+import { EmpilhadorQueueSummary } from "@/components/fila/EmpilhadorQueueSummary";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
 import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
@@ -500,7 +500,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   if (isEmpilhador) {
     return (
       <FieldStaffShell userName={getProfileDisplayName(profile.full_name, profile.email)}>
-        <EmpilhadorQueueHero
+        <EmpilhadorQueueSummary
           filter={empilhadorFilter}
           aguardandoCount={aguardandoCount}
           operationalCount={operationalEntries.length}
@@ -512,22 +512,21 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             <RefreshIconButton
               onRefresh={() => fetchQueue(true)}
               label="Atualizar fila"
-              className="text-white hover:bg-white/10"
             />
           }
-        />
-
-        <EmpilhadorQueueTabs
-          className="mb-4"
-          value={empilhadorFilter}
-          onChange={(filter) => {
-            setEmpilhadorFilter(filter);
-            setSelectedId(null);
-          }}
-          tabs={[
-            { id: "aguardando", label: "Aguardando", icon: Clock },
-            { id: "finalizadas", label: "Finalizadas", icon: CheckCircle2 },
-          ]}
+          tabsSlot={
+            <EmpilhadorQueueTabs
+              value={empilhadorFilter}
+              onChange={(filter) => {
+                setEmpilhadorFilter(filter);
+                setSelectedId(null);
+              }}
+              tabs={[
+                { id: "aguardando", label: "Aguardando", icon: Clock },
+                { id: "finalizadas", label: "Finalizadas", icon: CheckCircle2 },
+              ]}
+            />
+          }
         />
 
         {queueContent}
