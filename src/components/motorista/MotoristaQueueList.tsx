@@ -89,9 +89,8 @@ export function MotoristaQueueList({
             position={positionById.get(entry.id) ?? 0}
             isMine={entry.id === highlightId}
             showDriverName={showDriverName}
-            showStatus={showStatus && !minimal}
+            showStatus={showStatus}
             emVencimento={emVencimentoIds.has(entry.id)}
-            minimal={minimal}
           />
         ))}
       </div>

@@ -45,17 +45,20 @@ function DriverQueueFilaSection({
   highlightId,
   searchQuery,
   onSearchChange,
+  showStatus = false,
 }: {
   entries: QueueEntry[];
   highlightId?: string;
   searchQuery: string;
   onSearchChange: (value: string) => void;
+  showStatus?: boolean;
 }) {
   return (
     <MotoristaQueueList
       entries={entries}
       highlightId={highlightId}
       minimal
+      showStatus={showStatus}
       searchQuery={searchQuery}
       onSearchChange={onSearchChange}
       searchPlaceholder="Buscar minuta…"
@@ -141,6 +144,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
             highlightId={entry.id}
             searchQuery={minutaSearch}
             onSearchChange={setMinutaSearch}
+            showStatus
           />
         </div>
       ) : checkinBlocked ? (
