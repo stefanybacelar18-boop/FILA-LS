@@ -96,7 +96,9 @@ export function GeofenceMapEditor({
         geofenceRef
       );
     });
-  }, [enabled, geofence.lat, geofence.lng, geofence.radius_meters]);
+    // geofence parcial: evita re-sync do mapa quando só a referência do objeto muda
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lat/lng/raio/nome cobrem alterações reais
+  }, [enabled, geofence.lat, geofence.lng, geofence.radius_meters, geofence.name]);
 
   useEffect(() => {
     return () => {

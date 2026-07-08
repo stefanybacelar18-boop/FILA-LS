@@ -10,6 +10,7 @@ import {
   syncAutoPriorities,
 } from "@/lib/minuta-metadata-db";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
+import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import type { QueueEntry } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -35,6 +36,17 @@ export async function POST() {
 
     if (!profile?.role || !canAccessAdmin(profile.role)) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    const rateKey = `minutas-sync:${user.id}`;
+    if (!rateLimitAllow(rateKey, 10, 10 * 60_000)) {
+      return NextResponse.json(
+        { error: "rate_limit", message: "Aguarde antes de recalcular novamente." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimitRetryAfterSec(rateKey, 10 * 60_000)) },
+        }
+      );
     }
 
     const admin = createAdminClient();
