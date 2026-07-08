@@ -30,14 +30,13 @@ import {
 } from "@/lib/queue-counters";
 import { useQueuePanelData } from "@/hooks/useQueuePanelData";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
+import { EmpilhadorQueueHero } from "@/components/fila/EmpilhadorQueueHero";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
-import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
 import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
 import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlertsBanner";
 import { QueueEntryDetailPanel } from "@/components/fila/QueueEntryDetailPanel";
 import { QueuePanelListSection } from "@/components/fila/QueuePanelListSection";
-import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { AppShell } from "@/components/layout/AppShell";
 import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
@@ -458,11 +457,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             permissions.canChamarWhatsApp &&
             !selected &&
             empilhadorFilter === "aguardando" && (
-              <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgb(15_23_42/0.06)] backdrop-blur-sm">
+              <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 px-4 py-3">
                 <Button
                   variant="success"
                   size="lg"
-                  className="w-full shadow-md"
+                  className="w-full rounded-xl shadow-lg"
                   disabled={saving}
                   onClick={() => {
                     selectEntry(nextToCall);
@@ -501,28 +500,22 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   if (isEmpilhador) {
     return (
       <FieldStaffShell userName={getProfileDisplayName(profile.full_name, profile.email)}>
-        <PanelPageTitle
-          title={permissions.panelTitle}
-          subtitle={
-            empilhadorFilter === "aguardando"
-              ? `${operationalEntries.length} veículo${operationalEntries.length !== 1 ? "s" : ""} no pátio${ausenteEntries.length > 0 ? ` · ${ausenteEntries.length} ausente${ausenteEntries.length !== 1 ? "s" : ""}` : ""}`
-              : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} finalizada${displayedEntries.length !== 1 ? "s" : ""} hoje`
+        <EmpilhadorQueueHero
+          filter={empilhadorFilter}
+          aguardandoCount={aguardandoCount}
+          operationalCount={operationalEntries.length}
+          finalizedCount={finalizedTodayCount}
+          absentCount={ausenteEntries.length}
+          nextMinuta={nextToCall?.minuta}
+          estoqueSummary={estoqueSummary}
+          trailing={
+            <RefreshIconButton
+              onRefresh={() => fetchQueue(true)}
+              label="Atualizar fila"
+              className="text-white hover:bg-white/10"
+            />
           }
-        >
-          <RefreshIconButton
-            onRefresh={() => fetchQueue(true)}
-            label="Atualizar fila"
-          />
-        </PanelPageTitle>
-
-        <QueueMobileSummaryStrip
-          waiting={aguardandoCount}
-          finalized={finalizedTodayCount}
-          absent={adminAbsentCount}
-          className="mb-3"
         />
-
-        <EstoqueCapacityGauge summary={estoqueSummary} className="mb-4" />
 
         <EmpilhadorQueueTabs
           className="mb-4"
@@ -536,12 +529,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             { id: "finalizadas", label: "Finalizadas", icon: CheckCircle2 },
           ]}
         />
-
-        {empilhadorFilter === "finalizadas" && (
-          <p className="mb-3 text-xs leading-relaxed text-slate-500">
-            Minutas finalizadas hoje. Ausentes continuam na aba Aguardando até voltarem.
-          </p>
-        )}
 
         {queueContent}
       </FieldStaffShell>

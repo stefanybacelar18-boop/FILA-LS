@@ -29,7 +29,7 @@ export function QueuePanelListSection({
   const variant = cardVariant ?? (isAdmin ? "admin" : "default");
 
   return (
-    <div className={cn("space-y-2", isAdmin && "space-y-2.5")}>
+    <div className={cn("space-y-1.5", isAdmin && "space-y-2.5")}>
       {sectionLabel && (
         <div
           className={cn(

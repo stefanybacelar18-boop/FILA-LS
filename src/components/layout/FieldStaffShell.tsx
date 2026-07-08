@@ -1,14 +1,16 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
 import { Button } from "@/components/ui/Button";
 import { getDriverFirstName, getProfileDisplayName } from "@/lib/utils";
 import { LogOut, ListOrdered, LayoutDashboard } from "lucide-react";
 
-/** Shell mobile para empilhador (celular no pátio) */
+/** Shell mobile para empilhador — alinhado ao MotoristaShell */
 export function FieldStaffShell({
   children,
   userName,
@@ -30,21 +32,25 @@ export function FieldStaffShell({
   return (
     <div className="flex min-h-screen flex-col app-canvas-mobile pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]">
       <PanelShellHeader
+        logoHref="/empilhador"
+        leading={
+          <div className="min-w-0">
+            <Link href="/empilhador" className="inline-flex">
+              <BrandLogo size="sm" />
+            </Link>
+            <p className="mt-1 truncate text-sm font-semibold text-slate-800">Olá, {firstName}</p>
+          </div>
+        }
         trailing={
-          <>
-            <span className="max-w-[8rem] truncate rounded-full bg-brand-muted/80 px-3 py-1.5 text-xs font-semibold text-brand-dark">
-              {firstName}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="h-10 w-10 rounded-xl p-0 text-slate-400"
-              aria-label="Sair"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="h-10 rounded-xl px-2.5 text-slate-500"
+            aria-label="Sair"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         }
       />
 

@@ -10,6 +10,7 @@ type EmpilhadorQueueTabsProps = {
   className?: string;
 };
 
+/** Abas segmentadas — padrão mobile alinhado ao motorista */
 export function EmpilhadorQueueTabs({
   value,
   onChange,
@@ -18,7 +19,7 @@ export function EmpilhadorQueueTabs({
 }: EmpilhadorQueueTabsProps) {
   return (
     <div
-      className={cn("flex border-b border-slate-200", className)}
+      className={cn("empilhador-segmented-tabs", className)}
       role="tablist"
       aria-label="Filtrar fila"
     >
@@ -32,13 +33,11 @@ export function EmpilhadorQueueTabs({
             aria-selected={active}
             onClick={() => onChange(id)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 border-b-2 px-2 py-3 text-xs font-semibold transition",
-              active
-                ? "border-brand text-brand"
-                : "border-transparent text-slate-500 hover:text-slate-700"
+              "empilhador-segmented-tabs__item",
+              active && "empilhador-segmented-tabs__item--active"
             )}
           >
-            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <Icon className="h-4 w-4 shrink-0" aria-hidden />
             {label}
           </button>
         );

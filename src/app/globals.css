@@ -693,6 +693,44 @@ body {
   background: rgb(205 120 120 / 0.65);
 }
 
+.estoque-gauge--hero {
+  border: none;
+  background: rgb(255 255 255 / 0.12);
+  padding: 0.5rem 0.625rem;
+}
+
+.estoque-gauge--hero .estoque-gauge__track {
+  background: rgb(255 255 255 / 0.22);
+}
+
+.empilhador-segmented-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-radius: var(--radius-card);
+  background: rgb(241 245 249 / 0.95);
+  padding: 0.25rem;
+}
+
+.empilhador-segmented-tabs__item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: calc(var(--radius-card) - 0.25rem);
+  padding: 0.625rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgb(100 116 139);
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.empilhador-segmented-tabs__item--active {
+  background: white;
+  color: var(--brand-primary);
+  box-shadow: var(--shadow-card);
+}
+
 .table-head-cell {
   padding: 0.75rem 1rem;
   font-size: 0.6875rem;
