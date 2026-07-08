@@ -2,9 +2,7 @@
 
 import type { QueueEntry } from "@/lib/types";
 import { VEHICLE_TYPES, DEFAULT_CHECKIN_EMPRESA, DEFAULT_CHECKIN_TIPO_CARGA } from "@/lib/constants";
-import { entryRetornoRacksVazios } from "@/lib/queue-badges";
-import { formatVencimentoLabel } from "@/lib/minuta-intelligence";
-import { formatPhone, formatPrevisaoDate } from "@/lib/utils";
+import { formatPhone } from "@/lib/utils";
 import {
   formatEntryArrivalDay,
   formatEntryArrivalTime,
@@ -18,36 +16,26 @@ function vehicleTypeLabel(tipo: QueueEntry["tipo_veiculo"]): string | null {
   return VEHICLE_TYPES.find((v) => v.value === tipo)?.label ?? tipo;
 }
 
+/** Dados do check-in que não constam no card da fila */
 function buildCheckinSummaryRows(entry: QueueEntry): SummaryRow[] {
   const rows: SummaryRow[] = [];
 
   const nome = entry.nome?.trim();
-  if (nome) rows.push({ label: "Nome", value: nome });
+  if (nome) rows.push({ label: "Nome completo", value: nome });
 
   const telefone = formatPhone(entry.telefone);
   if (telefone) rows.push({ label: "Telefone", value: telefone });
 
-  const transportadora = entry.transportadora?.trim();
-  if (transportadora) rows.push({ label: "Transportadora", value: transportadora });
-
   const tipo = vehicleTypeLabel(entry.tipo_veiculo);
   if (tipo) rows.push({ label: "Tipo de veículo", value: tipo });
 
-  const cavalo = entry.placa_cavalo?.trim() || entry.placa?.trim();
+  const cavalo = entry.placa_cavalo?.trim();
   if (cavalo) rows.push({ label: "Placa cavalo", value: <span className="font-mono">{cavalo}</span> });
-
-  const carreta = entry.placa_carreta?.trim();
-  if (carreta) rows.push({ label: "Placa carreta", value: <span className="font-mono">{carreta}</span> });
 
   const segunda = entry.placa_segunda_carreta?.trim();
   if (segunda) {
     rows.push({ label: "Placa 2ª carreta", value: <span className="font-mono">{segunda}</span> });
   }
-
-  rows.push({
-    label: "Retorno com racks vazios",
-    value: entryRetornoRacksVazios(entry) ? "Sim" : "Não",
-  });
 
   const empresa = entry.empresa?.trim();
   if (empresa && empresa !== DEFAULT_CHECKIN_EMPRESA) {
@@ -57,20 +45,6 @@ function buildCheckinSummaryRows(entry: QueueEntry): SummaryRow[] {
   const tipoCarga = entry.tipo_carga?.trim();
   if (tipoCarga && tipoCarga !== DEFAULT_CHECKIN_TIPO_CARGA) {
     rows.push({ label: "Tipo de carga", value: tipoCarga });
-  }
-
-  if (entry.volume_motos != null && entry.volume_motos > 0) {
-    rows.push({ label: "Volume (minuta)", value: `${entry.volume_motos} motos` });
-  }
-
-  const nf = formatVencimentoLabel(entry.menor_vencimento);
-  if (nf) rows.push({ label: "Vencimento NF", value: nf });
-
-  if (entry.previsao_descarregamento) {
-    rows.push({
-      label: "Previsão descarga",
-      value: formatPrevisaoDate(entry.previsao_descarregamento),
-    });
   }
 
   const obs = entry.observacoes?.trim();
@@ -136,7 +110,7 @@ function SummarySection({
   );
 }
 
-/** Resumo organizado dos dados enviados no check-in */
+/** Complemento ao card — só o que não aparece na lista */
 export function CheckinEntrySummary({
   entry,
   className,
@@ -146,22 +120,16 @@ export function CheckinEntrySummary({
 }) {
   const all = buildCheckinSummaryRows(entry);
 
-  const motoristaLabels = new Set(["Nome", "Telefone", "Transportadora"]);
-  const veiculoLabels = new Set([
-    "Tipo de veículo",
-    "Placa cavalo",
-    "Placa carreta",
-    "Placa 2ª carreta",
-    "Retorno com racks vazios",
-  ]);
-  const cargaLabels = new Set(["Empresa", "Tipo de carga", "Volume (minuta)", "Vencimento NF"]);
-  const operacaoLabels = new Set(["Previsão descarga", "Doca", "Check-in realizado"]);
+  const motoristaLabels = new Set(["Nome completo", "Telefone"]);
+  const veiculoLabels = new Set(["Tipo de veículo", "Placa cavalo", "Placa 2ª carreta"]);
+  const cargaLabels = new Set(["Empresa", "Tipo de carga"]);
+  const operacaoLabels = new Set(["Check-in realizado", "Doca"]);
 
   const pick = (labels: Set<string>) => all.filter((r) => labels.has(r.label));
   const sections = [
     { title: "Motorista", rows: pick(motoristaLabels) },
     { title: "Veículo", rows: pick(veiculoLabels) },
-    { title: "Carga e minuta", rows: pick(cargaLabels) },
+    { title: "Carga", rows: pick(cargaLabels) },
     { title: "Operação", rows: pick(operacaoLabels) },
   ];
 

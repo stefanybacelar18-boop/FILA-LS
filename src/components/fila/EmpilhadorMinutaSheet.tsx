@@ -2,10 +2,7 @@
 
 import type { QueueEntry, QueueStatus } from "@/lib/types";
 import { isAusenteQueueStatus, isActiveQueueStatus } from "@/lib/queue";
-import { entryHasPrioridade } from "@/lib/queue-priorities";
-import { isNfVencida } from "@/lib/minuta-intelligence";
 import { CheckinEntrySummary } from "@/components/fila/CheckinEntrySummary";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import {
   CheckCircle2,
@@ -25,7 +22,7 @@ type EmpilhadorMinutaSheetProps = {
   onApplyStatus: (entryId: string, status: QueueStatus, fromStatus?: string) => void;
 };
 
-/** Painel ao tocar na minuta — dados do check-in + ações operacionais */
+/** Painel ao tocar na minuta — complemento ao card + ações operacionais */
 export function EmpilhadorMinutaSheet({
   entry,
   saving,
@@ -36,50 +33,22 @@ export function EmpilhadorMinutaSheet({
 }: EmpilhadorMinutaSheetProps) {
   const active = isActiveQueueStatus(entry.status);
   const absent = isAusenteQueueStatus(entry.status);
-  const priority = entryHasPrioridade(entry);
-  const placa = entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
 
   return (
     <div className="space-y-5 pb-1">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            Minuta
-          </p>
-          <p className="truncate text-2xl font-bold tracking-tight text-brand">
-            {entry.minuta || "—"}
-          </p>
-          <p className="mt-0.5 font-mono text-sm font-medium text-slate-600">{placa}</p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <StatusBadge status={entry.status} />
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
-            aria-label="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold tracking-tight text-slate-900">Detalhes do check-in</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
+          aria-label="Fechar"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       <CheckinEntrySummary entry={entry} />
-
-      {active &&
-        isNfVencida(entry.menor_vencimento) &&
-        !priority && (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800">
-            NF vencida — sem prioridade automática. Avise o administrador se precisar de prioridade
-            manual.
-          </p>
-        )}
-
-      {entry.capacidade_aviso && active && (
-        <p className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-900">
-          {entry.capacidade_aviso}
-        </p>
-      )}
 
       <div className="space-y-2 border-t border-slate-100 pt-4">
         {active && canChamarWhatsApp && (
