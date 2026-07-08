@@ -9,8 +9,8 @@ type EstoqueCapacityGaugeProps = {
 };
 
 function toneClass(pct: number): string {
-  if (pct >= 92) return "estoque-gauge__fill--critical";
-  if (pct >= 78) return "estoque-gauge__fill--warn";
+  if (pct >= 95) return "estoque-gauge__fill--critical";
+  if (pct >= 82) return "estoque-gauge__fill--warn";
   return "estoque-gauge__fill--ok";
 }
 
@@ -37,7 +37,6 @@ export function EstoqueCapacityGauge({
           className={cn("estoque-gauge__fill", ocupadoTone)}
           style={{ width: `${summary.pctOcupado}%` }}
         />
-        <div className="estoque-gauge__shine" aria-hidden />
       </div>
       {summary.vagasHoje > 0 && (
         <div
