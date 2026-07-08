@@ -29,7 +29,6 @@ import {
   isFinalizadaNoDiaOperacional,
 } from "@/lib/queue-counters";
 import { useQueuePanelData } from "@/hooks/useQueuePanelData";
-import { EmpilhadorFinalizadasToggle } from "@/components/fila/EmpilhadorQueueTabs";
 import { EmpilhadorQueueSummary } from "@/components/fila/EmpilhadorQueueSummary";
 import { EmpilhadorQueueList } from "@/components/fila/EmpilhadorQueueList";
 import { EmpilhadorMinutaSheet } from "@/components/fila/EmpilhadorMinutaSheet";
@@ -518,21 +517,15 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           finalizedCount={finalizedTodayCount}
           absentCount={ausenteEntries.length}
           estoqueSummary={estoqueSummary}
+          onFilterChange={(filter) => {
+            setEmpilhadorFilter(filter);
+            setSelectedId(null);
+            setMinutaSearch("");
+          }}
           trailing={
             <RefreshIconButton
               onRefresh={() => fetchQueue(true)}
               label="Atualizar fila"
-            />
-          }
-          tabsSlot={
-            <EmpilhadorFinalizadasToggle
-              filter={empilhadorFilter}
-              finalizedCount={finalizedTodayCount}
-              onChange={(filter) => {
-                setEmpilhadorFilter(filter);
-                setSelectedId(null);
-                setMinutaSearch("");
-              }}
             />
           }
         />

@@ -4,13 +4,12 @@ import type { QueueEntry, QueueStatus } from "@/lib/types";
 import { isAusenteQueueStatus, isActiveQueueStatus } from "@/lib/queue";
 import { entryHasPrioridade } from "@/lib/queue-priorities";
 import { isNfVencida } from "@/lib/minuta-intelligence";
-import { formatPhone } from "@/lib/utils";
+import { CheckinEntrySummary } from "@/components/fila/CheckinEntrySummary";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import {
   CheckCircle2,
   MessageCircle,
-  Phone,
   RotateCcw,
   User,
   UserX,
@@ -26,17 +25,7 @@ type EmpilhadorMinutaSheetProps = {
   onApplyStatus: (entryId: string, status: QueueStatus, fromStatus?: string) => void;
 };
 
-function FactRow({ label, value }: { label: string; value: React.ReactNode }) {
-  if (!value || value === "—") return null;
-  return (
-    <div className="flex items-start justify-between gap-3 py-2">
-      <dt className="shrink-0 text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="min-w-0 text-right text-sm font-semibold text-slate-800">{value}</dd>
-    </div>
-  );
-}
-
-/** Painel inferior ao tocar na minuta — ações operacionais sem repetir o card */
+/** Painel ao tocar na minuta — dados do check-in + ações operacionais */
 export function EmpilhadorMinutaSheet({
   entry,
   saving,
@@ -49,7 +38,6 @@ export function EmpilhadorMinutaSheet({
   const absent = isAusenteQueueStatus(entry.status);
   const priority = entryHasPrioridade(entry);
   const placa = entry.placa_carreta?.trim() || entry.placa?.trim() || "—";
-  const telefone = formatPhone(entry.telefone);
 
   return (
     <div className="space-y-5 pb-1">
@@ -76,22 +64,7 @@ export function EmpilhadorMinutaSheet({
         </div>
       </div>
 
-      <dl className="divide-y divide-slate-100 rounded-xl border border-slate-200/90 bg-slate-50/50 px-3">
-        <FactRow label="Motorista" value={entry.nome?.trim() || "—"} />
-        <FactRow label="Transportadora" value={entry.transportadora?.trim() || "—"} />
-        {telefone && (
-          <FactRow
-            label="Telefone"
-            value={
-              <span className="inline-flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 text-slate-400" aria-hidden />
-                {telefone}
-              </span>
-            }
-          />
-        )}
-        {entry.doca?.trim() && <FactRow label="Doca" value={entry.doca.trim()} />}
-      </dl>
+      <CheckinEntrySummary entry={entry} />
 
       {active &&
         isNfVencida(entry.menor_vencimento) &&
@@ -102,7 +75,13 @@ export function EmpilhadorMinutaSheet({
           </p>
         )}
 
-      <div className="space-y-2 pt-1">
+      {entry.capacidade_aviso && active && (
+        <p className="rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-900">
+          {entry.capacidade_aviso}
+        </p>
+      )}
+
+      <div className="space-y-2 border-t border-slate-100 pt-4">
         {active && canChamarWhatsApp && (
           <Button
             variant="success"
