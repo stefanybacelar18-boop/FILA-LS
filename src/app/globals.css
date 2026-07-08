@@ -337,6 +337,96 @@ body {
   opacity: 0.9;
 }
 
+.queue-position-hero__footer {
+  margin-top: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid rgb(255 255 255 / 0.15);
+  padding-top: 0.75rem;
+}
+
+/* Busca por minuta — motorista / fila pública */
+.minuta-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.minuta-search__icon {
+  pointer-events: none;
+  position: absolute;
+  left: 0.875rem;
+  height: 1rem;
+  width: 1rem;
+  color: rgb(100 116 139);
+}
+
+.minuta-search__input {
+  width: 100%;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--brand-border);
+  background: white;
+  padding: 0.75rem 2.5rem 0.75rem 2.5rem;
+  font-size: 1rem;
+  color: rgb(15 23 42);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.minuta-search__input::placeholder {
+  color: rgb(148 163 184);
+}
+
+.minuta-search__input:focus {
+  outline: none;
+  border-color: rgb(21 101 192 / 0.45);
+  box-shadow: 0 0 0 3px rgb(21 101 192 / 0.12);
+}
+
+.minuta-search__clear {
+  position: absolute;
+  right: 0.5rem;
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: rgb(100 116 139);
+  transition: background 0.15s, color 0.15s;
+}
+
+.minuta-search__clear:hover {
+  background: rgb(241 245 249);
+  color: rgb(51 65 85);
+}
+
+/* Resumo do motorista — métricas + status */
+.driver-queue-summary {
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--brand-border);
+  background: white;
+  box-shadow: var(--shadow-card);
+}
+
+.driver-queue-summary .stat-strip {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.driver-queue-summary__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid rgb(21 101 192 / 0.08);
+  background: rgb(248 250 252 / 0.8);
+  padding: 0.625rem 1rem;
+}
+
 /* Painel TV — fundo azul marca */
 .app-canvas-tv {
   background-color: var(--brand-dark);

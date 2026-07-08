@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
@@ -40,11 +40,42 @@ export function DriverQueuePanel() {
   );
 }
 
+function DriverQueueFilaSection({
+  entries,
+  highlightId,
+  searchQuery,
+  onSearchChange,
+  showStatus = false,
+  headerAction,
+}: {
+  entries: QueueEntry[];
+  highlightId?: string;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  showStatus?: boolean;
+  headerAction?: React.ReactNode;
+}) {
+  return (
+    <MotoristaQueueList
+      entries={entries}
+      highlightId={highlightId}
+      title="Fila do pátio"
+      showStatus={showStatus}
+      compact
+      searchQuery={searchQuery}
+      onSearchChange={onSearchChange}
+      searchPlaceholder="Buscar minuta na fila…"
+      headerAction={headerAction}
+    />
+  );
+}
+
 function DriverQueueContent({ profile }: { profile: Profile }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { entry, allEntries, loading, refresh } = useDriverQueueData(profile);
   const geo = useMotoristaGeofence(!loading);
+  const [minutaSearch, setMinutaSearch] = useState("");
 
   const hasEntry = !!entry;
   const checkinNavEnabled = hasEntry || geo.canCheckIn;
@@ -89,9 +120,9 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           <Spinner label="Carregando fila…" />
         </div>
       ) : hasEntry ? (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           <QueuePositionHero
-            label="Sua posição na fila"
+            label="Sua posição"
             value={posicao != null ? `${posicao}º` : "—"}
             detail={
               aFrente > 0
@@ -99,44 +130,48 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
                 : "Você é o próximo da fila"
             }
             trailing={listRefresh}
+            footer={
+              <div className="flex w-full justify-center">
+                <StatusBadge status={entry.status} className="bg-white/95 shadow-sm" />
+              </div>
+            }
             className="hero-pattern"
           />
 
-          <div className="stat-strip" role="status">
-            <div className="stat-strip__cell">
-              <span className="stat-strip__value text-brand">{entry.minuta || "—"}</span>
-              <span className="stat-strip__label">Minuta</span>
-              <span className="stat-strip__hint">Seu check-in</span>
-            </div>
-            <div className="stat-strip__cell">
-              <span className="stat-strip__value text-slate-700">{aFrente}</span>
-              <span className="stat-strip__label">À frente</span>
-              <span className="stat-strip__hint">Veículos</span>
-            </div>
-            <div className="stat-strip__cell">
-              <span className="stat-strip__value text-base text-slate-800">
-                {previsaoLabel ?? "—"}
-              </span>
-              <span className="stat-strip__label">Previsão</span>
-              <span className="stat-strip__hint">Descarga</span>
+          <div className="driver-queue-summary">
+            <div className="stat-strip" role="status">
+              <div className="stat-strip__cell">
+                <span className="stat-strip__value text-brand">{entry.minuta || "—"}</span>
+                <span className="stat-strip__label">Minuta</span>
+                <span className="stat-strip__hint">Seu check-in</span>
+              </div>
+              <div className="stat-strip__cell">
+                <span className="stat-strip__value text-slate-700">{aFrente}</span>
+                <span className="stat-strip__label">À frente</span>
+                <span className="stat-strip__hint">Veículos</span>
+              </div>
+              <div className="stat-strip__cell">
+                <span className="stat-strip__value text-sm text-slate-800">
+                  {previsaoLabel ?? "—"}
+                </span>
+                <span className="stat-strip__label">Previsão</span>
+                <span className="stat-strip__hint">Descarga</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-center">
-            <StatusBadge status={entry.status} className="px-4 py-1 text-sm" />
-          </div>
-
-          <MotoristaQueueList
+          <DriverQueueFilaSection
             entries={entries}
             highlightId={entry.id}
-            title="Fila do pátio"
+            searchQuery={minutaSearch}
+            onSearchChange={setMinutaSearch}
             showStatus
           />
 
           <p className="text-center text-xs text-slate-400">Atualização em tempo real</p>
         </div>
       ) : checkinBlocked ? (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           <CheckinBlockedAlert
             step={geo.step}
             distanceLabel={geo.distanceLabel}
@@ -146,9 +181,10 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           />
 
           {entries.length > 0 ? (
-            <MotoristaQueueList
+            <DriverQueueFilaSection
               entries={entries}
-              title="Fila do pátio"
+              searchQuery={minutaSearch}
+              onSearchChange={setMinutaSearch}
               headerAction={listRefresh}
             />
           ) : (
@@ -156,7 +192,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           <div className="panel-card">
             <div className="panel-card__icon">
               <ClipboardList className="h-7 w-7 text-brand" />
@@ -172,9 +208,10 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           </div>
 
           {entries.length > 0 && (
-            <MotoristaQueueList
+            <DriverQueueFilaSection
               entries={entries}
-              title="Fila do pátio"
+              searchQuery={minutaSearch}
+              onSearchChange={setMinutaSearch}
               headerAction={listRefresh}
             />
           )}

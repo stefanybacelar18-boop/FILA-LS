@@ -7,8 +7,8 @@ import { filterOperationalPanelEntries } from "@/lib/constants";
 import { computeEmVencimentoEntryIds } from "@/lib/queue-vencimento-badge";
 import { MotoristaQueueCard } from "@/components/motorista/MotoristaQueueCard";
 import { PanelSection } from "@/components/ui/PanelSection";
-import { Input } from "@/components/ui/Input";
-import { ListOrdered, Search } from "lucide-react";
+import { MinutaSearchField } from "@/components/ui/MinutaSearchField";
+import { ListOrdered } from "lucide-react";
 
 type MotoristaQueueListProps = {
   entries: QueueEntry[];
@@ -20,6 +20,8 @@ type MotoristaQueueListProps = {
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   headerAction?: React.ReactNode;
+  /** Texto curto no painel do motorista autenticado */
+  compact?: boolean;
 };
 
 function matchesMinutaSearch(entry: QueueEntry, query: string): boolean {
@@ -39,8 +41,9 @@ export function MotoristaQueueList({
   onSearchChange,
   searchPlaceholder = "Buscar minuta…",
   headerAction,
+  compact = false,
 }: MotoristaQueueListProps) {
-  const { emVencimentoIds, sorted, positionById, totalOperational } = useMemo(() => {
+  const { emVencimentoIds, sorted, positionById, totalOperational, filteredCount } = useMemo(() => {
     const operational = filterOperationalPanelEntries(entries);
     const ordered = [...operational].sort(compareQueueOrder);
     const emVencimento = computeEmVencimentoEntryIds(entries);
@@ -57,16 +60,21 @@ export function MotoristaQueueList({
       sorted: sortedEntries,
       positionById: positionMap,
       totalOperational: operational.length,
+      filteredCount: sortedEntries.length,
     };
   }, [entries, searchQuery]);
 
-  const description = `${totalOperational} ${
-    totalOperational === 1 ? "minuta na fila" : "minutas na fila"
-  } · ordem operacional${
-    showStatus || emVencimentoIds.size > 0
-      ? " · Prioridade vencimento = NF com urgência na fila"
-      : ""
-  }`;
+  const description = compact
+    ? searchQuery.trim()
+      ? `${filteredCount} de ${totalOperational} minuta(s) · busca ativa`
+      : `${totalOperational} ${totalOperational === 1 ? "minuta" : "minutas"} no pátio`
+    : `${totalOperational} ${
+        totalOperational === 1 ? "minuta na fila" : "minutas na fila"
+      } · ordem operacional${
+        showStatus || emVencimentoIds.size > 0
+          ? " · Prioridade vencimento = NF com urgência na fila"
+          : ""
+      }`;
 
   return (
     <PanelSection
@@ -76,19 +84,12 @@ export function MotoristaQueueList({
       action={headerAction}
     >
       {onSearchChange && (
-        <div className="relative mb-3">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-            aria-hidden
-          />
-          <Input
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="pl-9"
-            aria-label="Buscar minuta"
-          />
-        </div>
+        <MinutaSearchField
+          value={searchQuery}
+          onChange={onSearchChange}
+          placeholder={searchPlaceholder}
+          className="mb-3"
+        />
       )}
 
       {sorted.length === 0 ? (

@@ -74,24 +74,27 @@ export function QueuePositionHero({
   value,
   detail,
   trailing,
+  footer,
   className,
 }: {
   label: string;
   value: React.ReactNode;
   detail?: string;
   trailing?: React.ReactNode;
+  footer?: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn("queue-position-hero", className)} aria-live="polite">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="queue-position-hero__label">{label}</p>
           <p className="queue-position-hero__value">{value}</p>
           {detail && <p className="queue-position-hero__detail">{detail}</p>}
         </div>
         {trailing}
       </div>
+      {footer && <div className="queue-position-hero__footer">{footer}</div>}
     </div>
   );
 }
