@@ -20,7 +20,7 @@ import {
   assertStatusAllowed,
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
-import { isoToDateInput, getProfileDisplayName } from "@/lib/utils";
+import { isoToDateInput, getProfileDisplayName, cn } from "@/lib/utils";
 import {
   countAguardandoDescarregamento,
   countAusentes,
@@ -36,8 +36,8 @@ import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip
 import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
 import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
 import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlertsBanner";
-import { QueueEntryDetailPanel } from "@/components/fila/QueueEntryDetailPanel";
-import { QueuePanelListSection } from "@/components/fila/QueuePanelListSection";
+import { AdminMinutaDetailPanel } from "@/components/fila/AdminMinutaDetailPanel";
+import { AdminQueueList } from "@/components/fila/AdminQueueList";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { AppShell } from "@/components/layout/AppShell";
 import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
@@ -303,6 +303,13 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const nextToCall = getNextToCall(activeEntries);
   const nextToCallId = nextToCall?.id ?? null;
 
+  const showEmpilhadorCta =
+    isEmpilhador &&
+    Boolean(nextToCall) &&
+    permissions.canChamarWhatsApp &&
+    !selected &&
+    empilhadorFilter === "aguardando";
+
   const capacityAlerts = useMemo(
     () =>
       activeEntries.filter(
@@ -321,14 +328,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         displayedEntries.filter((e) => normalizeQueueStatus(e.status) === "finalizado")
       )
     : [];
-  const adminHasVisibleList =
-    adminOperationalList.length > 0 || showFinalizados;
-
-  const entryDetailProps = {
+  const adminDetailProps = {
     selected,
     permissions,
-    isAdmin,
-    isEmpilhador,
     selectedIsActive,
     editPrioridade,
     editDoca,
@@ -337,7 +339,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     editRetornoRacks,
     saving,
     statusOptions,
-    onClose: isEmpilhador ? () => setSelectedId(null) : undefined,
     onEditDoca: setEditDoca,
     onEditStatus: setEditStatus,
     onEditPrevisao: setEditPrevisao,
@@ -366,56 +367,29 @@ export function QueuePanel({ profile }: { profile: Profile }) {
           <div
             className={
               isEmpilhador
-                ? "space-y-2 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]"
-                : "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-6"
+                ? cn(
+                    "space-y-2",
+                    showEmpilhadorCta && "pb-[var(--mobile-queue-cta-height)]"
+                  )
+                : "grid items-start gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(26rem,1fr)] xl:gap-8 2xl:grid-cols-[minmax(0,1fr)_40rem]"
             }
           >
             <div className={isAdmin ? "space-y-4" : "space-y-2"}>
               {capacityAlerts.length > 0 &&
-                (isAdmin || isEmpilhador) &&
-                empilhadorFilter === "aguardando" && (
+                (isAdmin || (isEmpilhador && empilhadorFilter === "aguardando")) && (
                   <QueueCapacityAlertsBanner entries={capacityAlerts} />
                 )}
-              {isAdmin && !adminHasVisibleList ? (
-                <Card className="py-14 text-center">
-                  <p className="section-eyebrow">Fila do dia</p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Nenhum veículo aguardando na fila.
-                  </p>
-                </Card>
-              ) : isAdmin ? (
-                <div className="space-y-5">
-                  {adminOperationalList.length > 0 && (
-                    <QueuePanelListSection
-                      list={adminOperationalList}
-                      selectedId={selectedId}
-                      nextToCallId={nextToCallId}
-                      isAdmin={isAdmin}
-                      onSelect={selectEntry}
-                      sectionLabel={showFinalizados ? "Fila do pátio" : undefined}
-                      cardVariant="admin"
-                    />
-                  )}
-                  {showFinalizados && adminClosedList.length > 0 && (
-                    <QueuePanelListSection
-                      list={adminClosedList}
-                      selectedId={selectedId}
-                      nextToCallId={nextToCallId}
-                      isAdmin={isAdmin}
-                      onSelect={selectEntry}
-                      sectionLabel="Finalizados"
-                      startIndex={adminOperationalList.length}
-                      cardVariant="admin"
-                    />
-                  )}
-                  {showFinalizados && adminClosedList.length === 0 && (
-                    <Card className="py-8 text-center">
-                      <p className="text-sm text-slate-500">
-                        Nenhuma minuta finalizada no histórico carregado.
-                      </p>
-                    </Card>
-                  )}
-                </div>
+              {isAdmin ? (
+                <AdminQueueList
+                  operationalList={adminOperationalList}
+                  closedList={adminClosedList}
+                  showClosed={showFinalizados}
+                  selectedId={selectedId}
+                  nextToCallId={nextToCallId}
+                  searchQuery={minutaSearch}
+                  onSearchChange={setMinutaSearch}
+                  onSelect={selectEntry}
+                />
               ) : (
                 <EmpilhadorQueueList
                   entries={displayedEntries}
@@ -429,45 +403,30 @@ export function QueuePanel({ profile }: { profile: Profile }) {
             </div>
 
             {!isEmpilhador && (
-              <Card className="sticky top-28 h-fit overflow-hidden border-brand/12 p-0 shadow-[var(--shadow-card)]">
-                <div className="border-b border-brand/10 bg-brand-muted/40 px-5 py-4">
+              <Card className="sticky top-24 flex max-h-[calc(100vh-6.5rem)] flex-col overflow-hidden border-brand/12 p-0 shadow-[var(--shadow-card)]">
+                <div className="shrink-0 border-b border-brand/10 bg-brand-muted/40 px-5 py-4 xl:px-6">
                   <h2 className="text-base font-semibold text-slate-900">Gerenciar minuta</h2>
                   <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    {selected ? (
-                      <>
-                        <span className="font-semibold text-brand">{selected.minuta || "—"}</span>
-                        <span className="text-slate-400"> · </span>
-                        <span className="font-mono text-slate-600">
-                          {selected.placa_cavalo || selected.placa}
-                        </span>
-                      </>
-                    ) : (
-                      "Selecione um veículo na fila ao lado"
-                    )}
+                    {selected
+                      ? "Check-in completo e gestão operacional"
+                      : "Selecione um veículo na fila ao lado"}
                   </p>
                 </div>
-                <div className="p-5">
-                  <QueueEntryDetailPanel {...entryDetailProps} />
+                <div className="min-h-0 flex-1 overflow-y-auto p-5 xl:p-6">
+                  <AdminMinutaDetailPanel {...adminDetailProps} />
                 </div>
               </Card>
             )}
           </div>
 
-          {isEmpilhador &&
-            nextToCall &&
-            permissions.canChamarWhatsApp &&
-            !selected &&
-            empilhadorFilter === "aguardando" && (
-              <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 px-4 py-3">
+          {showEmpilhadorCta && nextToCall && (
+              <div className="mobile-queue-cta-bar">
                 <Button
                   variant="success"
                   size="lg"
-                  className="w-full rounded-xl shadow-lg"
+                  className="w-full rounded-xl shadow-md"
                   disabled={saving}
-                  onClick={() => {
-                    selectEntry(nextToCall);
-                    chamarMotorista(nextToCall);
-                  }}
+                  onClick={() => chamarMotorista(nextToCall)}
                 >
                   <Zap className="h-5 w-5" />
                   Chamar próximo
@@ -483,7 +442,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 aria-label="Fechar painel"
                 onClick={() => setSelectedId(null)}
               />
-              <div className="animate-slide-up fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-[60] max-h-[min(88vh,calc(100dvh-3.25rem-env(safe-area-inset-bottom,0px)))] overflow-y-auto rounded-t-2xl bg-white shadow-[var(--shadow-elevated)]">
+              <div className="animate-slide-up fixed inset-x-0 bottom-[var(--mobile-bottom-nav-clearance)] z-[60] max-h-[min(88vh,calc(100dvh-var(--mobile-bottom-nav-clearance)))] overflow-y-auto rounded-t-2xl bg-white shadow-[var(--shadow-elevated)]">
                 <div className="sticky top-0 z-10 bg-white px-4 pb-1 pt-3">
                   <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200" />
                 </div>
