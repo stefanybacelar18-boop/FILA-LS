@@ -6,17 +6,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueData } from "@/hooks/useDriverQueueData";
 import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
-import { resolveQueuePosition } from "@/lib/queue";
+import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { Card } from "@/components/ui/Card";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
 import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { Spinner } from "@/components/ui/Spinner";
+import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
+import { QueuePositionHero } from "@/components/ui/PageHeader";
 import type { Profile, QueueEntry } from "@/lib/types";
 import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
-import { ClipboardList, RefreshCw, ArrowRight } from "lucide-react";
+import { formatPrevisaoDate } from "@/lib/utils";
+import { ClipboardList, ArrowRight } from "lucide-react";
 
 export function DriverQueuePanel() {
   return (
@@ -67,9 +69,14 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     : null;
 
   const showLoading = loading || (!hasEntry && geoLoading);
-  const posicao = entry
-    ? resolveQueuePosition(entry as QueueEntry, allEntries as QueueEntry[])
+  const entries = allEntries as QueueEntry[];
+  const posicao = entry ? resolveQueuePosition(entry, entries) : null;
+  const aFrente = entry ? countVehiclesAhead(entry, entries) : 0;
+  const previsaoLabel = entry?.previsao_descarregamento
+    ? formatPrevisaoDate(entry.previsao_descarregamento)
     : null;
+
+  const listRefresh = <RefreshIconButton onRefresh={refresh} label="Atualizar fila" />;
 
   return (
     <MotoristaShell
@@ -83,34 +90,44 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
         </div>
       ) : hasEntry ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-600">Sua posição na fila</p>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="rounded-xl p-2 text-brand hover:bg-slate-100"
-              aria-label="Atualizar fila"
-            >
-              <RefreshCw className="h-5 w-5" />
-            </button>
+          <QueuePositionHero
+            label="Sua posição na fila"
+            value={posicao != null ? `${posicao}º` : "—"}
+            detail={
+              aFrente > 0
+                ? `${aFrente} veículo${aFrente !== 1 ? "s" : ""} à frente`
+                : "Você é o próximo da fila"
+            }
+            trailing={listRefresh}
+            className="hero-pattern"
+          />
+
+          <div className="stat-strip" role="status">
+            <div className="stat-strip__cell">
+              <span className="stat-strip__value text-brand">{entry.minuta || "—"}</span>
+              <span className="stat-strip__label">Minuta</span>
+              <span className="stat-strip__hint">Seu check-in</span>
+            </div>
+            <div className="stat-strip__cell">
+              <span className="stat-strip__value text-slate-700">{aFrente}</span>
+              <span className="stat-strip__label">À frente</span>
+              <span className="stat-strip__hint">Veículos</span>
+            </div>
+            <div className="stat-strip__cell">
+              <span className="stat-strip__value text-base text-slate-800">
+                {previsaoLabel ?? "—"}
+              </span>
+              <span className="stat-strip__label">Previsão</span>
+              <span className="stat-strip__hint">Descarga</span>
+            </div>
           </div>
 
-          <Card className="card-brand py-6 text-center" aria-live="polite">
-            <p className="text-sm font-medium uppercase text-slate-500">Posição</p>
-            <p className="mt-1 text-6xl font-black text-brand">
-              {posicao != null ? `${posicao}º` : "—"}
-            </p>
-            <div className="mt-3 flex justify-center">
-              <StatusBadge status={entry.status} className="px-4 py-1 text-sm" />
-            </div>
-            <p className="mt-4 text-lg font-bold text-brand">{entry.minuta || "—"}</p>
-            {entry.nome?.trim() && (
-              <p className="mt-2 text-sm font-semibold text-slate-700">{entry.nome.trim()}</p>
-            )}
-          </Card>
+          <div className="flex justify-center">
+            <StatusBadge status={entry.status} className="px-4 py-1 text-sm" />
+          </div>
 
           <MotoristaQueueList
-            entries={allEntries as QueueEntry[]}
+            entries={entries}
             highlightId={entry.id}
             title="Fila do pátio"
             showStatus
@@ -128,8 +145,12 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
             redirectedFromCheckin={redirectedFromCheckin}
           />
 
-          {allEntries.length > 0 ? (
-            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" />
+          {entries.length > 0 ? (
+            <MotoristaQueueList
+              entries={entries}
+              title="Fila do pátio"
+              headerAction={listRefresh}
+            />
           ) : (
             <p className="text-center text-sm text-slate-500">Nenhum veículo na fila no momento.</p>
           )}
@@ -144,14 +165,18 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
             <p className="panel-card__desc">
               Você está no pátio. Preencha os dados da carga para entrar na fila.
             </p>
-            <LinkButton href="/checkin" className="mt-6 w-full py-3.5 text-base">
+            <LinkButton href="/checkin" className="touch-target mt-6 w-full py-3.5 text-base">
               Iniciar check-in
               <ArrowRight className="h-4 w-4" />
             </LinkButton>
           </div>
 
-          {allEntries.length > 0 && (
-            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" />
+          {entries.length > 0 && (
+            <MotoristaQueueList
+              entries={entries}
+              title="Fila do pátio"
+              headerAction={listRefresh}
+            />
           )}
         </div>
       )}

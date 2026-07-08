@@ -44,6 +44,7 @@ import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
+import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { CheckCircle2, Clock, Zap } from "lucide-react";
 
 type EmpilhadorFilter = "aguardando" | "finalizadas";
@@ -507,11 +508,17 @@ export function QueuePanel({ profile }: { profile: Profile }) {
               ? `${operationalEntries.length} veículo${operationalEntries.length !== 1 ? "s" : ""} no pátio${ausenteEntries.length > 0 ? ` · ${ausenteEntries.length} ausente${ausenteEntries.length !== 1 ? "s" : ""}` : ""}`
               : `${displayedEntries.length} minuta${displayedEntries.length !== 1 ? "s" : ""} finalizada${displayedEntries.length !== 1 ? "s" : ""} hoje`
           }
-        />
+        >
+          <RefreshIconButton
+            onRefresh={() => fetchQueue(true)}
+            label="Atualizar fila"
+          />
+        </PanelPageTitle>
 
         <QueueMobileSummaryStrip
           waiting={aguardandoCount}
           finalized={finalizedTodayCount}
+          absent={adminAbsentCount}
           className="mb-3"
         />
 
@@ -549,6 +556,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         description="Ordem por check-in e prioridade · atualização em tempo real"
       >
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[15rem]">
+          <RefreshIconButton
+            onRefresh={() => fetchQueue(true)}
+            label="Atualizar fila"
+            className="self-end sm:self-auto"
+          />
           {nextToCall && permissions.canChamarWhatsApp && (
             <Button
               variant="success"

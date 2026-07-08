@@ -3,26 +3,41 @@ import { cn } from "@/lib/utils";
 type QueueMobileSummaryStripProps = {
   waiting: number;
   finalized: number;
+  absent?: number;
   className?: string;
 };
 
-/** Resumo horizontal compacto — empilhador mobile */
+/** Resumo horizontal compacto — empilhador mobile (padronizado com admin). */
 export function QueueMobileSummaryStrip({
   waiting,
   finalized,
+  absent = 0,
   className,
 }: QueueMobileSummaryStripProps) {
+  const showAbsent = absent > 0;
+
   return (
     <div
       className={cn("stat-strip", className)}
       role="status"
-      aria-label={`${waiting} aguardando descarregamento na fila, ${finalized} finalizadas hoje`}
+      aria-label={
+        showAbsent
+          ? `${waiting} aguardando, ${finalized} finalizadas hoje, ${absent} ausentes`
+          : `${waiting} aguardando descarregamento na fila, ${finalized} finalizadas hoje`
+      }
     >
       <div className="stat-strip__cell">
         <span className="stat-strip__value text-brand">{waiting}</span>
         <span className="stat-strip__label">Aguardando</span>
         <span className="stat-strip__hint">Na fila agora</span>
       </div>
+      {showAbsent && (
+        <div className="stat-strip__cell">
+          <span className="stat-strip__value text-slate-600">{absent}</span>
+          <span className="stat-strip__label">Ausente</span>
+          <span className="stat-strip__hint">No pátio</span>
+        </div>
+      )}
       <div className="stat-strip__cell">
         <span className="stat-strip__value text-emerald-700">{finalized}</span>
         <span className="stat-strip__label">Finalizadas</span>

@@ -56,7 +56,8 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "w-full rounded-xl border bg-white text-left transition active:scale-[0.995]",
+        "touch-target w-full rounded-xl border bg-white text-left transition active:scale-[0.995]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25",
         isAdmin ? "p-3.5 shadow-[var(--shadow-card)] lg:p-4" : "p-3 shadow-sm",
         selected && "border-brand/40 ring-2 ring-brand/15",
         !selected && isNext && "border-emerald-300 bg-emerald-50/30",
