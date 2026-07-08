@@ -60,7 +60,7 @@ export function EmpilhadorMinutaSheet({
   const telefone = formatPhone(entry.telefone);
 
   return (
-    <div className="space-y-5 pb-2">
+    <div className="space-y-5 pb-1">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">

@@ -484,11 +484,11 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 aria-label="Fechar painel"
                 onClick={() => setSelectedId(null)}
               />
-              <div className="animate-slide-up fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-2xl bg-white shadow-[var(--shadow-elevated)] safe-bottom">
+              <div className="animate-slide-up fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-[60] max-h-[min(88vh,calc(100dvh-3.25rem-env(safe-area-inset-bottom,0px)))] overflow-y-auto rounded-t-2xl bg-white shadow-[var(--shadow-elevated)]">
                 <div className="sticky top-0 z-10 bg-white px-4 pb-1 pt-3">
                   <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200" />
                 </div>
-                <div className="page-container pb-8 pt-1">
+                <div className="page-container pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-1">
                   <EmpilhadorMinutaSheet
                     entry={selected}
                     saving={saving}
