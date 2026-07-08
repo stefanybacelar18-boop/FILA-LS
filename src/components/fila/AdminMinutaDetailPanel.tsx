@@ -119,13 +119,13 @@ export function AdminMinutaDetailPanel({
   permissions,
   selectedIsActive,
   editPrioridade,
-  editDoca,
+  editDoca: _editDoca,
   editStatus,
   editPrevisao,
   editRetornoRacks,
   saving,
   statusOptions,
-  onEditDoca,
+  onEditDoca: _onEditDoca,
   onEditStatus,
   onEditPrevisao,
   onEditRetornoRacks,
@@ -333,15 +333,6 @@ export function AdminMinutaDetailPanel({
                 </span>
               </span>
             </label>
-          )}
-
-          {permissions.canEditDoca && (
-            <Input
-              label="Doca"
-              value={editDoca}
-              onChange={(e) => onEditDoca(e.target.value)}
-              placeholder="Ex: Doca 3"
-            />
           )}
 
           {statusOptions.length > 0 && (
