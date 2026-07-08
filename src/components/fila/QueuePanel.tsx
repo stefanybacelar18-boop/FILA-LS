@@ -35,6 +35,7 @@ import { EmpilhadorMinutaSheet } from "@/components/fila/EmpilhadorMinutaSheet";
 import { AdminQueueActionBar } from "@/components/fila/AdminQueueActionBar";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlertsBanner";
+import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
 import { AdminMinutaDetailPanel } from "@/components/fila/AdminMinutaDetailPanel";
 import { AdminQueueList } from "@/components/fila/AdminQueueList";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
