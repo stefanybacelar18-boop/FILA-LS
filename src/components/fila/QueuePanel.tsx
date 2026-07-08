@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState, useMemo } from "react";
 import type { QueueEntry, QueueStatus, Profile } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
 import {
@@ -11,78 +10,58 @@ import {
   normalizeQueueStatus,
   getNextToCall,
 } from "@/lib/queue";
+import { sortClosedEntries } from "@/lib/queue-closed-sort";
 import { updateQueueEntryViaApi } from "@/lib/queue-api";
 import { entryHasPrioridade } from "@/lib/queue-priorities";
 import { entryRetornoRacksVazios } from "@/lib/queue-badges";
-import { RacksVaziosBadge } from "@/components/fila/RacksVaziosBadge";
-import { QueueEntryBadges } from "@/components/fila/QueueEntryBadges";
 import {
   getQueuePermissions,
   statusOptionsForRole,
   assertStatusAllowed,
 } from "@/lib/role-permissions";
 import { getCallDriverWhatsAppLink, getEmpilhadorCallWhatsAppLink } from "@/lib/whatsapp";
-import { formatPhone, isoToDateInput, getProfileDisplayName, cn, formatPrevisaoDate } from "@/lib/utils";
-import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
-import { isNfVencida } from "@/lib/minuta-intelligence";
-import { countAguardandoDescarregamento, countAusentes, countFinalizadasNoDiaOperacional, countStrictAguardandoDescarregamento, isFinalizadaNoDiaOperacional } from "@/lib/queue-counters";
-import { createDebouncedFn } from "@/lib/debounce";
-import { QUEUE_REALTIME_DEBOUNCE_MS } from "@/lib/queue-refresh";
-import { QueueEntryDates } from "@/components/fila/QueueEntryDates";
-import { EmpilhadorQueueCard } from "@/components/fila/EmpilhadorQueueCard";
+import { isoToDateInput, getProfileDisplayName } from "@/lib/utils";
+import {
+  countAguardandoDescarregamento,
+  countAusentes,
+  countFinalizadasNoDiaOperacional,
+  countStrictAguardandoDescarregamento,
+  isFinalizadaNoDiaOperacional,
+} from "@/lib/queue-counters";
+import { useQueuePanelData } from "@/hooks/useQueuePanelData";
 import { EmpilhadorQueueTabs } from "@/components/fila/EmpilhadorQueueTabs";
 import { QueueAdminSummaryStrip } from "@/components/fila/QueueAdminSummaryStrip";
 import { QueueMobileSummaryStrip } from "@/components/fila/QueueMobileSummaryStrip";
 import { EstoqueCapacityGauge } from "@/components/fila/EstoqueCapacityGauge";
-import type { EstoqueCapacitySummary } from "@/lib/estoque-capacity-summary";
+import { QueuePanelAlerts } from "@/components/fila/QueuePanelAlerts";
+import { QueueCapacityAlertsBanner } from "@/components/fila/QueueCapacityAlertsBanner";
+import { QueueEntryDetailPanel } from "@/components/fila/QueueEntryDetailPanel";
+import { QueuePanelListSection } from "@/components/fila/QueuePanelListSection";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { AppShell } from "@/components/layout/AppShell";
-import {
-  FieldStaffShell,
-} from "@/components/layout/FieldStaffShell";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { FieldStaffShell } from "@/components/layout/FieldStaffShell";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import {
-  MessageCircle,
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  UserX,
-  Star,
-  Zap,
-  RotateCcw,
-  X,
-  PackageOpen,
-  Filter,
-  Clock,
-} from "lucide-react";
+import { CheckCircle2, Clock, Zap } from "lucide-react";
 
 type EmpilhadorFilter = "aguardando" | "finalizadas";
 
-function sortClosedEntries(entries: QueueEntry[]): QueueEntry[] {
-  return [...entries].sort(
-    (a, b) =>
-      new Date(b.finished_at ?? b.updated_at ?? 0).getTime() -
-      new Date(a.finished_at ?? a.updated_at ?? 0).getTime()
-  );
-}
-
 export function QueuePanel({ profile }: { profile: Profile }) {
-  const supabase = useMemo(() => createClient(), []);
   const appRole = toAppRole(profile.role);
   const permissions = getQueuePermissions(profile.role);
   const statusOptions = statusOptionsForRole(profile.role);
   const isEmpilhador = appRole === "empilhador";
   const isAdmin = appRole === "administrador";
 
-  const [entries, setEntries] = useState<QueueEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { entries, setEntries, loading, fetchError, estoqueSummary, fetchQueue } =
+    useQueuePanelData({
+      role: profile.role,
+      isAdmin,
+      isEmpilhador,
+    });
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<QueueStatus>("aguardando_descarregamento");
   const [editDoca, setEditDoca] = useState("");
@@ -92,42 +71,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   const [saving, setSaving] = useState(false);
   const [showFinalizados, setShowFinalizados] = useState(false);
   const [empilhadorFilter, setEmpilhadorFilter] = useState<EmpilhadorFilter>("aguardando");
-  const [estoqueSummary, setEstoqueSummary] = useState<EstoqueCapacitySummary | null>(
-    null
-  );
   const [actionError, setActionError] = useState<string | null>(null);
-
-  const fetchQueue = useCallback(async (fresh = false) => {
-      setFetchError(null);
-
-      const needsFullDay = isAdmin || isEmpilhador;
-
-      const params = new URLSearchParams();
-      if (isAdmin) params.set("scope", "admin");
-      else if (needsFullDay) params.set("scope", "all");
-      if (fresh) params.set("_", String(Date.now()));
-      const url = `/api/queue/today?${params.toString()}`;
-
-      const res = await fetch(url, { cache: "no-store" });
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        data?: QueueEntry[];
-        meta?: { estoque?: EstoqueCapacitySummary | null };
-      };
-
-      if (!res.ok) {
-        setFetchError(json.error ?? "Erro ao carregar fila");
-        setEstoqueSummary(null);
-        setLoading(false);
-        return;
-      }
-
-      setEntries(sortQueueEntries(sanitizeQueueEntries(json.data ?? [])));
-      setEstoqueSummary(json.meta?.estoque ?? null);
-      setLoading(false);
-    },
-    [isAdmin, isEmpilhador]
-  );
 
   async function refreshAfterSave(statusChanged?: QueueStatus) {
     if (statusChanged === "finalizado") {
@@ -150,21 +94,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     }
     await fetchQueue(true);
   }
-
-  useEffect(() => {
-    fetchQueue();
-    const debounced = createDebouncedFn(() => fetchQueue(), QUEUE_REALTIME_DEBOUNCE_MS);
-    const channel = supabase
-      .channel(`queue-${profile.role}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () =>
-        debounced.call()
-      )
-      .subscribe();
-    return () => {
-      debounced.cancel();
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, fetchQueue, profile.role]);
 
   const selected = useMemo(
     () => (selectedId ? entries.find((e) => e.id === selectedId) ?? null : null),
@@ -233,11 +162,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     }
   }
 
-  async function applyStatus(
-    entryId: string,
-    status: QueueStatus,
-    fromStatus?: string
-  ) {
+  async function applyStatus(entryId: string, status: QueueStatus, fromStatus?: string) {
     if (!assertStatusAllowed(profile.role, status, fromStatus)) {
       setActionError("Seu perfil não pode alterar para este status.");
       return;
@@ -342,11 +267,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
     const minuta = entry.minuta || entry.placa;
     const link = permissions.canEditDoca
-      ? getCallDriverWhatsAppLink(
-          entry.telefone,
-          minuta,
-          payload.doca ?? entry.doca
-        )
+      ? getCallDriverWhatsAppLink(entry.telefone, minuta, payload.doca ?? entry.doca)
       : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
 
     if (!link) {
@@ -388,43 +309,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     [activeEntries]
   );
 
-  function renderQueueList(
-    list: QueueEntry[],
-    options?: { sectionLabel?: string; startIndex?: number; cardVariant?: "default" | "admin" }
-  ) {
-    const start = options?.startIndex ?? 0;
-    const cardVariant = options?.cardVariant ?? (isAdmin ? "admin" : "default");
-
-    return (
-      <div className={cn("space-y-2", isAdmin && "space-y-2.5")}>
-        {options?.sectionLabel && (
-          <div
-            className={cn(
-              "flex items-baseline justify-between gap-2 px-0.5",
-              isAdmin ? "pb-0.5 pt-3 first:pt-0" : "pt-1"
-            )}
-          >
-            <p className="section-eyebrow">{options.sectionLabel}</p>
-            <span className="text-[11px] font-medium tabular-nums text-slate-400">
-              {list.length} {list.length === 1 ? "veículo" : "veículos"}
-            </span>
-          </div>
-        )}
-        {list.map((entry, idx) => (
-          <EmpilhadorQueueCard
-            key={entry.id}
-            entry={entry}
-            position={start + idx + 1}
-            selected={selectedId === entry.id}
-            isNext={entry.id === nextToCallId && isActiveQueueStatus(entry.status)}
-            onClick={() => selectEntry(entry)}
-            variant={cardVariant}
-          />
-        ))}
-      </div>
-    );
-  }
-
   const adminOperationalList = isAdmin
     ? displayedEntries.filter(
         (e) => isActiveQueueStatus(e.status) || isAusenteQueueStatus(e.status)
@@ -432,310 +316,48 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     : [];
   const adminClosedList = isAdmin
     ? sortClosedEntries(
-        displayedEntries.filter(
-          (e) => normalizeQueueStatus(e.status) === "finalizado"
-        )
+        displayedEntries.filter((e) => normalizeQueueStatus(e.status) === "finalizado")
       )
     : [];
   const adminHasVisibleList =
-    adminOperationalList.length > 0 ||
-    showFinalizados;
+    adminOperationalList.length > 0 || showFinalizados;
 
-  function renderEntryDetail() {
-    if (!selected) {
-      return (
-        <div className="py-10 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-            <Filter className="h-5 w-5" />
-          </div>
-          <p className="text-sm font-medium text-slate-600">Nenhuma minuta selecionada</p>
-          <p className="mt-1 text-xs text-slate-400">
-            Clique em um veículo na fila para editar status, doca e prioridade.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className={cn("space-y-4", isAdmin && "space-y-5")}>
-        <section className={cn(isAdmin && "space-y-3")}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-bold text-brand">{selected.minuta || "—"}</p>
-              <p className="mt-1 font-mono text-base font-semibold text-slate-900">
-                {selected.placa_cavalo || selected.placa}
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                {selected.nome || "—"}
-                <span className="text-slate-400"> · </span>
-                {selected.transportadora || "—"}
-              </p>
-              <p className="text-xs text-slate-400">{formatPhone(selected.telefone)}</p>
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                <StatusBadge status={selected.status} />
-                {selected.capacidade_aviso && selectedIsActive && (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
-                    <AlertCircle className="h-3 w-3" />
-                    Capacidade
-                  </span>
-                )}
-                {entryHasPrioridade(selected) && (
-                  <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
-                    <Star className="h-3 w-3" />
-                    Prioridade
-                  </span>
-                )}
-                {entryRetornoRacksVazios(selected) && <RacksVaziosBadge />}
-              </div>
-              <QueueEntryBadges entry={selected} showRacks={false} className="mt-2" />
-              {selected.capacidade_aviso && selectedIsActive && (
-                <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {selected.capacidade_aviso}
-                    {selected.previsao_automatica && selected.previsao_descarregamento && (
-                      <>
-                        {" "}
-                        · Previsão automática para{" "}
-                        {formatPrevisaoDate(selected.previsao_descarregamento)}
-                      </>
-                    )}
-                  </span>
-                </p>
-              )}
-              {selectedIsActive &&
-                isNfVencida(selected.menor_vencimento) &&
-                !entryHasPrioridade(selected) && (
-                  <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                    NF vencida — não entra em prioridade automática. Defina prioridade manual
-                    se necessário.
-                  </p>
-                )}
-            </div>
-            {isEmpilhador && (
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-100"
-                aria-label="Fechar"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-        </section>
-
-        {isAdmin && (
-          <section className="border-t border-slate-100 pt-4">
-            <QueueEntryDates entry={selected} />
-          </section>
-        )}
-
-        <section className={cn("space-y-3", isAdmin && "border-t border-slate-100 pt-4")}>
-          {permissions.canSetPrioridade && (
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm">
-              <input
-                type="checkbox"
-                checked={editPrioridade}
-                disabled={saving}
-                onChange={(e) => void savePrioridade(e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <Star className="h-4 w-4 text-amber-600" />
-              <span>
-                {selected.prioridade_automatica
-                  ? editPrioridade
-                    ? "Prioridade automática (NF vence amanhã)"
-                    : "Prioridade automática dispensada — ordem de check-in"
-                  : "Prioridade manual na fila"}
-              </span>
-            </label>
-          )}
-          {permissions.canSetPrioridade && selected.prioridade_automatica_dispensada && (
-            <p className="text-xs text-amber-800">
-              NF ainda vence amanhã, mas sem prioridade na fila. Marque de novo para reativar.
-            </p>
-          )}
-
-          {permissions.canEditDoca && (isAdmin || selectedIsActive) && (
-            <Input
-              label="Doca"
-              value={editDoca}
-              onChange={(e) => setEditDoca(e.target.value)}
-              placeholder="Ex: Doca 3"
-            />
-          )}
-
-          {permissions.canChamarWhatsApp && selectedIsActive && (
-            <Button
-              variant="success"
-              className="w-full"
-              size="lg"
-              disabled={saving}
-              onClick={() => chamarMotorista(selected)}
-            >
-              <MessageCircle className="h-4 w-4" />
-              Chamar motorista (WhatsApp)
-            </Button>
-          )}
-
-          {isEmpilhador && selectedIsActive && (
-            <div className="grid gap-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                disabled={saving}
-                onClick={() => applyStatus(selected.id, "ausente")}
-              >
-                <UserX className="h-4 w-4" />
-                Motorista ausente
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full justify-start"
-                disabled={saving}
-                onClick={() => applyStatus(selected.id, "finalizado")}
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Finalizar operação
-              </Button>
-            </div>
-          )}
-
-          {!selectedIsActive && (isAdmin || isEmpilhador) && (
-            <Button
-              variant="outline"
-              className="w-full justify-start border-brand text-brand"
-              disabled={saving}
-              onClick={() =>
-                applyStatus(selected.id, "aguardando_descarregamento", selected.status)
-              }
-            >
-              <RotateCcw className="h-4 w-4" />
-              {isAusenteQueueStatus(selected.status)
-                ? "Motorista voltou — liberar descarregamento"
-                : "Reativar na fila"}
-            </Button>
-          )}
-
-          {isAusenteQueueStatus(selected.status) && isEmpilhador && (
-            <p className="text-xs leading-relaxed text-slate-500">
-              Ausente permanece no topo da fila até ser descarregado. Os demais passam
-              enquanto ele não retorna.
-            </p>
-          )}
-
-          {isAdmin && statusOptions.length > 0 && (
-            <Select
-              label="Status"
-              value={editStatus}
-              onChange={(e) => setEditStatus(e.target.value as QueueStatus)}
-              options={statusOptions}
-            />
-          )}
-
-          {permissions.canEditPrevisao && isAdmin && (
-            <div>
-              <Input
-                label={
-                  selected.previsao_automatica
-                    ? "Previsão automática (capacidade)"
-                    : "Previsão de descarregamento (data)"
-                }
-                type="date"
-                value={editPrevisao}
-                onChange={(e) => setEditPrevisao(e.target.value)}
-              />
-              {selected.previsao_automatica && (
-                <p className="mt-1 text-xs text-sky-700">
-                  Calculada pelo volume da minuta e capacidade de expedição (aba Minutas).
-                  Altere a data para definir manualmente.
-                </p>
-              )}
-            </div>
-          )}
-
-          {permissions.canEditRetornoRacks && isAdmin && (
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 p-3.5 text-sm">
-              <input
-                type="checkbox"
-                checked={editRetornoRacks}
-                disabled={saving}
-                onChange={(e) => setEditRetornoRacks(e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <PackageOpen className="h-4 w-4 text-teal-700" />
-              Retorna com racks
-            </label>
-          )}
-        </section>
-
-        {(isAdmin || (isEmpilhador && selectedIsActive)) && (
-          <section className={cn("space-y-3", isAdmin && "border-t border-slate-100 pt-4")}>
-            <Button className="w-full" size="lg" onClick={handleUpdate} disabled={saving}>
-              {saving ? <Spinner size="sm" /> : "Salvar alterações"}
-            </Button>
-
-            {isAdmin && (
-              <p className="rounded-xl bg-brand-muted/80 p-3 text-xs leading-relaxed text-slate-600">
-                Você pode alterar status, prioridade, previsão (data) e retorno com racks.
-              </p>
-            )}
-          </section>
-        )}
-
-        {isEmpilhador && !selectedIsActive && (
-          <p className="rounded-xl bg-brand-muted p-3 text-xs leading-relaxed text-slate-600">
-            Esta minuta foi encerrada. Use &quot;Reativar na fila&quot; se precisar
-            desfazer e voltar ao aguardando descarregamento.
-          </p>
-        )}
-
-        {isEmpilhador && selectedIsActive && (
-          <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-slate-600">
-            Minutas com badge de prioridade e previsões de descarregamento são definidas pelo
-            administrador.
-          </p>
-        )}
-      </div>
-    );
-  }
+  const entryDetailProps = {
+    selected,
+    permissions,
+    isAdmin,
+    isEmpilhador,
+    selectedIsActive,
+    editPrioridade,
+    editDoca,
+    editStatus,
+    editPrevisao,
+    editRetornoRacks,
+    saving,
+    statusOptions,
+    onClose: isEmpilhador ? () => setSelectedId(null) : undefined,
+    onEditDoca: setEditDoca,
+    onEditStatus: setEditStatus,
+    onEditPrevisao: setEditPrevisao,
+    onEditRetornoRacks: setEditRetornoRacks,
+    onSavePrioridade: (checked: boolean) => void savePrioridade(checked),
+    onChamarMotorista: (entry: QueueEntry) => void chamarMotorista(entry),
+    onApplyStatus: (entryId: string, status: QueueStatus, fromStatus?: string) =>
+      void applyStatus(entryId, status, fromStatus),
+    onSave: () => void handleUpdate(),
+  };
 
   const queueContent = (
     <>
-      {fetchError && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <div>
-            <p className="font-semibold">Erro ao carregar fila</p>
-            <p>{fetchError}</p>
-          </div>
-        </div>
-      )}
-
-      {actionError && (
-        <div
-          className="mb-4 flex items-start justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
-          role="alert"
-        >
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            <p>{actionError}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setActionError(null)}
-            className="shrink-0 rounded-lg p-1 hover:bg-amber-100"
-            aria-label="Fechar aviso"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <QueuePanelAlerts
+        fetchError={fetchError}
+        actionError={actionError}
+        onDismissActionError={() => setActionError(null)}
+      />
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Spinner />
+          <Spinner label="Carregando fila…" />
         </div>
       ) : (
         <>
@@ -746,52 +368,46 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 : "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-6"
             }
           >
-            <div className={cn(isAdmin ? "space-y-4" : "space-y-2")}>
+            <div className={isAdmin ? "space-y-4" : "space-y-2"}>
               {capacityAlerts.length > 0 &&
                 (isAdmin || isEmpilhador) &&
                 empilhadorFilter === "aguardando" && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                    <p className="flex items-center gap-2 font-semibold">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      Estoque sem espaço para algumas minutas hoje
-                    </p>
-                    <ul className="mt-2 space-y-1.5 text-xs">
-                      {capacityAlerts.map((entry) => (
-                        <li key={entry.id}>
-                          <span className="font-semibold">{entry.minuta ?? "—"}</span>
-                          {" — "}
-                          {entry.capacidade_aviso}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-2 text-xs text-amber-800">
-                      Previsão automática vai para o próximo dia útil. Se descarregar parcial,
-                      finalize a operação da minuta.
-                    </p>
-                  </div>
+                  <QueueCapacityAlertsBanner entries={capacityAlerts} />
                 )}
               {(isAdmin ? !adminHasVisibleList : displayedEntries.length === 0) ? (
                 <Card className="py-14 text-center">
                   <p className="section-eyebrow">Fila do dia</p>
                   <p className="mt-2 text-sm text-slate-500">
-                  {isEmpilhador && empilhadorFilter === "finalizadas"
-                    ? "Nenhuma minuta encerrada hoje."
-                    : "Nenhum veículo aguardando na fila."}
+                    {isEmpilhador && empilhadorFilter === "finalizadas"
+                      ? "Nenhuma minuta encerrada hoje."
+                      : "Nenhum veículo aguardando na fila."}
                   </p>
                 </Card>
               ) : isAdmin ? (
                 <div className="space-y-5">
-                  {adminOperationalList.length > 0 &&
-                    renderQueueList(adminOperationalList, {
-                      sectionLabel: showFinalizados ? "Fila do pátio" : undefined,
-                      cardVariant: "admin",
-                    })}
-                  {showFinalizados && adminClosedList.length > 0 &&
-                    renderQueueList(adminClosedList, {
-                      sectionLabel: "Finalizados",
-                      startIndex: adminOperationalList.length,
-                      cardVariant: "admin",
-                    })}
+                  {adminOperationalList.length > 0 && (
+                    <QueuePanelListSection
+                      list={adminOperationalList}
+                      selectedId={selectedId}
+                      nextToCallId={nextToCallId}
+                      isAdmin={isAdmin}
+                      onSelect={selectEntry}
+                      sectionLabel={showFinalizados ? "Fila do pátio" : undefined}
+                      cardVariant="admin"
+                    />
+                  )}
+                  {showFinalizados && adminClosedList.length > 0 && (
+                    <QueuePanelListSection
+                      list={adminClosedList}
+                      selectedId={selectedId}
+                      nextToCallId={nextToCallId}
+                      isAdmin={isAdmin}
+                      onSelect={selectEntry}
+                      sectionLabel="Finalizados"
+                      startIndex={adminOperationalList.length}
+                      cardVariant="admin"
+                    />
+                  )}
                   {showFinalizados && adminClosedList.length === 0 && (
                     <Card className="py-8 text-center">
                       <p className="text-sm text-slate-500">
@@ -801,16 +417,20 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   )}
                 </div>
               ) : (
-                renderQueueList(displayedEntries)
+                <QueuePanelListSection
+                  list={displayedEntries}
+                  selectedId={selectedId}
+                  nextToCallId={nextToCallId}
+                  isAdmin={isAdmin}
+                  onSelect={selectEntry}
+                />
               )}
             </div>
 
             {!isEmpilhador && (
               <Card className="sticky top-28 h-fit overflow-hidden border-brand/12 p-0 shadow-[var(--shadow-card)]">
                 <div className="border-b border-brand/10 bg-brand-muted/40 px-5 py-4">
-                  <h2 className="text-base font-semibold text-slate-900">
-                    Gerenciar minuta
-                  </h2>
+                  <h2 className="text-base font-semibold text-slate-900">Gerenciar minuta</h2>
                   <p className="mt-1 text-xs leading-relaxed text-slate-500">
                     {selected ? (
                       <>
@@ -825,13 +445,19 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                     )}
                   </p>
                 </div>
-                <div className="p-5">{renderEntryDetail()}</div>
+                <div className="p-5">
+                  <QueueEntryDetailPanel {...entryDetailProps} />
+                </div>
               </Card>
             )}
           </div>
 
-          {isEmpilhador && nextToCall && permissions.canChamarWhatsApp && !selected && empilhadorFilter === "aguardando" && (
-            <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgb(15_23_42/0.06)] backdrop-blur-sm">
+          {isEmpilhador &&
+            nextToCall &&
+            permissions.canChamarWhatsApp &&
+            !selected &&
+            empilhadorFilter === "aguardando" && (
+              <div className="fixed inset-x-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgb(15_23_42/0.06)] backdrop-blur-sm">
                 <Button
                   variant="success"
                   size="lg"
@@ -845,8 +471,8 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                   <Zap className="h-5 w-5" />
                   Chamar próximo · Minuta {nextToCall.minuta || "—"}
                 </Button>
-            </div>
-          )}
+              </div>
+            )}
 
           {isEmpilhador && selected && (
             <>
@@ -860,7 +486,9 @@ export function QueuePanel({ profile }: { profile: Profile }) {
                 <div className="sticky top-0 bg-white px-4 pb-2 pt-3">
                   <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
                 </div>
-                <div className="page-container pb-6">{renderEntryDetail()}</div>
+                <div className="page-container pb-6">
+                  <QueueEntryDetailPanel {...entryDetailProps} />
+                </div>
               </div>
             </>
           )}
@@ -871,9 +499,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
   if (isEmpilhador) {
     return (
-      <FieldStaffShell
-        userName={getProfileDisplayName(profile.full_name, profile.email)}
-      >
+      <FieldStaffShell userName={getProfileDisplayName(profile.full_name, profile.email)}>
         <PanelPageTitle
           title={permissions.panelTitle}
           subtitle={
@@ -916,11 +542,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
   }
 
   return (
-    <AppShell
-      role={appRole}
-      userName={profile.full_name}
-      userEmail={profile.email}
-    >
+    <AppShell role={appRole} userName={profile.full_name} userEmail={profile.email}>
       <AdminPageHeader
         eyebrow="Operação · Descarregamento"
         title={permissions.panelTitle}
