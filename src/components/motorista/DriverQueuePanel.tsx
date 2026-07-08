@@ -45,29 +45,31 @@ function DriverQueueFilaSection({
   highlightId,
   searchQuery,
   onSearchChange,
-  showStatus = false,
-  headerAction,
 }: {
   entries: QueueEntry[];
   highlightId?: string;
   searchQuery: string;
   onSearchChange: (value: string) => void;
-  showStatus?: boolean;
-  headerAction?: React.ReactNode;
 }) {
   return (
     <MotoristaQueueList
       entries={entries}
       highlightId={highlightId}
-      title="Fila do pátio"
-      showStatus={showStatus}
-      compact
+      minimal
       searchQuery={searchQuery}
       onSearchChange={onSearchChange}
-      searchPlaceholder="Buscar minuta na fila…"
-      headerAction={headerAction}
+      searchPlaceholder="Buscar minuta…"
     />
   );
+}
+
+function buildHeroDetail(aFrente: number, previsaoLabel: string | null): string {
+  const fila =
+    aFrente > 0
+      ? `${aFrente} veículo${aFrente !== 1 ? "s" : ""} à frente`
+      : "Próximo da fila";
+  if (previsaoLabel) return `${fila} · Previsão ${previsaoLabel}`;
+  return fila;
 }
 
 function DriverQueueContent({ profile }: { profile: Profile }) {
@@ -120,15 +122,11 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           <Spinner label="Carregando fila…" />
         </div>
       ) : hasEntry ? (
-        <div className="space-y-3.5">
+        <div className="space-y-4">
           <QueuePositionHero
-            label="Sua posição"
+            label={`Minuta ${entry.minuta || "—"}`}
             value={posicao != null ? `${posicao}º` : "—"}
-            detail={
-              aFrente > 0
-                ? `${aFrente} veículo${aFrente !== 1 ? "s" : ""} à frente`
-                : "Você é o próximo da fila"
-            }
+            detail={buildHeroDetail(aFrente, previsaoLabel)}
             trailing={listRefresh}
             footer={
               <div className="flex w-full justify-center">
@@ -138,40 +136,15 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
             className="hero-pattern"
           />
 
-          <div className="driver-queue-summary">
-            <div className="stat-strip" role="status">
-              <div className="stat-strip__cell">
-                <span className="stat-strip__value text-brand">{entry.minuta || "—"}</span>
-                <span className="stat-strip__label">Minuta</span>
-                <span className="stat-strip__hint">Seu check-in</span>
-              </div>
-              <div className="stat-strip__cell">
-                <span className="stat-strip__value text-slate-700">{aFrente}</span>
-                <span className="stat-strip__label">À frente</span>
-                <span className="stat-strip__hint">Veículos</span>
-              </div>
-              <div className="stat-strip__cell">
-                <span className="stat-strip__value text-sm text-slate-800">
-                  {previsaoLabel ?? "—"}
-                </span>
-                <span className="stat-strip__label">Previsão</span>
-                <span className="stat-strip__hint">Descarga</span>
-              </div>
-            </div>
-          </div>
-
           <DriverQueueFilaSection
             entries={entries}
             highlightId={entry.id}
             searchQuery={minutaSearch}
             onSearchChange={setMinutaSearch}
-            showStatus
           />
-
-          <p className="text-center text-xs text-slate-400">Atualização em tempo real</p>
         </div>
       ) : checkinBlocked ? (
-        <div className="space-y-3.5">
+        <div className="space-y-4">
           <CheckinBlockedAlert
             step={geo.step}
             distanceLabel={geo.distanceLabel}
@@ -185,23 +158,20 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
               entries={entries}
               searchQuery={minutaSearch}
               onSearchChange={setMinutaSearch}
-              headerAction={listRefresh}
             />
           ) : (
-            <p className="text-center text-sm text-slate-500">Nenhum veículo na fila no momento.</p>
+            <p className="py-8 text-center text-sm text-slate-500">Fila vazia no momento.</p>
           )}
         </div>
       ) : (
-        <div className="space-y-3.5">
+        <div className="space-y-4">
           <div className="panel-card">
             <div className="panel-card__icon">
               <ClipboardList className="h-7 w-7 text-brand" />
             </div>
-            <h2 className="panel-card__title">Faça seu check-in</h2>
-            <p className="panel-card__desc">
-              Você está no pátio. Preencha os dados da carga para entrar na fila.
-            </p>
-            <LinkButton href="/checkin" className="touch-target mt-6 w-full py-3.5 text-base">
+            <h2 className="panel-card__title">Check-in no pátio</h2>
+            <p className="panel-card__desc">Entre na fila de descarregamento.</p>
+            <LinkButton href="/checkin" className="touch-target mt-5 w-full py-3.5 text-base">
               Iniciar check-in
               <ArrowRight className="h-4 w-4" />
             </LinkButton>
@@ -212,17 +182,18 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
               entries={entries}
               searchQuery={minutaSearch}
               onSearchChange={setMinutaSearch}
-              headerAction={listRefresh}
             />
           )}
         </div>
       )}
 
-      <p className="mt-6 text-center text-xs text-slate-400">
-        <Link href={FILA_DESCARGA_PUBLIC} className="font-semibold text-brand hover:underline">
-          Ver fila pública
-        </Link>
-      </p>
+      {!hasEntry && (
+        <p className="mt-8 text-center text-xs text-slate-400">
+          <Link href={FILA_DESCARGA_PUBLIC} className="text-brand hover:underline">
+            Fila pública
+          </Link>
+        </p>
+      )}
     </MotoristaShell>
   );
 }

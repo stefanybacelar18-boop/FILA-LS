@@ -20,8 +20,9 @@ type MotoristaQueueListProps = {
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   headerAction?: React.ReactNode;
-  /** Texto curto no painel do motorista autenticado */
   compact?: boolean;
+  /** Motorista autenticado — só busca + lista, sem cabeçalho pesado */
+  minimal?: boolean;
 };
 
 function matchesMinutaSearch(entry: QueueEntry, query: string): boolean {
@@ -42,8 +43,9 @@ export function MotoristaQueueList({
   searchPlaceholder = "Buscar minuta…",
   headerAction,
   compact = false,
+  minimal = false,
 }: MotoristaQueueListProps) {
-  const { emVencimentoIds, sorted, positionById, totalOperational, filteredCount } = useMemo(() => {
+  const { emVencimentoIds, sorted, positionById, totalOperational } = useMemo(() => {
     const operational = filterOperationalPanelEntries(entries);
     const ordered = [...operational].sort(compareQueueOrder);
     const emVencimento = computeEmVencimentoEntryIds(entries);
@@ -60,14 +62,11 @@ export function MotoristaQueueList({
       sorted: sortedEntries,
       positionById: positionMap,
       totalOperational: operational.length,
-      filteredCount: sortedEntries.length,
     };
   }, [entries, searchQuery]);
 
   const description = compact
-    ? searchQuery.trim()
-      ? `${filteredCount} de ${totalOperational} minuta(s) · busca ativa`
-      : `${totalOperational} ${totalOperational === 1 ? "minuta" : "minutas"} no pátio`
+    ? `${totalOperational} ${totalOperational === 1 ? "minuta" : "minutas"} no pátio`
     : `${totalOperational} ${
         totalOperational === 1 ? "minuta na fila" : "minutas na fila"
       } · ordem operacional${
@@ -75,6 +74,43 @@ export function MotoristaQueueList({
           ? " · Prioridade vencimento = NF com urgência na fila"
           : ""
       }`;
+
+  const listBody =
+    sorted.length === 0 ? (
+      <p className="py-8 text-center text-sm text-slate-500">
+        {searchQuery.trim() ? "Nenhuma minuta encontrada." : "Fila vazia no momento."}
+      </p>
+    ) : (
+      <div className="space-y-1.5">
+        {sorted.map((entry) => (
+          <MotoristaQueueCard
+            key={entry.id}
+            entry={entry}
+            position={positionById.get(entry.id) ?? 0}
+            isMine={entry.id === highlightId}
+            showDriverName={showDriverName}
+            showStatus={showStatus && !minimal}
+            emVencimento={emVencimentoIds.has(entry.id)}
+            minimal={minimal}
+          />
+        ))}
+      </div>
+    );
+
+  if (minimal) {
+    return (
+      <div className="space-y-3">
+        {onSearchChange && (
+          <MinutaSearchField
+            value={searchQuery}
+            onChange={onSearchChange}
+            placeholder={searchPlaceholder}
+          />
+        )}
+        {listBody}
+      </div>
+    );
+  }
 
   return (
     <PanelSection
@@ -91,28 +127,7 @@ export function MotoristaQueueList({
           className="mb-3"
         />
       )}
-
-      {sorted.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500">
-          {searchQuery.trim()
-            ? "Nenhuma minuta encontrada para essa busca."
-            : "Nenhuma minuta ativa na fila agora."}
-        </p>
-      ) : (
-        <div className="space-y-1.5">
-          {sorted.map((entry) => (
-            <MotoristaQueueCard
-              key={entry.id}
-              entry={entry}
-              position={positionById.get(entry.id) ?? 0}
-              isMine={entry.id === highlightId}
-              showDriverName={showDriverName}
-              showStatus={showStatus}
-              emVencimento={emVencimentoIds.has(entry.id)}
-            />
-          ))}
-        </div>
-      )}
+      {listBody}
     </PanelSection>
   );
 }

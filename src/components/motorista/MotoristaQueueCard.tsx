@@ -16,6 +16,7 @@ type MotoristaQueueCardProps = {
   showDriverName?: boolean;
   showStatus?: boolean;
   emVencimento?: boolean;
+  minimal?: boolean;
 };
 
 /** Card somente leitura — minuta e status */
@@ -26,11 +27,43 @@ export const MotoristaQueueCard = memo(function MotoristaQueueCard({
   showDriverName = false,
   showStatus = false,
   emVencimento = false,
+  minimal = false,
 }: MotoristaQueueCardProps) {
   const active = isActiveQueueStatus(entry.status);
-  const showPrevisao = active && Boolean(entry.previsao_descarregamento);
+  const showPrevisao = !minimal && active && Boolean(entry.previsao_descarregamento);
   const prioridadeVencimento = emVencimento || shouldShowEmVencimentoBadge(entry);
-  const showMineRow = (showDriverName && isMine) || isMine;
+  const showMineRow = !minimal && ((showDriverName && isMine) || isMine);
+
+  if (minimal) {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-xl border px-3 py-2.5",
+          isMine
+            ? "border-brand/35 bg-brand-muted/25 ring-1 ring-brand/20"
+            : "border-slate-200/90 bg-white",
+          prioridadeVencimento && !isMine && "border-red-200/80"
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold tabular-nums",
+            isMine && "bg-brand text-white",
+            !isMine && prioridadeVencimento && "bg-red-50 text-red-900",
+            !isMine && !prioridadeVencimento && "bg-slate-100 text-slate-600"
+          )}
+        >
+          {position}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-bold text-brand">{entry.minuta || "—"}</p>
+          {prioridadeVencimento && !isMine && (
+            <PrioridadeVencimentoBadge className="mt-1 w-fit max-w-full scale-90 origin-left" />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
