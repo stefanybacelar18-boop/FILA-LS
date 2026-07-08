@@ -7,7 +7,6 @@ import { computeDashboardStats, computeHourlyBuckets } from "@/lib/dashboard-sta
 import { formatDuration, formatQueueTime } from "@/lib/utils";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 import { formatManausDateLabel } from "@/lib/queue-day";
-import { createDebouncedFn } from "@/lib/debounce";
 import { AppShell } from "@/components/layout/AppShell";
 import { AdminPageHeader } from "@/components/layout/AdminPageHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -35,26 +34,31 @@ export function DashboardPanel({
 }) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchData = useCallback(async (fresh = false) => {
     const params = new URLSearchParams({ scope: "all" });
     if (fresh) params.set("_", String(Date.now()));
     const res = await fetch(`/api/queue/today?${params.toString()}`, { cache: "no-store" });
-    const json = (await res.json().catch(() => ({}))) as { data?: QueueEntry[] };
+    const json = (await res.json().catch(() => ({}))) as {
+      data?: QueueEntry[];
+      error?: string;
+    };
 
     if (res.ok) {
       setEntries(sanitizeQueueEntries(json.data ?? []));
+      setFetchError(null);
+    } else {
+      setFetchError(json.error ?? "Não foi possível carregar o dashboard.");
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const debounced = createDebouncedFn(() => fetchData(), 400);
-    const interval = setInterval(fetchData, 60_000);
+    void fetchData();
+    const interval = setInterval(() => void fetchData(), 60_000);
 
     return () => {
-      debounced.cancel();
       clearInterval(interval);
     };
   }, [fetchData]);
@@ -115,6 +119,19 @@ export function DashboardPanel({
         title={formatManausDateLabel()}
         description="Fila ativa no pátio · indicadores do dia em tempo real"
       />
+
+      {fetchError ? (
+        <div className="rounded-card border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          {fetchError}
+          <button
+            type="button"
+            onClick={() => void fetchData(true)}
+            className="ml-2 font-semibold underline"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-12">

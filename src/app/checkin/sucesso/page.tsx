@@ -26,17 +26,19 @@ function CheckInSuccessContent() {
 
   useEffect(() => {
     if (!profile) return;
+    let cancelled = false;
 
     async function loadEntry() {
       if (token) {
         const { data } = await supabase
           .from("queue_entries")
-          .select("*")
+          .select("id, token, minuta, status, placa_cavalo, transportadora, retorno_racks_vazios, created_at")
           .eq("token", token)
           .eq("driver_user_id", profile!.id)
           .is("deleted_at", null)
           .maybeSingle();
 
+        if (cancelled) return;
         if (data) {
           setEntry(data as QueueEntry);
           setLoading(false);
@@ -46,18 +48,23 @@ function CheckInSuccessContent() {
 
       const { data: latest } = await supabase
         .from("queue_entries")
-        .select("*")
+        .select("id, token, minuta, status, placa_cavalo, transportadora, retorno_racks_vazios, created_at")
         .eq("driver_user_id", profile!.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
+      if (cancelled) return;
       setEntry((latest as QueueEntry) ?? null);
       setLoading(false);
     }
 
-    loadEntry();
+    void loadEntry();
+
+    return () => {
+      cancelled = true;
+    };
   }, [profile, supabase, token]);
 
   if (authError) {

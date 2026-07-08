@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueEntry } from "@/lib/types";
 import { filterOperationalPanelEntries, OPERATIONAL_PANEL_DB_STATUSES } from "@/lib/constants";
+import { toPublicQueueEntries } from "@/lib/queue-public-dto";
 import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 
 const FETCH_TIMEOUT_MS = 25_000;
@@ -55,9 +56,8 @@ export async function fetchActiveQueueToday(
   );
 
   if (!rpcError && rpcData != null) {
-    return sanitizeQueueEntries(
-      filterOperationalPanelEntries(rpcData as QueueEntry[])
-    );
+    const operational = filterOperationalPanelEntries(rpcData as QueueEntry[]);
+    return sanitizeQueueEntries(toPublicQueueEntries(operational)) as QueueEntry[];
   }
 
   const { data, error } = await supabase

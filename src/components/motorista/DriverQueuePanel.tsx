@@ -14,7 +14,7 @@ import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert"
 import { LinkButton } from "@/components/ui/LinkButton";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { Spinner } from "@/components/ui/Spinner";
-import type { Profile } from "@/lib/types";
+import type { Profile, QueueEntry } from "@/lib/types";
 import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { ClipboardList, RefreshCw, ArrowRight } from "lucide-react";
 
@@ -67,7 +67,9 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     : null;
 
   const showLoading = loading || (!hasEntry && geoLoading);
-  const posicao = entry ? resolveQueuePosition(entry, allEntries) : null;
+  const posicao = entry
+    ? resolveQueuePosition(entry as QueueEntry, allEntries as QueueEntry[])
+    : null;
 
   return (
     <MotoristaShell
@@ -108,7 +110,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           </Card>
 
           <MotoristaQueueList
-            entries={allEntries}
+            entries={allEntries as QueueEntry[]}
             highlightId={entry.id}
             title="Fila do pátio"
             showDriverName
@@ -128,7 +130,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           />
 
           {allEntries.length > 0 ? (
-            <MotoristaQueueList entries={allEntries} title="Fila do pátio" showDriverName />
+            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" showDriverName />
           ) : (
             <p className="text-center text-sm text-slate-500">Nenhum veículo na fila no momento.</p>
           )}
@@ -150,7 +152,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           </div>
 
           {allEntries.length > 0 && (
-            <MotoristaQueueList entries={allEntries} title="Fila do pátio" showDriverName />
+            <MotoristaQueueList entries={allEntries as QueueEntry[]} title="Fila do pátio" showDriverName />
           )}
         </div>
       )}

@@ -64,17 +64,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  let user = session?.user ?? null;
-
-  if (!user) {
-    const {
-      data: { user: validatedUser },
-    } = await getUserWithTimeout(() => supabase.auth.getUser());
-    user = validatedUser ?? null;
-  }
+    data: { user: validatedUser },
+  } = await getUserWithTimeout(() => supabase.auth.getUser());
+  const user = validatedUser ?? null;
 
   if (!user) {
     const login = loginPathForRole(requiredRole);

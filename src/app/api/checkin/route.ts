@@ -4,7 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isWithinGeofence, normalizeGeofenceConfig } from "@/lib/geofence";
 import { canCheckInAgain, hasActiveCheckIn } from "@/lib/checkin-rules";
 import { validateCheckInBody } from "@/lib/checkin-validation";
-import { COOLDOWN_MESSAGE, DEFAULT_GEOFENCE, skipCheckinLimits } from "@/lib/constants";
+import {
+  ACTIVE_QUEUE_DB_STATUSES,
+  COOLDOWN_MESSAGE,
+  DEFAULT_GEOFENCE,
+  isActiveQueueStatus,
+  skipCheckinLimits,
+} from "@/lib/constants";
 import { skipGeofence } from "@/lib/dev-flags";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import { insertQueueEntry } from "@/lib/queue-db";
@@ -18,6 +24,10 @@ function getClientIp(request: NextRequest): string {
     request.headers.get("x-real-ip") ||
     "unknown"
   );
+}
+
+function isProd(): boolean {
+  return process.env.NODE_ENV === "production";
 }
 
 export async function POST(request: NextRequest) {
@@ -49,7 +59,22 @@ export async function POST(request: NextRequest) {
   }
   const form = validated.data;
 
-  const [{ data: profile }, { data: geofenceSetting }, { data: existingEntries }] =
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return NextResponse.json(
+      {
+        error: "insert_failed",
+        ...(isProd()
+          ? {}
+          : { detail: "SUPABASE_SERVICE_ROLE_KEY não configurada no servidor." }),
+      },
+      { status: 500 }
+    );
+  }
+
+  const [{ data: profile }, { data: geofenceSetting }, { data: myEntriesRaw }] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -59,8 +84,8 @@ export async function POST(request: NextRequest) {
       supabase.from("settings").select("value").eq("key", "geofence").single(),
       supabase
         .from("queue_entries")
-        .select("id, status, token, created_at, driver_user_id, placa_cavalo")
-        .or(`driver_user_id.eq.${user.id},placa_cavalo.eq.${form.placa_cavalo}`)
+        .select("id, status, token, created_at, driver_user_id")
+        .eq("driver_user_id", user.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(15),
@@ -86,10 +111,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const entries = (existingEntries ?? []) as QueueEntry[];
+  if (!skipCheckinLimits()) {
+    const { data: placaRows } = await admin
+      .from("queue_entries")
+      .select("id, driver_user_id, status")
+      .eq("placa_cavalo", form.placa_cavalo)
+      .is("deleted_at", null)
+      .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
+      .limit(5);
+
+    const placaBlocked = (placaRows ?? []).find(
+      (row) =>
+        row.driver_user_id !== user.id && isActiveQueueStatus(String(row.status))
+    );
+
+    if (placaBlocked) {
+      return NextResponse.json(
+        {
+          error: "placa_em_uso",
+          message: "Esta placa já possui um check-in ativo na fila.",
+        },
+        { status: 409 }
+      );
+    }
+  }
+
+  const myEntries = (myEntriesRaw ?? []) as QueueEntry[];
 
   if (!skipCheckinLimits() && !profile.checkin_liberado) {
-    const active = hasActiveCheckIn(entries);
+    const active = hasActiveCheckIn(myEntries);
     if (active) {
       return NextResponse.json(
         { error: "active_checkin", token: active.token },
@@ -98,7 +148,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const lastEntry = entries[0] ?? null;
+  const lastEntry = myEntries[0] ?? null;
   const cooldown = canCheckInAgain(lastEntry, profile as Profile);
   if (!skipCheckinLimits() && !cooldown.allowed) {
     return NextResponse.json(
@@ -108,16 +158,6 @@ export async function POST(request: NextRequest) {
   }
 
   const placaDisplay = form.placa_cavalo;
-
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return NextResponse.json(
-      { error: "insert_failed", detail: "SUPABASE_SERVICE_ROLE_KEY não configurada no servidor." },
-      { status: 500 }
-    );
-  }
 
   const { data: entry, error: insertError } = await insertQueueEntry(admin, {
     driver_user_id: user.id,
@@ -145,7 +185,10 @@ export async function POST(request: NextRequest) {
 
   if (insertError || !entry) {
     return NextResponse.json(
-      { error: "insert_failed", detail: insertError },
+      {
+        error: "insert_failed",
+        ...(isProd() ? {} : { detail: insertError }),
+      },
       { status: 500 }
     );
   }

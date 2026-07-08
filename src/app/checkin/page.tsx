@@ -55,6 +55,8 @@ export default function CheckInPage() {
 
   useEffect(() => {
     if (!profile) return;
+    let cancelled = false;
+
     setForm((f) => ({
       ...f,
       nome: profile.full_name || f.nome,
@@ -64,11 +66,12 @@ export default function CheckInPage() {
     async function checkExisting() {
       const { data } = await supabase
         .from("queue_entries")
-        .select("*")
+        .select("id, status, token, created_at, driver_user_id")
         .eq("driver_user_id", profile!.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(10);
+      if (cancelled) return;
       const entries = (data as QueueEntry[]) ?? [];
       const active = hasActiveCheckIn(entries);
       if (active && !profile!.checkin_liberado) {
@@ -80,6 +83,10 @@ export default function CheckInPage() {
     }
     setEligibilityLoading(true);
     void checkExisting();
+
+    return () => {
+      cancelled = true;
+    };
   }, [profile, supabase, router]);
 
   const geoLoading = geo.step === "loading" && !geo.skipGeofence;
@@ -149,6 +156,12 @@ export default function CheckInPage() {
 
     if (res.status === 409 && data.token) {
       router.push(MOTORISTA_HOME);
+      return;
+    }
+    if (data.error === "placa_em_uso") {
+      setErrors({
+        placa_cavalo: data.message ?? "Esta placa já possui um check-in ativo na fila.",
+      });
       return;
     }
     if (data.error === "cooldown") {

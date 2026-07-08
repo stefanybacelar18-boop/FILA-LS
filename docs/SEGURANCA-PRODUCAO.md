@@ -8,6 +8,7 @@ No **SQL Editor**, execute na ordem (se ainda não rodou):
 2. `supabase/evolucao-v1-parte3-fixes.sql`
 3. `supabase/migracao-seguranca-performance.sql`
 4. **`supabase/migracao-seguranca-producao.sql`** ← trigger anti-admin falso + perfis
+5. **`supabase/migracao-auditoria-seguranca.sql`** ← RPCs LGPD + índices (auditoria 2026)
 
 Confirme que não existem políticas `"Public read by token"` nem `"Public check-in insert"`.
 

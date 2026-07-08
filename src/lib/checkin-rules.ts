@@ -1,4 +1,5 @@
 import { CHECKIN_COOLDOWN_DAYS, isActiveQueueStatus, skipCheckinLimits } from "./constants";
+import { OPERATIONAL_TIMEZONE } from "./queue-day";
 import type { Profile, QueueEntry } from "./types";
 
 export type CheckinCooldownBlock = {
@@ -12,7 +13,7 @@ function formatCheckinDate(date: Date): string {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    timeZone: "America/Manaus",
+    timeZone: OPERATIONAL_TIMEZONE,
   }).format(date);
 }
 

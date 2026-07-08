@@ -25,6 +25,8 @@ export type PublicQueueEntry = Pick<
   | "previsao_automatica"
 >;
 
+export type MotoristaQueueEntry = PublicQueueEntry & { is_mine?: true };
+
 function toSanitizedPublicFields(entry: QueueEntry): PublicQueueEntry {
   return {
     id: entry.id,
@@ -54,16 +56,24 @@ export function toPublicQueueEntry(entry: QueueEntry): PublicQueueEntry {
   return toSanitizedPublicFields(entry);
 }
 
-/** Motorista autenticado — mesmos campos da fila pública (sem placas). */
+/** Motorista autenticado — campos públicos; `is_mine` só na própria linha. */
 export function toMotoristaQueueEntry(
-  entry: QueueEntry
-): PublicQueueEntry & { driver_user_id: string | null } {
-  return {
-    ...toSanitizedPublicFields(entry),
-    driver_user_id: entry.driver_user_id,
-  };
+  entry: QueueEntry,
+  viewerUserId?: string | null
+): MotoristaQueueEntry {
+  const base = toSanitizedPublicFields(entry);
+  if (viewerUserId && entry.driver_user_id === viewerUserId) {
+    return { ...base, is_mine: true };
+  }
+  return base;
 }
 
 export function toPublicQueueEntries(entries: QueueEntry[]): PublicQueueEntry[] {
   return entries.map(toPublicQueueEntry);
+}
+
+export function isMotoristaOwnEntry(
+  entry: Pick<MotoristaQueueEntry, "is_mine">
+): boolean {
+  return entry.is_mine === true;
 }

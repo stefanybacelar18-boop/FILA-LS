@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, QueueEntry } from "@/lib/types";
 import { hasActiveCheckIn } from "@/lib/checkin-rules";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
+import { isMotoristaOwnEntry, type MotoristaQueueEntry } from "@/lib/queue-public-dto";
 import { createDebouncedFn } from "@/lib/debounce";
 import {
   MOTORISTA_QUEUE_POLL_CONNECTED_MS,
@@ -16,16 +17,16 @@ import {
 export function useDriverQueueData(profile: Profile | null) {
   const supabase = useMemo(() => createClient(), []);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
-  const [allEntries, setAllEntries] = useState<QueueEntry[]>([]);
+  const [allEntries, setAllEntries] = useState<MotoristaQueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const profileId = profile?.id;
 
   const applyEntries = useCallback(
-    (entries: QueueEntry[]) => {
+    (entries: MotoristaQueueEntry[]) => {
       setAllEntries(entries);
       if (!profileId) return;
-      const mineEntries = entries.filter((e) => e.driver_user_id === profileId);
-      setEntry(hasActiveCheckIn(mineEntries));
+      const mineEntries = entries.filter((e) => isMotoristaOwnEntry(e));
+      setEntry(hasActiveCheckIn(mineEntries as QueueEntry[]));
       setLoading(false);
     },
     [profileId]
@@ -34,7 +35,10 @@ export function useDriverQueueData(profile: Profile | null) {
   const fetchData = useCallback(
     async (options?: { bypassCache?: boolean }) => {
       if (!profileId) return;
-      const entries = await fetchEnrichedOperationalQueue(supabase, options);
+      const entries = (await fetchEnrichedOperationalQueue(
+        supabase,
+        options
+      )) as MotoristaQueueEntry[];
       applyEntries(entries);
     },
     [supabase, profileId, applyEntries]
