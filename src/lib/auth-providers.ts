@@ -11,6 +11,10 @@ export type AuthProviderSettings = {
   email: boolean;
 };
 
+const AUTH_PROVIDER_CACHE_MS = 5 * 60 * 1000;
+let cachedAuthProviders: AuthProviderSettings | null = null;
+let cachedAuthProvidersAt = 0;
+
 export function getSupabaseProjectRef(): string | null {
   const match = SUPABASE_URL.match(/https:\/\/([^.]+)\.supabase\.co/);
   return match?.[1] ?? null;
@@ -25,6 +29,13 @@ export function supabaseDashboardUrl(path: string): string | null {
 export async function fetchAuthProviderSettings(): Promise<AuthProviderSettings | null> {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
 
+  if (
+    cachedAuthProviders &&
+    Date.now() - cachedAuthProvidersAt < AUTH_PROVIDER_CACHE_MS
+  ) {
+    return cachedAuthProviders;
+  }
+
   try {
     const { fetchWithTimeout } = await import("@/lib/async-timeout");
     const res = await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/settings`, {
@@ -37,13 +48,15 @@ export async function fetchAuthProviderSettings(): Promise<AuthProviderSettings 
     const data = (await res.json()) as { external?: Record<string, boolean> };
     const external = data.external ?? {};
 
-    return {
+    cachedAuthProviders = {
       google: !!external.google,
       apple: !!external.apple,
       email: !!external.email,
     };
+    cachedAuthProvidersAt = Date.now();
+    return cachedAuthProviders;
   } catch {
-    return null;
+    return cachedAuthProviders;
   }
 }
 

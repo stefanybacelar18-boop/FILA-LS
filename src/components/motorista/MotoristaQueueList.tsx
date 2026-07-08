@@ -37,33 +37,25 @@ export function MotoristaQueueList({
   onSearchChange,
   searchPlaceholder = "Buscar minuta…",
 }: MotoristaQueueListProps) {
-  const emVencimentoIds = useMemo(
-    () => computeEmVencimentoEntryIds(entries),
-    [entries]
-  );
-
-  const sorted = useMemo(() => {
+  const { emVencimentoIds, sorted, positionById, totalOperational } = useMemo(() => {
     const operational = filterOperationalPanelEntries(entries);
+    const ordered = [...operational].sort(compareQueueOrder);
+    const emVencimento = computeEmVencimentoEntryIds(entries);
+    const positionMap = new Map<string, number>();
+    ordered.forEach((entry, index) => {
+      positionMap.set(entry.id, index + 1);
+    });
     const filtered = searchQuery.trim()
       ? operational.filter((entry) => matchesMinutaSearch(entry, searchQuery))
       : operational;
-    return [...filtered].sort(compareQueueOrder);
+    const sortedEntries = [...filtered].sort(compareQueueOrder);
+    return {
+      emVencimentoIds: emVencimento,
+      sorted: sortedEntries,
+      positionById: positionMap,
+      totalOperational: operational.length,
+    };
   }, [entries, searchQuery]);
-
-  const positionById = useMemo(() => {
-    const operational = filterOperationalPanelEntries(entries);
-    const ordered = [...operational].sort(compareQueueOrder);
-    const map = new Map<string, number>();
-    ordered.forEach((entry, index) => {
-      map.set(entry.id, index + 1);
-    });
-    return map;
-  }, [entries]);
-
-  const totalOperational = useMemo(
-    () => filterOperationalPanelEntries(entries).length,
-    [entries]
-  );
 
   return (
     <section className="overflow-hidden rounded-card border border-brand/12 bg-white shadow-[var(--shadow-card)]">

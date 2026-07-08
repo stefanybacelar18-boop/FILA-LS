@@ -97,7 +97,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     null
   );
 
-  const fetchQueue = useCallback(async () => {
+  const fetchQueue = useCallback(async (fresh = false) => {
       setFetchError(null);
 
       const needsFullDay = isAdmin || isEmpilhador;
@@ -105,7 +105,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
       const params = new URLSearchParams();
       if (isAdmin) params.set("scope", "admin");
       else if (needsFullDay) params.set("scope", "all");
-      params.set("_", String(Date.now()));
+      if (fresh) params.set("_", String(Date.now()));
       const url = `/api/queue/today?${params.toString()}`;
 
       const res = await fetch(url, { cache: "no-store" });
@@ -133,22 +133,22 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     if (statusChanged === "finalizado") {
       setSelectedId(null);
       if ((isAdmin && showFinalizados) || (isEmpilhador && empilhadorFilter !== "aguardando")) {
-        await fetchQueue();
+        await fetchQueue(true);
         return;
       }
     }
     if (statusChanged === "ausente") {
-      await fetchQueue();
+      await fetchQueue(true);
       return;
     }
     if (statusChanged === "aguardando_descarregamento" && isEmpilhador) {
       setSelectedId(null);
       if (empilhadorFilter !== "aguardando") {
-        await fetchQueue();
+        await fetchQueue(true);
         return;
       }
     }
-    await fetchQueue();
+    await fetchQueue(true);
   }
 
   useEffect(() => {

@@ -7,11 +7,12 @@ import { hasActiveCheckIn } from "@/lib/checkin-rules";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
 import { createDebouncedFn } from "@/lib/debounce";
 import {
+  MOTORISTA_QUEUE_POLL_CONNECTED_MS,
   MOTORISTA_QUEUE_POLL_MS,
   QUEUE_REALTIME_DEBOUNCE_MS,
 } from "@/lib/queue-refresh";
 
-/** Fila do motorista — polling + Realtime na própria linha (RLS limita o restante). */
+/** Fila do motorista — Realtime (sempre fresco) + poll de backup. */
 export function useDriverQueueData(profile: Profile | null) {
   const supabase = useMemo(() => createClient(), []);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
@@ -19,30 +20,50 @@ export function useDriverQueueData(profile: Profile | null) {
   const [loading, setLoading] = useState(true);
   const profileId = profile?.id;
 
-  const fetchData = useCallback(async () => {
-    if (!profileId) return;
+  const applyEntries = useCallback(
+    (entries: QueueEntry[]) => {
+      setAllEntries(entries);
+      if (!profileId) return;
+      const mineEntries = entries.filter((e) => e.driver_user_id === profileId);
+      setEntry(hasActiveCheckIn(mineEntries));
+      setLoading(false);
+    },
+    [profileId]
+  );
 
-    const entries = await fetchEnrichedOperationalQueue(supabase);
-    setAllEntries(entries);
+  const fetchData = useCallback(
+    async (options?: { bypassCache?: boolean }) => {
+      if (!profileId) return;
+      const entries = await fetchEnrichedOperationalQueue(supabase, options);
+      applyEntries(entries);
+    },
+    [supabase, profileId, applyEntries]
+  );
 
-    const mineEntries = entries.filter((e) => e.driver_user_id === profileId);
-    setEntry(hasActiveCheckIn(mineEntries));
-    setLoading(false);
-  }, [supabase, profileId]);
-
-  const fetchRef = useRef(fetchData);
-  fetchRef.current = fetchData;
+  const fetchRoutineRef = useRef(() => fetchData());
+  const fetchFreshRef = useRef(() => fetchData({ bypassCache: true }));
+  fetchRoutineRef.current = () => fetchData();
+  fetchFreshRef.current = () => fetchData({ bypassCache: true });
 
   useEffect(() => {
     if (!profileId) return;
 
     setLoading(true);
-    void fetchRef.current();
+    void fetchFreshRef.current();
 
     const debounced = createDebouncedFn(
-      () => fetchRef.current(),
+      () => fetchFreshRef.current(),
       QUEUE_REALTIME_DEBOUNCE_MS
     );
+
+    let pollTimer: number | null = null;
+
+    function startPoll(ms: number) {
+      if (pollTimer) window.clearInterval(pollTimer);
+      pollTimer = window.setInterval(() => void fetchRoutineRef.current(), ms);
+    }
+
+    startPoll(MOTORISTA_QUEUE_POLL_MS);
 
     const channel = supabase
       .channel("motorista-queue-shared")
@@ -51,27 +72,33 @@ export function useDriverQueueData(profile: Profile | null) {
         { event: "*", schema: "public", table: "queue_entries" },
         () => debounced.call()
       )
-      .subscribe();
-
-    const pollTimer = window.setInterval(
-      () => void fetchRef.current(),
-      MOTORISTA_QUEUE_POLL_MS
-    );
+      .subscribe((status) => {
+        startPoll(
+          status === "SUBSCRIBED"
+            ? MOTORISTA_QUEUE_POLL_CONNECTED_MS
+            : MOTORISTA_QUEUE_POLL_MS
+        );
+      });
 
     function onVisible() {
       if (document.visibilityState === "visible") {
-        void fetchRef.current();
+        void fetchFreshRef.current();
       }
     }
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       debounced.cancel();
-      window.clearInterval(pollTimer);
+      if (pollTimer) window.clearInterval(pollTimer);
       document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, [supabase, profileId]);
 
-  return { entry, allEntries, loading, refresh: fetchData };
+  const refresh = useCallback(
+    () => fetchData({ bypassCache: true }),
+    [fetchData]
+  );
+
+  return { entry, allEntries, loading, refresh };
 }

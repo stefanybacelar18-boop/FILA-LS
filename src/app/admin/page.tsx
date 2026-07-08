@@ -45,8 +45,9 @@ export default function AdminPage() {
   const [refreshing, setRefreshing] = useState(false);
   const appUrl = usePublicAppUrl();
 
-  const loadOverview = useCallback(async () => {
-    const params = new URLSearchParams({ scope: "all", _: String(Date.now()) });
+  const loadOverview = useCallback(async (fresh = false) => {
+    const params = new URLSearchParams({ scope: "all" });
+    if (fresh) params.set("_", String(Date.now()));
     const res = await fetch(`/api/queue/today?${params.toString()}`, { cache: "no-store" });
     const json = (await res.json().catch(() => ({}))) as { data?: QueueEntry[] };
 
@@ -69,7 +70,7 @@ export default function AdminPage() {
 
   async function handleRefreshOverview() {
     setRefreshing(true);
-    await loadOverview();
+    await loadOverview(true);
     setRefreshing(false);
   }
 

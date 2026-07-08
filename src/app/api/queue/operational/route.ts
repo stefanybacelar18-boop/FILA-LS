@@ -7,7 +7,6 @@ import {
   loadBasicOperationalQueue,
   loadEnrichedQueueEntries,
 } from "@/lib/queue-enrich";
-import { mergePrioritiesIntoEntries, readPriorityMap } from "@/lib/queue-priorities";
 import { toMotoristaQueueEntry, toPublicQueueEntries } from "@/lib/queue-public-dto";
 import {
   computePublicQueueStats,
@@ -25,17 +24,18 @@ export async function GET(request: NextRequest) {
   try {
     const bustCache = request.nextUrl.searchParams.has("_");
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
     let scope: "public" | "motorista" | "staff" = "public";
 
-    if (user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.user) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", user.id)
+        .eq("id", session.user.id)
         .maybeSingle();
 
       if (profile?.role === "motorista") scope = "motorista";
@@ -62,9 +62,6 @@ export async function GET(request: NextRequest) {
       );
       fallback = true;
     }
-
-    const priorityMap = await readPriorityMap(admin);
-    entries = mergePrioritiesIntoEntries(entries, priorityMap);
 
     const data =
       scope === "staff"

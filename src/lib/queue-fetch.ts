@@ -5,19 +5,23 @@ import { sanitizeQueueEntries } from "@/lib/sanitize-queue-entry";
 
 const FETCH_TIMEOUT_MS = 25_000;
 
-function operationalQueueUrl(): string {
-  return `/api/queue/operational?_=${Date.now()}`;
+function operationalQueueUrl(bypassCache = false): string {
+  if (bypassCache) {
+    return `/api/queue/operational?_=${Date.now()}`;
+  }
+  return "/api/queue/operational";
 }
 
 /** Fila operacional enriquecida via API (prioridade, minuta, previsão). */
 export async function fetchEnrichedOperationalQueue(
-  supabaseFallback?: SupabaseClient
+  supabaseFallback?: SupabaseClient,
+  options?: { bypassCache?: boolean }
 ): Promise<QueueEntry[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(operationalQueueUrl(), {
+    const res = await fetch(operationalQueueUrl(options?.bypassCache), {
       cache: "no-store",
       signal: controller.signal,
     });
@@ -76,13 +80,21 @@ export async function fetchActiveQueueToday(
 /** Fila do dia via API autenticada (staff). */
 export async function fetchStaffQueueToday(options?: {
   includeClosedToday?: boolean;
+  bypassCache?: boolean;
 }): Promise<{ data: QueueEntry[]; error?: string }> {
-  const params = new URLSearchParams({ _: String(Date.now()) });
+  const params = new URLSearchParams();
   if (options?.includeClosedToday !== false) {
     params.set("scope", "all");
   }
+  if (options?.bypassCache) {
+    params.set("_", String(Date.now()));
+  }
 
-  const res = await fetch(`/api/queue/today?${params}`, { cache: "no-store" });
+  const query = params.toString();
+  const res = await fetch(
+    query ? `/api/queue/today?${query}` : "/api/queue/today",
+    { cache: "no-store" }
+  );
   const json = (await res.json().catch(() => ({}))) as {
     error?: string;
     data?: QueueEntry[];

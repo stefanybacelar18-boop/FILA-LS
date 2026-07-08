@@ -18,11 +18,14 @@ export function usePublicQueueData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (bypassCache = false) => {
     try {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), 25_000);
-      const res = await fetch(`/api/queue/operational?_=${Date.now()}`, {
+      const url = bypassCache
+        ? `/api/queue/operational?_=${Date.now()}`
+        : "/api/queue/operational";
+      const res = await fetch(url, {
         cache: "no-store",
         signal: controller.signal,
       });
@@ -68,5 +71,7 @@ export function usePublicQueueData() {
     };
   }, []);
 
-  return { entries, stats, loading, error, refresh: fetchData };
+  const refresh = useCallback(() => fetchData(true), [fetchData]);
+
+  return { entries, stats, loading, error, refresh };
 }

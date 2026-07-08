@@ -36,8 +36,9 @@ export function DashboardPanel({
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    const params = new URLSearchParams({ scope: "all", _: String(Date.now()) });
+  const fetchData = useCallback(async (fresh = false) => {
+    const params = new URLSearchParams({ scope: "all" });
+    if (fresh) params.set("_", String(Date.now()));
     const res = await fetch(`/api/queue/today?${params.toString()}`, { cache: "no-store" });
     const json = (await res.json().catch(() => ({}))) as { data?: QueueEntry[] };
 

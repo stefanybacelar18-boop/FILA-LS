@@ -8,7 +8,7 @@ export async function GET() {
   if (isProd) {
     return NextResponse.json(
       { settings },
-      { headers: { "Cache-Control": "no-store, max-age=0" } }
+      { headers: { "Cache-Control": "public, max-age=300" } }
     );
   }
 

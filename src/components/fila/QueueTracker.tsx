@@ -23,7 +23,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options?: { bypassCache?: boolean }) => {
     const { data: entryData, error: entryError } = await supabase
       .rpc("get_queue_by_token", { p_token: token });
 
@@ -37,13 +37,20 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
 
     setEntry(sanitizeQueueEntry(row as QueueEntry));
 
-    setAllEntries(await fetchEnrichedOperationalQueue(supabase));
+    setAllEntries(
+      await fetchEnrichedOperationalQueue(supabase, options)
+    );
     setLoading(false);
   }, [supabase, token]);
 
+  const fetchFresh = useCallback(
+    () => fetchData({ bypassCache: true }),
+    [fetchData]
+  );
+
   useEffect(() => {
-    fetchData();
-    const debounced = createDebouncedFn(() => fetchData(), 400);
+    void fetchData();
+    const debounced = createDebouncedFn(() => fetchFresh(), 400);
 
     const channel = supabase
       .channel(`queue-track-${token}`)
@@ -55,7 +62,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
       debounced.cancel();
       supabase.removeChannel(channel);
     };
-  }, [supabase, token, fetchData]);
+  }, [supabase, token, fetchData, fetchFresh]);
 
   if (loading) {
     return (
@@ -82,7 +89,7 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
         logoHref={false}
         trailing={
           <button
-            onClick={fetchData}
+            onClick={() => void fetchFresh()}
             className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
             aria-label="Atualizar"
           >

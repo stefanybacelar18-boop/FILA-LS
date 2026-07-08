@@ -9,7 +9,8 @@ import { skipGeofence } from "@/lib/dev-flags";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import { insertQueueEntry } from "@/lib/queue-db";
 import { applyAutoPriorityForMinuta, recalculateQueuePrevisoes } from "@/lib/minuta-metadata-db";
-import type { GeofenceConfig, Profile, QueueEntry } from "@/lib/types";
+import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
+import type { Profile, QueueEntry } from "@/lib/types";
 
 function getClientIp(request: NextRequest): string {
   return (
@@ -48,21 +49,26 @@ export async function POST(request: NextRequest) {
   }
   const form = validated.data;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, { data: geofenceSetting }, { data: existingEntries }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("role, checkin_liberado")
+        .eq("id", user.id)
+        .single(),
+      supabase.from("settings").select("value").eq("key", "geofence").single(),
+      supabase
+        .from("queue_entries")
+        .select("id, status, token, created_at, driver_user_id, placa_cavalo")
+        .or(`driver_user_id.eq.${user.id},placa_cavalo.eq.${form.placa_cavalo}`)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(15),
+    ]);
 
   if (!profile || profile.role !== "motorista") {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
-
-  const { data: geofenceSetting } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "geofence")
-    .single();
 
   const geofence = normalizeGeofenceConfig(
     geofenceSetting?.value ?? DEFAULT_GEOFENCE
@@ -79,14 +85,6 @@ export async function POST(request: NextRequest) {
       { status: 403 }
     );
   }
-
-  const { data: existingEntries } = await supabase
-    .from("queue_entries")
-    .select("id, status, token, created_at, driver_user_id, placa_cavalo")
-    .or(`driver_user_id.eq.${user.id},placa_cavalo.eq.${form.placa_cavalo}`)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(15);
 
   const entries = (existingEntries ?? []) as QueueEntry[];
 
@@ -172,7 +170,8 @@ export async function POST(request: NextRequest) {
   }
 
   await applyAutoPriorityForMinuta(admin, entry.id, form.minuta).catch(() => {});
-  await recalculateQueuePrevisoes(admin).catch(() => {});
+  invalidateEnrichedQueueCache();
+  void recalculateQueuePrevisoes(admin).catch(() => {});
 
   return NextResponse.json({ token: entry.token });
 }

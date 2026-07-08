@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { QueueEntry } from "@/lib/types";
 import { isDriverCalled, isActiveQueueStatus, isAusenteQueueStatus } from "@/lib/queue";
 import { entryHasPrioridade } from "@/lib/queue-priorities";
@@ -26,7 +27,7 @@ type EmpilhadorQueueCardProps = {
 };
 
 /** Card da fila — layout em grade para celular do empilhador */
-export function EmpilhadorQueueCard({
+export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
   entry,
   position,
   selected = false,
@@ -183,4 +184,4 @@ export function EmpilhadorQueueCard({
       )}
     </button>
   );
-}
+});

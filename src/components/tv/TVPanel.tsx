@@ -27,9 +27,24 @@ export function TVPanel() {
   }, [supabase]);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => void fetchData(), TV_QUEUE_POLL_MS);
-    return () => clearInterval(interval);
+    void fetchData();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchData();
+      }
+    }, TV_QUEUE_POLL_MS);
+
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        void fetchData();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchData]);
 
   useEffect(() => {
