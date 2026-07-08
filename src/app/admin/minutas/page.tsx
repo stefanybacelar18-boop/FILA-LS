@@ -55,6 +55,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const loadCapacity = useCallback(async () => {
     setLoading(true);
@@ -156,6 +157,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
   async function handleSync() {
     setSyncing(true);
     setSyncResult(null);
+    setSyncError(null);
 
     try {
       const { ok, json } = await fetchJson<{
@@ -165,7 +167,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
       }>("/api/admin/minutas/sync", { method: "POST" });
 
       if (!ok) {
-        alert(json.error ?? "Erro ao recalcular.");
+        setSyncError(json.error ?? "Erro ao recalcular.");
         return;
       }
 
@@ -174,7 +176,7 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
       );
       await loadCapacity();
     } catch {
-      alert("Recálculo demorou demais. Reinicie o servidor e tente novamente.");
+      setSyncError("Recálculo demorou demais. Reinicie o servidor e tente novamente.");
     } finally {
       setSyncing(false);
     }
@@ -194,6 +196,12 @@ function AdminMinutasContent({ profile }: { profile: { full_name: string; email?
         </Button>
         {syncResult && <span className="text-sm text-green-700">{syncResult}</span>}
       </div>
+
+      {syncError && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {syncError}
+        </p>
+      )}
 
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Minutas importadas" value={totalImportadas} accent="brand" />

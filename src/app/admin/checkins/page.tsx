@@ -57,6 +57,8 @@ export default function AdminCheckinsPage() {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -64,18 +66,28 @@ export default function AdminCheckinsPage() {
 
   const fetchCheckins = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     const params = buildCheckinsParams({ statusFilter, search, dateFrom, dateTo });
 
-    const res = await fetch(`/api/queue/checkins?${params.toString()}`);
-    const json = (await res.json().catch(() => ({}))) as {
-      data?: QueueEntry[];
-      error?: string;
-    };
+    try {
+      const res = await fetch(`/api/queue/checkins?${params.toString()}`);
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: QueueEntry[];
+        error?: string;
+      };
 
-    if (res.ok) {
-      setEntries(sanitizeQueueEntries(json.data ?? []));
+      if (res.ok) {
+        setEntries(sanitizeQueueEntries(json.data ?? []));
+      } else {
+        setFetchError(json.error ?? "Não foi possível carregar os check-ins.");
+        setEntries([]);
+      }
+    } catch {
+      setFetchError("Erro de conexão ao carregar check-ins.");
+      setEntries([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [search, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -97,6 +109,7 @@ export default function AdminCheckinsPage() {
 
   async function handleExportExcel() {
     setExporting(true);
+    setExportError(null);
     try {
       const params = buildCheckinsParams({
         statusFilter,
@@ -108,7 +121,7 @@ export default function AdminCheckinsPage() {
 
       const res = await fetch(`/api/queue/checkins?${params.toString()}`);
       if (!res.ok) {
-        alert("Não foi possível exportar. Tente novamente.");
+        setExportError("Não foi possível exportar. Tente novamente.");
         return;
       }
 
@@ -124,7 +137,7 @@ export default function AdminCheckinsPage() {
       if (entries.length > 0) {
         downloadCheckinsExcel(entries);
       } else {
-        alert("Erro ao gerar relatório.");
+        setExportError("Erro ao gerar relatório.");
       }
     } finally {
       setExporting(false);
@@ -159,6 +172,18 @@ export default function AdminCheckinsPage() {
             { label: "Ausentes", value: registryStats.absent, tone: "slate" },
           ]}
         />
+      )}
+
+      {fetchError && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {fetchError}
+        </p>
+      )}
+
+      {exportError && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {exportError}
+        </p>
       )}
 
       <Card className="mb-4 p-4">
@@ -236,7 +261,7 @@ export default function AdminCheckinsPage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Spinner />
+          <Spinner label="Carregando check-ins…" />
         </div>
       ) : (
         <Card className="overflow-hidden p-0">

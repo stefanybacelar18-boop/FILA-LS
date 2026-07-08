@@ -46,6 +46,8 @@ export function EstoqueExpedicaoEditor({
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const capacidadeNum = Math.max(0, parseInt(capacidadeTotal, 10) || 0);
   const expedidasNum = Math.max(0, parseInt(motosExpedidas, 10) || 0);
@@ -87,13 +89,16 @@ export function EstoqueExpedicaoEditor({
   }, [loadConfig]);
 
   async function handleSave() {
+    setValidationError(null);
+    setSaveError(null);
+
     if (capacidadeNum <= 0) {
-      alert("Informe a capacidade do estoque.");
+      setValidationError("Informe a capacidade do estoque.");
       return;
     }
 
     if (expedidasNum > capacidadeNum) {
-      alert("Motos expedidas não pode ser maior que a capacidade do estoque.");
+      setValidationError("Motos expedidas não pode ser maior que a capacidade do estoque.");
       return;
     }
 
@@ -114,7 +119,7 @@ export function EstoqueExpedicaoEditor({
       });
 
       if (!ok) {
-        alert(json.error ?? "Erro ao salvar.");
+        setSaveError(json.error ?? "Erro ao salvar.");
         return;
       }
 
@@ -127,7 +132,7 @@ export function EstoqueExpedicaoEditor({
         updated_at: new Date().toISOString(),
       });
     } catch {
-      alert("Erro ao salvar.");
+      setSaveError("Erro ao salvar. Tente novamente.");
     } finally {
       setSaving(false);
     }
@@ -152,6 +157,11 @@ export function EstoqueExpedicaoEditor({
 
   const fields = (
     <div className="space-y-3">
+      {(validationError || saveError) && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {validationError ?? saveError}
+        </p>
+      )}
       <div
         className={cn(
           "grid gap-3",
@@ -163,18 +173,30 @@ export function EstoqueExpedicaoEditor({
           type="number"
           min={0}
           value={capacidadeTotal}
-          onChange={(e) => setCapacidadeTotal(e.target.value)}
+          onChange={(e) => {
+            setCapacidadeTotal(e.target.value);
+            setValidationError(null);
+          }}
           placeholder="950"
           disabled={loading || saving}
+          error={
+            validationError?.includes("capacidade") ? validationError : undefined
+          }
         />
         <Input
           label="Motos expedidas"
           type="number"
           min={0}
           value={motosExpedidas}
-          onChange={(e) => setMotosExpedidas(e.target.value)}
+          onChange={(e) => {
+            setMotosExpedidas(e.target.value);
+            setValidationError(null);
+          }}
           placeholder="0"
           disabled={loading || saving}
+          error={
+            validationError?.includes("expedidas") ? validationError : undefined
+          }
         />
         {variant === "card" ? resultadoBox : variant === "compact" && resultadoBox}
       </div>

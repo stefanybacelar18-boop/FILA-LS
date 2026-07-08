@@ -1,7 +1,12 @@
 import type { QueueEntry } from "./types";
 import { isActiveQueueStatus } from "./constants";
 import { compareQueueOrder } from "./queue";
-import { manausDayStartISO, getOperationalPlanningBaseYmd, businessDayOffsetToYmd } from "./queue-day";
+import {
+  getManausDateYmd,
+  manausDayStartISO,
+  getOperationalPlanningBaseYmd,
+  businessDayOffsetToYmd,
+} from "./queue-day";
 
 export interface MinutaMetadata {
   minuta: string;
@@ -441,11 +446,19 @@ export function isNfVencida(vencimento: string | null | undefined): boolean {
   return days != null && days < 0;
 }
 
+/** Dias civis até o vencimento no fuso operacional (0 = hoje, 1 = amanhã). */
 export function daysUntilVencimento(vencimento: string | null | undefined): number | null {
   if (!vencimento) return null;
-  const end = new Date(`${vencimento}T23:59:59`);
-  if (Number.isNaN(end.getTime())) return null;
-  return Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const match = vencimento.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  const vencYmd = `${match[1]}-${match[2]}-${match[3]}`;
+  const todayYmd = getManausDateYmd();
+  const [y1, m1, d1] = todayYmd.split("-").map(Number);
+  const [y2, m2, d2] = vencYmd.split("-").map(Number);
+  const todayUtc = Date.UTC(y1, m1 - 1, d1);
+  const vencUtc = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((vencUtc - todayUtc) / (1000 * 60 * 60 * 24));
 }
 
 export function formatVencimentoDateBR(vencimento: string | null | undefined): string | null {
