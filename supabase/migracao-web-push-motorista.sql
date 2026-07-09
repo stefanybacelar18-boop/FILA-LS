@@ -1,4 +1,4 @@
--- Web Push para motorista (notificacao com app fechado)
+﻿-- Web Push para motorista (notificacao com app fechado)
 -- Execute no SQL Editor do Supabase.
 
 CREATE TABLE IF NOT EXISTS public.driver_push_subscriptions (

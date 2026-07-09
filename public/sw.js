@@ -1,4 +1,4 @@
-const CACHE = "filadock-v26";
+const CACHE = "filadock-v27";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -18,7 +18,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-/** Rede primeiro — app sempre usa dados ao vivo da Vercel/Supabase */
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
@@ -53,13 +52,18 @@ function parsePushPayload(event) {
   return fallback;
 }
 
+function shouldSkipSystemNotification(clients) {
+  return clients.some(
+    (client) => client.visibilityState === "visible" && ("focused" in client ? client.focused : true)
+  );
+}
+
 self.addEventListener("push", (event) => {
   const payload = parsePushPayload(event);
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const appVisible = clients.some((client) => client.visibilityState === "visible");
-      if (appVisible) {
+      if (shouldSkipSystemNotification(clients)) {
         clients.forEach((client) => {
           client.postMessage({ type: "DRIVER_CALLED", payload });
         });
@@ -70,10 +74,10 @@ self.addEventListener("push", (event) => {
         body: payload.body,
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
-        vibrate: [400, 150, 400, 150, 600],
+        vibrate: [500, 200, 500, 200, 700],
         silent: false,
         data: { path: payload.url || "/motorista" },
-        tag: payload.tag,
+        tag: payload.tag || "filadock-driver-call",
         renotify: true,
       });
     })
@@ -102,7 +106,7 @@ self.addEventListener("notificationclick", (event) => {
 
 self.addEventListener("pushsubscriptionchange", (event) => {
   event.waitUntil(
-    fetch("/api/notifications/subscribe", { cache: "no-store" })
+    fetch("/api/notifications/subscribe", { cache: "no-store", credentials: "include" })
       .then((res) => res.json())
       .then((json) => {
         if (!json?.publicKey) return;
@@ -123,6 +127,7 @@ self.addEventListener("pushsubscriptionchange", (event) => {
         return fetch("/api/notifications/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify(subscription.toJSON()),
         });
       })

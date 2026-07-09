@@ -60,7 +60,12 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const hint =
+      error.message.includes("driver_push_subscriptions") ||
+      error.message.includes("does not exist")
+        ? " Execute migracao-web-push-motorista.sql no Supabase."
+        : "";
+    return NextResponse.json({ error: `${error.message}${hint}` }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

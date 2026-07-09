@@ -30,18 +30,28 @@ export function getWebPushPublicKey(): string | null {
 export async function sendDriverPushNotification(
   driverUserId: string,
   payload: DriverPushPayload
-) {
-  if (!ensureWebPushConfigured()) return;
+): Promise<{ sent: number; failed: number; reason?: string }> {
+  if (!ensureWebPushConfigured()) {
+    return { sent: 0, failed: 0, reason: "push_not_configured" };
+  }
 
   const admin = createAdminClient();
-  const { data: subscriptions } = await admin
+  const { data: subscriptions, error } = await admin
     .from("driver_push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("driver_user_id", driverUserId);
 
-  if (!subscriptions?.length) return;
+  if (error) {
+    return { sent: 0, failed: 0, reason: error.message };
+  }
+
+  if (!subscriptions?.length) {
+    return { sent: 0, failed: 0, reason: "no_subscriptions" };
+  }
 
   const jsonPayload = JSON.stringify(payload);
+  let sent = 0;
+  let failed = 0;
 
   await Promise.all(
     subscriptions.map(async (row) => {
@@ -54,15 +64,16 @@ export async function sendDriverPushNotification(
         await webpush.sendNotification(subscription, jsonPayload, {
           TTL: 300,
           urgency: "high",
-          topic: payload.tag,
         });
-      } catch (error) {
+        sent += 1;
+      } catch (pushError) {
+        failed += 1;
         const statusCode =
-          typeof error === "object" &&
-          error !== null &&
-          "statusCode" in error &&
-          typeof (error as { statusCode?: unknown }).statusCode === "number"
-            ? (error as { statusCode: number }).statusCode
+          typeof pushError === "object" &&
+          pushError !== null &&
+          "statusCode" in pushError &&
+          typeof (pushError as { statusCode?: unknown }).statusCode === "number"
+            ? (pushError as { statusCode: number }).statusCode
             : null;
         if (statusCode === 404 || statusCode === 410) {
           await admin.from("driver_push_subscriptions").delete().eq("id", row.id);
@@ -70,5 +81,10 @@ export async function sendDriverPushNotification(
       }
     })
   );
-}
 
+  return {
+    sent,
+    failed,
+    reason: sent === 0 ? "push_delivery_failed" : undefined,
+  };
+}

@@ -8,6 +8,9 @@ import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
 import { Button } from "@/components/ui/Button";
 import { ClipboardList, ListOrdered, LogOut } from "lucide-react";
+import { useEffect } from "react";
+import { unlockDriverCallSound } from "@/lib/driver-call-sound";
+
 import type { Profile } from "@/lib/types";
 import { useDriverPushSubscription } from "@/hooks/useDriverPushSubscription";
 
@@ -27,6 +30,16 @@ export function MotoristaShell({
   const supabase = createClient();
   const firstName = profile.full_name?.split(" ")?.[0] ?? "Motorista";
   useDriverPushSubscription(true);
+
+  useEffect(() => {
+    const unlock = () => unlockDriverCallSound();
+    document.addEventListener("touchstart", unlock, { once: true, passive: true });
+    document.addEventListener("click", unlock, { once: true, passive: true });
+    return () => {
+      document.removeEventListener("touchstart", unlock);
+      document.removeEventListener("click", unlock);
+    };
+  }, []);
 
   async function logout() {
     await supabase.auth.signOut();

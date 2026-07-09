@@ -116,7 +116,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     const currentStatus = currentRow.status as string;
-    const currentCalledAt = currentRow.called_at as string | null;
 
     if (status && !assertStatusAllowed(profile.role, status, currentStatus)) {
       return NextResponse.json({ error: "Status não permitido para seu perfil" }, { status: 403 });
@@ -226,27 +225,22 @@ export async function PATCH(request: NextRequest) {
       priorityMap
     );
 
-    const calledAtUpdated =
+    const shouldPushDriver =
       called_at !== undefined &&
       Boolean(updated?.called_at) &&
-      updated?.called_at !== currentCalledAt;
-    const shouldPushDriver = calledAtUpdated && Boolean(updated?.driver_user_id);
+      Boolean(updated?.driver_user_id);
 
     if (shouldPushDriver) {
       const minutaLabel = updated?.minuta?.trim() || updated?.placa?.trim() || "sua minuta";
       const docaLabel = updated?.doca?.trim();
-      try {
-        await sendDriverPushNotification(updated!.driver_user_id as string, {
-          title: "FilaDock — Voce foi chamado",
-          body: docaLabel
-            ? `Minuta ${minutaLabel} — doca ${docaLabel}. Apresente-se agora.`
-            : `Minuta ${minutaLabel} — apresente-se no ponto de operacao.`,
-          url: "/motorista",
-          tag: `driver-call-${updated?.id}`,
-        });
-      } catch {
-        /* push falhou, nao interrompe fluxo operacional */
-      }
+      await sendDriverPushNotification(updated!.driver_user_id as string, {
+        title: "FilaDock — Voce foi chamado",
+        body: docaLabel
+          ? `Minuta ${minutaLabel} — doca ${docaLabel}. Apresente-se agora.`
+          : `Minuta ${minutaLabel} — apresente-se no ponto de operacao.`,
+        url: "/motorista",
+        tag: `driver-call-${updated?.id}-${Date.now()}`,
+      });
     }
 
     return NextResponse.json({ data: responseRow ?? updated });

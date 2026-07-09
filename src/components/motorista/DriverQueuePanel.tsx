@@ -20,6 +20,7 @@ import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { ClipboardList, ArrowRight, BellRing } from "lucide-react";
 import { ensureDriverPushSubscription, isDriverPushSupported } from "@/lib/driver-push-client";
+import { playDriverCallAlert, unlockDriverCallSound } from "@/lib/driver-call-sound";
 
 export function DriverQueuePanel() {
   return (
@@ -76,41 +77,6 @@ function buildHeroDetail(aFrente: number, previsaoLabel: string | null): string 
   return fila;
 }
 
-function playCallSoundFallback() {
-  if (typeof window === "undefined") return;
-  const audioCtx =
-    "AudioContext" in window
-      ? new window.AudioContext()
-      : "webkitAudioContext" in window
-        ? new (window as Window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext()
-        : null;
-  if (!audioCtx) return;
-
-  const pulse = (startAt: number, duration: number, frequency: number) => {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(frequency, startAt);
-    gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.25, startAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(startAt);
-    osc.stop(startAt + duration);
-  };
-
-  const now = audioCtx.currentTime + 0.02;
-  pulse(now, 0.22, 920);
-  pulse(now + 0.28, 0.22, 1080);
-
-  window.setTimeout(() => {
-    void audioCtx.close().catch(() => {
-      /* noop */
-    });
-  }, 1000);
-}
-
 function DriverQueueContent({ profile }: { profile: Profile }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -123,6 +89,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   );
   const [pushBusy, setPushBusy] = useState(false);
   const [pushSyncError, setPushSyncError] = useState<string | null>(null);
+  const [pushTestMsg, setPushTestMsg] = useState<string | null>(null);
   const initializedCallStateRef = useRef(false);
   const lastCallMarkerRef = useRef<string | null>(null);
 
@@ -171,14 +138,35 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   async function enablePush(requestPermission = true) {
     setPushBusy(true);
     setPushSyncError(null);
+    setPushTestMsg(null);
+    unlockDriverCallSound();
     try {
       const result = await ensureDriverPushSubscription({ requestPermission });
       setPushPermission(result);
       if (result === "denied") {
         setPushSyncError("Notificacoes bloqueadas no celular. Ative nas configuracoes do app.");
+      } else if (result === "granted") {
+        setPushTestMsg("Notificacoes ativas. Feche o app e use Testar para validar.");
       }
     } catch (error) {
       setPushSyncError(error instanceof Error ? error.message : "Erro ao ativar notificacoes");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function testPushNotification() {
+    setPushBusy(true);
+    setPushTestMsg(null);
+    setPushSyncError(null);
+    try {
+      const res = await fetch("/api/notifications/test", { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setPushSyncError(json.error ?? "Falha no teste de notificacao.");
+        return;
+      }
+      setPushTestMsg("Push enviado. Feche o app para ver na barra de notificacoes.");
     } finally {
       setPushBusy(false);
     }
@@ -194,7 +182,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
       if ("vibrate" in navigator) {
         navigator.vibrate([250, 120, 250]);
       }
-      playCallSoundFallback();
+      void playDriverCallAlert();
     }
 
     navigator.serviceWorker.addEventListener("message", onSwMessage);
@@ -221,7 +209,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     if ("vibrate" in navigator) {
       navigator.vibrate([250, 120, 250]);
     }
-    playCallSoundFallback();
+    void playDriverCallAlert();
     lastCallMarkerRef.current = marker;
   }, [entryId, calledAt]);
 
@@ -258,9 +246,20 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           )}
 
           {pushPermission === "granted" && (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-              Notificacoes ativas — voce sera avisado na barra do celular mesmo com app fechado.
-            </p>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              <p className="font-medium">
+                Notificacoes ativas — aviso na barra mesmo com app fechado.
+              </p>
+              {pushTestMsg && <p className="mt-1">{pushTestMsg}</p>}
+              <button
+                type="button"
+                onClick={() => void testPushNotification()}
+                disabled={pushBusy}
+                className="mt-2 rounded-md border border-emerald-400 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-900 disabled:opacity-60"
+              >
+                {pushBusy ? "Enviando..." : "Testar notificacao (feche o app)"}
+              </button>
+            </div>
           )}
 
           {showCallAlert && (
