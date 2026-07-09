@@ -62,7 +62,9 @@ export async function ensureDriverPushSubscription(options?: {
   if (permission !== "granted") return permission;
 
   const publicKey = await fetchPushPublicKey();
-  if (!publicKey) return permission;
+  if (!publicKey) {
+    throw new Error("Push nao configurado no servidor. Contate o suporte.");
+  }
 
   const registration = await navigator.serviceWorker.register("/sw.js", {
     scope: "/",

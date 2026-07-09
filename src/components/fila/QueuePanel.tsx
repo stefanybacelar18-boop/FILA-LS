@@ -269,11 +269,6 @@ export function QueuePanel({ profile }: { profile: Profile }) {
     async (entry: QueueEntry) => {
       if (!permissions.canChamarWhatsApp) return;
 
-      if (!entry.telefone?.replace(/\D/g, "").trim()) {
-        setActionError("Telefone do motorista não disponível para WhatsApp.");
-        return;
-      }
-
       setSaving(true);
 
       const payload: {
@@ -299,7 +294,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
         payload.previsao_descarregamento = editPrevisao ? editPrevisao : null;
       }
 
-      const { error, data } = await updateQueueEntryViaApi(payload);
+      const { error, data, push } = await updateQueueEntryViaApi(payload);
 
       setSaving(false);
 
@@ -310,17 +305,23 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
       if (data) patchEntry(entry.id, data);
 
+      if (push && push.sent === 0) {
+        setActionError(
+          "Chamada registrada, mas o motorista pode nao ter recebido o aviso no celular. Verifique se ele ativou notificacoes no app instalado."
+        );
+      }
+
+      const phone = entry.telefone?.replace(/\D/g, "").trim();
+      if (!phone) return;
+
       const minuta = entry.minuta || entry.placa;
       const link = permissions.canEditDoca
         ? getCallDriverWhatsAppLink(entry.telefone, minuta, payload.doca ?? entry.doca)
         : getEmpilhadorCallWhatsAppLink(entry.telefone, minuta);
 
-      if (!link) {
-        setActionError("Telefone do motorista inválido para WhatsApp.");
-        return;
+      if (link) {
+        window.open(link, "_blank", "noopener,noreferrer");
       }
-
-      window.open(link, "_blank", "noopener,noreferrer");
     },
     [
       editDoca,

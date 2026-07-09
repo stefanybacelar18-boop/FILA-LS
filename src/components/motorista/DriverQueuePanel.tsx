@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
-import { useDriverQueueData } from "@/hooks/useDriverQueueData";
 import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
+import { useDriverQueueContext } from "@/contexts/DriverQueueContext";
 import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
@@ -18,9 +18,9 @@ import { QueuePositionHero } from "@/components/ui/PageHeader";
 import type { Profile, QueueEntry } from "@/lib/types";
 import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { formatPrevisaoDate } from "@/lib/utils";
-import { ClipboardList, ArrowRight, BellRing } from "lucide-react";
+import { ClipboardList, ArrowRight } from "lucide-react";
 import { ensureDriverPushSubscription, isDriverPushSupported } from "@/lib/driver-push-client";
-import { playDriverCallAlert, unlockDriverCallSound } from "@/lib/driver-call-sound";
+import { unlockDriverCallSound } from "@/lib/driver-call-sound";
 import { isPwaStandalone } from "@/lib/pwa-client";
 
 export function DriverQueuePanel() {
@@ -79,12 +79,18 @@ function buildHeroDetail(aFrente: number, previsaoLabel: string | null): string 
 }
 
 function DriverQueueContent({ profile }: { profile: Profile }) {
+  return (
+    <MotoristaShell profile={profile}>
+      <DriverQueueInner />
+    </MotoristaShell>
+  );
+}
+
+function DriverQueueInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { entry, allEntries, loading, refresh } = useDriverQueueData(profile);
-  const geo = useMotoristaGeofence(!loading);
+  const { entry, allEntries, loading, refresh } = useDriverQueueContext();
   const [minutaSearch, setMinutaSearch] = useState("");
-  const [showCallAlert, setShowCallAlert] = useState(false);
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
     "default"
   );
@@ -92,11 +98,9 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   const [pushSyncError, setPushSyncError] = useState<string | null>(null);
   const [pushTestMsg, setPushTestMsg] = useState<string | null>(null);
   const [isStandaloneApp, setIsStandaloneApp] = useState(false);
-  const initializedCallStateRef = useRef(false);
-  const lastCallMarkerRef = useRef<string | null>(null);
 
   const hasEntry = !!entry;
-  const checkinNavEnabled = hasEntry || geo.canCheckIn;
+  const geo = useMotoristaGeofence(!loading);
   const geoLoading = geo.step === "loading" && !geo.skipGeofence;
   const checkinBlocked = !hasEntry && !geo.canCheckIn && !geoLoading;
   const redirectedFromCheckin =
@@ -109,18 +113,8 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     }
   }, [loading, geoLoading, hasEntry, geo.canCheckIn, router, redirectedFromCheckin]);
 
-  const blockHint = checkinBlocked
-    ? geo.step === "outside"
-      ? "Check-in bloqueado — fora do pátio"
-      : geo.step === "denied"
-        ? "Check-in bloqueado — ative o GPS"
-        : "Check-in bloqueado — valide a localização"
-    : null;
-
   const showLoading = loading || (!hasEntry && geoLoading);
   const entries = allEntries as QueueEntry[];
-  const entryId = entry?.id ?? null;
-  const calledAt = entry?.called_at ?? null;
   const posicao = entry ? resolveQueuePosition(entry, entries) : null;
   const aFrente = entry ? countVehiclesAhead(entry, entries) : 0;
   const previsaoLabel = entry?.previsao_descarregamento
@@ -193,53 +187,8 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     }
   }
 
-  useEffect(() => {
-    if (!isDriverPushSupported()) return;
-
-    function onSwMessage(event: MessageEvent) {
-      const data = event.data as { type?: string } | null;
-      if (data?.type !== "DRIVER_CALLED") return;
-      setShowCallAlert(true);
-      if ("vibrate" in navigator) {
-        navigator.vibrate([250, 120, 250]);
-      }
-      void playDriverCallAlert();
-    }
-
-    navigator.serviceWorker.addEventListener("message", onSwMessage);
-    return () => navigator.serviceWorker.removeEventListener("message", onSwMessage);
-  }, []);
-
-  useEffect(() => {
-    const marker = entryId ? `${entryId}:${calledAt ?? ""}` : null;
-
-    if (!initializedCallStateRef.current) {
-      initializedCallStateRef.current = true;
-      lastCallMarkerRef.current = marker;
-      return;
-    }
-
-    if (!calledAt) {
-      lastCallMarkerRef.current = marker;
-      return;
-    }
-
-    if (lastCallMarkerRef.current === marker) return;
-
-    setShowCallAlert(true);
-    if ("vibrate" in navigator) {
-      navigator.vibrate([250, 120, 250]);
-    }
-    void playDriverCallAlert();
-    lastCallMarkerRef.current = marker;
-  }, [entryId, calledAt]);
-
   return (
-    <MotoristaShell
-      profile={profile}
-      checkinNavEnabled={checkinNavEnabled}
-      checkinBlockHint={blockHint}
-    >
+    <>
       {showLoading ? (
         <div className="flex justify-center py-16" role="status" aria-live="polite">
           <Spinner label="Carregando fila…" />
@@ -290,37 +239,6 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
               >
                 {pushBusy ? "Enviando..." : "Testar notificacao (feche o app)"}
               </button>
-            </div>
-          )}
-
-          {showCallAlert && (
-            <div
-              className="rounded-2xl border-2 border-emerald-500 bg-emerald-100 px-4 py-4 text-emerald-900 shadow-md ring-2 ring-emerald-300/70"
-              role="status"
-              aria-live="assertive"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-full bg-emerald-600 p-2 text-white animate-pulse">
-                    <BellRing className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-base font-bold uppercase tracking-wide">
-                      Voce foi chamado
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-emerald-900">
-                      Dirija-se ao ponto de operacao agora e aguarde orientacao da equipe.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-md border border-emerald-500 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-900"
-                  onClick={() => setShowCallAlert(false)}
-                >
-                  Entendi
-                </button>
-              </div>
             </div>
           )}
 
@@ -396,6 +314,6 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           </Link>
         </p>
       )}
-    </MotoristaShell>
+    </>
   );
 }

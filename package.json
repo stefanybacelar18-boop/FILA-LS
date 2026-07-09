@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:lan": "next dev -H 0.0.0.0 -p 3000",
-    "build": "next build",
+    "build": "npm run generate:icons && next build",
     "start": "next start",
     "start:lan": "next start -H 0.0.0.0 -p 3000",
     "prod:lan": "npm run build && npm run start:lan",

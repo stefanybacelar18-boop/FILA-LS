@@ -1,4 +1,4 @@
-const CACHE = "filadock-v28";
+const CACHE = "filadock-v29";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -113,7 +113,13 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
+function detectClientMode() {
+  return self.matchMedia("(display-mode: standalone)").matches ? "standalone" : "browser";
+}
+
 self.addEventListener("pushsubscriptionchange", (event) => {
+  const clientMode = detectClientMode();
+
   event.waitUntil(
     fetch("/api/notifications/subscribe", { cache: "no-store", credentials: "include" })
       .then((res) => res.json())
@@ -137,7 +143,10 @@ self.addEventListener("pushsubscriptionchange", (event) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify(subscription.toJSON()),
+          body: JSON.stringify({
+            ...subscription.toJSON(),
+            clientMode,
+          }),
         });
       })
       .catch(() => undefined)

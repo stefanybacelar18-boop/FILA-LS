@@ -230,10 +230,12 @@ export async function PATCH(request: NextRequest) {
       Boolean(updated?.called_at) &&
       Boolean(updated?.driver_user_id);
 
+    let pushResult: { sent: number; failed: number; reason?: string } | undefined;
+
     if (shouldPushDriver) {
       const minutaLabel = updated?.minuta?.trim() || updated?.placa?.trim() || "sua minuta";
       const docaLabel = updated?.doca?.trim();
-      await sendDriverPushNotification(updated!.driver_user_id as string, {
+      pushResult = await sendDriverPushNotification(updated!.driver_user_id as string, {
         title: "FilaDock — Voce foi chamado",
         body: docaLabel
           ? `Minuta ${minutaLabel} — doca ${docaLabel}. Apresente-se agora.`
@@ -243,7 +245,7 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ data: responseRow ?? updated });
+    return NextResponse.json({ data: responseRow ?? updated, push: pushResult });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro interno";
     return NextResponse.json({ error: message }, { status: 500 });

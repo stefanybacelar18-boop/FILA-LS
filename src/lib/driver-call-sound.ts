@@ -23,10 +23,10 @@ export function unlockDriverCallSound() {
 function pulseTone(ctx: AudioContext, startAt: number, duration: number, frequency: number) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = "square";
+  osc.type = "sine";
   osc.frequency.setValueAtTime(frequency, startAt);
   gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(0.35, startAt + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.85, startAt + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
   osc.connect(gain);
   gain.connect(ctx.destination);
@@ -45,32 +45,19 @@ export async function playDriverCallSound() {
   if (ctx.state !== "running") return;
 
   const now = ctx.currentTime + 0.02;
-  pulseTone(ctx, now, 0.28, 880);
-  pulseTone(ctx, now + 0.34, 0.28, 1100);
-  pulseTone(ctx, now + 0.68, 0.36, 880);
+  pulseTone(ctx, now, 0.32, 880);
+  pulseTone(ctx, now + 0.38, 0.32, 1100);
+  pulseTone(ctx, now + 0.76, 0.42, 880);
+  pulseTone(ctx, now + 1.14, 0.5, 1320);
 }
 
-let alertAudio: HTMLAudioElement | null = null;
-
-/** Fallback com elemento audio (alguns Androids). */
-export function playDriverCallSoundFallback() {
-  if (typeof window === "undefined") return;
-  try {
-    if (!alertAudio) {
-      alertAudio = new Audio(
-        "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUtvT18="
-      );
-      alertAudio.volume = 1;
-    }
-    alertAudio.currentTime = 0;
-    void alertAudio.play().catch(() => undefined);
-  } catch {
-    // noop
-  }
+/** Fallback — segunda tentativa de Web Audio. */
+export async function playDriverCallSoundFallback() {
+  await playDriverCallSound();
 }
 
 export async function playDriverCallAlert() {
   unlockDriverCallSound();
   await playDriverCallSound();
-  playDriverCallSoundFallback();
+  await playDriverCallSoundFallback();
 }
