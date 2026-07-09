@@ -18,7 +18,7 @@ import { QueuePositionHero } from "@/components/ui/PageHeader";
 import type { Profile, QueueEntry } from "@/lib/types";
 import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { formatPrevisaoDate } from "@/lib/utils";
-import { ClipboardList, ArrowRight } from "lucide-react";
+import { ClipboardList, ArrowRight, BellRing } from "lucide-react";
 
 export function DriverQueuePanel() {
   return (
@@ -144,6 +144,8 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
 
   const showLoading = loading || (!hasEntry && geoLoading);
   const entries = allEntries as QueueEntry[];
+  const entryId = entry?.id ?? null;
+  const calledAt = entry?.called_at ?? null;
   const posicao = entry ? resolveQueuePosition(entry, entries) : null;
   const aFrente = entry ? countVehiclesAhead(entry, entries) : 0;
   const previsaoLabel = entry?.previsao_descarregamento
@@ -153,7 +155,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   const listRefresh = <RefreshIconButton onRefresh={refresh} label="Atualizar fila" />;
 
   useEffect(() => {
-    const marker = entry ? `${entry.id}:${entry.called_at ?? ""}` : null;
+    const marker = entryId ? `${entryId}:${calledAt ?? ""}` : null;
 
     if (!initializedCallStateRef.current) {
       initializedCallStateRef.current = true;
@@ -161,7 +163,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
       return;
     }
 
-    if (!entry?.called_at) {
+    if (!calledAt) {
       lastCallMarkerRef.current = marker;
       return;
     }
@@ -174,7 +176,20 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     }
     playCallSoundFallback();
     lastCallMarkerRef.current = marker;
-  }, [entry?.id, entry?.called_at]);
+  }, [entryId, calledAt]);
+
+  useEffect(() => {
+    if (!showCallAlert) return;
+
+    const timer = window.setInterval(() => {
+      if ("vibrate" in navigator) {
+        navigator.vibrate([300, 120, 300, 120, 450]);
+      }
+      playCallSoundFallback();
+    }, 3500);
+
+    return () => window.clearInterval(timer);
+  }, [showCallAlert]);
 
   return (
     <MotoristaShell
@@ -190,20 +205,27 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
         <div className="space-y-4">
           {showCallAlert && (
             <div
-              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm"
+              className="rounded-2xl border-2 border-emerald-500 bg-emerald-100 px-4 py-4 text-emerald-900 shadow-md ring-2 ring-emerald-300/70"
               role="status"
               aria-live="assertive"
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Voce foi chamado para descarga</p>
-                  <p className="mt-0.5 text-xs text-emerald-800">
-                    Dirija-se ao ponto de operacao e aguarde orientacao da equipe.
-                  </p>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-full bg-emerald-600 p-2 text-white animate-pulse">
+                    <BellRing className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-base font-bold uppercase tracking-wide">
+                      Voce foi chamado
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-emerald-900">
+                      Dirija-se ao ponto de operacao agora e aguarde orientacao da equipe.
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  className="rounded-md border border-emerald-400 bg-white px-2 py-1 text-xs font-semibold text-emerald-800"
+                  className="rounded-md border border-emerald-500 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-900"
                   onClick={() => setShowCallAlert(false)}
                 >
                   Entendi
