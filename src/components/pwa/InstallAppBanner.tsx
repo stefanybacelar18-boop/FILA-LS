@@ -14,6 +14,7 @@ const HIDDEN_PREFIXES = [
   "/admin",
   "/dashboard",
   "/historico",
+  "/login/motorista",
 ];
 
 type BeforeInstallPromptEvent = Event & {
@@ -53,7 +54,10 @@ export function InstallAppBanner() {
       setVisible(false);
       return;
     }
-    if (isStandalone()) return;
+    if (isStandalone()) {
+      setVisible(false);
+      return;
+    }
     if (sessionStorage.getItem(DISMISS_KEY)) return;
     if (!isMobile()) return;
 

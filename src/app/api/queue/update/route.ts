@@ -25,7 +25,6 @@ import { shouldAutoPrioritize } from "@/lib/minuta-intelligence";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
-import { getConfiguredAppUrl } from "@/lib/app-url";
 import { sendDriverPushNotification } from "@/lib/driver-push";
 
 type UpdateBody = {
@@ -236,14 +235,13 @@ export async function PATCH(request: NextRequest) {
     if (shouldPushDriver) {
       const minutaLabel = updated?.minuta?.trim() || updated?.placa?.trim() || "sua minuta";
       const docaLabel = updated?.doca?.trim();
-      const appUrl = getConfiguredAppUrl() ?? "https://fila-lsl.vercel.app";
       try {
         await sendDriverPushNotification(updated!.driver_user_id as string, {
           title: "FilaDock — Voce foi chamado",
           body: docaLabel
             ? `Minuta ${minutaLabel} — doca ${docaLabel}. Apresente-se agora.`
             : `Minuta ${minutaLabel} — apresente-se no ponto de operacao.`,
-          url: `${appUrl}/motorista`,
+          url: "/motorista",
           tag: `driver-call-${updated?.id}`,
         });
       } catch {

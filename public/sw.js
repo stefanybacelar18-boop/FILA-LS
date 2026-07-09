@@ -1,4 +1,4 @@
-const CACHE = "filadock-v25";
+const CACHE = "filadock-v26";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -57,38 +57,45 @@ self.addEventListener("push", (event) => {
   const payload = parsePushPayload(event);
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      image: "/icons/icon-512-plain.png",
-      vibrate: [400, 150, 400, 150, 600],
-      silent: false,
-      data: { url: payload.url },
-      tag: payload.tag,
-      renotify: true,
-      requireInteraction: true,
-      actions: [{ action: "open", title: "Abrir fila" }],
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const appVisible = clients.some((client) => client.visibilityState === "visible");
+      if (appVisible) {
+        clients.forEach((client) => {
+          client.postMessage({ type: "DRIVER_CALLED", payload });
+        });
+        return undefined;
+      }
+
+      return self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        vibrate: [400, 150, 400, 150, 600],
+        silent: false,
+        data: { path: payload.url || "/motorista" },
+        tag: payload.tag,
+        renotify: true,
+      });
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || "/motorista";
+  const targetPath = event.notification?.data?.path || "/motorista";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
           if ("navigate" in client) {
-            return client.navigate(targetUrl).then(() => client.focus());
+            return client.navigate(targetPath).then(() => client.focus());
           }
           client.focus();
           return undefined;
         }
       }
-      return self.clients.openWindow(targetUrl);
+      return self.clients.openWindow(targetPath);
     })
   );
 });

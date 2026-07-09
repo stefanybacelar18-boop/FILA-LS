@@ -185,6 +185,23 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   }
 
   useEffect(() => {
+    if (!isDriverPushSupported()) return;
+
+    function onSwMessage(event: MessageEvent) {
+      const data = event.data as { type?: string } | null;
+      if (data?.type !== "DRIVER_CALLED") return;
+      setShowCallAlert(true);
+      if ("vibrate" in navigator) {
+        navigator.vibrate([250, 120, 250]);
+      }
+      playCallSoundFallback();
+    }
+
+    navigator.serviceWorker.addEventListener("message", onSwMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onSwMessage);
+  }, []);
+
+  useEffect(() => {
     const marker = entryId ? `${entryId}:${calledAt ?? ""}` : null;
 
     if (!initializedCallStateRef.current) {
@@ -207,19 +224,6 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     playCallSoundFallback();
     lastCallMarkerRef.current = marker;
   }, [entryId, calledAt]);
-
-  useEffect(() => {
-    if (!showCallAlert) return;
-
-    const timer = window.setInterval(() => {
-      if ("vibrate" in navigator) {
-        navigator.vibrate([300, 120, 300, 120, 450]);
-      }
-      playCallSoundFallback();
-    }, 3500);
-
-    return () => window.clearInterval(timer);
-  }, [showCallAlert]);
 
   return (
     <MotoristaShell
