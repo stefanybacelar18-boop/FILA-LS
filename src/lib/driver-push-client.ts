@@ -1,5 +1,7 @@
 "use client";
 
+import { isPwaStandalone } from "@/lib/pwa-client";
+
 function base64UrlToUint8Array(base64Url: string) {
   const padded = `${base64Url}${"=".repeat((4 - (base64Url.length % 4)) % 4)}`
     .replace(/-/g, "+")
@@ -37,7 +39,10 @@ async function saveSubscriptionToServer(subscription: PushSubscription) {
   const res = await fetch("/api/notifications/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(subscription.toJSON()),
+    body: JSON.stringify({
+      ...subscription.toJSON(),
+      clientMode: isPwaStandalone() ? "standalone" : "browser",
+    }),
   });
   if (!res.ok) {
     const json = (await res.json().catch(() => ({}))) as { error?: string };

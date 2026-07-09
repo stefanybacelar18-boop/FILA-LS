@@ -1,4 +1,4 @@
-const CACHE = "filadock-v27";
+const CACHE = "filadock-v28";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -54,32 +54,41 @@ function parsePushPayload(event) {
 
 function shouldSkipSystemNotification(clients) {
   return clients.some(
-    (client) => client.visibilityState === "visible" && ("focused" in client ? client.focused : true)
+    (client) => client.visibilityState === "visible" && client.focused === true
   );
+}
+
+function isTestPush(payload) {
+  const tag = payload.tag || "";
+  return tag.startsWith("driver-test-");
 }
 
 self.addEventListener("push", (event) => {
   const payload = parsePushPayload(event);
+  const forceSystemNotification = isTestPush(payload);
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      if (shouldSkipSystemNotification(clients)) {
-        clients.forEach((client) => {
-          client.postMessage({ type: "DRIVER_CALLED", payload });
+      const skipSystem = !forceSystemNotification && shouldSkipSystemNotification(clients);
+
+      if (!skipSystem) {
+        return self.registration.showNotification(payload.title, {
+          body: payload.body,
+          icon: "/icons/icon-192.png",
+          badge: "/icons/icon-192.png",
+          vibrate: [500, 200, 500, 200, 700],
+          silent: false,
+          requireInteraction: !forceSystemNotification,
+          data: { path: payload.url || "/motorista" },
+          tag: payload.tag || "filadock-driver-call",
+          renotify: true,
         });
-        return undefined;
       }
 
-      return self.registration.showNotification(payload.title, {
-        body: payload.body,
-        icon: "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
-        vibrate: [500, 200, 500, 200, 700],
-        silent: false,
-        data: { path: payload.url || "/motorista" },
-        tag: payload.tag || "filadock-driver-call",
-        renotify: true,
+      clients.forEach((client) => {
+        client.postMessage({ type: "DRIVER_CALLED", payload });
       });
+      return undefined;
     })
   );
 });

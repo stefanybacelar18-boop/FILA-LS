@@ -38,7 +38,7 @@ export async function sendDriverPushNotification(
   const admin = createAdminClient();
   const { data: subscriptions, error } = await admin
     .from("driver_push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
+    .select("id, endpoint, p256dh, auth, user_agent")
     .eq("driver_user_id", driverUserId);
 
   if (error) {
@@ -49,12 +49,17 @@ export async function sendDriverPushNotification(
     return { sent: 0, failed: 0, reason: "no_subscriptions" };
   }
 
+  const standaloneSubs = subscriptions.filter((row) =>
+    row.user_agent?.includes("FilaDock-Client:standalone")
+  );
+  const targets = standaloneSubs.length > 0 ? standaloneSubs : subscriptions;
+
   const jsonPayload = JSON.stringify(payload);
   let sent = 0;
   let failed = 0;
 
   await Promise.all(
-    subscriptions.map(async (row) => {
+    targets.map(async (row) => {
       const subscription = {
         endpoint: row.endpoint,
         keys: { p256dh: row.p256dh, auth: row.auth },

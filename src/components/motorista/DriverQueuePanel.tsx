@@ -21,6 +21,7 @@ import { formatPrevisaoDate } from "@/lib/utils";
 import { ClipboardList, ArrowRight, BellRing } from "lucide-react";
 import { ensureDriverPushSubscription, isDriverPushSupported } from "@/lib/driver-push-client";
 import { playDriverCallAlert, unlockDriverCallSound } from "@/lib/driver-call-sound";
+import { isPwaStandalone } from "@/lib/pwa-client";
 
 export function DriverQueuePanel() {
   return (
@@ -90,6 +91,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   const [pushBusy, setPushBusy] = useState(false);
   const [pushSyncError, setPushSyncError] = useState<string | null>(null);
   const [pushTestMsg, setPushTestMsg] = useState<string | null>(null);
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
   const initializedCallStateRef = useRef(false);
   const lastCallMarkerRef = useRef<string | null>(null);
 
@@ -133,6 +135,7 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
       return;
     }
     setPushPermission(Notification.permission);
+    setIsStandaloneApp(isPwaStandalone());
   }, []);
 
   async function enablePush(requestPermission = true) {
@@ -146,7 +149,11 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
       if (result === "denied") {
         setPushSyncError("Notificacoes bloqueadas no celular. Ative nas configuracoes do app.");
       } else if (result === "granted") {
-        setPushTestMsg("Notificacoes ativas. Feche o app e use Testar para validar.");
+        setPushTestMsg(
+          isPwaStandalone()
+            ? "Notificacoes ativas no app instalado. Feche o app e use Testar."
+            : "Abra pelo icone instalado na tela inicial e ative de novo para avisos com app fechado."
+        );
       }
     } catch (error) {
       setPushSyncError(error instanceof Error ? error.message : "Erro ao ativar notificacoes");
@@ -160,13 +167,27 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     setPushTestMsg(null);
     setPushSyncError(null);
     try {
+      if (!isPwaStandalone()) {
+        setPushSyncError(
+          "Abra pelo icone FilaDock na tela inicial (app instalado), nao pela aba do Chrome."
+        );
+        return;
+      }
+
       const res = await fetch("/api/notifications/test", { method: "POST" });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setPushSyncError(json.error ?? "Falha no teste de notificacao.");
         return;
       }
-      setPushTestMsg("Push enviado. Feche o app para ver na barra de notificacoes.");
+
+      if (document.visibilityState === "visible") {
+        setPushTestMsg(
+          "Push enviado. Agora feche o app instalado (remova dos recentes). O som aqui e so alerta interno — a notificacao real aparece na barra do celular com app fechado."
+        );
+      } else {
+        setPushTestMsg("Push enviado. Verifique a barra de notificacoes do celular.");
+      }
     } finally {
       setPushBusy(false);
     }
@@ -248,8 +269,18 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
           {pushPermission === "granted" && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
               <p className="font-medium">
-                Notificacoes ativas — aviso na barra mesmo com app fechado.
+                {isStandaloneApp
+                  ? "Notificacoes ativas no app instalado."
+                  : "Notificacoes ativas no navegador — abra pelo icone instalado para avisos com app fechado."}
               </p>
+              {!isStandaloneApp && (
+                <p className="mt-1 font-medium text-amber-800">
+                  Feche a aba do Chrome e use o app FilaDock na tela inicial.
+                </p>
+              )}
+              {pushSyncError && (
+                <p className="mt-1 font-medium text-red-700">{pushSyncError}</p>
+              )}
               {pushTestMsg && <p className="mt-1">{pushTestMsg}</p>}
               <button
                 type="button"

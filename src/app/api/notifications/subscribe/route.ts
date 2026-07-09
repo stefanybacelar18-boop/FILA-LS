@@ -7,6 +7,7 @@ type SubscriptionBody = {
   endpoint?: string;
   keys?: { p256dh?: string; auth?: string };
   expirationTime?: number | null;
+  clientMode?: "standalone" | "browser";
 };
 
 export async function GET() {
@@ -42,6 +43,16 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const clientMode = body.clientMode === "standalone" ? "standalone" : "browser";
+  const userAgent = `${request.headers.get("user-agent") ?? ""} FilaDock-Client:${clientMode}`.trim();
+
+  if (clientMode === "standalone") {
+    await admin
+      .from("driver_push_subscriptions")
+      .delete()
+      .eq("driver_user_id", user.id)
+      .like("user_agent", "%FilaDock-Client:browser%");
+  }
 
   await admin
     .from("driver_push_subscriptions")
@@ -55,7 +66,7 @@ export async function POST(request: NextRequest) {
     p256dh,
     auth,
     expiration_time: body.expirationTime ?? null,
-    user_agent: request.headers.get("user-agent"),
+    user_agent: userAgent,
     updated_at: new Date().toISOString(),
   });
 
