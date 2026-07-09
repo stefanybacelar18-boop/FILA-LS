@@ -66,4 +66,3 @@ CREATE TRIGGER trg_driver_push_subscriptions_updated_at
   EXECUTE FUNCTION public.set_driver_push_subscriptions_updated_at();
 
 SELECT 'migracao-web-push-motorista aplicada' AS status;
-

@@ -9,6 +9,7 @@ import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
 import { Button } from "@/components/ui/Button";
 import { ClipboardList, ListOrdered, LogOut } from "lucide-react";
 import type { Profile } from "@/lib/types";
+import { useDriverPushSubscription } from "@/hooks/useDriverPushSubscription";
 
 export function MotoristaShell({
   profile,
@@ -25,6 +26,7 @@ export function MotoristaShell({
   const router = useRouter();
   const supabase = createClient();
   const firstName = profile.full_name?.split(" ")?.[0] ?? "Motorista";
+  useDriverPushSubscription(true);
 
   async function logout() {
     await supabase.auth.signOut();

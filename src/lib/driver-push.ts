@@ -10,12 +10,6 @@ type DriverPushPayload = {
 
 let configured = false;
 
-function base64UrlToBase64(value: string) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padLength = (4 - (normalized.length % 4)) % 4;
-  return normalized + "=".repeat(padLength);
-}
-
 function ensureWebPushConfigured() {
   if (configured) return true;
 
@@ -23,11 +17,7 @@ function ensureWebPushConfigured() {
   const privateKey = process.env.WEB_PUSH_PRIVATE_KEY?.trim();
   if (!publicKey || !privateKey) return false;
 
-  webpush.setVapidDetails(
-    "mailto:suporte@filadock.local",
-    base64UrlToBase64(publicKey),
-    base64UrlToBase64(privateKey)
-  );
+  webpush.setVapidDetails("mailto:suporte@filadock.local", publicKey, privateKey);
   configured = true;
   return true;
 }
@@ -62,8 +52,9 @@ export async function sendDriverPushNotification(
 
       try {
         await webpush.sendNotification(subscription, jsonPayload, {
-          TTL: 60,
+          TTL: 300,
           urgency: "high",
+          topic: payload.tag,
         });
       } catch (error) {
         const statusCode =

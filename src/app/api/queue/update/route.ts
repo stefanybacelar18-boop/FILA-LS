@@ -237,16 +237,18 @@ export async function PATCH(request: NextRequest) {
       const minutaLabel = updated?.minuta?.trim() || updated?.placa?.trim() || "sua minuta";
       const docaLabel = updated?.doca?.trim();
       const appUrl = getConfiguredAppUrl() ?? "https://fila-lsl.vercel.app";
-      void sendDriverPushNotification(updated!.driver_user_id as string, {
-        title: "Voce foi chamado",
-        body: docaLabel
-          ? `Minuta ${minutaLabel} - dirija-se para a doca ${docaLabel}.`
-          : `Minuta ${minutaLabel} - dirija-se ao ponto de operacao.`,
-        url: `${appUrl}/motorista`,
-        tag: `driver-call-${updated?.id}`,
-      }).catch(() => {
+      try {
+        await sendDriverPushNotification(updated!.driver_user_id as string, {
+          title: "FilaDock — Voce foi chamado",
+          body: docaLabel
+            ? `Minuta ${minutaLabel} — doca ${docaLabel}. Apresente-se agora.`
+            : `Minuta ${minutaLabel} — apresente-se no ponto de operacao.`,
+          url: `${appUrl}/motorista`,
+          tag: `driver-call-${updated?.id}`,
+        });
+      } catch {
         /* push falhou, nao interrompe fluxo operacional */
-      });
+      }
     }
 
     return NextResponse.json({ data: responseRow ?? updated });

@@ -6,9 +6,20 @@ import { useEffect } from "react";
 export function PwaRegistrar() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      /* silencioso — PWA ainda funciona via manifest no iOS */
-    });
+
+    async function register() {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        });
+        await registration.update();
+      } catch {
+        /* silencioso — PWA ainda funciona via manifest no iOS */
+      }
+    }
+
+    void register();
   }, []);
 
   return null;

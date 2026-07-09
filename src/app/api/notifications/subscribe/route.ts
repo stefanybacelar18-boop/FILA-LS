@@ -42,18 +42,22 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { error } = await admin.from("driver_push_subscriptions").upsert(
-    {
-      driver_user_id: user.id,
-      endpoint,
-      p256dh,
-      auth,
-      expiration_time: body.expirationTime ?? null,
-      user_agent: request.headers.get("user-agent"),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "driver_user_id,endpoint" }
-  );
+
+  await admin
+    .from("driver_push_subscriptions")
+    .delete()
+    .eq("driver_user_id", user.id)
+    .eq("endpoint", endpoint);
+
+  const { error } = await admin.from("driver_push_subscriptions").insert({
+    driver_user_id: user.id,
+    endpoint,
+    p256dh,
+    auth,
+    expiration_time: body.expirationTime ?? null,
+    user_agent: request.headers.get("user-agent"),
+    updated_at: new Date().toISOString(),
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
