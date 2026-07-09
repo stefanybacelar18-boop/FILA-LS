@@ -1,4 +1,4 @@
-const CACHE = "filadock-v30";
+const CACHE = "filadock-v31";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -72,7 +72,7 @@ self.addEventListener("push", (event) => {
           badge: "/icons/icon-192.png",
           vibrate: [500, 200, 500, 200, 700],
           silent: false,
-          requireInteraction: true,
+          requireInteraction: false,
           data: { path: payload.url || "/motorista" },
           tag: payload.tag || "filadock-driver-call",
           renotify: true,

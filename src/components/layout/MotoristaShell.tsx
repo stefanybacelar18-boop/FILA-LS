@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { ClipboardList, ListOrdered, LogOut } from "lucide-react";
 import { useEffect } from "react";
 import { unlockDriverCallSound } from "@/lib/driver-call-sound";
+import { clearDriverCallNotifications } from "@/lib/clear-driver-notifications";
 import { DriverQueueProvider, useDriverQueueContext } from "@/contexts/DriverQueueContext";
 import { useDriverCallAlert } from "@/hooks/useDriverCallAlert";
 import { DriverCallAlertBanner } from "@/components/motorista/DriverCallAlertBanner";
@@ -55,11 +56,21 @@ function MotoristaShellInner({
 
   useEffect(() => {
     const unlock = () => unlockDriverCallSound();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void clearDriverCallNotifications();
+      }
+    };
+
     document.addEventListener("touchstart", unlock, { passive: true });
     document.addEventListener("click", unlock, { passive: true });
+    document.addEventListener("visibilitychange", onVisible);
+    void clearDriverCallNotifications();
+
     return () => {
       document.removeEventListener("touchstart", unlock);
       document.removeEventListener("click", unlock);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
