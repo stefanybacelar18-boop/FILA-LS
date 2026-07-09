@@ -1,4 +1,4 @@
-const CACHE = "filadock-v32";
+const CACHE = "filadock-v33";
 
 const DRIVER_CALL_VIBRATE = [0, 700, 250, 700, 250, 900, 250, 1100];
 
