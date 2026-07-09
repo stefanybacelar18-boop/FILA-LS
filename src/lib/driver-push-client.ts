@@ -46,7 +46,7 @@ async function saveSubscriptionToServer(subscription: PushSubscription) {
   });
   if (!res.ok) {
     const json = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(json.error ?? "Falha ao salvar notificacoes");
+    throw new Error(json.error ?? "Falha ao salvar notificações");
   }
 }
 
@@ -63,7 +63,7 @@ export async function ensureDriverPushSubscription(options?: {
 
   const publicKey = await fetchPushPublicKey();
   if (!publicKey) {
-    throw new Error("Push nao configurado no servidor. Contate o suporte.");
+    throw new Error("Push não configurado no servidor. Contate o suporte.");
   }
 
   const registration = await navigator.serviceWorker.register("/sw.js", {

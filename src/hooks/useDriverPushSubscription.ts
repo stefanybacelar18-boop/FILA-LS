@@ -23,11 +23,11 @@ export function useDriverPushSubscription(active = true) {
       const result = await ensureDriverPushSubscription({ requestPermission });
       setPermission(result);
       if (result === "denied") {
-        setSyncError("Notificacoes bloqueadas no celular. Ative nas configuracoes do app.");
+        setSyncError("Notificações bloqueadas no celular. Ative nas configurações do app.");
       }
       return result;
     } catch (error) {
-      setSyncError(error instanceof Error ? error.message : "Erro ao ativar notificacoes");
+      setSyncError(error instanceof Error ? error.message : "Erro ao ativar notificações");
       return Notification.permission;
     } finally {
       setSyncing(false);

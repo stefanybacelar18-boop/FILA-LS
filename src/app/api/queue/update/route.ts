@@ -26,6 +26,10 @@ import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
 import { sendDriverPushNotification } from "@/lib/driver-push";
+import {
+  buildDriverCallPushBody,
+  DRIVER_CALL_PUSH_TITLE,
+} from "@/lib/driver-notification-copy";
 
 type UpdateBody = {
   entryId?: string;
@@ -233,13 +237,13 @@ export async function PATCH(request: NextRequest) {
     let pushResult: { sent: number; failed: number; reason?: string } | undefined;
 
     if (shouldPushDriver) {
-      const minutaLabel = updated?.minuta?.trim() || updated?.placa?.trim() || "sua minuta";
-      const docaLabel = updated?.doca?.trim();
       pushResult = await sendDriverPushNotification(updated!.driver_user_id as string, {
-        title: "FilaDock — Voce foi chamado",
-        body: docaLabel
-          ? `Minuta ${minutaLabel} — doca ${docaLabel}. Apresente-se agora.`
-          : `Minuta ${minutaLabel} — apresente-se no ponto de operacao.`,
+        title: DRIVER_CALL_PUSH_TITLE,
+        body: buildDriverCallPushBody({
+          minuta: updated?.minuta,
+          placa: updated?.placa,
+          doca: updated?.doca,
+        }),
         url: "/motorista",
         tag: `driver-call-${updated?.id}-${Date.now()}`,
       });

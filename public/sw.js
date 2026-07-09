@@ -1,4 +1,4 @@
-const CACHE = "filadock-v29";
+const CACHE = "filadock-v30";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -27,8 +27,8 @@ self.addEventListener("fetch", (event) => {
 
 function parsePushPayload(event) {
   const fallback = {
-    title: "FilaDock — Voce foi chamado",
-    body: "Apresente-se no ponto de operacao.",
+    title: "FilaDock — Chamada para descarga",
+    body: "Dirija-se ao ponto de operação imediatamente. Sua presença foi solicitada pela equipe.",
     url: "/motorista",
     tag: "filadock-driver-call",
   };
@@ -58,18 +58,12 @@ function shouldSkipSystemNotification(clients) {
   );
 }
 
-function isTestPush(payload) {
-  const tag = payload.tag || "";
-  return tag.startsWith("driver-test-");
-}
-
 self.addEventListener("push", (event) => {
   const payload = parsePushPayload(event);
-  const forceSystemNotification = isTestPush(payload);
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const skipSystem = !forceSystemNotification && shouldSkipSystemNotification(clients);
+      const skipSystem = shouldSkipSystemNotification(clients);
 
       if (!skipSystem) {
         return self.registration.showNotification(payload.title, {
@@ -78,7 +72,7 @@ self.addEventListener("push", (event) => {
           badge: "/icons/icon-192.png",
           vibrate: [500, 200, 500, 200, 700],
           silent: false,
-          requireInteraction: !forceSystemNotification,
+          requireInteraction: true,
           data: { path: payload.url || "/motorista" },
           tag: payload.tag || "filadock-driver-call",
           renotify: true,

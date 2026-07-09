@@ -96,7 +96,6 @@ function DriverQueueInner() {
   );
   const [pushBusy, setPushBusy] = useState(false);
   const [pushSyncError, setPushSyncError] = useState<string | null>(null);
-  const [pushTestMsg, setPushTestMsg] = useState<string | null>(null);
   const [isStandaloneApp, setIsStandaloneApp] = useState(false);
 
   const hasEntry = !!entry;
@@ -135,53 +134,15 @@ function DriverQueueInner() {
   async function enablePush(requestPermission = true) {
     setPushBusy(true);
     setPushSyncError(null);
-    setPushTestMsg(null);
     unlockDriverCallSound();
     try {
       const result = await ensureDriverPushSubscription({ requestPermission });
       setPushPermission(result);
       if (result === "denied") {
-        setPushSyncError("Notificacoes bloqueadas no celular. Ative nas configuracoes do app.");
-      } else if (result === "granted") {
-        setPushTestMsg(
-          isPwaStandalone()
-            ? "Notificacoes ativas no app instalado. Feche o app e use Testar."
-            : "Abra pelo icone instalado na tela inicial e ative de novo para avisos com app fechado."
-        );
+        setPushSyncError("Notificações bloqueadas no celular. Ative nas configurações do app.");
       }
     } catch (error) {
-      setPushSyncError(error instanceof Error ? error.message : "Erro ao ativar notificacoes");
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
-  async function testPushNotification() {
-    setPushBusy(true);
-    setPushTestMsg(null);
-    setPushSyncError(null);
-    try {
-      if (!isPwaStandalone()) {
-        setPushSyncError(
-          "Abra pelo icone FilaDock na tela inicial (app instalado), nao pela aba do Chrome."
-        );
-        return;
-      }
-
-      const res = await fetch("/api/notifications/test", { method: "POST" });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setPushSyncError(json.error ?? "Falha no teste de notificacao.");
-        return;
-      }
-
-      if (document.visibilityState === "visible") {
-        setPushTestMsg(
-          "Push enviado. Agora feche o app instalado (remova dos recentes). O som aqui e so alerta interno — a notificacao real aparece na barra do celular com app fechado."
-        );
-      } else {
-        setPushTestMsg("Push enviado. Verifique a barra de notificacoes do celular.");
-      }
+      setPushSyncError(error instanceof Error ? error.message : "Erro ao ativar notificações");
     } finally {
       setPushBusy(false);
     }
@@ -199,7 +160,7 @@ function DriverQueueInner() {
             <div className="rounded-xl border border-brand/30 bg-brand-muted/40 px-4 py-3 text-brand">
               <p className="text-sm font-semibold">Ative alertas na barra do celular</p>
               <p className="mt-1 text-xs text-brand/80">
-                Necessario para avisar com app fechado ou tela bloqueada.
+                Necessário para avisar com app fechado ou tela bloqueada.
               </p>
               {pushSyncError && (
                 <p className="mt-1 text-xs font-medium text-red-700">{pushSyncError}</p>
@@ -210,7 +171,7 @@ function DriverQueueInner() {
                 disabled={pushBusy}
                 className="mt-2 rounded-md border border-brand/40 bg-white px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-60"
               >
-                {pushBusy ? "Ativando..." : "Permitir notificacoes"}
+                {pushBusy ? "Ativando..." : "Permitir notificações"}
               </button>
             </div>
           )}
@@ -219,8 +180,8 @@ function DriverQueueInner() {
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
               <p className="font-medium">
                 {isStandaloneApp
-                  ? "Notificacoes ativas no app instalado."
-                  : "Notificacoes ativas no navegador — abra pelo icone instalado para avisos com app fechado."}
+                  ? "Notificações ativas no app instalado."
+                  : "Notificações ativas no navegador — abra pelo ícone instalado para avisos com app fechado."}
               </p>
               {!isStandaloneApp && (
                 <p className="mt-1 font-medium text-amber-800">
@@ -230,15 +191,6 @@ function DriverQueueInner() {
               {pushSyncError && (
                 <p className="mt-1 font-medium text-red-700">{pushSyncError}</p>
               )}
-              {pushTestMsg && <p className="mt-1">{pushTestMsg}</p>}
-              <button
-                type="button"
-                onClick={() => void testPushNotification()}
-                disabled={pushBusy}
-                className="mt-2 rounded-md border border-emerald-400 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-900 disabled:opacity-60"
-              >
-                {pushBusy ? "Enviando..." : "Testar notificacao (feche o app)"}
-              </button>
             </div>
           )}
 

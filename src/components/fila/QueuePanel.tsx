@@ -307,7 +307,7 @@ export function QueuePanel({ profile }: { profile: Profile }) {
 
       if (push && push.sent === 0) {
         setActionError(
-          "Chamada registrada, mas o motorista pode nao ter recebido o aviso no celular. Verifique se ele ativou notificacoes no app instalado."
+          "Chamada registrada, mas o motorista pode não ter recebido o aviso no celular. Verifique se ele ativou as notificações no app instalado."
         );
       }
 

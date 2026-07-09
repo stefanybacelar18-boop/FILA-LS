@@ -1,6 +1,10 @@
 "use client";
 
 import { BellRing } from "lucide-react";
+import {
+  DRIVER_CALL_BANNER_BODY,
+  DRIVER_CALL_BANNER_TITLE,
+} from "@/lib/driver-notification-copy";
 
 export function DriverCallAlertBanner({
   visible,
@@ -23,10 +27,8 @@ export function DriverCallAlertBanner({
             <BellRing className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-base font-bold uppercase tracking-wide">Voce foi chamado</p>
-            <p className="mt-1 text-sm font-medium text-emerald-900">
-              Dirija-se ao ponto de operacao agora e aguarde orientacao da equipe.
-            </p>
+            <p className="text-base font-bold uppercase tracking-wide">{DRIVER_CALL_BANNER_TITLE}</p>
+            <p className="mt-1 text-sm font-medium text-emerald-900">{DRIVER_CALL_BANNER_BODY}</p>
           </div>
         </div>
         <button
