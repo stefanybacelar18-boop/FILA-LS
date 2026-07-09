@@ -25,6 +25,8 @@ import { shouldAutoPrioritize } from "@/lib/minuta-intelligence";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
+import { getConfiguredAppUrl } from "@/lib/app-url";
+import { sendDriverPushNotification } from "@/lib/driver-push";
 
 type UpdateBody = {
   entryId?: string;
@@ -115,6 +117,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const currentStatus = currentRow.status as string;
+    const currentCalledAt = currentRow.called_at as string | null;
 
     if (status && !assertStatusAllowed(profile.role, status, currentStatus)) {
       return NextResponse.json({ error: "Status não permitido para seu perfil" }, { status: 403 });
@@ -223,6 +226,28 @@ export async function PATCH(request: NextRequest) {
       ],
       priorityMap
     );
+
+    const calledAtUpdated =
+      called_at !== undefined &&
+      Boolean(updated?.called_at) &&
+      updated?.called_at !== currentCalledAt;
+    const shouldPushDriver = calledAtUpdated && Boolean(updated?.driver_user_id);
+
+    if (shouldPushDriver) {
+      const minutaLabel = updated?.minuta?.trim() || updated?.placa?.trim() || "sua minuta";
+      const docaLabel = updated?.doca?.trim();
+      const appUrl = getConfiguredAppUrl() ?? "https://fila-lsl.vercel.app";
+      void sendDriverPushNotification(updated!.driver_user_id as string, {
+        title: "Voce foi chamado",
+        body: docaLabel
+          ? `Minuta ${minutaLabel} - dirija-se para a doca ${docaLabel}.`
+          : `Minuta ${minutaLabel} - dirija-se ao ponto de operacao.`,
+        url: `${appUrl}/motorista`,
+        tag: `driver-call-${updated?.id}`,
+      }).catch(() => {
+        /* push falhou, nao interrompe fluxo operacional */
+      });
+    }
 
     return NextResponse.json({ data: responseRow ?? updated });
   } catch (err) {

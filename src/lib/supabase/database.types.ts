@@ -96,6 +96,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      driver_push_subscriptions: {
+        Row: {
+          id: string;
+          driver_user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          expiration_time: number | null;
+          user_agent: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          driver_user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          expiration_time?: number | null;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          driver_user_id?: string;
+          endpoint?: string;
+          p256dh?: string;
+          auth?: string;
+          expiration_time?: number | null;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
       queue_entries: {
         Row: {
           id: string;

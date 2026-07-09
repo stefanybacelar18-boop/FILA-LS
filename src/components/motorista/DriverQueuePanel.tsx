@@ -110,6 +110,18 @@ function playCallSoundFallback() {
   }, 1000);
 }
 
+function base64UrlToUint8Array(base64Url: string) {
+  const padded = `${base64Url}${"=".repeat((4 - (base64Url.length % 4)) % 4)}`
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const raw = window.atob(padded);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
+}
+
 function DriverQueueContent({ profile }: { profile: Profile }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -117,6 +129,10 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
   const geo = useMotoristaGeofence(!loading);
   const [minutaSearch, setMinutaSearch] = useState("");
   const [showCallAlert, setShowCallAlert] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
+    "default"
+  );
+  const [pushBusy, setPushBusy] = useState(false);
   const initializedCallStateRef = useRef(false);
   const lastCallMarkerRef = useRef<string | null>(null);
 
@@ -153,6 +169,53 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
     : null;
 
   const listRefresh = <RefreshIconButton onRefresh={refresh} label="Atualizar fila" />;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setPushPermission("unsupported");
+      return;
+    }
+    setPushPermission(Notification.permission);
+  }, []);
+
+  async function enablePushAlerts() {
+    if (pushBusy || typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setPushPermission("unsupported");
+      return;
+    }
+
+    setPushBusy(true);
+    try {
+      const perm = await Notification.requestPermission();
+      setPushPermission(perm);
+      if (perm !== "granted") return;
+
+      const keyRes = await fetch("/api/notifications/subscribe", { cache: "no-store" });
+      const keyJson = (await keyRes.json().catch(() => ({}))) as {
+        publicKey?: string | null;
+        enabled?: boolean;
+      };
+      if (!keyRes.ok || !keyJson.enabled || !keyJson.publicKey) return;
+
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToUint8Array(keyJson.publicKey),
+        }));
+
+      await fetch("/api/notifications/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   useEffect(() => {
     const marker = entryId ? `${entryId}:${calledAt ?? ""}` : null;
@@ -203,6 +266,23 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
         </div>
       ) : hasEntry ? (
         <div className="space-y-4">
+          {pushPermission !== "granted" && pushPermission !== "unsupported" && (
+            <div className="rounded-xl border border-brand/30 bg-brand-muted/40 px-4 py-3 text-brand">
+              <p className="text-sm font-semibold">Ative alertas com app fechado</p>
+              <p className="mt-1 text-xs text-brand/80">
+                Permita notificacoes para receber aviso mesmo fora da tela do app.
+              </p>
+              <button
+                type="button"
+                onClick={() => void enablePushAlerts()}
+                disabled={pushBusy}
+                className="mt-2 rounded-md border border-brand/40 bg-white px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-60"
+              >
+                {pushBusy ? "Ativando..." : "Ativar notificacoes"}
+              </button>
+            </div>
+          )}
+
           {showCallAlert && (
             <div
               className="rounded-2xl border-2 border-emerald-500 bg-emerald-100 px-4 py-4 text-emerald-900 shadow-md ring-2 ring-emerald-300/70"
