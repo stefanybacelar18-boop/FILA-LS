@@ -30,6 +30,7 @@ import {
   buildDriverCallPushBody,
   buildDriverCallPushTitle,
 } from "@/lib/driver-notification-copy";
+import { isNewDriverCall } from "@/lib/driver-call";
 
 type UpdateBody = {
   entryId?: string;
@@ -231,7 +232,7 @@ export async function PATCH(request: NextRequest) {
 
     const shouldPushDriver =
       called_at !== undefined &&
-      Boolean(updated?.called_at) &&
+      isNewDriverCall(currentRow.called_at as string | null, updated?.called_at) &&
       Boolean(updated?.driver_user_id);
 
     let pushResult: { sent: number; failed: number; reason?: string } | undefined;
@@ -245,6 +246,7 @@ export async function PATCH(request: NextRequest) {
         body: buildDriverCallPushBody(),
         url: "/motorista",
         tag: `driver-call-${updated?.id}-${Date.now()}`,
+        kind: "driver_call",
       });
     }
 

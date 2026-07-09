@@ -6,6 +6,7 @@ type DriverPushPayload = {
   body: string;
   url: string;
   tag?: string;
+  kind?: "driver_call";
 };
 
 let configured = false;

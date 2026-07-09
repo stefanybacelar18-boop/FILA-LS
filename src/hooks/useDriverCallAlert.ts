@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isDriverPushSupported } from "@/lib/driver-push-client";
+import { parseCalledAtMs } from "@/lib/driver-call";
 import { playDriverCallAlert } from "@/lib/driver-call-sound";
 
 function vibrateCall() {
@@ -10,11 +11,12 @@ function vibrateCall() {
   }
 }
 
-/** Alerta de chamada (som + vibração) em qualquer rota do motorista. */
+/** Alerta de chamada (som + vibração) — só quando called_at avança (chamada nova). */
 export function useDriverCallAlert(entryId: string | null, calledAt: string | null) {
   const [showCallAlert, setShowCallAlert] = useState(false);
   const initializedRef = useRef(false);
-  const lastMarkerRef = useRef<string | null>(null);
+  const lastCallMsRef = useRef(0);
+  const entryIdRef = useRef<string | null>(null);
 
   const fireCallAlert = useCallback(() => {
     setShowCallAlert(true);
@@ -26,8 +28,9 @@ export function useDriverCallAlert(entryId: string | null, calledAt: string | nu
     if (!isDriverPushSupported()) return;
 
     function onSwMessage(event: MessageEvent) {
-      const data = event.data as { type?: string } | null;
+      const data = event.data as { type?: string; payload?: { kind?: string } } | null;
       if (data?.type !== "DRIVER_CALLED") return;
+      if (data.payload?.kind && data.payload.kind !== "driver_call") return;
       fireCallAlert();
     }
 
@@ -36,23 +39,36 @@ export function useDriverCallAlert(entryId: string | null, calledAt: string | nu
   }, [fireCallAlert]);
 
   useEffect(() => {
-    const marker = entryId ? `${entryId}:${calledAt ?? ""}` : null;
+    const callMs = parseCalledAtMs(calledAt);
+
+    if (!entryId) {
+      entryIdRef.current = null;
+      lastCallMsRef.current = 0;
+      return;
+    }
+
+    if (entryIdRef.current !== entryId) {
+      entryIdRef.current = entryId;
+      lastCallMsRef.current = callMs;
+      initializedRef.current = true;
+      return;
+    }
 
     if (!initializedRef.current) {
       initializedRef.current = true;
-      lastMarkerRef.current = marker;
+      lastCallMsRef.current = callMs;
       return;
     }
 
-    if (!calledAt) {
-      lastMarkerRef.current = marker;
+    if (callMs <= 0) {
+      lastCallMsRef.current = 0;
       return;
     }
 
-    if (lastMarkerRef.current === marker) return;
+    if (callMs <= lastCallMsRef.current) return;
 
     fireCallAlert();
-    lastMarkerRef.current = marker;
+    lastCallMsRef.current = callMs;
   }, [entryId, calledAt, fireCallAlert]);
 
   return {
