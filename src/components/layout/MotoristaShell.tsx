@@ -33,7 +33,7 @@ function MotoristaShellInner({
   const router = useRouter();
   const supabase = createClient();
   const firstName = profile.full_name?.split(" ")?.[0] ?? "Motorista";
-  const { syncError } = useDriverPushSubscription(true);
+  useDriverPushSubscription(true);
   const { entry, loading } = useDriverQueueContext();
   const geo = useMotoristaGeofence(checkinNavOverride === undefined && !loading);
   const hasEntry = !!entry;
@@ -112,12 +112,6 @@ function MotoristaShellInner({
           </Button>
         }
       />
-
-      {syncError && (
-        <p className="mx-4 -mt-2 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-          {syncError}
-        </p>
-      )}
 
       <main className="page-container shell-main flex-1">{children}</main>
 

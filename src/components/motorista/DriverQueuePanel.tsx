@@ -19,8 +19,6 @@ import type { Profile, QueueEntry } from "@/lib/types";
 import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { ClipboardList, ArrowRight } from "lucide-react";
-import { ensureDriverPushSubscription, isDriverPushSupported } from "@/lib/driver-push-client";
-import { unlockDriverCallSound } from "@/lib/driver-call-sound";
 
 export function DriverQueuePanel() {
   return (
@@ -90,11 +88,6 @@ function DriverQueueInner() {
   const searchParams = useSearchParams();
   const { entry, allEntries, loading, refresh } = useDriverQueueContext();
   const [minutaSearch, setMinutaSearch] = useState("");
-  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
-    "default"
-  );
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushSyncError, setPushSyncError] = useState<string | null>(null);
 
   const hasEntry = !!entry;
   const geo = useMotoristaGeofence(!loading);
@@ -120,32 +113,6 @@ function DriverQueueInner() {
 
   const listRefresh = <RefreshIconButton onRefresh={refresh} label="Atualizar fila" />;
 
-  useEffect(() => {
-    if (!isDriverPushSupported()) {
-      setPushPermission("unsupported");
-      return;
-    }
-    setPushPermission(Notification.permission);
-    setIsStandaloneApp(isPwaStandalone());
-  }, []);
-
-  async function enablePush(requestPermission = true) {
-    setPushBusy(true);
-    setPushSyncError(null);
-    unlockDriverCallSound();
-    try {
-      const result = await ensureDriverPushSubscription({ requestPermission });
-      setPushPermission(result);
-      if (result === "denied") {
-        setPushSyncError("Notificações bloqueadas no celular. Ative nas configurações do app.");
-      }
-    } catch (error) {
-      setPushSyncError(error instanceof Error ? error.message : "Erro ao ativar notificações");
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
   return (
     <>
       {showLoading ? (
@@ -154,44 +121,6 @@ function DriverQueueInner() {
         </div>
       ) : hasEntry ? (
         <div className="space-y-4">
-          {pushPermission !== "granted" && pushPermission !== "unsupported" && (
-            <div className="rounded-xl border border-brand/30 bg-brand-muted/40 px-4 py-3 text-brand">
-              <p className="text-sm font-semibold">Ative alertas na barra do celular</p>
-              <p className="mt-1 text-xs text-brand/80">
-                Necessário para avisar com app fechado ou tela bloqueada.
-              </p>
-              {pushSyncError && (
-                <p className="mt-1 text-xs font-medium text-red-700">{pushSyncError}</p>
-              )}
-              <button
-                type="button"
-                onClick={() => void enablePush(true)}
-                disabled={pushBusy}
-                className="mt-2 rounded-md border border-brand/40 bg-white px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-60"
-              >
-                {pushBusy ? "Ativando..." : "Permitir notificações"}
-              </button>
-            </div>
-          )}
-
-          {pushPermission === "granted" && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              <p className="font-medium">
-                {isStandaloneApp
-                  ? "Notificações ativas no app instalado."
-                  : "Notificações ativas no navegador — abra pelo ícone instalado para avisos com app fechado."}
-              </p>
-              {!isStandaloneApp && (
-                <p className="mt-1 font-medium text-amber-800">
-                  Feche a aba do Chrome e use o app FilaDock na tela inicial.
-                </p>
-              )}
-              {pushSyncError && (
-                <p className="mt-1 font-medium text-red-700">{pushSyncError}</p>
-              )}
-            </div>
-          )}
-
           <QueuePositionHero
             label={`Minuta ${entry.minuta || "—"}`}
             value={posicao != null ? `${posicao}º` : "—"}
