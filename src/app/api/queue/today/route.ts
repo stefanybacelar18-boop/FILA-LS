@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffQueueRole } from "@/lib/role-permissions";
 import { loadEnrichedQueueEntries } from "@/lib/queue-enrich";
+import { withTimeout } from "@/lib/async-timeout";
 import { readExpedicaoDiaria } from "@/lib/minuta-metadata-db";
 import { buildEstoqueCapacitySummary } from "@/lib/estoque-capacity-summary";
 
@@ -33,11 +34,15 @@ export async function GET(request: NextRequest) {
     const scope = request.nextUrl.searchParams.get("scope");
     const includeAllClosed = scope === "admin";
     const includeInactive = scope === "all" || includeAllClosed;
-    const entries = await loadEnrichedQueueEntries(admin, {
-      includeInactive,
-      includeAllClosed,
-      bypassCache: request.nextUrl.searchParams.has("_"),
-    });
+    const entries = await withTimeout(
+      loadEnrichedQueueEntries(admin, {
+        includeInactive,
+        includeAllClosed,
+        bypassCache: request.nextUrl.searchParams.has("_"),
+      }),
+      18_000,
+      "Carregar fila"
+    );
 
     const expedicao = await readExpedicaoDiaria(admin);
     const estoque = buildEstoqueCapacitySummary(entries, expedicao);

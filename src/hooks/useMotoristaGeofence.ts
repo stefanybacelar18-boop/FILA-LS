@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_GEOFENCE } from "@/lib/constants";
 import { skipGeofence } from "@/lib/dev-flags";
@@ -23,14 +23,6 @@ export type GeofenceStep =
   | "insecure"
   | "skipped";
 
-function geofenceDiffers(a: GeofenceConfig, b: GeofenceConfig): boolean {
-  return (
-    a.lat !== b.lat ||
-    a.lng !== b.lng ||
-    a.radius_meters !== b.radius_meters
-  );
-}
-
 export function useMotoristaGeofence(enabled = true) {
   const supabase = createClient();
   const skipGeofenceDev = skipGeofence();
@@ -38,7 +30,6 @@ export function useMotoristaGeofence(enabled = true) {
   const [step, setStep] = useState<GeofenceStep>("loading");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const validatedFenceRef = useRef<GeofenceConfig | null>(null);
 
   const validateWithGeofence = useCallback(
     async (fence: GeofenceConfig) => {
@@ -49,7 +40,6 @@ export function useMotoristaGeofence(enabled = true) {
       if (skipGeofenceDev) {
         setCoords({ lat: fence.lat, lng: fence.lng });
         setStep("skipped");
-        validatedFenceRef.current = fence;
         return;
       }
       if (!isSecureGeolocationContext()) {
@@ -67,7 +57,6 @@ export function useMotoristaGeofence(enabled = true) {
         const dist = haversineDistance(lat, lng, fence.lat, fence.lng);
         setDistance(dist);
         setStep(isWithinGeofence(lat, lng, fence) ? "inside" : "outside");
-        validatedFenceRef.current = fence;
       } catch (err) {
         const error = err as GeolocationPositionError & Error;
         if (error.message === "insecure_context") {
@@ -81,31 +70,27 @@ export function useMotoristaGeofence(enabled = true) {
   );
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setStep("skipped");
+      return;
+    }
     async function loadGeofence() {
       const { data } = await supabase
         .from("settings")
         .select("value")
         .eq("key", "geofence")
         .single();
-      if (data?.value && typeof data.value === "object") {
-        const loaded = normalizeGeofenceConfig(data.value);
-        setGeofence(loaded);
-        if (
-          validatedFenceRef.current &&
-          geofenceDiffers(validatedFenceRef.current, loaded)
-        ) {
-          void validateWithGeofence(loaded);
-        }
-      }
+
+      const loaded =
+        data?.value && typeof data.value === "object"
+          ? normalizeGeofenceConfig(data.value)
+          : DEFAULT_GEOFENCE;
+
+      setGeofence(loaded);
+      await validateWithGeofence(loaded);
     }
     void loadGeofence();
   }, [enabled, supabase, validateWithGeofence]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    void validateWithGeofence(DEFAULT_GEOFENCE);
-  }, [enabled, validateWithGeofence]);
 
   const validateLocation = useCallback(async () => {
     await validateWithGeofence(geofence);

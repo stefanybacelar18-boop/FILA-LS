@@ -1,4 +1,4 @@
-const CACHE = "filadock-v34";
+const CACHE = "filadock-v35";
 
 const DRIVER_CALL_VIBRATE = [0, 700, 250, 700, 250, 900, 250, 1100];
 
@@ -23,7 +23,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request).then((r) => r ?? caches.match("/")))
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+      if (event.request.mode === "navigate") {
+        const home = await caches.match("/");
+        return home ?? Response.error();
+      }
+      return Response.error();
+    })
   );
 });
 

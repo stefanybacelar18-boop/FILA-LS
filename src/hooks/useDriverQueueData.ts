@@ -32,14 +32,21 @@ export function useDriverQueueData(profile: Profile | null) {
     [profileId]
   );
 
+  const fetchInFlightRef = useRef(false);
+
   const fetchData = useCallback(
     async (options?: { bypassCache?: boolean }) => {
-      if (!profileId) return;
-      const entries = (await fetchEnrichedOperationalQueue(
-        supabase,
-        options
-      )) as MotoristaQueueEntry[];
-      applyEntries(entries);
+      if (!profileId || fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
+      try {
+        const entries = (await fetchEnrichedOperationalQueue(
+          supabase,
+          options
+        )) as MotoristaQueueEntry[];
+        applyEntries(entries);
+      } finally {
+        fetchInFlightRef.current = false;
+      }
     },
     [supabase, profileId, applyEntries]
   );

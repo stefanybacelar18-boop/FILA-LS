@@ -64,7 +64,7 @@ export function useQueuePanelData({ role, isAdmin, isEmpilhador }: UseQueuePanel
 
   useEffect(() => {
     fetchQueue();
-    const debounced = createDebouncedFn(() => fetchQueue(), QUEUE_REALTIME_DEBOUNCE_MS);
+    const debounced = createDebouncedFn(() => fetchQueue(true), QUEUE_REALTIME_DEBOUNCE_MS);
     const channel = supabase
       .channel(`queue-${role}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () =>

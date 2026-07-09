@@ -66,11 +66,6 @@ export async function ensureDriverPushSubscription(options?: {
     throw new Error("Push não configurado no servidor. Contate o suporte.");
   }
 
-  const registration = await navigator.serviceWorker.register("/sw.js", {
-    scope: "/",
-    updateViaCache: "none",
-  });
-  await registration.update();
   const ready = await navigator.serviceWorker.ready;
 
   let subscription = await ready.pushManager.getSubscription();

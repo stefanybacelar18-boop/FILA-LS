@@ -52,7 +52,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Corpo inválido" }, { status: 400 });
+  }
   const validated = validateCheckInBody(body);
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 400 });

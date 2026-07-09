@@ -4,8 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
-import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import { useDriverQueueContext } from "@/contexts/DriverQueueContext";
+import { useMotoristaGeofenceContext } from "@/contexts/MotoristaGeofenceContext";
 import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
@@ -26,11 +26,9 @@ export function DriverQueuePanel() {
       {(profile) => (
         <Suspense
           fallback={
-            <MotoristaShell profile={profile}>
-              <div className="flex justify-center py-16">
-                <Spinner label="Carregando fila…" />
-              </div>
-            </MotoristaShell>
+            <div className="flex min-h-[50vh] justify-center py-16">
+              <Spinner label="Carregando fila…" />
+            </div>
           }
         >
           <DriverQueueContent profile={profile} />
@@ -90,7 +88,7 @@ function DriverQueueInner() {
   const [minutaSearch, setMinutaSearch] = useState("");
 
   const hasEntry = !!entry;
-  const geo = useMotoristaGeofence(!loading);
+  const geo = useMotoristaGeofenceContext();
   const geoLoading = geo.step === "loading" && !geo.skipGeofence;
   const checkinBlocked = !hasEntry && !geo.canCheckIn && !geoLoading;
   const redirectedFromCheckin =

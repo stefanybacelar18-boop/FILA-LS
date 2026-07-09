@@ -12,10 +12,13 @@ import { useEffect } from "react";
 import { unlockDriverCallSound } from "@/lib/driver-call-sound";
 import { clearDriverCallNotifications } from "@/lib/clear-driver-notifications";
 import { DriverQueueProvider, useDriverQueueContext } from "@/contexts/DriverQueueContext";
+import {
+  MotoristaGeofenceProvider,
+  useMotoristaGeofenceContext,
+} from "@/contexts/MotoristaGeofenceContext";
 import { useDriverCallAlert } from "@/hooks/useDriverCallAlert";
 import { DriverCallAlertBanner } from "@/components/motorista/DriverCallAlertBanner";
 import { useDriverPushSubscription } from "@/hooks/useDriverPushSubscription";
-import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
 import type { Profile } from "@/lib/types";
 
 function MotoristaShellInner({
@@ -34,24 +37,20 @@ function MotoristaShellInner({
   const supabase = createClient();
   const firstName = profile.full_name?.split(" ")?.[0] ?? "Motorista";
   useDriverPushSubscription(true);
-  const { entry, loading } = useDriverQueueContext();
-  const geo = useMotoristaGeofence(checkinNavOverride === undefined && !loading);
+  const geo = useMotoristaGeofenceContext();
+  const { entry } = useDriverQueueContext();
   const hasEntry = !!entry;
-  const geoLoading = geo.step === "loading" && !geo.skipGeofence;
 
-  const checkinNavEnabled =
-    checkinNavOverride ?? (hasEntry || geo.canCheckIn || geoLoading);
+  const checkinNavEnabled = checkinNavOverride ?? (hasEntry || geo.canCheckIn || geo.step === "loading");
 
   const checkinBlockHint =
     checkinBlockHintOverride ??
-    (!hasEntry && !geo.canCheckIn && !geoLoading
+    (!hasEntry && !geo.canCheckIn && geo.step !== "loading"
       ? geo.step === "outside"
         ? "Check-in bloqueado — fora do pátio"
         : geo.step === "denied"
           ? "Check-in bloqueado — ative o GPS"
-          : geo.step === "loading"
-            ? null
-            : "Check-in bloqueado — valide a localização"
+          : "Check-in bloqueado — valide a localização"
       : null);
 
   useEffect(() => {
@@ -155,6 +154,20 @@ function MotoristaCallAlertLayer({ children }: { children: React.ReactNode }) {
   );
 }
 
+function MotoristaGeofenceBridge({
+  checkinNavOverride,
+  children,
+}: {
+  checkinNavOverride?: boolean;
+  children: React.ReactNode;
+}) {
+  const geoEnabled = checkinNavOverride === undefined;
+
+  return (
+    <MotoristaGeofenceProvider enabled={geoEnabled}>{children}</MotoristaGeofenceProvider>
+  );
+}
+
 export function MotoristaShell({
   profile,
   children,
@@ -168,15 +181,17 @@ export function MotoristaShell({
 }) {
   return (
     <DriverQueueProvider profile={profile}>
-      <MotoristaCallAlertLayer>
-        <MotoristaShellInner
-          profile={profile}
-          checkinNavOverride={checkinNavEnabled}
-          checkinBlockHintOverride={checkinBlockHint}
-        >
-          {children}
-        </MotoristaShellInner>
-      </MotoristaCallAlertLayer>
+      <MotoristaGeofenceBridge checkinNavOverride={checkinNavEnabled}>
+        <MotoristaCallAlertLayer>
+          <MotoristaShellInner
+            profile={profile}
+            checkinNavOverride={checkinNavEnabled}
+            checkinBlockHintOverride={checkinBlockHint}
+          >
+            {children}
+          </MotoristaShellInner>
+        </MotoristaCallAlertLayer>
+      </MotoristaGeofenceBridge>
     </DriverQueueProvider>
   );
 }

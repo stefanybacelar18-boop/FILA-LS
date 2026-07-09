@@ -54,7 +54,9 @@ export function DashboardPanel({
 
   useEffect(() => {
     void fetchData();
-    const interval = setInterval(() => void fetchData(), 60_000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchData();
+    }, 60_000);
 
     return () => {
       clearInterval(interval);
