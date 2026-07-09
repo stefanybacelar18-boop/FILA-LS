@@ -28,7 +28,7 @@ import type { QueueEntry, QueueStatus } from "@/lib/types";
 import { sendDriverPushNotification } from "@/lib/driver-push";
 import {
   buildDriverCallPushBody,
-  DRIVER_CALL_PUSH_TITLE,
+  buildDriverCallPushTitle,
 } from "@/lib/driver-notification-copy";
 
 type UpdateBody = {
@@ -238,12 +238,11 @@ export async function PATCH(request: NextRequest) {
 
     if (shouldPushDriver) {
       pushResult = await sendDriverPushNotification(updated!.driver_user_id as string, {
-        title: DRIVER_CALL_PUSH_TITLE,
-        body: buildDriverCallPushBody({
+        title: buildDriverCallPushTitle({
           minuta: updated?.minuta,
           placa: updated?.placa,
-          doca: updated?.doca,
         }),
+        body: buildDriverCallPushBody(),
         url: "/motorista",
         tag: `driver-call-${updated?.id}-${Date.now()}`,
       });

@@ -1,4 +1,6 @@
-const CACHE = "filadock-v31";
+const CACHE = "filadock-v32";
+
+const DRIVER_CALL_VIBRATE = [0, 700, 250, 700, 250, 900, 250, 1100];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -28,7 +30,7 @@ self.addEventListener("fetch", (event) => {
 function parsePushPayload(event) {
   const fallback = {
     title: "FilaDock — Chamada para descarga",
-    body: "Dirija-se ao ponto de operação imediatamente. Sua presença foi solicitada pela equipe.",
+    body: "Você foi chamado para descarga. Apresente-se no ponto de operação imediatamente.",
     url: "/motorista",
     tag: "filadock-driver-call",
   };
@@ -70,10 +72,10 @@ self.addEventListener("push", (event) => {
           body: payload.body,
           icon: "/icons/icon-192.png",
           badge: "/icons/icon-192.png",
-          vibrate: [500, 200, 500, 200, 700],
+          vibrate: DRIVER_CALL_VIBRATE,
           silent: false,
-          requireInteraction: false,
-          data: { path: payload.url || "/motorista" },
+          requireInteraction: true,
+          data: { path: payload.url || "/motorista", playSound: true },
           tag: payload.tag || "filadock-driver-call",
           renotify: true,
         });
