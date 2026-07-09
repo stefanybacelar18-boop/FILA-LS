@@ -21,7 +21,6 @@ import { formatPrevisaoDate } from "@/lib/utils";
 import { ClipboardList, ArrowRight } from "lucide-react";
 import { ensureDriverPushSubscription, isDriverPushSupported } from "@/lib/driver-push-client";
 import { unlockDriverCallSound } from "@/lib/driver-call-sound";
-import { isPwaStandalone } from "@/lib/pwa-client";
 
 export function DriverQueuePanel() {
   return (
@@ -96,7 +95,6 @@ function DriverQueueInner() {
   );
   const [pushBusy, setPushBusy] = useState(false);
   const [pushSyncError, setPushSyncError] = useState<string | null>(null);
-  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
 
   const hasEntry = !!entry;
   const geo = useMotoristaGeofence(!loading);

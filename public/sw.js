@@ -29,8 +29,8 @@ self.addEventListener("fetch", (event) => {
 
 function parsePushPayload(event) {
   const fallback = {
-    title: "FilaDock — Chamada para descarga",
-    body: "Você foi chamado para descarga. Apresente-se no ponto de operação imediatamente.",
+    title: "FilaDock — Chamada para descarregar",
+    body: "Você foi chamado para descarregar. Apresente-se no ponto de operação imediatamente.",
     url: "/motorista",
     tag: "filadock-driver-call",
   };
