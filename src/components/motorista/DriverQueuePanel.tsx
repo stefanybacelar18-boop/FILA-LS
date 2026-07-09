@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
@@ -75,12 +75,50 @@ function buildHeroDetail(aFrente: number, previsaoLabel: string | null): string 
   return fila;
 }
 
+function playCallSoundFallback() {
+  if (typeof window === "undefined") return;
+  const audioCtx =
+    "AudioContext" in window
+      ? new window.AudioContext()
+      : "webkitAudioContext" in window
+        ? new (window as Window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext()
+        : null;
+  if (!audioCtx) return;
+
+  const pulse = (startAt: number, duration: number, frequency: number) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(frequency, startAt);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.25, startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(startAt);
+    osc.stop(startAt + duration);
+  };
+
+  const now = audioCtx.currentTime + 0.02;
+  pulse(now, 0.22, 920);
+  pulse(now + 0.28, 0.22, 1080);
+
+  window.setTimeout(() => {
+    void audioCtx.close().catch(() => {
+      /* noop */
+    });
+  }, 1000);
+}
+
 function DriverQueueContent({ profile }: { profile: Profile }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { entry, allEntries, loading, refresh } = useDriverQueueData(profile);
   const geo = useMotoristaGeofence(!loading);
   const [minutaSearch, setMinutaSearch] = useState("");
+  const [showCallAlert, setShowCallAlert] = useState(false);
+  const initializedCallStateRef = useRef(false);
+  const lastCallMarkerRef = useRef<string | null>(null);
 
   const hasEntry = !!entry;
   const checkinNavEnabled = hasEntry || geo.canCheckIn;
@@ -114,6 +152,30 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
 
   const listRefresh = <RefreshIconButton onRefresh={refresh} label="Atualizar fila" />;
 
+  useEffect(() => {
+    const marker = entry ? `${entry.id}:${entry.called_at ?? ""}` : null;
+
+    if (!initializedCallStateRef.current) {
+      initializedCallStateRef.current = true;
+      lastCallMarkerRef.current = marker;
+      return;
+    }
+
+    if (!entry?.called_at) {
+      lastCallMarkerRef.current = marker;
+      return;
+    }
+
+    if (lastCallMarkerRef.current === marker) return;
+
+    setShowCallAlert(true);
+    if ("vibrate" in navigator) {
+      navigator.vibrate([250, 120, 250]);
+    }
+    playCallSoundFallback();
+    lastCallMarkerRef.current = marker;
+  }, [entry?.id, entry?.called_at]);
+
   return (
     <MotoristaShell
       profile={profile}
@@ -126,6 +188,30 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
         </div>
       ) : hasEntry ? (
         <div className="space-y-4">
+          {showCallAlert && (
+            <div
+              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm"
+              role="status"
+              aria-live="assertive"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Voce foi chamado para descarga</p>
+                  <p className="mt-0.5 text-xs text-emerald-800">
+                    Dirija-se ao ponto de operacao e aguarde orientacao da equipe.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-emerald-400 bg-white px-2 py-1 text-xs font-semibold text-emerald-800"
+                  onClick={() => setShowCallAlert(false)}
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          )}
+
           <QueuePositionHero
             label={`Minuta ${entry.minuta || "—"}`}
             value={posicao != null ? `${posicao}º` : "—"}
