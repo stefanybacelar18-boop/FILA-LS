@@ -16,6 +16,25 @@ export interface MinutaMetadata {
   updated_at?: string;
 }
 
+/** Média de carga (motos) quando a minuta ainda não tem volume importado da ConsultaGeral. */
+export const DEFAULT_MINUTA_VOLUME_MEDIA = 62;
+
+/**
+ * Volume efetivo para estoque/previsão.
+ * Usa o volume real se > 0; senão a média operacional (62).
+ */
+export function resolveVolumeMotos(volume: number | null | undefined): number {
+  if (typeof volume === "number" && Number.isFinite(volume) && volume > 0) {
+    return Math.round(volume);
+  }
+  return DEFAULT_MINUTA_VOLUME_MEDIA;
+}
+
+/** True quando não há volume real importado (cálculo usa a média). */
+export function isVolumeEstimado(volume: number | null | undefined): boolean {
+  return !(typeof volume === "number" && Number.isFinite(volume) && volume > 0);
+}
+
 /** Configuração diária: teto físico do estoque + expedição que libera espaço. */
 export interface EstoqueExpedicaoConfig {
   capacidade_estoque: number;
@@ -409,9 +428,15 @@ export function mergeMetadataIntoEntries<T extends QueueEntry>(
   menor_vencimento: string | null;
   prioridade_automatica: boolean;
   prioridade_automatica_dispensada?: boolean;
+  volume_estimado?: boolean;
 })[] {
   return entries.map((entry) => {
     const meta = metadataMap.get(normalizeMinutaKey(entry.minuta));
+    const volumeReal =
+      typeof meta?.volume_motos === "number" && meta.volume_motos > 0
+        ? meta.volume_motos
+        : null;
+    const volume_estimado = volumeReal == null;
     const menor_vencimento = meta?.menor_vencimento ?? null;
     const prioridade_automatica = shouldAutoPrioritize(menor_vencimento);
     const prioridadeAutomaticaDispensada =
@@ -424,7 +449,9 @@ export function mergeMetadataIntoEntries<T extends QueueEntry>(
 
     return {
       ...entry,
-      volume_motos: meta?.volume_motos ?? null,
+      // Sem metadata: média 62 para estoque; com importação: volume real.
+      volume_motos: volume_estimado ? DEFAULT_MINUTA_VOLUME_MEDIA : volumeReal,
+      volume_estimado,
       menor_vencimento,
       prioridade,
       prioridade_automatica,
@@ -655,7 +682,7 @@ export function allocateQueueByStock(
   }
 
   for (const entry of sorted) {
-    const vol = entry.volume_motos ?? 0;
+    const vol = resolveVolumeMotos(entry.volume_motos);
     if (vol <= 0) continue;
 
     if (vol > C) {
@@ -734,7 +761,10 @@ export function computeCapacityPlan(
   const allocations = allocateQueueByStock(entries, input);
   const active = entries.filter((e) => isActiveQueueStatus(e.status));
   const sorted = [...active].sort(compareQueueOrder);
-  const motosNaFila = sorted.reduce((sum, e) => sum + (e.volume_motos ?? 0), 0);
+  const motosNaFila = sorted.reduce(
+    (sum, e) => sum + resolveVolumeMotos(e.volume_motos),
+    0
+  );
   const planningBaseYmd = getOperationalPlanningBaseYmd();
   const hoje = allocations.filter(
     (a) =>
@@ -757,7 +787,7 @@ export function computeCapacityPlan(
     espacoLivreHoje,
     motosNaFila,
     motosCabeHoje: hoje.reduce((sum, a) => sum + a.volume_motos, 0),
-    minutasNaFila: sorted.filter((e) => (e.volume_motos ?? 0) > 0).length,
+    minutasNaFila: sorted.filter((e) => resolveVolumeMotos(e.volume_motos) > 0).length,
     minutasCabeHoje: hoje.length,
     minutasSugeridas: allocations.map((a) => ({
       id: a.id,

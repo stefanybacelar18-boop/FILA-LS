@@ -2,6 +2,7 @@ import type { EstoqueExpedicaoConfig } from "./minuta-intelligence";
 import {
   computeCapacityPlan,
   computeMotosNoEstoque,
+  resolveVolumeMotos,
 } from "./minuta-intelligence";
 import { isFinalizadaNoDiaOperacional } from "./queue-counters";
 import type { QueueEntry } from "./types";
@@ -38,7 +39,7 @@ export function buildEstoqueCapacitySummary(
 
   const descarregadasHoje = entries
     .filter(isFinalizadaNoDiaOperacional)
-    .reduce((sum, e) => sum + Math.max(0, e.volume_motos ?? 0), 0);
+    .reduce((sum, e) => sum + resolveVolumeMotos(e.volume_motos), 0);
 
   const ocupado = Math.min(capacidade, baseOcupado + descarregadasHoje);
 

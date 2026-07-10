@@ -7,6 +7,7 @@ import {
   mergeMetadataIntoEntries,
   normalizeEstoqueExpedicaoConfig,
   normalizeMinutaKey,
+  resolveVolumeMotos,
   shouldAutoPrioritize,
   type CapacityAllocation,
   type EstoqueExpedicaoConfig,
@@ -220,7 +221,7 @@ export async function recalculateQueuePrevisoes(
 
   const updates = active.filter((entry) => {
     if (manualIds.has(entry.id)) return false;
-    if ((entry.volume_motos ?? 0) <= 0) return false;
+    if (resolveVolumeMotos(entry.volume_motos) <= 0) return false;
     const auto = previsoes.get(entry.id) ?? null;
     return !samePrevisaoDay(entry.previsao_descarregamento, auto);
   });
@@ -252,7 +253,7 @@ export function overlayAutoPrevisoes<T extends QueueEntry>(
   capacidade_aviso?: string | null;
 })[] {
   return entries.map((entry) => {
-    if (manualIds.has(entry.id) || (entry.volume_motos ?? 0) <= 0) {
+    if (manualIds.has(entry.id) || resolveVolumeMotos(entry.volume_motos) <= 0) {
       return { ...entry, previsao_automatica: false };
     }
     const auto = previsoes.get(entry.id);

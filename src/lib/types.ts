@@ -79,6 +79,8 @@ export interface QueueEntry {
   deleted_at: string | null;
   /** Metadados importados (Excel) — preenchidos em runtime */
   volume_motos?: number | null;
+  /** Volume veio da média (62), não da ConsultaGeral. */
+  volume_estimado?: boolean;
   menor_vencimento?: string | null;
   prioridade_automatica?: boolean;
   /** Admin dispensou prioridade automática (NF vence amanhã) — volta à ordem de check-in. */
