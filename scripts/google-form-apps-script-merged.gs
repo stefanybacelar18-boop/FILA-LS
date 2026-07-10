@@ -1,63 +1,79 @@
 /**
- * MVP + FilaDock — script unificado (NÃO substitua o MVP!)
+ * MVP + FilaDock — script unificado
  *
- * MVP: Form → "Respostas ao formulário 9" → espelha em "Respostas ao formulário 1" + STATUS
- * FilaDock: lê o espelho (aba do Looker) e avisa o app na hora
+ * Aba do Looker / fila: "Respostas ao formulário 1"
+ * Aba do Form (se existir): "Respostas ao formulário 9"
  *
- * Configurar em: Projeto → Propriedades do script
+ * Propriedades do script:
  *   FILADOCK_WEBHOOK_URL = https://fila-lsl.vercel.app/api/integrations/google-form
  *   FILADOCK_WEBHOOK_SECRET = (mesmo token da Vercel)
  *
  * Executar uma vez: instalarGatilhosUnificado
  */
 
-/***** CONFIG MVP (mantido) *****/
+/***** CONFIG *****/
 
 const ABA_FORM = "Respostas ao formulário 9";
 const ABA_ESPELHO = "Respostas ao formulário 1";
 const COL_STATUS = 11;
 const STATUS_INICIAL = "AGUARDANDO DESCARREGAMENTO";
-
-/***** CONFIG FILADOCK *****/
-
 const FILADOCK_DATA_COLUMNS = 16;
 
-/***** HELPERS MVP *****/
+/***** HELPERS *****/
+
+function listarAbas_() {
+  return SpreadsheetApp.getActiveSpreadsheet()
+    .getSheets()
+    .map(function (s) {
+      return s.getName();
+    })
+    .join(" | ");
+}
 
 function sh(nome) {
-  const s = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nome);
+  var s = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nome);
   if (!s) {
-    throw new Error("Aba não encontrada: " + nome);
+    throw new Error(
+      'Aba nao encontrada: "' + nome + '". Abas existentes: ' + listarAbas_()
+    );
   }
   return s;
 }
 
-/***** PROCESSA NOVA RESPOSTA (MVP — Looker) *****/
+function shOpcional_(nome) {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nome);
+}
+
+function listarNomesDasAbas() {
+  SpreadsheetApp.getUi().alert("Abas da planilha:\n\n" + listarAbas_());
+}
+
+/***** MVP — espelho Form → aba 1 *****/
 
 function processarEnvio(e) {
-  const origem = sh(ABA_FORM);
-  const destino = sh(ABA_ESPELHO);
+  var origem = shOpcional_(ABA_FORM);
+  var destino = sh(ABA_ESPELHO);
 
-  let linha;
+  // Se nao existe aba 9, o Form provavelmente ja grava direto na aba 1
+  if (!origem) {
+    console.log("Aba Form nao encontrada (" + ABA_FORM + "). Pulando espelho MVP.");
+    return;
+  }
 
+  var linha;
   if (e && e.range) {
-    const sheetEvento = e.range.getSheet();
-    if (sheetEvento.getName() !== ABA_FORM) {
-      return;
-    }
+    if (e.range.getSheet().getName() !== ABA_FORM) return;
     linha = e.range.getRow();
   } else {
     linha = origem.getLastRow();
   }
 
-  const ultimaColuna = origem.getLastColumn();
-
-  let valores = origem.getRange(linha, 1, 1, ultimaColuna).getValues()[0];
+  var ultimaColuna = origem.getLastColumn();
+  var valores = origem.getRange(linha, 1, 1, ultimaColuna).getValues()[0];
 
   while (valores.length < COL_STATUS - 1) {
     valores.push("");
   }
-
   valores.push(STATUS_INICIAL);
 
   destino.getRange(destino.getLastRow() + 1, 1, 1, valores.length).setValues([valores]);
@@ -67,7 +83,7 @@ function testeManual() {
   processarEnvio();
 }
 
-/***** FILADOCK (sync instantânea — só lê, não altera planilha) *****/
+/***** FILADOCK *****/
 
 function getWebhookUrl_() {
   return PropertiesService.getScriptProperties().getProperty("FILADOCK_WEBHOOK_URL");
@@ -91,30 +107,72 @@ function syncRowToFilaDock_(rowValues, eventType) {
     return;
   }
 
-  var payload = {
-    event: eventType,
-    row: { values: rowValues },
-  };
+  secret = String(secret).trim().replace(/^["']|["']$/g, "");
+  url = String(url).trim();
+
+  console.log("Enviando para FilaDock...");
 
   var response = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
     headers: {
       "X-Google-Form-Secret": secret,
+      Authorization: "Bearer " + secret,
     },
-    payload: JSON.stringify(payload),
+    payload: JSON.stringify({
+      event: eventType,
+      secret: secret,
+      row: { values: rowValues },
+    }),
     muteHttpExceptions: true,
   });
 
   var code = response.getResponseCode();
+  var text = response.getContentText();
   if (code < 200 || code >= 300) {
-    console.error("FilaDock webhook falhou:", code, response.getContentText());
+    console.error("FilaDock webhook falhou:", code, text);
+  } else {
+    console.log("FilaDock OK:", text);
   }
 }
 
-/** Form enviado: MVP espelha → depois avisa FilaDock */
+/**
+ * RODE ESTA FUNCAO PRIMEIRO (corrige o 401).
+ * Grava URL + secret iguais aos da Vercel, sem digitar na mao.
+ */
+function configurarFilaDockAgora() {
+  console.log("Gravando URL e secret...");
+  PropertiesService.getScriptProperties().setProperties(
+    {
+      FILADOCK_WEBHOOK_URL: "https://fila-lsl.vercel.app/api/integrations/google-form",
+      FILADOCK_WEBHOOK_SECRET: "Fd7kQm2pLx9Rv4nW8sYcH6tB3jA5uE1zG0mK9pN4qR7wX2",
+    },
+    true
+  );
+  console.log("OK — configurado. Agora rode testarSyncLinhaAtiva");
+}
+
+/** Selecione uma linha na aba "Respostas ao formulário 1" e execute */
+function testarSyncLinhaAtiva() {
+  console.log("Iniciando teste...");
+  var sheet = sh(ABA_ESPELHO);
+  var row = sheet.getActiveRange().getRow();
+  if (row < 2) {
+    console.error("Clique em uma linha de dados na aba: " + ABA_ESPELHO + " (linha 2 ou abaixo)");
+    return;
+  }
+  console.log("Linha selecionada: " + row);
+  syncEspelhoRowToFilaDock_(sheet, row);
+  console.log("Teste finalizado. Veja as linhas acima (OK ou erro).");
+}
+
+/** Nova resposta do Form → espelho MVP + FilaDock */
 function onFormSubmitUnificado(e) {
-  processarEnvio(e);
+  try {
+    processarEnvio(e);
+  } catch (err) {
+    console.error("MVP processarEnvio:", err);
+  }
 
   try {
     var destino = sh(ABA_ESPELHO);
@@ -123,11 +181,11 @@ function onFormSubmitUnificado(e) {
       syncEspelhoRowToFilaDock_(destino, linha);
     }
   } catch (err) {
-    console.error("FilaDock após processarEnvio:", err);
+    console.error("FilaDock apos form:", err);
   }
 }
 
-/** STATUS alterado no espelho (coluna K) → FilaDock na hora */
+/** Mudou STATUS na aba 1 → FilaDock na hora */
 function onEditFilaDock(e) {
   if (!e || !e.range) return;
 
@@ -141,12 +199,11 @@ function onEditFilaDock(e) {
   syncEspelhoRowToFilaDock_(sheet, row);
 }
 
-/**
- * Instala gatilhos unificados.
- * Substitui gatilho antigo de processarEnvio por onFormSubmitUnificado (MVP + FilaDock).
- */
 function instalarGatilhosUnificado() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Confirma que a aba do Looker existe
+  sh(ABA_ESPELHO);
 
   ScriptApp.getProjectTriggers().forEach(function (trigger) {
     var fn = trigger.getHandlerFunction();
@@ -164,21 +221,5 @@ function instalarGatilhosUnificado() {
   ScriptApp.newTrigger("onFormSubmitUnificado").forSpreadsheet(ss).onFormSubmit().create();
   ScriptApp.newTrigger("onEditFilaDock").forSpreadsheet(ss).onEdit().create();
 
-  SpreadsheetApp.getUi().alert(
-    "Pronto!\n\n" +
-      "MVP (Looker): continua espelhando Form -> aba 1\n" +
-      "FilaDock: nova resposta + mudanca de STATUS sincronizam na hora"
-  );
-}
-
-/** Teste: selecione uma linha na aba espelho e execute */
-function testarSyncLinhaAtiva() {
-  var sheet = sh(ABA_ESPELHO);
-  var row = sheet.getActiveRange().getRow();
-  if (row < 2) {
-    SpreadsheetApp.getUi().alert("Selecione uma linha na aba: " + ABA_ESPELHO);
-    return;
-  }
-  syncEspelhoRowToFilaDock_(sheet, row);
-  SpreadsheetApp.getUi().alert("Sync enviada linha " + row + ". Veja Execucoes se falhar.");
+  console.log("Gatilhos instalados. Aba: " + ABA_ESPELHO);
 }

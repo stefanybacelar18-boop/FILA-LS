@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildGoogleFormRowId,
   mapGoogleFormStatus,
+  normalizeDriverName,
+  normalizeTransportadora,
   parseGoogleFormRow,
 } from "./google-form-sync";
 
@@ -16,6 +18,39 @@ describe("google-form-sync", () => {
     expect(buildGoogleFormRowId("13/08/2025 08:38:16", "EGK8I13")).toBe(
       "13/08/2025 08:38:16|EGK8I13"
     );
+  });
+
+  it("normaliza nome, placa e transportadora", () => {
+    expect(normalizeDriverName("joão da silva")).toBe("João da Silva");
+    expect(normalizeDriverName("LUCAS")).toBe("Lucas");
+    expect(normalizeTransportadora("ldp transportes")).toBe("LDP TRANSPORTES");
+
+    const result = parseGoogleFormRow({
+      values: [
+        "13/08/2025 08:38:16",
+        "motorista@test.com",
+        "584152",
+        "maurilio fernando da silva",
+        "egk8i13",
+        "fuq3231",
+        "ldp",
+        "(71)981631504",
+        "",
+        "",
+        "AGUARDANDO DESCARREGAMENTO",
+        "",
+        "",
+        "",
+        "",
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.nome).toBe("Maurilio Fernando da Silva");
+    expect(result.data.placa_cavalo).toBe("EGK8I13");
+    expect(result.data.placa_carreta).toBe("FUQ3231");
+    expect(result.data.transportadora).toBe("LDP");
   });
 
   it("parseGoogleFormRow a partir de values da planilha", () => {
@@ -44,6 +79,7 @@ describe("google-form-sync", () => {
     expect(result.data.rowId).toBe("13/08/2025 08:38:16|EGK8I13");
     expect(result.data.status).toBe("finalizado");
     expect(result.data.minuta).toBe("584152");
+    expect(result.data.nome).toBe("Lucas");
     expect(result.data.placa_carreta).toBe("FUQ3231");
     expect(result.data.previsao_descarregamento).toBeTruthy();
   });

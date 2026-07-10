@@ -9,33 +9,53 @@ export const maxDuration = 30;
 export const dynamic = "force-dynamic";
 
 type WebhookBody = {
-  event?: "form_submit" | "sheet_edit";
+  event?: "form_submit" | "sheet_edit" | "sheet_sync" | "backfill";
   row?: GoogleFormRowPayload;
+  secret?: string;
 };
 
-function verifySecret(request: NextRequest): boolean {
-  const expected = process.env.GOOGLE_FORM_WEBHOOK_SECRET?.trim();
+function normalizeSecret(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/^["']|["']$/g, "");
+}
+
+function secretsMatch(provided: string | null | undefined, expected: string): boolean {
+  const a = normalizeSecret(provided);
+  const b = normalizeSecret(expected);
+  return a.length > 0 && a === b;
+}
+
+function verifySecret(request: NextRequest, bodySecret?: string | null): boolean {
+  const expected = normalizeSecret(process.env.GOOGLE_FORM_WEBHOOK_SECRET);
   if (!expected) return false;
 
-  const header = request.headers.get("x-google-form-secret")?.trim();
-  if (header && header === expected) return true;
+  if (secretsMatch(request.headers.get("x-google-form-secret"), expected)) return true;
 
   const auth = request.headers.get("authorization");
-  if (auth?.startsWith("Bearer ") && auth.slice(7).trim() === expected) return true;
+  if (auth?.startsWith("Bearer ") && secretsMatch(auth.slice(7), expected)) return true;
+
+  if (secretsMatch(bodySecret, expected)) return true;
 
   return false;
 }
 
 export async function POST(request: NextRequest) {
-  if (!process.env.GOOGLE_FORM_WEBHOOK_SECRET?.trim()) {
+  if (!normalizeSecret(process.env.GOOGLE_FORM_WEBHOOK_SECRET)) {
     return NextResponse.json(
       { error: "GOOGLE_FORM_WEBHOOK_SECRET não configurado no servidor." },
       { status: 503 }
     );
   }
 
-  if (!verifySecret(request)) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const body = (await request.json().catch(() => null)) as WebhookBody | null;
+
+  if (!verifySecret(request, body?.secret)) {
+    return NextResponse.json(
+      {
+        error: "Não autorizado",
+        hint: "FILADOCK_WEBHOOK_SECRET na planilha deve ser igual a GOOGLE_FORM_WEBHOOK_SECRET na Vercel (mesmo valor, sem espaços).",
+      },
+      { status: 401 }
+    );
   }
 
   const ip =
@@ -54,7 +74,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = (await request.json().catch(() => null)) as WebhookBody | null;
   if (!body?.row) {
     return NextResponse.json({ error: "Campo row obrigatório." }, { status: 400 });
   }

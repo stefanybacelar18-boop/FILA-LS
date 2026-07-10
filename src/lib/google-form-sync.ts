@@ -67,6 +67,34 @@ function normalizePlaca(value: string): string {
   return value.replace(/[^A-Z0-9]/gi, "").toUpperCase();
 }
 
+const NAME_PARTICLES = new Set(["da", "das", "de", "do", "dos", "e"]);
+
+/** Nome do motorista: "joão da silva" → "João Da Silva" com partículas em minúsculo. */
+export function normalizeDriverName(value: string): string {
+  const cleaned = value.trim().replace(/\s+/g, " ");
+  if (!cleaned) return "";
+
+  return cleaned
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((part, index) => {
+      if (index > 0 && NAME_PARTICLES.has(part)) return part;
+      if (part.length === 0) return part;
+      return part.charAt(0).toLocaleUpperCase("pt-BR") + part.slice(1);
+    })
+    .join(" ");
+}
+
+/** Transportadora: maiúsculas e espaços limpos. */
+export function normalizeTransportadora(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
+}
+
+/** Minuta: remove espaços extras. */
+export function normalizeMinuta(value: string): string {
+  return value.trim().replace(/\s+/g, "");
+}
+
 /** dd/mm/yyyy ou dd/mm/yyyy hh:mm:ss → ISO (America/Manaus, UTC-4). */
 export function parseBrazilDateTime(value: string): string | null {
   const trimmed = value.trim();
@@ -191,10 +219,14 @@ export function parseGoogleFormRow(
   const placaCarreta = mapped.placa_carreta ? normalizePlaca(mapped.placa_carreta) : null;
   const telefone = mapped.telefone.replace(/\D/g, "");
   const status = mapGoogleFormStatus(mapped.status);
+  const nome = normalizeDriverName(mapped.nome);
+  const transportadora =
+    normalizeTransportadora(mapped.transportadora) || DEFAULT_CHECKIN_EMPRESA;
+  const minuta = normalizeMinuta(mapped.minuta) || placaCavalo;
 
   const notes: string[] = [];
   if (mapped.email) notes.push(`E-mail: ${mapped.email}`);
-  if (mapped.operador) notes.push(`Operador: ${mapped.operador}`);
+  if (mapped.operador) notes.push(`Operador: ${normalizeDriverName(mapped.operador)}`);
   if (mapped.vencimento_nf) notes.push(`Venc. NF: ${mapped.vencimento_nf}`);
 
   const previsaoRaw = mapped.previsao;
@@ -207,13 +239,13 @@ export function parseGoogleFormRow(
     data: {
       rowId: buildGoogleFormRowId(mapped.carimbo, placaCavalo),
       createdAtIso,
-      minuta: mapped.minuta || placaCavalo,
-      nome: mapped.nome,
+      minuta,
+      nome,
       telefone: telefone || "00000000000",
       placa: placaCavalo,
       placa_cavalo: placaCavalo,
       placa_carreta: placaCarreta,
-      transportadora: mapped.transportadora || DEFAULT_CHECKIN_EMPRESA,
+      transportadora,
       previsao_descarregamento,
       status,
       observacoes: notes.length > 0 ? notes.join(" · ") : null,
