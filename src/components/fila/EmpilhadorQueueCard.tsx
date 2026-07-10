@@ -128,6 +128,7 @@ function EmpilhadorQueueCardMobile({
             compact
             staffView
             volumeMotos={entry.volume_motos}
+            volumeEstimado={Boolean(entry.volume_estimado)}
             menorVencimento={entry.menor_vencimento}
           />
         )}
@@ -281,14 +282,15 @@ export const EmpilhadorQueueCard = memo(function EmpilhadorQueueCard({
             <span className="text-slate-400"> · </span>
             <span className="text-slate-500">{entry.transportadora || "—"}</span>
           </p>
-          {hasMinutaMeta && (
-            <MinutaMetaBadge
-              compact
-              staffView
-              volumeMotos={entry.volume_motos}
-              menorVencimento={entry.menor_vencimento}
-            />
-          )}
+        {hasMinutaMeta && (
+          <MinutaMetaBadge
+            compact
+            staffView
+            volumeMotos={entry.volume_motos}
+            volumeEstimado={Boolean(entry.volume_estimado)}
+            menorVencimento={entry.menor_vencimento}
+          />
+        )}
           {hasCapacidadeAviso && (
             <p className="flex items-start gap-1 text-xs font-semibold text-amber-800">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

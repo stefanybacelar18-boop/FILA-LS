@@ -38,6 +38,7 @@ export function QueueEntryBadges({
         compact={compact}
         staffView
         volumeMotos={entry.volume_motos}
+        volumeEstimado={Boolean(entry.volume_estimado)}
         menorVencimento={entry.menor_vencimento}
       />
       <PrevisaoDisplay

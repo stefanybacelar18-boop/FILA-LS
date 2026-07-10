@@ -60,13 +60,15 @@ export const AdminQueueCard = memo(function AdminQueueCard({
   const previsao = entry.previsao_descarregamento?.trim();
   const racks = entryRetornoRacksVazios(entry);
   const volume = entry.volume_motos != null && entry.volume_motos > 0 ? entry.volume_motos : null;
+  const volumeEstimado = Boolean(entry.volume_estimado);
   const nfLabel = formatVencimentoLabel(entry.menor_vencimento);
   const nfDays = daysUntilVencimento(entry.menor_vencimento);
   const nfUrgente =
     active &&
     (isNfVencida(entry.menor_vencimento) ||
       (nfDays != null && nfDays >= 0 && nfDays <= 1));
-  const hasMeta = volume != null || Boolean(nfLabel) || racks || Boolean(previsao);
+  const hasMeta =
+    volume != null || Boolean(nfLabel) || racks || Boolean(previsao) || volumeEstimado;
 
   return (
     <button
@@ -99,10 +101,25 @@ export const AdminQueueCard = memo(function AdminQueueCard({
 
         {hasMeta && (
           <div className="admin-queue-card__meta mt-2.5 flex flex-wrap items-center gap-1.5">
+            {volumeEstimado && (
+              <CardMetaPill
+                tone="urgent"
+                title="Minuta sem importação da ConsultaGeral — volume médio 62 no estoque"
+              >
+                Sem importação
+              </CardMetaPill>
+            )}
             {volume != null && (
-              <CardMetaPill title={`${volume} motos`}>
+              <CardMetaPill
+                title={
+                  volumeEstimado
+                    ? `${volume} motos (média estimada)`
+                    : `${volume} motos`
+                }
+              >
                 <Bike className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                 {volume}
+                {volumeEstimado ? " · média" : ""}
               </CardMetaPill>
             )}
             {nfLabel && (
