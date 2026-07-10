@@ -117,6 +117,12 @@ export function mapGoogleFormStatus(raw: string): QueueStatus {
   }
 
   if (normalized === "AUSENTE") return "ausente";
+  if (
+    normalized === "AGUARDANDO DESCARREGAMENTO" ||
+    normalized.includes("AGUARDANDO")
+  ) {
+    return "aguardando_descarregamento";
+  }
   return "aguardando_descarregamento";
 }
 
