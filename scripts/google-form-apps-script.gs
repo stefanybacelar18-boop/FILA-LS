@@ -40,10 +40,10 @@ function instalarGatilhosFilaDock() {
     .onEdit()
     .create();
 
-  importarHistoricoFilaDock();
-
   SpreadsheetApp.getUi().alert(
-    "Gatilhos FilaDock instalados.\n\nHistorico importado.\nNovas respostas e alteracoes de STATUS sincronizam automaticamente."
+    "Gatilhos FilaDock instalados!\n\n" +
+    "- Nova resposta do Form -> fila em segundos\n" +
+    "- Mudar STATUS para FINALIZADO ou DESCARREGADO -> finaliza no app na hora"
   );
 }
 
@@ -79,7 +79,8 @@ function onEditFilaDock(e) {
   if (row < 2) return;
 
   var col = e.range.getColumn();
-  if (col > DATA_COLUMNS) return;
+  // Sync instantanea ao mudar STATUS (coluna K = 11)
+  if (col !== 11) return;
 
   var values = sheet.getRange(row, 1, 1, DATA_COLUMNS).getValues()[0];
   syncRowToFilaDock_(values, "sheet_edit");
