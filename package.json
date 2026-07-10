@@ -14,7 +14,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
-    "generate:icons": "node scripts/generate-pwa-icons.mjs"
+    "generate:icons": "node scripts/generate-pwa-icons.mjs",
+    "sync:google-form": "npx tsx scripts/sync-google-form-now.ts",
+    "ativar:google-form": "powershell -ExecutionPolicy Bypass -File scripts/ativar-google-form.ps1"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

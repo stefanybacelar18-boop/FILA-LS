@@ -110,8 +110,10 @@ export type GoogleFormBatchStats = {
 
 export async function upsertGoogleFormRows(
   admin: SupabaseClient,
-  rows: GoogleFormRowPayload[]
+  rows: GoogleFormRowPayload[],
+  options?: { concurrency?: number; onProgress?: (done: number, total: number) => void }
 ): Promise<GoogleFormBatchStats> {
+  const concurrency = Math.max(1, Math.min(options?.concurrency ?? 20, 40));
   const stats: GoogleFormBatchStats = {
     totalRows: rows.length,
     created: 0,
@@ -121,18 +123,35 @@ export async function upsertGoogleFormRows(
     errors: [],
   };
 
-  for (let i = 0; i < rows.length; i++) {
-    const result = await upsertGoogleFormRow(admin, rows[i]);
-    if (!result.ok) {
-      stats.skipped += 1;
-      stats.errors.push({ row: i + 2, error: result.error });
-      continue;
-    }
+  let done = 0;
 
-    if (result.action === "created") stats.created += 1;
-    else if (result.action === "updated") stats.updated += 1;
-    else stats.unchanged += 1;
+  async function worker(batch: Array<{ row: GoogleFormRowPayload; index: number }>) {
+    for (const item of batch) {
+      const result = await upsertGoogleFormRow(admin, item.row);
+      done += 1;
+      options?.onProgress?.(done, rows.length);
+
+      if (!result.ok) {
+        stats.skipped += 1;
+        stats.errors.push({ row: item.index + 2, error: result.error });
+        continue;
+      }
+
+      if (result.action === "created") stats.created += 1;
+      else if (result.action === "updated") stats.updated += 1;
+      else stats.unchanged += 1;
+    }
   }
+
+  const chunks: Array<Array<{ row: GoogleFormRowPayload; index: number }>> = Array.from(
+    { length: concurrency },
+    () => []
+  );
+  rows.forEach((row, index) => {
+    chunks[index % concurrency].push({ row, index });
+  });
+
+  await Promise.all(chunks.map((chunk) => worker(chunk)));
 
   return stats;
 }
