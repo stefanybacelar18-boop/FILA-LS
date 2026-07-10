@@ -19,6 +19,7 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Spinner } from "@/components/ui/Spinner";
 import { GeofenceMapEditor } from "@/components/admin/GeofenceMapEditor";
+import { GoogleFormSyncPanel } from "@/components/admin/GoogleFormSyncPanel";
 import {
   MapPin,
   QrCode,
@@ -167,6 +168,8 @@ export default function AdminPage() {
           <span className="ml-1.5">Atualizar</span>
         </Button>
       </div>
+
+      <GoogleFormSyncPanel />
 
       <SectionHeader title="Equipe" />
       <div className="mb-10 grid gap-3 sm:grid-cols-3">

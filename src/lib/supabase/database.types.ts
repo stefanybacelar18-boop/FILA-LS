@@ -169,6 +169,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
+          google_form_row_id: string | null;
         };
         Insert: {
           id?: string;
@@ -203,6 +204,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          google_form_row_id?: string | null;
         };
         Update: {
           id?: string;
@@ -237,6 +239,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          google_form_row_id?: string | null;
         };
         Relationships: [];
       };

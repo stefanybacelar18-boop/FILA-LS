@@ -88,6 +88,8 @@ export interface QueueEntry {
   empurrada_por_capacidade?: boolean;
   motos_com_espaco?: number;
   capacidade_aviso?: string | null;
+  /** Linha vinculada na planilha Google Form (carimbo|placa). */
+  google_form_row_id?: string | null;
 }
 
 export interface QueueHistory {
