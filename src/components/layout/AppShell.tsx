@@ -18,6 +18,7 @@ import {
   LogOut,
   ClipboardList,
   FileSpreadsheet,
+  Table2,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import {
@@ -63,6 +64,12 @@ const NAV_ITEMS: {
     href: "/admin/minutas",
     label: "Minutas",
     icon: FileSpreadsheet,
+    visible: canAccessAdmin,
+  },
+  {
+    href: "/admin/volu-recebimento",
+    label: "Volu",
+    icon: Table2,
     visible: canAccessAdmin,
   },
   {
