@@ -5,7 +5,7 @@ import { canAccessAdmin } from "@/lib/role-permissions";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import {
   syncVoluRecebimentoFromMonitoramento,
-  workbookToArrayBuffer,
+  workbookToBuffer,
   VOLU_PAD,
 } from "@/lib/volu-recebimento-sync";
 
@@ -96,14 +96,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const out = workbookToArrayBuffer(workbook);
+    const out = workbookToBuffer(workbook);
     const originalName =
       voluFile instanceof File && voluFile.name
         ? voluFile.name.replace(/\.xlsx$/i, "")
         : `Volu_Recebimento_${VOLU_PAD}`;
     const filename = `${originalName}_atualizado.xlsx`;
 
-    return new NextResponse(Buffer.from(out), {
+    return new NextResponse(new Uint8Array(out), {
       status: 200,
       headers: {
         "Content-Type":

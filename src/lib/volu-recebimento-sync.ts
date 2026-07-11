@@ -310,11 +310,11 @@ export function syncVoluRecebimentoFromMonitoramento(
   return { workbook: voluWorkbook, stats, byDay: list };
 }
 
-export function workbookToArrayBuffer(workbook: XLSX.WorkBook): ArrayBuffer {
+export function workbookToBuffer(workbook: XLSX.WorkBook): Buffer {
   const out = XLSX.write(workbook, {
-    type: "array",
+    type: "buffer",
     bookType: "xlsx",
     cellDates: true,
-  }) as Uint8Array;
-  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength);
+  });
+  return Buffer.isBuffer(out) ? out : Buffer.from(out as ArrayBuffer);
 }
