@@ -1,25 +1,19 @@
-# Acesso público (demo) — link atualizado
+# Acesso público (demo) — ATUALIZADO agora
 
-## Use este link agora
+## Links ativos (testados agora)
 
-**https://real-singers-think.loca.lt**
+1. **https://continuing-yukon-back-fully.trycloudflare.com** ← tente este primeiro
+2. **https://tasty-rings-smell.loca.lt** ← reserva
 
-### Logins
+### Login
 
-| E-mail | Senha | Perfil |
-|--------|-------|--------|
-| admin@frotatms.com | admin123 | Administrador |
-| operacao@frotatms.com | operacao123 | Operação |
-| consulta@frotatms.com | consulta123 | Consulta |
+- E-mail: `admin@frotatms.com`
+- Senha: `admin123`
 
-### Se o `loca.lt` pedir senha / “Tunnel Password”
+### Se `loca.lt` pedir senha
 
-1. Abra https://ifconfig.me em outra aba e copie o IP  
-2. Cole esse IP no campo de senha do tunnel e continue  
-   **ou** clique em Continue / Click to continue, se aparecer.
+Use o IP de https://ifconfig.me no campo Tunnel Password, ou clique em Continue.
 
-### Importante
+### Observação
 
-- Link **temporário** (só enquanto o agente Cloud estiver ativo).
-- O link antigo `cal-minority-donate-bangkok.trycloudflare.com` **expirou** — não use.
-- Rede corporativa às vezes bloqueia esses domínios; se não abrir, avise para publicarmos no Render (URL fixa).
+Esses links são temporários. Se cair de novo, avise que eu reabro — ou autorizo deploy fixo no Render.
