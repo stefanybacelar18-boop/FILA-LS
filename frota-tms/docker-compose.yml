@@ -1,34 +1,17 @@
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: frota
-      POSTGRES_PASSWORD: frota
-      POSTGRES_DB: frota_tms
-    ports:
-      - "5432:5432"
-    volumes:
-      - frota_pg:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U frota -d frota_tms"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://frota:frota@db:5432/frota_tms
+      DATABASE_URL: file:./data/prod.db
       JWT_SECRET: change-me-in-production
       CORS_ORIGIN: http://localhost:5173
       PORT: 4000
     ports:
       - "4000:4000"
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes:
+      - frota_data:/app/data
 
   web:
     build:
@@ -39,5 +22,19 @@ services:
     depends_on:
       - api
 
+  # Opcional: PostgreSQL para produção.
+  # 1) Altere provider no schema.prisma para "postgresql"
+  # 2) Defina DATABASE_URL=postgresql://frota:frota@db:5432/frota_tms na api
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: frota
+  #     POSTGRES_PASSWORD: frota
+  #     POSTGRES_DB: frota_tms
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - frota_pg:/var/lib/postgresql/data
+
 volumes:
-  frota_pg:
+  frota_data:

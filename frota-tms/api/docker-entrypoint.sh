@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+mkdir -p /app/data
 npx prisma db push
 npx tsx prisma/seed.ts || true
-node dist/index.js
+exec node dist/index.js
