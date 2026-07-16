@@ -1,19 +1,16 @@
-# Acesso público (demo) — ATUALIZADO agora
+# Acesso público — dados reais
 
-## Links ativos (testados agora)
+## Link ativo
 
-1. **https://continuing-yukon-back-fully.trycloudflare.com** ← tente este primeiro
-2. **https://tasty-rings-smell.loca.lt** ← reserva
+**https://responded-perfectly-consistency-pot.trycloudflare.com**
+
+Reserva: **https://curly-foxes-deny.loca.lt**
 
 ### Login
+- admin@frotatms.com / admin123
 
-- E-mail: `admin@frotatms.com`
-- Senha: `admin123`
-
-### Se `loca.lt` pedir senha
-
-Use o IP de https://ifconfig.me no campo Tunnel Password, ou clique em Continue.
-
-### Observação
-
-Esses links são temporários. Se cair de novo, avise que eu reabro — ou autorizo deploy fixo no Render.
+### Dados carregados
+- 22 placas reais (capacidade em motos + motorista padrão)
+- 9 concessionárias (distância calculada da base -12.809004, -38.428719)
+- 0 rotas/viagens de teste (limpo)
+- Roteiro aceita várias concessionárias (4–5+)

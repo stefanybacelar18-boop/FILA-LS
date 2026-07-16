@@ -27,17 +27,19 @@ export function distanceFromBase(lat: number, lng: number): number {
 
 /**
  * Estimate round-trip travel days from one-way distance.
- * ≈ max(1, ceil(distanceKm / 400))
+ * Assume ~450 km/day effective (ida+volta).
  */
 export function estimateTravelDays(distanceKm: number): number {
-  return Math.max(1, Math.ceil(distanceKm / 400));
+  return Math.max(1, Math.ceil((distanceKm * 2) / 450));
 }
 
 /**
- * Average travel days for dealership seed: max(1, round(distanceKm/350 * 10)/10)
+ * Average travel days for dealership seed (1 decimal, min 1).
+ * Round-trip at ~400 km/day.
  */
 export function avgTravelDaysFromDistance(distanceKm: number): number {
-  return Math.max(1, Math.round((distanceKm / 350) * 10) / 10);
+  const days = (distanceKm * 2) / 400;
+  return Math.max(1, Math.round(days * 10) / 10);
 }
 
 export const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
