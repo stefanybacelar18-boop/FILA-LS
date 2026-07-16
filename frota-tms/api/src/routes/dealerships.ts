@@ -4,6 +4,7 @@ import { AllowedVehicleType, Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
+import { paramId } from '../utils/params';
 
 const router = Router();
 router.use(authenticate);
@@ -45,7 +46,7 @@ router.get('/filters/meta', async (_req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const item = await prisma.dealership.findUnique({ where: { id: req.params.id } });
+  const item = await prisma.dealership.findUnique({ where: { id: paramId(req) } });
   if (!item) return res.status(404).json({ error: 'Concessionária não encontrada' });
   res.json(item);
 });
@@ -66,14 +67,14 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' });
   const data = { ...parsed.data };
   if (data.state) data.state = data.state.toUpperCase();
-  const item = await prisma.dealership.update({ where: { id: req.params.id }, data });
+  const item = await prisma.dealership.update({ where: { id: paramId(req) }, data });
   await audit('UPDATE', 'Dealership', { userId: req.user!.id, entityId: item.id });
   res.json(item);
 });
 
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
-  await prisma.dealership.update({ where: { id: req.params.id }, data: { active: false } });
-  await audit('SOFT_DELETE', 'Dealership', { userId: req.user!.id, entityId: req.params.id });
+  await prisma.dealership.update({ where: { id: paramId(req) }, data: { active: false } });
+  await audit('SOFT_DELETE', 'Dealership', { userId: req.user!.id, entityId: paramId(req) });
   res.status(204).send();
 });
 

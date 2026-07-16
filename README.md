@@ -2,6 +2,8 @@
 
 Plataforma web responsiva para **gestão inteligente de docas** — controle de filas, check-in e operação logística em tempo real.
 
+> **Novo:** Sistema de roteirização e gestão de frota em [`frota-tms/`](./frota-tms/README.md).
+
 ## Tecnologias
 
 - **Next.js 15** (App Router)

@@ -1,22 +1,23 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
+import { paramId } from '../utils/params';
 
 const router = Router();
 router.use(authenticate);
 
 router.get('/vehicle/:id', async (req, res) => {
-  const vehicle = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+  const vehicle = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
   if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
 
   const [history, trips] = await Promise.all([
     prisma.vehicleHistory.findMany({
-      where: { vehicleId: req.params.id },
+      where: { vehicleId: paramId(req) },
       include: { user: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.trip.findMany({
-      where: { vehicleId: req.params.id },
+      where: { vehicleId: paramId(req) },
       include: {
         dealership: true,
         assignedBy: { select: { name: true } },

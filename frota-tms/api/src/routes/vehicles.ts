@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { vehicleColor } from '../utils/status';
+import { paramId } from '../utils/params';
 
 const router = Router();
 router.use(authenticate);
@@ -78,7 +79,7 @@ router.get('/available', async (_req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const v = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+  const v = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
   if (!v) return res.status(404).json({ error: 'Veículo não encontrado' });
   res.json(await enrichVehicle(v));
 });
@@ -111,13 +112,13 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const parsed = schema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' });
 
-  const current = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+  const current = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
   if (!current) return res.status(404).json({ error: 'Veículo não encontrado' });
 
   const data = { ...parsed.data };
   if (data.plate) data.plate = data.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  const vehicle = await prisma.vehicle.update({ where: { id: req.params.id }, data });
+  const vehicle = await prisma.vehicle.update({ where: { id: paramId(req) }, data });
   if (data.status && data.status !== current.status) {
     await prisma.vehicleHistory.create({
       data: {
@@ -135,12 +136,12 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
 
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const active = await prisma.trip.findFirst({
-    where: { vehicleId: req.params.id, status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
+    where: { vehicleId: paramId(req), status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
   });
   if (active) return res.status(400).json({ error: 'Veículo em viagem não pode ser excluído' });
 
-  await prisma.vehicle.delete({ where: { id: req.params.id } });
-  await audit('DELETE', 'Vehicle', { userId: req.user!.id, entityId: req.params.id });
+  await prisma.vehicle.delete({ where: { id: paramId(req) } });
+  await audit('DELETE', 'Vehicle', { userId: req.user!.id, entityId: paramId(req) });
   res.status(204).send();
 });
 

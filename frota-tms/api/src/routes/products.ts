@@ -6,6 +6,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { daysUntilExpiry, priorityColor } from '../utils/status';
 import { addDays, startOfDay } from 'date-fns';
+import { paramId } from '../utils/params';
 
 const router = Router();
 router.use(authenticate);
@@ -67,7 +68,7 @@ router.get('/panel', async (_req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const item = await prisma.priorityProduct.findUnique({ where: { id: req.params.id } });
+  const item = await prisma.priorityProduct.findUnique({ where: { id: paramId(req) } });
   if (!item) return res.status(404).json({ error: 'Produto não encontrado' });
   res.json(enrich(item));
 });
@@ -92,14 +93,14 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const data: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.expiryDate) data.expiryDate = new Date(parsed.data.expiryDate);
 
-  const item = await prisma.priorityProduct.update({ where: { id: req.params.id }, data });
+  const item = await prisma.priorityProduct.update({ where: { id: paramId(req) }, data });
   await audit('UPDATE', 'PriorityProduct', { userId: req.user!.id, entityId: item.id });
   res.json(enrich(item));
 });
 
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
-  await prisma.priorityProduct.update({ where: { id: req.params.id }, data: { active: false } });
-  await audit('SOFT_DELETE', 'PriorityProduct', { userId: req.user!.id, entityId: req.params.id });
+  await prisma.priorityProduct.update({ where: { id: paramId(req) }, data: { active: false } });
+  await audit('SOFT_DELETE', 'PriorityProduct', { userId: req.user!.id, entityId: paramId(req) });
   res.status(204).send();
 });
 

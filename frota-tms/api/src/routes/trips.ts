@@ -6,6 +6,7 @@ import { audit } from '../services/audit';
 import { isOverdue, vehicleColor } from '../utils/status';
 import { addDays, startOfDay, endOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
+import { paramId } from '../utils/params';
 
 export function createTripsRouter(io: Server) {
   const router = Router();
@@ -89,7 +90,7 @@ export function createTripsRouter(io: Server) {
 
   router.post('/:id/return', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
     const trip = await prisma.trip.findUnique({
-      where: { id: req.params.id },
+      where: { id: paramId(req) },
       include: { vehicle: true, route: true, dealership: true },
     });
     if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });

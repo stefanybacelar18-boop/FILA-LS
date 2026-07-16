@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, signToken, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { Role } from '../types/enums';
+import { paramId } from '../utils/params';
 
 const router = Router();
 
@@ -23,7 +24,12 @@ router.post('/login', async (req, res) => {
   const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: 'Credenciais inválidas' });
 
-  const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role });
+  const token = signToken({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role as Role,
+  });
   await audit('LOGIN', 'User', { userId: user.id, entityId: user.id, ip: req.ip });
 
   res.json({
@@ -87,7 +93,7 @@ router.patch('/users/:id', authenticate, authorize(Role.ADMIN), async (req: Auth
   if (password) data.passwordHash = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.update({
-    where: { id: req.params.id },
+    where: { id: paramId(req) },
     data,
     select: { id: true, name: true, email: true, role: true, active: true },
   });

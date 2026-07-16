@@ -6,6 +6,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { expectedReturnDate, daysUntilExpiry } from '../utils/status';
 import type { Server } from 'socket.io';
+import { paramId } from '../utils/params';
 
 export function createRoutesRouter(io: Server) {
   const router = Router();
@@ -53,7 +54,7 @@ export function createRoutesRouter(io: Server) {
 
   router.get('/:id', async (req, res) => {
     const route = await prisma.route.findUnique({
-      where: { id: req.params.id },
+      where: { id: paramId(req) },
       include: {
         dealership: true,
         createdBy: { select: { id: true, name: true } },
@@ -119,7 +120,7 @@ export function createRoutesRouter(io: Server) {
     delete data.productIds;
 
     const route = await prisma.route.update({
-      where: { id: req.params.id },
+      where: { id: paramId(req) },
       data,
       include: { dealership: true, vehicles: { include: { vehicle: true } } },
     });
@@ -136,7 +137,7 @@ export function createRoutesRouter(io: Server) {
     }
 
     const route = await prisma.route.findUnique({
-      where: { id: req.params.id },
+      where: { id: paramId(req) },
       include: { dealership: true },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
@@ -221,16 +222,16 @@ export function createRoutesRouter(io: Server) {
 
   router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     const openTrips = await prisma.trip.count({
-      where: { routeId: req.params.id, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+      where: { routeId: paramId(req), status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
     });
     if (openTrips > 0) return res.status(400).json({ error: 'Roteiro possui viagens abertas' });
 
     await prisma.route.update({
-      where: { id: req.params.id },
+      where: { id: paramId(req) },
       data: { status: RouteStatus.CANCELADO },
     });
-    await audit('CANCEL', 'Route', { userId: req.user!.id, entityId: req.params.id });
-    io.emit('routes:changed', { action: 'cancel', id: req.params.id });
+    await audit('CANCEL', 'Route', { userId: req.user!.id, entityId: paramId(req) });
+    io.emit('routes:changed', { action: 'cancel', id: paramId(req) });
     res.status(204).send();
   });
 
