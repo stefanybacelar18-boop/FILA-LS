@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("CONSULTA")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs       AuditLog[]
+  routesCreated   Route[]          @relation("RouteCreatedBy")
+  tripsAssigned   Trip[]           @relation("TripAssignedBy")
+  tripsReturned   Trip[]           @relation("TripReturnedBy")
+  vehicleHistory  VehicleHistory[]
+}
+
+model Vehicle {
+  id         String   @id @default(cuid())
+  plate      String   @unique
+  type       String
+  model      String
+  brand      String
+  year       Int
+  capacityKg Float
+  status     String   @default("DISPONIVEL")
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  routeVehicles RouteVehicle[]
+  trips         Trip[]
+  history       VehicleHistory[]
+}
+
+model Dealership {
+  id             String   @id @default(cuid())
+  name           String
+  city           String
+  state          String
+  region         String
+  distanceKm     Float
+  avgTravelDays  Float
+  allowedVehicle String   @default("AMBOS")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  routes Route[]
+  trips  Trip[]
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  name        String
+  date        DateTime
+  region      String?
+  notes       String?
+  status      String   @default("AGUARDANDO_PLACAS")
+  hasPriority Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dealershipId String
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+  createdById  String
+  createdBy    User       @relation("RouteCreatedBy", fields: [createdById], references: [id])
+
+  vehicles RouteVehicle[]
+  trips    Trip[]
+  products RouteProduct[]
+}
+
+model RouteVehicle {
+  id         String   @id @default(cuid())
+  assignedAt DateTime @default(now())
+
+  routeId   String
+  route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@unique([routeId, vehicleId])
+}
+
+model PriorityProduct {
+  id         String   @id @default(cuid())
+  product    String
+  code       String
+  lot        String
+  quantity   Float
+  expiryDate DateTime
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  routes RouteProduct[]
+}
+
+model RouteProduct {
+  id        String @id @default(cuid())
+  routeId   String
+  route     Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  productId String
+  product   PriorityProduct @relation(fields: [productId], references: [id])
+
+  @@unique([routeId, productId])
+}
+
+model Trip {
+  id             String    @id @default(cuid())
+  driverName     String?
+  departureAt    DateTime
+  expectedReturn DateTime
+  returnedAt     DateTime?
+  status         String    @default("EM_ANDAMENTO")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  vehicleId    String
+  vehicle      Vehicle    @relation(fields: [vehicleId], references: [id])
+  dealershipId String
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+  routeId      String?
+  route        Route?     @relation(fields: [routeId], references: [id])
+  assignedById String
+  assignedBy   User       @relation("TripAssignedBy", fields: [assignedById], references: [id])
+  returnedById String?
+  returnedBy   User?      @relation("TripReturnedBy", fields: [returnedById], references: [id])
+}
+
+model VehicleHistory {
+  id         String   @id @default(cuid())
+  action     String
+  fromStatus String?
+  toStatus   String?
+  details    String?
+  createdAt  DateTime @default(now())
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id])
+  tripId    String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  userId String?
+  user   User?  @relation(fields: [userId], references: [id])
+}

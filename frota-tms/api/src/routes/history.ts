@@ -1,0 +1,73 @@
+import { Router } from 'express';
+import { prisma } from '../lib/prisma';
+import { authenticate } from '../middleware/auth';
+
+const router = Router();
+router.use(authenticate);
+
+router.get('/vehicle/:id', async (req, res) => {
+  const vehicle = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+  if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
+
+  const [history, trips] = await Promise.all([
+    prisma.vehicleHistory.findMany({
+      where: { vehicleId: req.params.id },
+      include: { user: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.trip.findMany({
+      where: { vehicleId: req.params.id },
+      include: {
+        dealership: true,
+        assignedBy: { select: { name: true } },
+        returnedBy: { select: { name: true } },
+        route: true,
+      },
+      orderBy: { departureAt: 'desc' },
+    }),
+  ]);
+
+  res.json({ vehicle, history, trips });
+});
+
+router.get('/trips', async (req, res) => {
+  const { dealershipId, userId, vehicleType, from, to, plate } = req.query;
+  const where: Record<string, unknown> = {};
+  if (dealershipId) where.dealershipId = String(dealershipId);
+  if (userId) where.assignedById = String(userId);
+  if (from || to) {
+    where.departureAt = {};
+    if (from) (where.departureAt as Record<string, Date>).gte = new Date(String(from));
+    if (to) (where.departureAt as Record<string, Date>).lte = new Date(String(to));
+  }
+  if (vehicleType || plate) {
+    where.vehicle = {};
+    if (vehicleType) (where.vehicle as Record<string, string>).type = String(vehicleType);
+    if (plate) (where.vehicle as Record<string, object>).plate = { contains: String(plate).toUpperCase() };
+  }
+
+  const trips = await prisma.trip.findMany({
+    where,
+    include: {
+      vehicle: true,
+      dealership: true,
+      assignedBy: { select: { id: true, name: true } },
+      returnedBy: { select: { id: true, name: true } },
+      route: true,
+    },
+    orderBy: { departureAt: 'desc' },
+    take: 500,
+  });
+  res.json(trips);
+});
+
+router.get('/audit', async (req, res) => {
+  const logs = await prisma.auditLog.findMany({
+    include: { user: { select: { name: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  });
+  res.json(logs);
+});
+
+export default router;

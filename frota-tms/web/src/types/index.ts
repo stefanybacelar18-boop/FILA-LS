@@ -1,0 +1,213 @@
+export type Role = 'ADMIN' | 'OPERACAO' | 'CONSULTA'
+
+export type VehicleType = 'TRUCK' | 'CARRETA'
+
+export type VehicleStatus =
+  | 'DISPONIVEL'
+  | 'EM_VIAGEM'
+  | 'EM_CARREGAMENTO'
+  | 'EM_MANUTENCAO'
+  | 'BLOQUEADO'
+
+export type AllowedVehicleType = 'TRUCK' | 'CARRETA' | 'AMBOS'
+
+export type RouteStatus =
+  | 'RASCUNHO'
+  | 'AGUARDANDO_PLACAS'
+  | 'EM_ANDAMENTO'
+  | 'CONCLUIDO'
+  | 'CANCELADO'
+
+export type TripStatus = 'EM_ANDAMENTO' | 'RETORNOU' | 'ATRASADO' | 'CANCELADO'
+
+export type PlateColor = 'green' | 'yellow' | 'blue' | 'orange' | 'red' | 'black'
+
+export type PriorityColor = 'green' | 'yellow' | 'orange' | 'red' | 'expired'
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  role: Role
+  active?: boolean
+  createdAt?: string
+}
+
+export interface Vehicle {
+  id: string
+  plate: string
+  type: VehicleType
+  model: string
+  brand: string
+  year: number
+  capacityKg: number
+  status: VehicleStatus
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  color: PlateColor
+  expectedReturn: string | null
+  activeTripId: string | null
+}
+
+export interface Dealership {
+  id: string
+  name: string
+  city: string
+  state: string
+  region: string
+  distanceKm: number
+  avgTravelDays: number
+  allowedVehicle: AllowedVehicleType
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PriorityProduct {
+  id: string
+  product: string
+  code: string
+  lot: string
+  quantity: number
+  expiryDate: string
+  notes: string | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+  daysRemaining: number
+  color: PriorityColor
+  blinking: boolean
+}
+
+export interface RouteProduct {
+  id: string
+  routeId: string
+  productId: string
+  product: PriorityProduct
+}
+
+export interface RouteVehicle {
+  id: string
+  routeId: string
+  vehicleId: string
+  assignedAt: string
+  vehicle: Vehicle
+}
+
+export interface Route {
+  id: string
+  name: string
+  date: string
+  region: string | null
+  notes: string | null
+  status: RouteStatus
+  hasPriority: boolean
+  createdAt: string
+  updatedAt: string
+  dealershipId: string
+  dealership: Dealership
+  createdById: string
+  createdBy: { id: string; name: string }
+  vehicles?: RouteVehicle[]
+  products?: RouteProduct[]
+  trips?: Trip[]
+  _count?: { trips: number }
+}
+
+export interface Trip {
+  id: string
+  driverName: string | null
+  departureAt: string
+  expectedReturn: string
+  returnedAt: string | null
+  status: TripStatus
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  vehicleId: string
+  vehicle: Vehicle
+  dealershipId: string
+  dealership: Dealership
+  routeId: string | null
+  route: Route | null
+  assignedById: string
+  assignedBy: { id?: string; name: string }
+  returnedById: string | null
+  returnedBy: { id?: string; name: string } | null
+  overdue?: boolean
+  color?: PlateColor
+}
+
+export interface VehicleHistory {
+  id: string
+  action: string
+  fromStatus: string | null
+  toStatus: string | null
+  details: string | null
+  createdAt: string
+  vehicleId: string
+  userId: string | null
+  user: { name: string } | null
+  tripId: string | null
+}
+
+export interface AuditLog {
+  id: string
+  action: string
+  entity: string
+  entityId: string | null
+  details: string | null
+  ip: string | null
+  createdAt: string
+  userId: string | null
+  user: { name: string; email: string } | null
+}
+
+export interface DashboardData {
+  fleet: {
+    total: number
+    trucksAvailable: number
+    carretasAvailable: number
+    emViagem: number
+    emManutencao: number
+    retornamHoje: number
+    retornamAmanha: number
+    atrasadas: number
+  }
+  topDealership: { dealershipId: string; name: string; city: string; trips: number } | null
+  avgTravelDays: number
+  tripsPerDay: { date: string; count: number }[]
+  tripsPerDealership: { dealershipId: string; name: string; city: string; trips: number }[]
+  ranking: { dealershipId: string; name: string; city: string; trips: number }[]
+  products: {
+    prioritarios: number
+    vencendo: number
+    vencidos: number
+    list: (PriorityProduct & { daysRemaining: number })[]
+  }
+}
+
+export interface ProductsPanel {
+  in30: PriorityProduct[]
+  in15: PriorityProduct[]
+  in7: PriorityProduct[]
+  today: PriorityProduct[]
+  expired: PriorityProduct[]
+  urgentTop: PriorityProduct[]
+}
+
+export interface ReturnsPanel {
+  today: Trip[]
+  tomorrow: Trip[]
+  in2Days: Trip[]
+  overdue: Trip[]
+}
+
+export interface SearchResult {
+  type: 'placa' | 'concessionaria' | 'produto' | 'motorista' | 'roteiro'
+  id: string
+  title: string
+  subtitle: string
+  href: string
+}
