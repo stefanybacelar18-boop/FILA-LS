@@ -1,10 +1,10 @@
-# Acesso público (demo)
+# Acesso público (demo) — link atualizado
 
-Enquanto o agente Cloud estiver ativo, o FrotaTMS fica disponível em:
+## Use este link agora
 
-**https://cal-minority-donate-bangkok.trycloudflare.com**
+**https://real-singers-think.loca.lt**
 
-## Logins
+### Logins
 
 | E-mail | Senha | Perfil |
 |--------|-------|--------|
@@ -12,9 +12,14 @@ Enquanto o agente Cloud estiver ativo, o FrotaTMS fica disponível em:
 | operacao@frotatms.com | operacao123 | Operação |
 | consulta@frotatms.com | consulta123 | Consulta |
 
-## Importante
+### Se o `loca.lt` pedir senha / “Tunnel Password”
 
-- Este link é um **túnel temporário** (Cloudflare Quick Tunnel).
-- Funciona no celular, tablet ou qualquer notebook — sem instalar nada.
-- Se o agente Cloud for encerrado, o link para de funcionar.
-- Para produção permanente (Vercel/Railway), use o guia em `DEPLOY-PRODUCAO.md`.
+1. Abra https://ifconfig.me em outra aba e copie o IP  
+2. Cole esse IP no campo de senha do tunnel e continue  
+   **ou** clique em Continue / Click to continue, se aparecer.
+
+### Importante
+
+- Link **temporário** (só enquanto o agente Cloud estiver ativo).
+- O link antigo `cal-minority-donate-bangkok.trycloudflare.com` **expirou** — não use.
+- Rede corporativa às vezes bloqueia esses domínios; se não abrir, avise para publicarmos no Render (URL fixa).
