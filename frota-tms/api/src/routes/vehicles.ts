@@ -12,11 +12,12 @@ router.use(authenticate);
 
 const schema = z.object({
   plate: z.string().min(7).max(8),
-  type: z.enum([VehicleType.TRUCK, VehicleType.CARRETA]),
-  model: z.string().min(1),
-  brand: z.string().min(1),
-  year: z.number().int().min(1990).max(2100),
-  capacityKg: z.number().positive(),
+  type: z.enum([VehicleType.TRUCK, VehicleType.CARRETA]).default(VehicleType.TRUCK),
+  model: z.string().min(1).default('—'),
+  brand: z.string().min(1).default('—'),
+  year: z.number().int().min(1990).max(2100).default(2020),
+  capacityMotos: z.number().positive(),
+  defaultDriver: z.string().optional().nullable(),
   status: z
     .enum([
       VehicleStatus.DISPONIVEL,
@@ -36,7 +37,8 @@ async function enrichVehicle(v: {
   model: string;
   brand: string;
   year: number;
-  capacityKg: number;
+  capacityMotos: number;
+  defaultDriver: string | null;
   status: string;
   notes: string | null;
   createdAt: Date;
@@ -64,6 +66,7 @@ router.get('/', async (req, res) => {
       { plate: { contains: String(q) } },
       { model: { contains: String(q) } },
       { brand: { contains: String(q) } },
+      { defaultDriver: { contains: String(q) } },
     ];
   }
   const vehicles = await prisma.vehicle.findMany({ where, orderBy: { plate: 'asc' } });
@@ -85,7 +88,14 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
-  const parsed = schema.safeParse(req.body);
+  const body = {
+    ...req.body,
+    type: req.body.type ?? VehicleType.TRUCK,
+    brand: req.body.brand || '—',
+    model: req.body.model || '—',
+    year: req.body.year ?? 2020,
+  };
+  const parsed = schema.safeParse(body);
   if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() });
 
   const plate = parsed.data.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -93,7 +103,12 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   if (exists) return res.status(409).json({ error: 'Placa já cadastrada' });
 
   const vehicle = await prisma.vehicle.create({
-    data: { ...parsed.data, plate, status: parsed.data.status ?? VehicleStatus.DISPONIVEL },
+    data: {
+      ...parsed.data,
+      plate,
+      defaultDriver: parsed.data.defaultDriver || null,
+      status: parsed.data.status ?? VehicleStatus.DISPONIVEL,
+    },
   });
   await prisma.vehicleHistory.create({
     data: {
@@ -117,6 +132,7 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
 
   const data = { ...parsed.data };
   if (data.plate) data.plate = data.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (data.defaultDriver !== undefined) data.defaultDriver = data.defaultDriver || null;
 
   const vehicle = await prisma.vehicle.update({ where: { id: paramId(req) }, data });
   if (data.status && data.status !== current.status) {

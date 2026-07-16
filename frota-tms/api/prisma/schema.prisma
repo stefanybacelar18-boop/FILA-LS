@@ -17,25 +17,26 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  auditLogs       AuditLog[]
-  routesCreated   Route[]          @relation("RouteCreatedBy")
-  tripsAssigned   Trip[]           @relation("TripAssignedBy")
-  tripsReturned   Trip[]           @relation("TripReturnedBy")
-  vehicleHistory  VehicleHistory[]
+  auditLogs      AuditLog[]
+  routesCreated  Route[]          @relation("RouteCreatedBy")
+  tripsAssigned  Trip[]           @relation("TripAssignedBy")
+  tripsReturned  Trip[]           @relation("TripReturnedBy")
+  vehicleHistory VehicleHistory[]
 }
 
 model Vehicle {
-  id         String   @id @default(cuid())
-  plate      String   @unique
-  type       String
-  model      String
-  brand      String
-  year       Int
-  capacityKg Float
-  status     String   @default("DISPONIVEL")
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  plate         String   @unique
+  type          String
+  model         String
+  brand         String
+  year          Int
+  capacityMotos Float
+  defaultDriver String?
+  status        String   @default("DISPONIVEL")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   routeVehicles RouteVehicle[]
   trips         Trip[]
@@ -55,8 +56,9 @@ model Dealership {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  routes Route[]
-  trips  Trip[]
+  routeLinks RouteDealership[]
+  trips      Trip[]
+  routes     Route[]           @relation("RoutePrimaryDealership")
 }
 
 model Route {
@@ -70,14 +72,26 @@ model Route {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  dealershipId String?
+  dealership   Dealership? @relation("RoutePrimaryDealership", fields: [dealershipId], references: [id])
+  createdById  String
+  createdBy    User        @relation("RouteCreatedBy", fields: [createdById], references: [id])
+
+  dealerships RouteDealership[]
+  vehicles    RouteVehicle[]
+  trips       Trip[]
+  products    RouteProduct[]
+}
+
+model RouteDealership {
+  id           String @id @default(cuid())
+  order        Int    @default(0)
+  routeId      String
+  route        Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
   dealershipId String
   dealership   Dealership @relation(fields: [dealershipId], references: [id])
-  createdById  String
-  createdBy    User       @relation("RouteCreatedBy", fields: [createdById], references: [id])
 
-  vehicles RouteVehicle[]
-  trips    Trip[]
-  products RouteProduct[]
+  @@unique([routeId, dealershipId])
 }
 
 model RouteVehicle {
@@ -108,9 +122,9 @@ model PriorityProduct {
 }
 
 model RouteProduct {
-  id        String @id @default(cuid())
+  id        String          @id @default(cuid())
   routeId   String
-  route     Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  route     Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
   productId String
   product   PriorityProduct @relation(fields: [productId], references: [id])
 

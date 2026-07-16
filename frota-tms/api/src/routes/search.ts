@@ -54,9 +54,16 @@ router.get('/', async (req, res) => {
     }),
     prisma.route.findMany({
       where: {
-        OR: [{ name: { contains: q } }, { region: { contains: q } }],
+        OR: [
+          { name: { contains: q } },
+          { region: { contains: q } },
+          { dealerships: { some: { dealership: { name: { contains: q } } } } },
+        ],
       },
-      include: { dealership: true },
+      include: {
+        dealerships: { include: { dealership: true }, orderBy: { order: 'asc' } },
+        dealership: true,
+      },
       take: 8,
     }),
   ]);
@@ -95,13 +102,19 @@ router.get('/', async (req, res) => {
         subtitle: `${t.vehicle.plate} → ${t.dealership.name}`,
         href: `/viagens`,
       })),
-    ...routes.map((r) => ({
-      type: 'roteiro' as const,
-      id: r.id,
-      title: r.name,
-      subtitle: r.dealership.name,
-      href: `/roteiros/${r.id}`,
-    })),
+    ...routes.map((r) => {
+      const names =
+        r.dealerships.length > 0
+          ? r.dealerships.map((rd) => rd.dealership.name).join(', ')
+          : r.dealership?.name ?? '—';
+      return {
+        type: 'roteiro' as const,
+        id: r.id,
+        title: r.name,
+        subtitle: names,
+        href: `/roteiros/${r.id}`,
+      };
+    }),
   ];
 
   res.json({ results, q });

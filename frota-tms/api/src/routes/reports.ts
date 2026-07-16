@@ -44,7 +44,8 @@ router.get('/excel/:type', async (req, res) => {
       { header: 'Marca', key: 'brand', width: 14 },
       { header: 'Modelo', key: 'model', width: 14 },
       { header: 'Ano', key: 'year', width: 8 },
-      { header: 'Capacidade (kg)', key: 'capacityKg', width: 16 },
+      { header: 'Capacidade (motos)', key: 'capacityMotos', width: 18 },
+      { header: 'Motorista padrão', key: 'defaultDriver', width: 18 },
       { header: 'Situação', key: 'status', width: 16 },
     ];
     vehicles.forEach((v) => ws.addRow(v));

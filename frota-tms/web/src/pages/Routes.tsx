@@ -47,7 +47,7 @@ export function Routes() {
     <div>
       <PageHeader
         title="Roteiros"
-        description="Planejamento de entregas por concessionária"
+        description="Planejamento de entregas por concessionária(s)"
         actions={
           isAdmin ? (
             <Link
@@ -84,7 +84,7 @@ export function Routes() {
               <tr>
                 <th>Roteiro</th>
                 <th>Data</th>
-                <th>Concessionária</th>
+                <th>Concessionárias</th>
                 <th>Status</th>
                 <th>Placas</th>
                 <th>Criado por</th>
@@ -111,7 +111,23 @@ export function Routes() {
                     )}
                   </td>
                   <td>{formatDate(r.date)}</td>
-                  <td>{r.dealership.name}</td>
+                  <td>
+                    {(() => {
+                      const names =
+                        r.dealerships && r.dealerships.length > 0
+                          ? r.dealerships.map((rd) => rd.dealership.name)
+                          : r.dealership
+                            ? [r.dealership.name]
+                            : []
+                      if (names.length === 0) return '—'
+                      if (names.length === 1) return names[0]
+                      return (
+                        <span title={names.join(', ')}>
+                          {names.length} concessionárias
+                        </span>
+                      )
+                    })()}
+                  </td>
                   <td>
                     <Badge
                       tone={

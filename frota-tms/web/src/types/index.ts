@@ -40,7 +40,8 @@ export interface Vehicle {
   model: string
   brand: string
   year: number
-  capacityKg: number
+  capacityMotos: number
+  defaultDriver: string | null
   status: VehicleStatus
   notes: string | null
   createdAt: string
@@ -95,6 +96,14 @@ export interface RouteVehicle {
   vehicle: Vehicle
 }
 
+export interface RouteDealership {
+  id: string
+  order: number
+  routeId: string
+  dealershipId: string
+  dealership: Dealership
+}
+
 export interface Route {
   id: string
   name: string
@@ -105,8 +114,9 @@ export interface Route {
   hasPriority: boolean
   createdAt: string
   updatedAt: string
-  dealershipId: string
-  dealership: Dealership
+  dealershipId: string | null
+  dealership: Dealership | null
+  dealerships?: RouteDealership[]
   createdById: string
   createdBy: { id: string; name: string }
   vehicles?: RouteVehicle[]

@@ -8,6 +8,29 @@ import { expectedReturnDate, daysUntilExpiry } from '../utils/status';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 
+const routeDealershipInclude = {
+  dealerships: {
+    include: { dealership: true },
+    orderBy: { order: 'asc' as const },
+  },
+};
+
+type DealershipRow = {
+  id: string;
+  name: string;
+  distanceKm: number;
+  avgTravelDays: number;
+  allowedVehicle: string;
+};
+
+/** Farthest dealership: highest avgTravelDays, then distanceKm */
+function farthestDealership(dealerships: DealershipRow[]): DealershipRow {
+  return [...dealerships].sort((a, b) => {
+    if (b.avgTravelDays !== a.avgTravelDays) return b.avgTravelDays - a.avgTravelDays;
+    return b.distanceKm - a.distanceKm;
+  })[0];
+}
+
 export function createRoutesRouter(io: Server) {
   const router = Router();
   router.use(authenticate);
@@ -15,7 +38,7 @@ export function createRoutesRouter(io: Server) {
   const schema = z.object({
     name: z.string().min(2),
     date: z.string(),
-    dealershipId: z.string(),
+    dealershipIds: z.array(z.string()).min(1),
     region: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     productIds: z.array(z.string()).optional(),
@@ -35,12 +58,13 @@ export function createRoutesRouter(io: Server) {
       where.OR = [
         { name: { contains: String(q) } },
         { region: { contains: String(q) } },
-        { dealership: { name: { contains: String(q) } } },
+        { dealerships: { some: { dealership: { name: { contains: String(q) } } } } },
       ];
     }
     const routes = await prisma.route.findMany({
       where,
       include: {
+        ...routeDealershipInclude,
         dealership: true,
         createdBy: { select: { id: true, name: true } },
         vehicles: { include: { vehicle: true } },
@@ -56,6 +80,7 @@ export function createRoutesRouter(io: Server) {
     const route = await prisma.route.findUnique({
       where: { id: paramId(req) },
       include: {
+        ...routeDealershipInclude,
         dealership: true,
         createdBy: { select: { id: true, name: true } },
         vehicles: { include: { vehicle: true } },
@@ -71,9 +96,14 @@ export function createRoutesRouter(io: Server) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() });
 
-    const dealership = await prisma.dealership.findUnique({ where: { id: parsed.data.dealershipId } });
-    if (!dealership) return res.status(404).json({ error: 'Concessionária não encontrada' });
+    const dealerships = await prisma.dealership.findMany({
+      where: { id: { in: parsed.data.dealershipIds } },
+    });
+    if (dealerships.length !== parsed.data.dealershipIds.length) {
+      return res.status(404).json({ error: 'Uma ou mais concessionárias não encontradas' });
+    }
 
+    const ordered = parsed.data.dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
     const productIds = parsed.data.productIds ?? [];
     let hasPriority = false;
     if (productIds.length) {
@@ -86,20 +116,30 @@ export function createRoutesRouter(io: Server) {
       hasPriority = urgent > 0;
     }
 
+    const joinedRegions = [...new Set(ordered.map((d) => d.region))].join(' / ');
+    const region = parsed.data.region ?? (joinedRegions || ordered[0]?.region);
+
     const route = await prisma.route.create({
       data: {
         name: parsed.data.name,
         date: new Date(parsed.data.date),
-        dealershipId: parsed.data.dealershipId,
-        region: parsed.data.region ?? dealership.region,
+        dealershipId: ordered[0]?.id,
+        region,
         notes: parsed.data.notes,
         hasPriority,
         createdById: req.user!.id,
+        dealerships: {
+          create: ordered.map((d, order) => ({
+            dealershipId: d.id,
+            order,
+          })),
+        },
         products: productIds.length
           ? { create: productIds.map((productId) => ({ productId })) }
           : undefined,
       },
       include: {
+        ...routeDealershipInclude,
         dealership: true,
         products: { include: { product: true } },
         createdBy: { select: { id: true, name: true } },
@@ -115,35 +155,99 @@ export function createRoutesRouter(io: Server) {
     const parsed = schema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' });
 
-    const data: Record<string, unknown> = { ...parsed.data };
-    if (parsed.data.date) data.date = new Date(parsed.data.date);
-    delete data.productIds;
+    const routeId = paramId(req);
+    const existing = await prisma.route.findUnique({ where: { id: routeId } });
+    if (!existing) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
-    const route = await prisma.route.update({
-      where: { id: paramId(req) },
-      data,
-      include: { dealership: true, vehicles: { include: { vehicle: true } } },
+    const { dealershipIds, productIds, date, ...rest } = parsed.data;
+    const data: Record<string, unknown> = { ...rest };
+    if (date) data.date = new Date(date);
+
+    if (dealershipIds?.length) {
+      const dealerships = await prisma.dealership.findMany({
+        where: { id: { in: dealershipIds } },
+      });
+      if (dealerships.length !== dealershipIds.length) {
+        return res.status(404).json({ error: 'Uma ou mais concessionárias não encontradas' });
+      }
+      const ordered = dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
+      data.dealershipId = ordered[0]?.id;
+      if (rest.region === undefined) {
+        data.region = [...new Set(ordered.map((d) => d.region))].join(' / ') || ordered[0]?.region;
+      }
+      await prisma.$transaction(async (tx) => {
+        await tx.routeDealership.deleteMany({ where: { routeId } });
+        await tx.routeDealership.createMany({
+          data: ordered.map((d, order) => ({
+            routeId,
+            dealershipId: d.id,
+            order,
+          })),
+        });
+        await tx.route.update({ where: { id: routeId }, data });
+      });
+    } else {
+      await prisma.route.update({ where: { id: routeId }, data });
+    }
+
+    if (productIds) {
+      await prisma.routeProduct.deleteMany({ where: { routeId } });
+      if (productIds.length) {
+        await prisma.routeProduct.createMany({
+          data: productIds.map((productId) => ({ routeId, productId })),
+        });
+      }
+    }
+
+    const route = await prisma.route.findUnique({
+      where: { id: routeId },
+      include: {
+        ...routeDealershipInclude,
+        dealership: true,
+        vehicles: { include: { vehicle: true } },
+        products: { include: { product: true } },
+      },
     });
-    await audit('UPDATE', 'Route', { userId: req.user!.id, entityId: route.id });
-    io.emit('routes:changed', { action: 'update', id: route.id });
+    await audit('UPDATE', 'Route', { userId: req.user!.id, entityId: routeId });
+    io.emit('routes:changed', { action: 'update', id: routeId });
     res.json(route);
   });
 
   /** Assign plates to route (operação) — exclusive screen action */
   router.post('/:id/assign-plates', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
-    const { vehicleIds, driverName } = req.body as { vehicleIds: string[]; driverName?: string };
+    const { vehicleIds, driverName, drivers } = req.body as {
+      vehicleIds: string[];
+      driverName?: string;
+      drivers?: Record<string, string>;
+    };
     if (!Array.isArray(vehicleIds) || vehicleIds.length === 0) {
       return res.status(400).json({ error: 'Selecione ao menos uma placa' });
     }
 
     const route = await prisma.route.findUnique({
       where: { id: paramId(req) },
-      include: { dealership: true },
+      include: {
+        ...routeDealershipInclude,
+        dealership: true,
+      },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
     if (route.status === RouteStatus.CANCELADO || route.status === RouteStatus.CONCLUIDO) {
       return res.status(400).json({ error: 'Roteiro não aceita novas placas' });
     }
+
+    const linked: DealershipRow[] =
+      route.dealerships.length > 0
+        ? route.dealerships.map((rd) => rd.dealership)
+        : route.dealership
+          ? [route.dealership]
+          : [];
+    if (linked.length === 0) {
+      return res.status(400).json({ error: 'Roteiro sem concessionárias' });
+    }
+
+    const farthest = farthestDealership(linked);
+    const destNames = linked.map((d) => d.name).join(', ');
 
     const results = [];
     for (const vehicleId of vehicleIds) {
@@ -160,7 +264,7 @@ export function createRoutesRouter(io: Server) {
         return res.status(409).json({ error: `Placa ${vehicle.plate} já está em outro roteiro/viagem` });
       }
 
-      const allowed = route.dealership.allowedVehicle;
+      const allowed = farthest.allowedVehicle;
       if (allowed !== 'AMBOS' && vehicle.type !== allowed) {
         return res.status(400).json({
           error: `Placa ${vehicle.plate} (${vehicle.type}) não permitida nesta concessionária (${allowed})`,
@@ -168,7 +272,12 @@ export function createRoutesRouter(io: Server) {
       }
 
       const departureAt = new Date();
-      const expectedReturn = expectedReturnDate(departureAt, route.dealership.avgTravelDays);
+      const expectedReturn = expectedReturnDate(departureAt, farthest.avgTravelDays);
+      const resolvedDriver =
+        drivers?.[vehicleId]?.trim() ||
+        driverName?.trim() ||
+        vehicle.defaultDriver ||
+        null;
 
       const trip = await prisma.$transaction(async (tx) => {
         await tx.routeVehicle.create({ data: { routeId: route.id, vehicleId } });
@@ -179,9 +288,9 @@ export function createRoutesRouter(io: Server) {
         const t = await tx.trip.create({
           data: {
             vehicleId,
-            dealershipId: route.dealershipId,
+            dealershipId: farthest.id,
             routeId: route.id,
-            driverName: driverName || null,
+            driverName: resolvedDriver,
             departureAt,
             expectedReturn,
             assignedById: req.user!.id,
@@ -197,7 +306,7 @@ export function createRoutesRouter(io: Server) {
             action: 'SAIDA',
             fromStatus: VehicleStatus.DISPONIVEL,
             toStatus: VehicleStatus.EM_VIAGEM,
-            details: `Roteiro ${route.name} → ${route.dealership.name}`,
+            details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name})`,
           },
         });
         return t;

@@ -53,9 +53,10 @@ export function FleetDetail() {
         actions={<PlateBadge plate={vehicle.plate} color={vehicle.color ?? 'green'} />}
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Info label="Situação" value={vehicleStatusLabels[vehicle.status]} />
-        <Info label="Capacidade" value={`${vehicle.capacityKg.toLocaleString('pt-BR')} kg`} />
+        <Info label="Capacidade" value={`${vehicle.capacityMotos} motos`} />
+        <Info label="Motorista padrão" value={vehicle.defaultDriver ?? '—'} />
         <Info label="Viagens" value={String(trips.length)} />
         <Info label="Eventos" value={String(history.length)} />
       </div>

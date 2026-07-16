@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
@@ -28,6 +28,14 @@ import {
 import { routeStatusLabels, vehicleTypeLabels } from '../lib/labels'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
+
+function routeDealershipNames(route: Route): string[] {
+  if (route.dealerships && route.dealerships.length > 0) {
+    return route.dealerships.map((rd) => rd.dealership.name)
+  }
+  if (route.dealership) return [route.dealership.name]
+  return []
+}
 
 function DraggablePlate({ vehicle, selected, onToggle }: {
   vehicle: Vehicle
@@ -66,7 +74,8 @@ function DraggablePlate({ vehicle, selected, onToggle }: {
         />
         <PlateBadge plate={vehicle.plate} color={vehicle.color} />
         <span className="truncate text-xs text-[var(--color-text-muted)]">
-          {vehicleTypeLabels[vehicle.type]} · {vehicle.brand} {vehicle.model}
+          {vehicleTypeLabels[vehicle.type]} · {vehicle.capacityMotos} motos
+          {vehicle.defaultDriver ? ` · ${vehicle.defaultDriver}` : ''}
         </span>
       </label>
     </div>
@@ -99,6 +108,7 @@ export function AssignPlates() {
   const [routeId, setRouteId] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [driverName, setDriverName] = useState('')
+  const [driverTouched, setDriverTouched] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -119,17 +129,41 @@ export function AssignPlates() {
   )
 
   const selectedRoute = routes.find((r) => r.id === routeId)
+  const dealershipNames = selectedRoute ? routeDealershipNames(selectedRoute) : []
 
   const { data: available = [], isLoading: loadingAvailable } = useQuery({
     queryKey: ['vehicles', 'available'],
     queryFn: async () => (await api.get<Vehicle[]>('/vehicles/available')).data,
   })
 
+  const selectedVehicles = available.filter((v) => selected.includes(v.id))
+
+  useEffect(() => {
+    if (driverTouched) return
+    const vehicles = available.filter((v) => selected.includes(v.id))
+    if (vehicles.length === 1 && vehicles[0].defaultDriver) {
+      setDriverName(vehicles[0].defaultDriver)
+    } else if (vehicles.length === 0) {
+      setDriverName('')
+    } else {
+      const drivers = [...new Set(vehicles.map((v) => v.defaultDriver).filter(Boolean))]
+      if (drivers.length === 1) setDriverName(drivers[0] as string)
+      else if (drivers.length === 0) setDriverName('')
+    }
+  }, [selected, available, driverTouched])
+
   const assignMutation = useMutation({
     mutationFn: async () => {
+      const drivers: Record<string, string> = {}
+      for (const v of selectedVehicles) {
+        const override = driverName.trim()
+        if (override) drivers[v.id] = override
+        else if (v.defaultDriver) drivers[v.id] = v.defaultDriver
+      }
       return api.post(`/routes/${routeId}/assign-plates`, {
         vehicleIds: selected,
-        driverName: driverName || undefined,
+        driverName: driverName.trim() || undefined,
+        drivers,
       })
     },
     onSuccess: () => {
@@ -138,6 +172,7 @@ export function AssignPlates() {
       void qc.invalidateQueries({ queryKey: ['trips'] })
       setSelected([])
       setDriverName('')
+      setDriverTouched(false)
       setConfirmOpen(false)
       setError('')
     },
@@ -166,7 +201,6 @@ export function AssignPlates() {
     }
   }
 
-  const selectedVehicles = available.filter((v) => selected.includes(v.id))
   const activeVehicle = available.find((v) => v.id === activeId)
 
   return (
@@ -183,31 +217,55 @@ export function AssignPlates() {
           onChange={(e) => {
             setRouteId(e.target.value)
             setSelected([])
+            setDriverName('')
+            setDriverTouched(false)
             setError('')
           }}
-          options={assignableRoutes.map((r) => ({
-            value: r.id,
-            label: `${r.name} — ${r.dealership.name} (${formatDate(r.date)})`,
-          }))}
+          options={assignableRoutes.map((r) => {
+            const names = routeDealershipNames(r)
+            const dest =
+              names.length === 0
+                ? '—'
+                : names.length <= 2
+                  ? names.join(', ')
+                  : `${names.length} concessionárias`
+            return {
+              value: r.id,
+              label: `${r.name} — ${dest} (${formatDate(r.date)})`,
+            }
+          })}
           placeholder={loadingRoutes ? 'Carregando…' : 'Selecione um roteiro…'}
         />
         <Input
-          label="Motorista (opcional)"
+          label="Motorista (opcional — sobrescreve o padrão da placa)"
           value={driverName}
-          onChange={(e) => setDriverName(e.target.value)}
+          onChange={(e) => {
+            setDriverTouched(true)
+            setDriverName(e.target.value)
+          }}
           placeholder="Nome do motorista"
         />
       </div>
 
       {selectedRoute && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
-          <Tags className="h-4 w-4 text-[var(--color-primary)]" />
-          <span className="font-medium">{selectedRoute.name}</span>
-          <Badge>{routeStatusLabels[selectedRoute.status]}</Badge>
-          {selectedRoute.hasPriority && <Badge tone="warning">Carga Prioritária</Badge>}
-          <span className="text-[var(--color-text-muted)]">
-            {selectedRoute.dealership.name} · veículo: {selectedRoute.dealership.allowedVehicle}
-          </span>
+        <div className="mb-4 space-y-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tags className="h-4 w-4 text-[var(--color-primary)]" />
+            <span className="font-medium">{selectedRoute.name}</span>
+            <Badge>{routeStatusLabels[selectedRoute.status]}</Badge>
+            {selectedRoute.hasPriority && <Badge tone="warning">Carga Prioritária</Badge>}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {dealershipNames.length === 0 ? (
+              <span className="text-[var(--color-text-muted)]">Sem concessionárias</span>
+            ) : (
+              dealershipNames.map((name) => (
+                <Badge key={name} tone="info">
+                  {name}
+                </Badge>
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -255,11 +313,18 @@ export function AssignPlates() {
                         key={v.id}
                         className="flex items-center justify-between gap-2 rounded border border-[var(--color-primary)]/40 bg-[var(--color-primary-muted)] px-3 py-2"
                       >
-                        <div className="flex items-center gap-2">
-                          <PlateBadge plate={v.plate} color={v.color} />
-                          <span className="text-xs text-[var(--color-text-muted)]">
-                            {vehicleTypeLabels[v.type]}
-                          </span>
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <PlateBadge plate={v.plate} color={v.color} />
+                            <span className="text-xs text-[var(--color-text-muted)]">
+                              {vehicleTypeLabels[v.type]} · {v.capacityMotos} motos
+                            </span>
+                          </div>
+                          {(driverName.trim() || v.defaultDriver) && (
+                            <span className="text-xs text-[var(--color-text-muted)]">
+                              Motorista: {driverName.trim() || v.defaultDriver}
+                            </span>
+                          )}
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => toggle(v.id)}>
                           Remover

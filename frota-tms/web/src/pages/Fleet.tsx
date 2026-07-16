@@ -24,10 +24,11 @@ import { formatDate } from '../lib/format'
 const emptyForm = {
   plate: '',
   type: 'TRUCK' as VehicleType,
-  model: '',
-  brand: '',
-  year: new Date().getFullYear(),
-  capacityKg: 8000,
+  model: '—',
+  brand: '—',
+  year: 2020,
+  capacityMotos: 50,
+  defaultDriver: '',
   status: 'DISPONIVEL' as VehicleStatus,
   notes: '',
 }
@@ -60,7 +61,8 @@ export function Fleet() {
         ...form,
         plate: form.plate,
         year: Number(form.year),
-        capacityKg: Number(form.capacityKg),
+        capacityMotos: Number(form.capacityMotos),
+        defaultDriver: form.defaultDriver || null,
         notes: form.notes || null,
       }
       if (editing) return api.put(`/vehicles/${editing.id}`, payload)
@@ -101,7 +103,8 @@ export function Fleet() {
       model: v.model,
       brand: v.brand,
       year: v.year,
-      capacityKg: v.capacityKg,
+      capacityMotos: v.capacityMotos,
+      defaultDriver: v.defaultDriver ?? '',
       status: v.status,
       notes: v.notes ?? '',
     })
@@ -162,6 +165,7 @@ export function Fleet() {
                 <th>Tipo</th>
                 <th>Veículo</th>
                 <th>Capacidade</th>
+                <th>Motorista</th>
                 <th>Situação</th>
                 <th>Previsão retorno</th>
                 {isAdmin && <th />}
@@ -182,7 +186,8 @@ export function Fleet() {
                     </div>
                     <div className="text-xs text-[var(--color-text-muted)]">{v.year}</div>
                   </td>
-                  <td>{v.capacityKg.toLocaleString('pt-BR')} kg</td>
+                  <td>{v.capacityMotos} motos</td>
+                  <td>{v.defaultDriver ?? '—'}</td>
                   <td>{vehicleStatusLabels[v.status]}</td>
                   <td>{formatDate(v.expectedReturn)}</td>
                   {isAdmin && (
@@ -256,11 +261,17 @@ export function Fleet() {
             required
           />
           <Input
-            label="Capacidade (kg)"
+            label="Capacidade (motos)"
             type="number"
-            value={form.capacityKg}
-            onChange={(e) => setForm({ ...form, capacityKg: Number(e.target.value) })}
+            value={form.capacityMotos}
+            onChange={(e) => setForm({ ...form, capacityMotos: Number(e.target.value) })}
             required
+          />
+          <Input
+            label="Motorista padrão"
+            value={form.defaultDriver}
+            onChange={(e) => setForm({ ...form, defaultDriver: e.target.value })}
+            placeholder="Opcional"
           />
           <Select
             label="Situação"
