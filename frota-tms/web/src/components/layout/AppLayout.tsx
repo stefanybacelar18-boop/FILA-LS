@@ -6,7 +6,6 @@ import {
   Building2,
   Route,
   Tags,
-  Package,
   MapPinned,
   RotateCcw,
   History,
@@ -26,8 +25,6 @@ import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
 import { roleLabels } from '../../lib/labels'
 import type { Role } from '../../types'
-import { PriorityBanner } from '../PriorityBanner'
-
 interface NavItem {
   to: string
   label: string
@@ -41,7 +38,6 @@ const navItems: NavItem[] = [
   { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
   { to: '/roteiros', label: 'Roteiros', icon: Route },
   { to: '/definir-placas', label: 'Definir Placas', icon: Tags, roles: ['ADMIN', 'OPERACAO'] },
-  { to: '/produtos', label: 'Produtos Prioritários', icon: Package },
   { to: '/viagens', label: 'Viagens', icon: MapPinned },
   { to: '/retornos', label: 'Retornos', icon: RotateCcw, roles: ['ADMIN', 'OPERACAO'] },
   { to: '/historico', label: 'Histórico', icon: History },
@@ -161,7 +157,7 @@ export function AppLayout() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar placa, roteiro, produto…"
+              placeholder="Buscar placa, roteiro, concessionária…"
               className="h-9 w-full rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] pr-3 pl-9 text-sm outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20"
             />
           </form>
@@ -221,7 +217,6 @@ export function AppLayout() {
         </header>
 
         <main className="flex-1 p-3 md:p-5">
-          <PriorityBanner />
           <Outlet />
         </main>
       </div>

@@ -4,7 +4,7 @@ import { Role, RouteStatus, VehicleStatus, TripStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
-import { expectedReturnDate, daysUntilExpiry } from '../utils/status';
+import { expectedReturnDate } from '../utils/status';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 
@@ -41,7 +41,8 @@ export function createRoutesRouter(io: Server) {
     dealershipIds: z.array(z.string()).min(1),
     region: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
-    productIds: z.array(z.string()).optional(),
+    hasPriority: z.boolean().optional(),
+    priorityNotes: z.string().optional().nullable(),
   });
 
   router.get('/', async (req, res) => {
@@ -68,7 +69,6 @@ export function createRoutesRouter(io: Server) {
         dealership: true,
         createdBy: { select: { id: true, name: true } },
         vehicles: { include: { vehicle: true } },
-        products: { include: { product: true } },
         _count: { select: { trips: true } },
       },
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
@@ -84,7 +84,6 @@ export function createRoutesRouter(io: Server) {
         dealership: true,
         createdBy: { select: { id: true, name: true } },
         vehicles: { include: { vehicle: true } },
-        products: { include: { product: true } },
         trips: { include: { vehicle: true, assignedBy: { select: { name: true } } } },
       },
     });
@@ -104,17 +103,7 @@ export function createRoutesRouter(io: Server) {
     }
 
     const ordered = parsed.data.dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
-    const productIds = parsed.data.productIds ?? [];
-    let hasPriority = false;
-    if (productIds.length) {
-      const products = await prisma.priorityProduct.findMany({ where: { id: { in: productIds }, active: true } });
-      hasPriority = products.some((p) => daysUntilExpiry(p.expiryDate) <= 30);
-    } else {
-      const urgent = await prisma.priorityProduct.count({
-        where: { active: true, expiryDate: { lte: new Date(Date.now() + 30 * 86400000) } },
-      });
-      hasPriority = urgent > 0;
-    }
+    const hasPriority = !!parsed.data.hasPriority;
 
     const joinedRegions = [...new Set(ordered.map((d) => d.region))].join(' / ');
     const region = parsed.data.region ?? (joinedRegions || ordered[0]?.region);
@@ -127,6 +116,7 @@ export function createRoutesRouter(io: Server) {
         region,
         notes: parsed.data.notes,
         hasPriority,
+        priorityNotes: hasPriority ? parsed.data.priorityNotes ?? null : null,
         createdById: req.user!.id,
         dealerships: {
           create: ordered.map((d, order) => ({
@@ -134,14 +124,10 @@ export function createRoutesRouter(io: Server) {
             order,
           })),
         },
-        products: productIds.length
-          ? { create: productIds.map((productId) => ({ productId })) }
-          : undefined,
       },
       include: {
         ...routeDealershipInclude,
         dealership: true,
-        products: { include: { product: true } },
         createdBy: { select: { id: true, name: true } },
       },
     });
@@ -159,9 +145,10 @@ export function createRoutesRouter(io: Server) {
     const existing = await prisma.route.findUnique({ where: { id: routeId } });
     if (!existing) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
-    const { dealershipIds, productIds, date, ...rest } = parsed.data;
+    const { dealershipIds, date, ...rest } = parsed.data;
     const data: Record<string, unknown> = { ...rest };
     if (date) data.date = new Date(date);
+    if (rest.hasPriority === false) data.priorityNotes = null;
 
     if (dealershipIds?.length) {
       const dealerships = await prisma.dealership.findMany({
@@ -190,22 +177,12 @@ export function createRoutesRouter(io: Server) {
       await prisma.route.update({ where: { id: routeId }, data });
     }
 
-    if (productIds) {
-      await prisma.routeProduct.deleteMany({ where: { routeId } });
-      if (productIds.length) {
-        await prisma.routeProduct.createMany({
-          data: productIds.map((productId) => ({ routeId, productId })),
-        });
-      }
-    }
-
     const route = await prisma.route.findUnique({
       where: { id: routeId },
       include: {
         ...routeDealershipInclude,
         dealership: true,
         vehicles: { include: { vehicle: true } },
-        products: { include: { product: true } },
       },
     });
     await audit('UPDATE', 'Route', { userId: req.user!.id, entityId: routeId });

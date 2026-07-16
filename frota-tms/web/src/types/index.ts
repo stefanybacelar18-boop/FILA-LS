@@ -112,6 +112,7 @@ export interface Route {
   notes: string | null
   status: RouteStatus
   hasPriority: boolean
+  priorityNotes?: string | null
   createdAt: string
   updatedAt: string
   dealershipId: string | null
@@ -120,7 +121,6 @@ export interface Route {
   createdById: string
   createdBy: { id: string; name: string }
   vehicles?: RouteVehicle[]
-  products?: RouteProduct[]
   trips?: Trip[]
   _count?: { trips: number }
 }
@@ -190,12 +190,7 @@ export interface DashboardData {
   tripsPerDay: { date: string; count: number }[]
   tripsPerDealership: { dealershipId: string; name: string; city: string; trips: number }[]
   ranking: { dealershipId: string; name: string; city: string; trips: number }[]
-  products: {
-    prioritarios: number
-    vencendo: number
-    vencidos: number
-    list: (PriorityProduct & { daysRemaining: number })[]
-  }
+  priorityRoutes?: number
 }
 
 export interface ProductsPanel {

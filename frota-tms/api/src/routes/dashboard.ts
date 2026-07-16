@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { TripStatus, VehicleStatus, VehicleType } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
-import { daysUntilExpiry, isOverdue } from '../utils/status';
+import { isOverdue } from '../utils/status';
 import { addDays, startOfDay, subDays, format } from 'date-fns';
 
 const router = Router();
@@ -20,8 +20,8 @@ router.get('/', async (_req, res) => {
     emManutencao,
     openTrips,
     dealershipTripCounts,
-    products,
     tripsLast14,
+    priorityRoutes,
   ] = await Promise.all([
     prisma.vehicle.count(),
     prisma.vehicle.count({ where: { type: VehicleType.TRUCK, status: VehicleStatus.DISPONIVEL } }),
@@ -38,10 +38,15 @@ router.get('/', async (_req, res) => {
       orderBy: { _count: { id: 'desc' } },
       take: 10,
     }),
-    prisma.priorityProduct.findMany({ where: { active: true } }),
     prisma.trip.findMany({
       where: { departureAt: { gte: subDays(today, 13) } },
       select: { departureAt: true },
+    }),
+    prisma.route.count({
+      where: {
+        hasPriority: true,
+        status: { in: ['AGUARDANDO_PLACAS', 'EM_ANDAMENTO'] },
+      },
     }),
   ]);
 
@@ -85,11 +90,6 @@ router.get('/', async (_req, res) => {
     tripsPerDay.push({ date: key, count });
   }
 
-  const enrichedProducts = products.map((p) => ({
-    ...p,
-    daysRemaining: daysUntilExpiry(p.expiryDate),
-  }));
-
   res.json({
     fleet: {
       total: fleet,
@@ -106,12 +106,7 @@ router.get('/', async (_req, res) => {
     tripsPerDay,
     tripsPerDealership: ranking,
     ranking,
-    products: {
-      prioritarios: enrichedProducts.filter((p) => p.daysRemaining <= 30 && p.daysRemaining >= 0).length,
-      vencendo: enrichedProducts.filter((p) => p.daysRemaining >= 0 && p.daysRemaining < 15).length,
-      vencidos: enrichedProducts.filter((p) => p.daysRemaining < 0).length,
-      list: enrichedProducts.filter((p) => p.daysRemaining <= 30).slice(0, 10),
-    },
+    priorityRoutes,
   });
 });
 

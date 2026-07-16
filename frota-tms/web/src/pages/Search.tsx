@@ -35,7 +35,7 @@ export function Search() {
 
   return (
     <div>
-      <PageHeader title="Busca" description="Pesquisa global em placas, roteiros, produtos e mais" />
+      <PageHeader title="Busca" description="Pesquisa global em placas, roteiros, concessionárias e mais" />
 
       <div className="mb-5 max-w-xl">
         <SearchInput value={q} onChange={setQ} placeholder="Digite ao menos 2 caracteres…" />
@@ -44,7 +44,7 @@ export function Search() {
       {query.length < 2 ? (
         <EmptyState
           title="Digite para buscar"
-          description="Informe placa, concessionária, produto, motorista ou roteiro."
+          description="Informe placa, concessionária, motorista ou roteiro."
         />
       ) : isLoading || isFetching ? (
         <div className="flex justify-center py-16">

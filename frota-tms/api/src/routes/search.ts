@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
-import { daysUntilExpiry, priorityColor } from '../utils/status';
 
 const router = Router();
 router.use(authenticate);
@@ -10,13 +9,14 @@ router.get('/', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json({ results: [] });
 
-  const [vehicles, dealerships, products, trips, routes] = await Promise.all([
+  const [vehicles, dealerships, trips, routes] = await Promise.all([
     prisma.vehicle.findMany({
       where: {
         OR: [
           { plate: { contains: q } },
           { model: { contains: q } },
           { brand: { contains: q } },
+          { defaultDriver: { contains: q } },
         ],
       },
       take: 8,
@@ -28,16 +28,6 @@ router.get('/', async (req, res) => {
           { city: { contains: q } },
           { state: { contains: q } },
           { region: { contains: q } },
-        ],
-      },
-      take: 8,
-    }),
-    prisma.priorityProduct.findMany({
-      where: {
-        OR: [
-          { product: { contains: q } },
-          { code: { contains: q } },
-          { lot: { contains: q } },
         ],
       },
       take: 8,
@@ -73,7 +63,7 @@ router.get('/', async (req, res) => {
       type: 'placa' as const,
       id: v.id,
       title: v.plate,
-      subtitle: `${v.brand} ${v.model} · ${v.status}`,
+      subtitle: `${v.capacityMotos} motos · ${v.defaultDriver ?? 'sem motorista'} · ${v.status}`,
       href: `/frota/${v.id}`,
     })),
     ...dealerships.map((d) => ({
@@ -83,16 +73,6 @@ router.get('/', async (req, res) => {
       subtitle: `${d.city}/${d.state} · ${d.region}`,
       href: `/concessionarias`,
     })),
-    ...products.map((p) => {
-      const days = daysUntilExpiry(p.expiryDate);
-      return {
-        type: 'produto' as const,
-        id: p.id,
-        title: p.product,
-        subtitle: `Lote ${p.lot} · ${days} dias · ${priorityColor(days)}`,
-        href: `/produtos`,
-      };
-    }),
     ...trips
       .filter((t) => t.driverName)
       .map((t) => ({
@@ -106,7 +86,7 @@ router.get('/', async (req, res) => {
       const names =
         r.dealerships.length > 0
           ? r.dealerships.map((rd) => rd.dealership.name).join(', ')
-          : r.dealership?.name ?? '—';
+          : r.dealership?.name ?? '';
       return {
         type: 'roteiro' as const,
         id: r.id,

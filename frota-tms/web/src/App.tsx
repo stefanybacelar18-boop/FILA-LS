@@ -15,7 +15,6 @@ import { Dealerships } from './pages/Dealerships'
 import { Routes as RoutesPage } from './pages/Routes'
 import { RouteForm } from './pages/RouteForm'
 import { AssignPlates } from './pages/AssignPlates'
-import { Products } from './pages/Products'
 import { Trips } from './pages/Trips'
 import { Returns } from './pages/Returns'
 import { History } from './pages/History'
@@ -105,7 +104,6 @@ export default function App() {
                   </RoleGate>
                 }
               />
-              <Route path="produtos" element={<Products />} />
               <Route path="viagens" element={<Trips />} />
               <Route
                 path="retornos"

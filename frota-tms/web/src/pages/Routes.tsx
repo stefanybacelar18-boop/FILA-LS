@@ -106,6 +106,9 @@ export function Routes() {
                         <Badge tone="warning">Carga Prioritária</Badge>
                       )}
                     </div>
+                    {r.hasPriority && r.priorityNotes && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">{r.priorityNotes}</p>
+                    )}
                     {r.region && (
                       <p className="text-xs text-[var(--color-text-muted)]">{r.region}</p>
                     )}

@@ -12,7 +12,6 @@ const reportTypes = [
   { type: 'viagens', label: 'Viagens' },
   { type: 'diario', label: 'Diário de viagens' },
   { type: 'periodo', label: 'Viagens por período' },
-  { type: 'produtos', label: 'Produtos prioritários' },
   { type: 'concessionarias', label: 'Concessionárias' },
   { type: 'historico-placa', label: 'Histórico por placa' },
 ]

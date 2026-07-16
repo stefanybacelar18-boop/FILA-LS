@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Dealership, PriorityProduct, Route } from '../types'
-import { PageHeader, Button, Input, Textarea, Spinner, Badge } from '../components/ui'
+import type { Dealership, Route } from '../types'
+import { PageHeader, Button, Input, Textarea, Spinner } from '../components/ui'
 import { toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
@@ -17,18 +17,15 @@ export function RouteForm() {
   const [name, setName] = useState('')
   const [date, setDate] = useState(toInputDate(new Date()))
   const [dealershipIds, setDealershipIds] = useState<string[]>([])
+  const [dealerSearch, setDealerSearch] = useState('')
   const [region, setRegion] = useState('')
   const [notes, setNotes] = useState('')
-  const [productIds, setProductIds] = useState<string[]>([])
+  const [hasPriority, setHasPriority] = useState(false)
+  const [priorityNotes, setPriorityNotes] = useState('')
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
     queryFn: async () => (await api.get<Dealership[]>('/dealerships')).data,
-  })
-
-  const { data: products = [] } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => (await api.get<PriorityProduct[]>('/products')).data,
   })
 
   const { data: existing, isLoading } = useQuery({
@@ -47,8 +44,22 @@ export function RouteForm() {
     setDealershipIds(ids)
     setRegion(existing.region ?? '')
     setNotes(existing.notes ?? '')
-    setProductIds(existing.products?.map((p) => p.productId) ?? [])
+    setHasPriority(!!existing.hasPriority)
+    setPriorityNotes(existing.priorityNotes ?? '')
   }, [existing])
+
+  const filteredDealerships = useMemo(() => {
+    const q = dealerSearch.trim().toLowerCase()
+    const active = dealerships.filter((d) => d.active)
+    if (!q) return active
+    return active.filter(
+      (d) =>
+        d.name.toLowerCase().includes(q) ||
+        d.city.toLowerCase().includes(q) ||
+        d.state.toLowerCase().includes(q) ||
+        d.region.toLowerCase().includes(q),
+    )
+  }, [dealerships, dealerSearch])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -59,27 +70,23 @@ export function RouteForm() {
         dealershipIds,
         region: region || null,
         notes: notes || null,
-        productIds,
+        hasPriority,
+        priorityNotes: hasPriority ? priorityNotes || null : null,
       }
       if (isNew) return (await api.post<Route>('/routes', payload)).data
       return (await api.put<Route>(`/routes/${id}`, payload)).data
     },
-    onSuccess: (route) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['routes'] })
       navigate('/roteiros')
-      return route
     },
   })
-
-  function toggleProduct(pid: string) {
-    setProductIds((prev) => (prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]))
-  }
 
   function toggleDealership(did: string) {
     setDealershipIds((prev) => {
       const next = prev.includes(did) ? prev.filter((x) => x !== did) : [...prev, did]
       const selected = dealerships.filter((d) => next.includes(d.id))
-      if (selected.length && !region) {
+      if (selected.length) {
         setRegion([...new Set(selected.map((d) => d.region))].join(' / '))
       }
       return next
@@ -111,7 +118,7 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Defina destinos, data e produtos prioritários vinculados"
+        description="Selecione as concessionárias do roteiro e informe manualmente se há carga prioritária"
       />
 
       <form
@@ -129,61 +136,66 @@ export function RouteForm() {
           </div>
         </div>
 
-        <div>
-          <p className="mb-2 text-sm font-medium">
-            Concessionárias <span className="text-[var(--color-danger)]">*</span>
-            <span className="ml-2 font-normal text-[var(--color-text-muted)]">
-              ({dealershipIds.length} selecionada{dealershipIds.length === 1 ? '' : 's'})
+        <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={hasPriority}
+              onChange={(e) => setHasPriority(e.target.checked)}
+              className="mt-1 accent-[var(--color-primary)]"
+            />
+            <span>
+              <span className="font-medium">Carga prioritária</span>
+              <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                Marque manualmente quando este roteiro tiver prioridade de carregamento
+              </span>
             </span>
-          </p>
-          <div className="max-h-56 space-y-1 overflow-y-auto rounded border border-[var(--color-border)] p-2">
-            {dealerships.filter((d) => d.active).length === 0 && (
-              <p className="p-2 text-sm text-[var(--color-text-muted)]">Nenhuma concessionária ativa.</p>
-            )}
-            {dealerships
-              .filter((d) => d.active)
-              .map((d) => {
-                const checked = dealershipIds.includes(d.id)
-                return (
-                  <label
-                    key={d.id}
-                    className={cn(
-                      'flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm hover:bg-[var(--color-surface-2)]',
-                      checked && 'bg-[var(--color-primary-muted)]',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleDealership(d.id)}
-                      className="accent-[var(--color-primary)]"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="font-medium">{d.name}</span>
-                      <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                        {d.city}/{d.state} · {d.distanceKm} km · {d.avgTravelDays}d
-                      </span>
-                    </span>
-                  </label>
-                )
-              })}
-          </div>
-          {dealershipIds.length < 1 && (
-            <p className="mt-1 text-xs text-[var(--color-danger)]">Selecione ao menos uma concessionária</p>
+          </label>
+          {hasPriority && (
+            <div className="mt-3">
+              <Textarea
+                label="Detalhe da prioridade (opcional)"
+                value={priorityNotes}
+                onChange={(e) => setPriorityNotes(e.target.value)}
+                placeholder="Ex.: vencimento próximo, pedido urgente, cliente X…"
+              />
+            </div>
           )}
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-medium">Produtos prioritários</p>
-          <div className="max-h-56 space-y-1 overflow-y-auto rounded border border-[var(--color-border)] p-2">
-            {products.length === 0 && (
-              <p className="p-2 text-sm text-[var(--color-text-muted)]">Nenhum produto ativo.</p>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">
+              Concessionárias <span className="text-[var(--color-danger)]">*</span>
+              <span className="ml-2 font-normal text-[var(--color-text-muted)]">
+                ({dealershipIds.length} selecionada{dealershipIds.length === 1 ? '' : 's'} ·{' '}
+                {dealerships.filter((d) => d.active).length} na lista)
+              </span>
+            </p>
+          </div>
+
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+            <input
+              type="search"
+              value={dealerSearch}
+              onChange={(e) => setDealerSearch(e.target.value)}
+              placeholder="Buscar por nome, cidade, UF ou região…"
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-primary)]"
+            />
+          </div>
+
+          <div className="max-h-72 space-y-1 overflow-y-auto rounded border border-[var(--color-border)] p-2">
+            {filteredDealerships.length === 0 && (
+              <p className="p-2 text-sm text-[var(--color-text-muted)]">
+                Nenhuma concessionária encontrada com esse filtro.
+              </p>
             )}
-            {products.map((p) => {
-              const checked = productIds.includes(p.id)
+            {filteredDealerships.map((d) => {
+              const checked = dealershipIds.includes(d.id)
               return (
                 <label
-                  key={p.id}
+                  key={d.id}
                   className={cn(
                     'flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm hover:bg-[var(--color-surface-2)]',
                     checked && 'bg-[var(--color-primary-muted)]',
@@ -192,22 +204,22 @@ export function RouteForm() {
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => toggleProduct(p.id)}
+                    onChange={() => toggleDealership(d.id)}
                     className="accent-[var(--color-primary)]"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="font-medium">{p.product}</span>
+                    <span className="font-medium">{d.name}</span>
                     <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                      Lote {p.lot} · {p.daysRemaining}d
+                      {d.city}/{d.state} · {d.distanceKm} km · {d.avgTravelDays}d
                     </span>
                   </span>
-                  {p.daysRemaining <= 30 && (
-                    <Badge tone={p.daysRemaining < 7 ? 'danger' : 'warning'}>Prioritário</Badge>
-                  )}
                 </label>
               )
             })}
           </div>
+          {dealershipIds.length < 1 && (
+            <p className="mt-1 text-xs text-[var(--color-danger)]">Selecione ao menos uma concessionária</p>
+          )}
         </div>
 
         {saveMutation.isError && (

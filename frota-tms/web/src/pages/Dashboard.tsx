@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Truck, MapPinned, AlertTriangle, Wrench, Package } from 'lucide-react'
+import { Truck, MapPinned, AlertTriangle, Wrench } from 'lucide-react'
 import { api } from '../lib/api'
 import type { DashboardData } from '../types'
 import { PageHeader, Spinner, Card } from '../components/ui'
@@ -51,10 +51,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <PageHeader
-        title="Dashboard"
-        description="Visão operacional da frota, viagens e produtos prioritários"
-      />
+      <PageHeader title="Dashboard" description="Visão operacional da frota, roteiros e viagens" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-4">
         {kpis.map((k) => (
@@ -109,53 +106,6 @@ export function Dashboard() {
                 <span className="font-display font-semibold">{r.trips}</span>
               </div>
             ))}
-          </div>
-        </Card>
-
-        <Card title="Produtos prioritários" className="lg:col-span-2">
-          <div className="mb-4 grid grid-cols-3 gap-3">
-            <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-center">
-              <Package className="mx-auto mb-1 h-4 w-4 text-[var(--color-primary)]" />
-              <p className="font-display text-xl font-bold">{data.products.prioritarios}</p>
-              <p className="text-xs text-[var(--color-text-muted)]">Prioritários (≤30d)</p>
-            </div>
-            <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-center">
-              <p className="font-display text-xl font-bold text-amber-600">{data.products.vencendo}</p>
-              <p className="text-xs text-[var(--color-text-muted)]">Vencendo (&lt;15d)</p>
-            </div>
-            <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-center">
-              <p className="font-display text-xl font-bold text-red-600">{data.products.vencidos}</p>
-              <p className="text-xs text-[var(--color-text-muted)]">Vencidos</p>
-            </div>
-          </div>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Produto</th>
-                  <th>Lote</th>
-                  <th>Dias</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.products.list.map((p) => (
-                  <tr key={p.id}>
-                    <td className="font-medium">{p.product}</td>
-                    <td>{p.lot}</td>
-                    <td
-                      className={cn(
-                        p.daysRemaining < 0 && 'priority-expired',
-                        p.daysRemaining >= 0 && p.daysRemaining < 7 && 'priority-red animate-blink font-semibold',
-                        p.daysRemaining >= 7 && p.daysRemaining < 15 && 'priority-orange',
-                        p.daysRemaining >= 15 && p.daysRemaining <= 30 && 'priority-yellow',
-                      )}
-                    >
-                      {p.daysRemaining}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </Card>
       </div>
