@@ -45,10 +45,12 @@ model Vehicle {
 
 model Dealership {
   id             String   @id @default(cuid())
+  code           String?
   name           String
   city           String
   state          String
   region         String
+  phone          String?
   distanceKm     Float
   avgTravelDays  Float
   allowedVehicle String   @default("AMBOS")

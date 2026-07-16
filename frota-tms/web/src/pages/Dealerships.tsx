@@ -16,7 +16,6 @@ import {
   Badge,
 } from '../components/ui'
 import { useAuthStore } from '../stores/auth'
-import { allowedVehicleLabels } from '../lib/labels'
 
 const emptyForm = {
   name: '',
@@ -124,7 +123,7 @@ export function Dealerships() {
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <SearchInput value={q} onChange={setQ} placeholder="Buscar nome, cidade ou região…" />
+        <SearchInput value={q} onChange={setQ} placeholder="Buscar nome, código, cidade ou região…" />
         <Select
           value={state}
           onChange={(e) => setState(e.target.value)}
@@ -150,12 +149,13 @@ export function Dealerships() {
           <table className="data-table">
             <thead>
               <tr>
+                <th>Código</th>
                 <th>Nome</th>
                 <th>Cidade/UF</th>
+                <th>Telefone</th>
                 <th>Região</th>
                 <th>Distância</th>
                 <th>Tempo médio</th>
-                <th>Veículo</th>
                 <th>Status</th>
                 {isAdmin && <th />}
               </tr>
@@ -163,14 +163,15 @@ export function Dealerships() {
             <tbody>
               {data.map((d) => (
                 <tr key={d.id}>
+                  <td className="text-xs text-[var(--color-text-muted)]">{d.code ?? '—'}</td>
                   <td className="font-medium">{d.name}</td>
                   <td>
                     {d.city}/{d.state}
                   </td>
+                  <td className="text-xs">{d.phone ?? '—'}</td>
                   <td>{d.region}</td>
                   <td>{d.distanceKm} km</td>
                   <td>{d.avgTravelDays} dias</td>
-                  <td>{allowedVehicleLabels[d.allowedVehicle]}</td>
                   <td>
                     <Badge tone={d.active ? 'success' : 'default'}>
                       {d.active ? 'Ativa' : 'Inativa'}

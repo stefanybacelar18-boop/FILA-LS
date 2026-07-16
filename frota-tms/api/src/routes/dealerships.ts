@@ -10,10 +10,12 @@ const router = Router();
 router.use(authenticate);
 
 const schema = z.object({
+  code: z.string().optional().nullable(),
   name: z.string().min(2),
   city: z.string().min(2),
   state: z.string().min(2).max(2),
-  region: z.string().min(2),
+  region: z.string().min(1),
+  phone: z.string().optional().nullable(),
   distanceKm: z.number().nonnegative(),
   avgTravelDays: z.number().positive(),
   allowedVehicle: z
@@ -32,9 +34,11 @@ router.get('/', async (req, res) => {
       { name: { contains: String(q) } },
       { city: { contains: String(q) } },
       { region: { contains: String(q) } },
+      { code: { contains: String(q) } },
+      { phone: { contains: String(q) } },
     ];
   }
-  const items = await prisma.dealership.findMany({ where, orderBy: { name: 'asc' } });
+  const items = await prisma.dealership.findMany({ where, orderBy: [{ city: 'asc' }, { name: 'asc' }] });
   res.json(items);
 });
 

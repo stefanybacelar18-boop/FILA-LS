@@ -57,7 +57,9 @@ export function RouteForm() {
         d.name.toLowerCase().includes(q) ||
         d.city.toLowerCase().includes(q) ||
         d.state.toLowerCase().includes(q) ||
-        d.region.toLowerCase().includes(q),
+        d.region.toLowerCase().includes(q) ||
+        (d.code?.toLowerCase().includes(q) ?? false) ||
+        (d.phone?.toLowerCase().includes(q) ?? false),
     )
   }, [dealerships, dealerSearch])
 
@@ -180,7 +182,7 @@ export function RouteForm() {
               type="search"
               value={dealerSearch}
               onChange={(e) => setDealerSearch(e.target.value)}
-              placeholder="Buscar por nome, cidade, UF ou região…"
+              placeholder="Buscar por nome, código, cidade, UF ou região…"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-primary)]"
             />
           </div>
@@ -207,12 +209,13 @@ export function RouteForm() {
                     onChange={() => toggleDealership(d.id)}
                     className="accent-[var(--color-primary)]"
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="font-medium">{d.name}</span>
-                    <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                      {d.city}/{d.state} · {d.distanceKm} km · {d.avgTravelDays}d
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium">{d.name}</span>
+                      <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                        {d.code ? `${d.code} · ` : ''}
+                        {d.city}/{d.state} · {d.region} · {d.distanceKm} km · {d.avgTravelDays}d
+                      </span>
                     </span>
-                  </span>
                 </label>
               )
             })}

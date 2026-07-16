@@ -53,10 +53,12 @@ export interface Vehicle {
 
 export interface Dealership {
   id: string
+  code: string | null
   name: string
   city: string
   state: string
   region: string
+  phone: string | null
   distanceKm: number
   avgTravelDays: number
   allowedVehicle: AllowedVehicleType

@@ -9,6 +9,7 @@ import {
   normalizeCityKey,
   distanceFromBase,
   avgTravelDaysFromDistance,
+  inferState,
 } from '../src/utils/geo';
 
 const prisma = new PrismaClient();
@@ -21,19 +22,16 @@ interface VehicleSeed {
 }
 
 interface DealershipSeed {
+  code: string;
   name: string;
   city: string;
+  phone?: string;
+  regionCode?: string;
 }
 
 function loadJson<T>(filename: string): T {
   const path = join(__dirname, 'data', filename);
   return JSON.parse(readFileSync(path, 'utf-8')) as T;
-}
-
-function inferState(city: string): string {
-  const key = normalizeCityKey(city);
-  if (key === 'ARACAJU' || key === 'ESTANCIA') return 'SE';
-  return 'BA';
 }
 
 async function main() {
@@ -85,12 +83,18 @@ async function main() {
     }
     const distanceKm = Math.round(distanceFromBase(coords.lat, coords.lng) * 10) / 10;
     const avgTravelDays = avgTravelDaysFromDistance(distanceKm);
+    const region =
+      d.regionCode !== undefined && d.regionCode !== ''
+        ? `Região ${d.regionCode}`
+        : d.city;
     await prisma.dealership.create({
       data: {
+        code: d.code,
         name: d.name,
         city: d.city,
         state: inferState(d.city),
-        region: d.city,
+        region,
+        phone: d.phone || null,
         distanceKm,
         avgTravelDays,
         allowedVehicle: AllowedVehicleType.AMBOS,
@@ -119,7 +123,6 @@ async function main() {
 
   const vehicleCount = await prisma.vehicle.count();
   const dealershipCount = await prisma.dealership.count();
-
   console.log('Seed OK');
   console.log(`  Vehicles: ${vehicleCount}`);
   console.log(`  Dealerships: ${dealershipCount}`);
