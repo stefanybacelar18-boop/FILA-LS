@@ -1,24 +1,23 @@
 # Acesso de teste — FrotaTMS
 
-> Sistema **separado** do FilaDock. Só use links desta pasta.
+> Sistema **separado** do FilaDock.
 
-## URL pública (túnel — pode expirar)
+## URL pública
 
-**https://whom-institutional-quarter-approval.trycloudflare.com**
+**https://treasures-edit-engineers-mounted.trycloudflare.com**
 
-## Login demo (somente teste)
+## Login
 
 | Perfil | E-mail | Senha |
 |--------|--------|-------|
 | Admin | admin@frotatms.com | admin123 |
-| Operação (empresa terceira) | operacao@frotatms.com | operacao123 |
+| Operação | operacao@frotatms.com | operacao123 |
 | Consulta | consulta@frotatms.com | consulta123 |
 
-## Novidade: atraso / indisponível
+## O que validar
 
-Em **Viagens** ou **Retornos** → **Informar** → motivo + opção de bloquear o veículo.  
-Se passou da previsão, o **Retornou** exige justificativa para liberar novo carregamento.
+1. Dashboard → alertas e carregamento de hoje  
+2. Admin → Novo roteiro (06:00 + prioridade + meta de placas)  
+3. Definir Placas → disponíveis + justificar indisponíveis  
 
-## Produção permanente
-
-Ver [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md) (Docker/Render — **não** afeta o FilaDock).
+Deploy: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)
