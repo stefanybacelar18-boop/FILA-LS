@@ -143,7 +143,7 @@ export function AssignPlates() {
   const assignableRoutes = useMemo(
     () =>
       routes.filter(
-        (r) => r.status === 'AGUARDANDO_PLACAS' || r.status === 'EM_ANDAMENTO' || r.status === 'RASCUNHO',
+        (r) => r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO',
       ),
     [routes],
   )
@@ -198,12 +198,15 @@ export function AssignPlates() {
     },
     onSuccess: async () => {
       const n = selected.length
+      const name = selectedRoute?.name ?? 'roteiro'
       setSelected([])
       setDriverName('')
       setDriverTouched(false)
       setConfirmOpen(false)
       setError('')
-      setOkMsg(`${n} placa(s) enviada(s) com sucesso`)
+      setRouteId('') // volta à lista — este roteiro some (já não é pendência)
+      setPlateSearch('')
+      setOkMsg(`${n} placa(s) definida(s) em "${name}". Roteiro saiu da pendência.`)
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['routes'] }),
         qc.invalidateQueries({ queryKey: ['vehicles'] }),
@@ -254,15 +257,22 @@ export function AssignPlates() {
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Definir Placas" description="Escolha o roteiro e as placas" />
 
+      {/* Mensagem de sucesso fica no topo mesmo após limpar o roteiro */}
+      {okMsg && (
+        <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-base font-medium text-teal-900 dark:text-teal-100">
+          {okMsg}
+        </p>
+      )}
+
       {/* PASSO 1 */}
-      <p className="mb-3 text-lg font-semibold">1. Roteiro</p>
+      <p className="mb-3 text-lg font-semibold">1. Roteiro pendente</p>
 
       {loadingRoutes ? (
         <div className="flex justify-center py-10">
           <Spinner size="lg" />
         </div>
       ) : assignableRoutes.length === 0 ? (
-        <EmptyState title="Nenhum roteiro pronto" description="Crie um roteiro em Roteiros." />
+        <EmptyState title="Nenhuma pendência" description="Todos os roteiros já têm placa definida." />
       ) : (
         <div className="mb-6 grid gap-3 sm:grid-cols-2">
           {assignableRoutes.map((r) => {
@@ -330,11 +340,6 @@ export function AssignPlates() {
             />
           </div>
 
-          {okMsg && (
-            <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-base font-medium text-teal-900 dark:text-teal-100">
-              {okMsg}
-            </p>
-          )}
           {error && (
             <p className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-base text-[var(--color-danger)]">
               {error}
