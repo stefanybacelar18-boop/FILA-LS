@@ -22,6 +22,7 @@ model User {
   tripsAssigned  Trip[]           @relation("TripAssignedBy")
   tripsReturned  Trip[]           @relation("TripReturnedBy")
   tripsDelayReport Trip[]         @relation("TripDelayReportedBy")
+  plateUnavailabilities PlateUnavailability[]
   vehicleHistory VehicleHistory[]
 }
 
@@ -42,6 +43,7 @@ model Vehicle {
   routeVehicles RouteVehicle[]
   trips         Trip[]
   history       VehicleHistory[]
+  unavailabilities PlateUnavailability[]
 }
 
 model Dealership {
@@ -85,6 +87,7 @@ model Route {
   vehicles    RouteVehicle[]
   trips       Trip[]
   products    RouteProduct[]
+  unavailabilities PlateUnavailability[]
 }
 
 model RouteDealership {
@@ -106,6 +109,24 @@ model RouteVehicle {
   route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
   vehicleId String
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@unique([routeId, vehicleId])
+}
+
+// Operador justifica por que a placa não estará disponível para carregar na data do roteiro
+model PlateUnavailability {
+  id                  String   @id @default(cuid())
+  reason              String
+  availableAtForecast DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  routeId      String
+  route        Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  vehicle      Vehicle @relation(fields: [vehicleId], references: [id])
+  reportedById String
+  reportedBy   User    @relation(fields: [reportedById], references: [id])
 
   @@unique([routeId, vehicleId])
 }

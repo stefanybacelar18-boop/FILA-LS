@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core'
 import { GripVertical, Search } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Route, Vehicle } from '../types'
+import type { PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
   PageHeader,
   Button,
@@ -21,9 +21,34 @@ import {
   Spinner,
   EmptyState,
   ConfirmModal,
+  Modal,
+  Textarea,
+  Input,
+  Select,
 } from '../components/ui'
-import { formatDate } from '../lib/format'
+import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
+import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
+
+interface PlatesBoardVehicle extends Vehicle {
+  report?: {
+    id: string
+    reason: string
+    availableAtForecast: string
+    reportedAt: string
+    reportedBy: { id: string; name: string }
+  } | null
+  unavailableReasonCode?: string
+  loadDate?: string
+}
+
+interface PlatesBoard {
+  routeId: string
+  routeName: string
+  loadAt: string
+  available: PlatesBoardVehicle[]
+  unavailable: PlatesBoardVehicle[]
+}
 
 function citiesOf(route: Route): string[] {
   const dealers =
@@ -42,7 +67,6 @@ function dealersOf(route: Route) {
   return route.dealership ? [route.dealership] : []
 }
 
-/** Interseção das regras allowedVehicle de todos os destinos. null = qualquer tipo. */
 function allowedTypesForRoute(route: Route): Set<'TRUCK' | 'CARRETA'> | null {
   const dealers = dealersOf(route)
   if (dealers.length === 0) return null
@@ -61,11 +85,13 @@ function PlateRow({
   onAction,
   actionLabel,
   draggable,
+  extra,
 }: {
-  vehicle: Vehicle
+  vehicle: { id: string; plate: string; color: PlateColor; capacityMotos: number; defaultDriver: string | null }
   onAction: () => void
   actionLabel: string
   draggable?: boolean
+  extra?: string
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: vehicle.id,
@@ -98,6 +124,7 @@ function PlateRow({
           {vehicle.capacityMotos} motos
           {vehicle.defaultDriver ? ` · ${vehicle.defaultDriver}` : ''}
         </p>
+        {extra && <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{extra}</p>}
       </div>
       <Button variant={draggable ? 'primary' : 'secondary'} size="sm" onClick={onAction}>
         {actionLabel}
@@ -106,13 +133,7 @@ function PlateRow({
   )
 }
 
-function DropArea({
-  empty,
-  children,
-}: {
-  empty: boolean
-  children: React.ReactNode
-}) {
+function DropArea({ empty, children }: { empty: boolean; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'route-drop' })
   return (
     <div
@@ -147,6 +168,11 @@ export function AssignPlates() {
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
 
+  const [justifyVehicle, setJustifyVehicle] = useState<PlatesBoardVehicle | null>(null)
+  const [preset, setPreset] = useState('')
+  const [reason, setReason] = useState('')
+  const [forecastDate, setForecastDate] = useState('')
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const { data: routes = [], isLoading: loadingRoutes } = useQuery({
@@ -155,10 +181,7 @@ export function AssignPlates() {
   })
 
   const assignableRoutes = useMemo(
-    () =>
-      routes.filter(
-        (r) => r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO',
-      ),
+    () => routes.filter((r) => r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO'),
     [routes],
   )
 
@@ -167,10 +190,14 @@ export function AssignPlates() {
   const dealers = selectedRoute ? dealersOf(selectedRoute) : []
   const allowedTypes = selectedRoute ? allowedTypesForRoute(selectedRoute) : null
 
-  const { data: available = [], isLoading: loadingAvailable } = useQuery({
-    queryKey: ['vehicles', 'available'],
-    queryFn: async () => (await api.get<Vehicle[]>('/vehicles/available')).data,
+  const { data: board, isLoading: loadingBoard } = useQuery({
+    queryKey: ['plates-board', routeId],
+    queryFn: async () => (await api.get<PlatesBoard>(`/routes/${routeId}/plates-board`)).data,
+    enabled: !!routeId,
   })
+
+  const available = board?.available ?? []
+  const unavailable = board?.unavailable ?? []
 
   const pool = useMemo(() => {
     const q = plateSearch.trim().toLowerCase()
@@ -220,7 +247,7 @@ export function AssignPlates() {
       setDriverTouched(false)
       setConfirmOpen(false)
       setError('')
-      setRouteId('') // volta à lista — este roteiro some (já não é pendência)
+      setRouteId('')
       setPlateSearch('')
       setOkMsg(`${n} placa(s) definida(s) em "${name}". Roteiro saiu da pendência.`)
       await Promise.all([
@@ -228,6 +255,7 @@ export function AssignPlates() {
         qc.invalidateQueries({ queryKey: ['vehicles'] }),
         qc.invalidateQueries({ queryKey: ['trips'] }),
         qc.invalidateQueries({ queryKey: ['dashboard'] }),
+        qc.invalidateQueries({ queryKey: ['plates-board'] }),
       ])
     },
     onError: (err: unknown) => {
@@ -236,6 +264,38 @@ export function AssignPlates() {
           'Não foi possível atribuir. Tente de novo.',
       )
       setConfirmOpen(false)
+    },
+  })
+
+  function composedReason() {
+    return [preset && preset !== 'Outro (descrever abaixo)' ? preset : '', reason.trim()]
+      .filter(Boolean)
+      .join(' — ')
+  }
+
+  const justifyMutation = useMutation({
+    mutationFn: async () => {
+      if (!justifyVehicle || !routeId) return
+      return api.post(`/routes/${routeId}/unavailable`, {
+        vehicleId: justifyVehicle.id,
+        reason: composedReason(),
+        availableAtForecast: forecastDate,
+      })
+    },
+    onSuccess: async () => {
+      setJustifyVehicle(null)
+      setPreset('')
+      setReason('')
+      setForecastDate('')
+      setError('')
+      setOkMsg('Indisponibilidade registrada com previsão de disponibilidade.')
+      await qc.invalidateQueries({ queryKey: ['plates-board', routeId] })
+    },
+    onError: (err: unknown) => {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível salvar a justificativa.',
+      )
     },
   })
 
@@ -269,18 +329,21 @@ export function AssignPlates() {
 
   const activeVehicle = available.find((v) => v.id === activeId)
 
+  const pendingJustification = unavailable.filter((v) => !v.report)
+
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Definir Placas" description="Escolha o roteiro e as placas" />
+      <PageHeader
+        title="Definir Placas"
+        description="Lista disponível pela automação de retorno · Indisponíveis exigem motivo + previsão"
+      />
 
-      {/* Mensagem de sucesso fica no topo mesmo após limpar o roteiro */}
       {okMsg && (
         <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-base font-medium text-teal-900 dark:text-teal-100">
           {okMsg}
         </p>
       )}
 
-      {/* PASSO 1 */}
       <p className="mb-3 text-lg font-semibold">1. Roteiro pendente</p>
 
       {loadingRoutes ? (
@@ -315,7 +378,7 @@ export function AssignPlates() {
                   )}
                 </div>
                 <p className="mt-1 text-base text-[var(--color-text-muted)]">
-                  {formatDate(r.date)}
+                  {formatDate(r.date)} · 06:00
                   {c.length > 0 ? ` · ${c.join(', ')}` : ''}
                 </p>
               </button>
@@ -326,55 +389,42 @@ export function AssignPlates() {
 
       {!routeId ? null : (
         <>
-          {/* Resumo curto do roteiro escolhido */}
           <div className="mb-6 rounded-xl bg-[var(--color-surface-2)] px-4 py-3 text-base">
             <p>
               <span className="font-semibold">{selectedRoute?.name}</span>
               {cities.length > 0 && <> → {cities.join(', ')}</>}
+              {selectedRoute?.hasPriority && (
+                <span className="ml-2 text-sm text-amber-700 dark:text-amber-300">· Prioritário</span>
+              )}
             </p>
-            {dealers.length > 0 && (
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                {dealers.length} destino{dealers.length > 1 ? 's' : ''}:{' '}
-                {dealers.map((d) => d.name).join(' · ')}
-              </p>
-            )}
             {selectedRoute && (
               <p className="mt-2 text-sm">
-                <span className="text-[var(--color-text-muted)]">Saída (data do roteiro): </span>
-                <strong>{formatDate(selectedRoute.date)}</strong>
+                <span className="text-[var(--color-text-muted)]">Início / saída: </span>
+                <strong>
+                  {formatDate(selectedRoute.date)} às 06:00
+                </strong>
                 {dealers.length > 0 && (
                   <>
                     <span className="text-[var(--color-text-muted)]"> · Previsão de retorno: </span>
                     <strong>
                       {formatDate(
                         new Date(
-                          new Date(selectedRoute.date).getTime() +
-                            Math.ceil(
-                              Math.max(...dealers.map((d) => d.avgTravelDays)) * 86400000,
-                            ),
+                          new Date(`${toInputDate(selectedRoute.date)}T06:00:00`).getTime() +
+                            Math.ceil(Math.max(...dealers.map((d) => d.avgTravelDays)) * 86400000),
                         ).toISOString(),
                       )}
                     </strong>
-                    <span className="text-[var(--color-text-muted)]"> (automática pela distância)</span>
                   </>
                 )}
               </p>
             )}
           </div>
 
-          {/* PASSO 2 */}
-          <p className="mb-3 text-lg font-semibold">2. Placas</p>
+          <p className="mb-3 text-lg font-semibold">2. Placas disponíveis (automação de retorno)</p>
 
-          {allowedTypes && allowedTypes.size < 2 && (
+          {allowedTypes && allowedTypes.size < 2 && allowedTypes.size > 0 && (
             <p className="mb-3 rounded-xl bg-amber-500/15 px-4 py-2 text-sm text-amber-900 dark:text-amber-100">
-              Este roteiro aceita apenas{' '}
-              <strong>{[...allowedTypes].join(' / ')}</strong> (regra das concessionárias).
-            </p>
-          )}
-          {allowedTypes && allowedTypes.size === 0 && (
-            <p className="mb-3 rounded-xl bg-red-500/10 px-4 py-3 text-base text-[var(--color-danger)]">
-              Destinos incompatíveis (tipos de veículo conflitantes). Revise as concessionárias do
-              roteiro.
+              Este roteiro aceita apenas <strong>{[...allowedTypes].join(' / ')}</strong>
             </p>
           )}
 
@@ -400,9 +450,7 @@ export function AssignPlates() {
           <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
             <div className="grid gap-4 lg:grid-cols-2">
               <section>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-base font-semibold">Disponíveis ({pool.length})</h3>
-                </div>
+                <h3 className="mb-2 text-base font-semibold">Disponíveis ({pool.length})</h3>
                 <div className="relative mb-3">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
                   <input
@@ -413,8 +461,8 @@ export function AssignPlates() {
                     className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-10 pr-3 text-base outline-none focus:border-[var(--color-primary)]"
                   />
                 </div>
-                <div className="max-h-[460px] space-y-2 overflow-y-auto pr-1">
-                  {loadingAvailable ? (
+                <div className="max-h-[400px] space-y-2 overflow-y-auto pr-1">
+                  {loadingBoard ? (
                     <div className="flex justify-center py-12">
                       <Spinner size="lg" />
                     </div>
@@ -468,6 +516,75 @@ export function AssignPlates() {
               ) : null}
             </DragOverlay>
           </DndContext>
+
+          {/* Indisponíveis — operador justifica */}
+          <div className="mt-8">
+            <p className="mb-2 text-lg font-semibold">3. Placas indisponíveis para esta data</p>
+            <p className="mb-3 text-sm text-[var(--color-text-muted)]">
+              Se a placa não pode carregar em {selectedRoute ? formatDate(selectedRoute.date) : '—'}{' '}
+              às 06:00, o operador deve justificar e informar a previsão de disponibilidade.
+              {pendingJustification.length > 0 && (
+                <span className="ml-1 font-medium text-[var(--color-danger)]">
+                  ({pendingJustification.length} sem justificativa)
+                </span>
+              )}
+            </p>
+
+            {loadingBoard ? (
+              <div className="flex justify-center py-8">
+                <Spinner />
+              </div>
+            ) : unavailable.length === 0 ? (
+              <EmptyState title="Nenhuma placa indisponível" description="Toda a frota elegível está livre." />
+            ) : (
+              <div className="max-h-[420px] space-y-2 overflow-y-auto">
+                {unavailable.map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <PlateBadge plate={v.plate} color={v.color} />
+                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                        {vehicleStatusLabels[v.status as VehicleStatus] ?? v.status}
+                        {v.expectedReturn ? ` · retorno prev. ${formatDate(v.expectedReturn)}` : ''}
+                      </p>
+                      {v.report ? (
+                        <p className="mt-1 text-sm">
+                          <span className="font-medium">Justificativa:</span> {v.report.reason}
+                          <span className="block text-xs text-[var(--color-text-muted)]">
+                            Disp. prevista: {formatDate(v.report.availableAtForecast)} · por{' '}
+                            {v.report.reportedBy.name}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs font-medium text-[var(--color-danger)]">
+                          Pendente de justificativa
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={v.report ? 'secondary' : 'primary'}
+                      onClick={() => {
+                        setError('')
+                        setJustifyVehicle(v)
+                        setPreset('')
+                        setReason(v.report?.reason ?? '')
+                        setForecastDate(
+                          v.report?.availableAtForecast
+                            ? toInputDate(v.report.availableAtForecast)
+                            : toInputDate(selectedRoute?.date ?? new Date()),
+                        )
+                      }}
+                    >
+                      {v.report ? 'Atualizar' : 'Justificar'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -482,10 +599,58 @@ export function AssignPlates() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => assignMutation.mutate()}
         title="Confirmar placas?"
-        message={`Enviar ${selected.length} placa(s) para ${selectedRoute?.name}${cities.length ? ` (${cities.join(', ')})` : ''}?`}
+        message={`Enviar ${selected.length} placa(s) para ${selectedRoute?.name} — saída ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00?`}
         confirmLabel="Sim, confirmar"
         loading={assignMutation.isPending}
       />
+
+      <Modal
+        open={!!justifyVehicle}
+        onClose={() => setJustifyVehicle(null)}
+        title={`Indisponível — ${justifyVehicle?.plate ?? ''}`}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Informe por que esta placa não estará disponível para carregar em{' '}
+            <strong>{selectedRoute ? formatDate(selectedRoute.date) : ''}</strong> às 06:00 e a
+            previsão de quando volta a ficar disponível.
+          </p>
+          <Select
+            label="Motivo"
+            value={preset}
+            onChange={(e) => setPreset(e.target.value)}
+            options={delayReasonPresets.map((label) => ({ value: label, label }))}
+            placeholder="Selecione"
+          />
+          <Textarea
+            label="Justificativa"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="Descreva o motivo…"
+            required
+          />
+          <Input
+            label="Previsão de disponibilidade"
+            type="date"
+            value={forecastDate}
+            onChange={(e) => setForecastDate(e.target.value)}
+            required
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setJustifyVehicle(null)}>
+              Cancelar
+            </Button>
+            <Button
+              loading={justifyMutation.isPending}
+              disabled={composedReason().length < 5 || !forecastDate}
+              onClick={() => justifyMutation.mutate()}
+            >
+              Salvar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

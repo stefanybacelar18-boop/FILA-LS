@@ -4,8 +4,7 @@ import { Role, RouteStatus, VehicleStatus, TripStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
-import { expectedReturnDate } from '../utils/status';
-import { startOfDay } from 'date-fns';
+import { expectedReturnDate, routeDepartureAt, vehicleColor } from '../utils/status';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 
@@ -89,6 +88,180 @@ export function createRoutesRouter(io: Server) {
     });
     res.json(routes);
   });
+
+  /**
+   * Painel para Definir Placas:
+   * - available: livres (retorno já liberou / DISPONIVEL)
+   * - unavailable: não podem carregar na data do roteiro (em viagem, bloqueado, manutenção…)
+   *   + justificativa/previsão se o operador já informou
+   */
+  router.get('/:id/plates-board', authorize(Role.ADMIN, Role.OPERACAO), async (req, res) => {
+    const route = await prisma.route.findUnique({ where: { id: paramId(req) } });
+    if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+
+    const loadAt = routeDepartureAt(route.date);
+
+    const [vehicles, reports] = await Promise.all([
+      prisma.vehicle.findMany({ orderBy: { plate: 'asc' } }),
+      prisma.plateUnavailability.findMany({
+        where: { routeId: route.id },
+        include: { reportedBy: { select: { id: true, name: true } } },
+      }),
+    ]);
+
+    const reportByVehicle = new Map(reports.map((r) => [r.vehicleId, r]));
+
+    const openTrips = await prisma.trip.findMany({
+      where: {
+        vehicleId: { in: vehicles.map((v) => v.id) },
+        status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+      },
+      orderBy: { departureAt: 'desc' },
+    });
+    const tripByVehicle = new Map<string, (typeof openTrips)[0]>();
+    for (const t of openTrips) {
+      if (!tripByVehicle.has(t.vehicleId)) tripByVehicle.set(t.vehicleId, t);
+    }
+
+    const available = [];
+    const unavailable = [];
+
+    for (const v of vehicles) {
+      const open = tripByVehicle.get(v.id);
+      const report = reportByVehicle.get(v.id);
+      const isFree =
+        v.status === VehicleStatus.DISPONIVEL && !open;
+
+      const enriched = {
+        ...v,
+        color: vehicleColor(v.status, open?.expectedReturn),
+        expectedReturn: open?.expectedReturn ?? null,
+        activeTripId: open?.id ?? null,
+        report: report
+          ? {
+              id: report.id,
+              reason: report.reason,
+              availableAtForecast: report.availableAtForecast,
+              reportedAt: report.createdAt,
+              reportedBy: report.reportedBy,
+            }
+          : null,
+      };
+
+      if (isFree) {
+        available.push(enriched);
+      } else {
+        let statusLabel = v.status;
+        if (open) {
+          statusLabel =
+            open.expectedReturn <= loadAt
+              ? 'EM_VIAGEM_ATRASADO_OU_SEM_RETORNO'
+              : 'EM_VIAGEM';
+        }
+        unavailable.push({
+          ...enriched,
+          unavailableReasonCode: statusLabel,
+          loadDate: loadAt,
+        });
+      }
+    }
+
+    res.json({
+      routeId: route.id,
+      routeName: route.name,
+      loadAt,
+      available,
+      unavailable,
+    });
+  });
+
+  const unavailabilitySchema = z.object({
+    vehicleId: z.string().min(1),
+    reason: z.string().min(5),
+    availableAtForecast: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Data inválida'),
+  });
+
+  /** Operador justifica indisponibilidade para a data de carregamento do roteiro */
+  router.post(
+    '/:id/unavailable',
+    authorize(Role.ADMIN, Role.OPERACAO),
+    async (req: AuthRequest, res) => {
+      const parsed = unavailabilitySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: 'Informe o motivo (mín. 5 caracteres) e a previsão de disponibilidade',
+        });
+      }
+
+      const routeId = paramId(req);
+      const route = await prisma.route.findUnique({ where: { id: routeId } });
+      if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+
+      const vehicle = await prisma.vehicle.findUnique({ where: { id: parsed.data.vehicleId } });
+      if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
+
+      const open = await prisma.trip.findFirst({
+        where: {
+          vehicleId: vehicle.id,
+          status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+        },
+      });
+      const isFree = vehicle.status === VehicleStatus.DISPONIVEL && !open;
+      if (isFree) {
+        return res.status(400).json({
+          error: 'Esta placa já está disponível. Não é necessário justificar indisponibilidade.',
+        });
+      }
+
+      const forecast = new Date(parsed.data.availableAtForecast);
+      const loadAt = routeDepartureAt(route.date);
+      if (forecast < loadAt && forecast < new Date()) {
+        // allow past forecast only if clarifying; prefer forecast >= today
+      }
+
+      const row = await prisma.plateUnavailability.upsert({
+        where: {
+          routeId_vehicleId: { routeId, vehicleId: vehicle.id },
+        },
+        create: {
+          routeId,
+          vehicleId: vehicle.id,
+          reason: parsed.data.reason.trim(),
+          availableAtForecast: forecast,
+          reportedById: req.user!.id,
+        },
+        update: {
+          reason: parsed.data.reason.trim(),
+          availableAtForecast: forecast,
+          reportedById: req.user!.id,
+        },
+        include: {
+          vehicle: true,
+          reportedBy: { select: { id: true, name: true } },
+        },
+      });
+
+      await prisma.vehicleHistory.create({
+        data: {
+          vehicleId: vehicle.id,
+          userId: req.user!.id,
+          action: 'INDISPONIVEL_ROTEIRO',
+          fromStatus: vehicle.status,
+          toStatus: vehicle.status,
+          details: `Roteiro ${route.name} (${loadAt.toISOString().slice(0, 10)} 06:00): ${parsed.data.reason.trim()} · prev. disp. ${forecast.toISOString().slice(0, 10)}`,
+        },
+      });
+
+      await audit('UNAVAILABLE_REPORT', 'Route', {
+        userId: req.user!.id,
+        entityId: routeId,
+        details: `${vehicle.plate}: ${parsed.data.reason.trim().slice(0, 100)}`,
+      });
+      io.emit('routes:changed', { action: 'unavailable', id: routeId });
+      io.emit('fleet:changed', { action: 'unavailable', vehicleId: vehicle.id });
+      res.status(201).json(row);
+    },
+  );
 
   router.get('/:id', async (req, res) => {
     const route = await prisma.route.findUnique({
@@ -250,8 +423,8 @@ export function createRoutesRouter(io: Server) {
 
     const farthest = farthestDealership(linked);
     const destNames = linked.map((d) => d.name).join(', ');
-    // Saída = data do roteiro (definida na criação), não o momento do clique
-    const departureAt = startOfDay(new Date(route.date));
+    // Saída = data do roteiro às 06:00 (regra operacional)
+    const departureAt = routeDepartureAt(route.date);
     const expectedReturn = expectedReturnDate(departureAt, farthest.avgTravelDays);
 
     try {

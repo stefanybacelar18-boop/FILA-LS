@@ -120,7 +120,7 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Selecione as concessionárias do roteiro e informe manualmente se há carga prioritária"
+        description="Admin define data de início (saída sempre às 06:00), destinos e se a carga é prioritária"
       />
 
       <form
@@ -131,7 +131,18 @@ export function RouteForm() {
           <div className="sm:col-span-2">
             <Input label="Nome do roteiro" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-          <Input label="Data" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          <div>
+            <Input
+              label="Data de início"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+              Saída de todas as viagens deste roteiro: <strong>06:00</strong>
+            </p>
+          </div>
           <Input label="Região" value={region} onChange={(e) => setRegion(e.target.value)} />
           <div className="sm:col-span-2">
             <Textarea label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -139,6 +150,7 @@ export function RouteForm() {
         </div>
 
         <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+          <p className="mb-2 text-sm font-medium">Prioridade de carga</p>
           <label className="flex cursor-pointer items-start gap-3">
             <input
               type="checkbox"
@@ -147,19 +159,19 @@ export function RouteForm() {
               className="mt-1 accent-[var(--color-primary)]"
             />
             <span>
-              <span className="font-medium">Carga prioritária</span>
+              <span className="font-medium">Este roteiro tem carga prioritária</span>
               <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
-                Marque manualmente quando este roteiro tiver prioridade de carregamento
+                Marque o que é prioridade. O que não marcar fica como carga normal.
               </span>
             </span>
           </label>
           {hasPriority && (
             <div className="mt-3">
               <Textarea
-                label="Detalhe da prioridade (opcional)"
+                label="O que é prioritário (descreva)"
                 value={priorityNotes}
                 onChange={(e) => setPriorityNotes(e.target.value)}
-                placeholder="Ex.: vencimento próximo, pedido urgente, cliente X…"
+                placeholder="Ex.: pedido urgente, vencimento próximo, cliente X…"
               />
             </div>
           )}
