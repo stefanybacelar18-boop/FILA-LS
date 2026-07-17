@@ -22,6 +22,7 @@ export function RouteForm() {
   const [notes, setNotes] = useState('')
   const [hasPriority, setHasPriority] = useState(false)
   const [priorityNotes, setPriorityNotes] = useState('')
+  const [plannedVehicleCount, setPlannedVehicleCount] = useState('')
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -46,6 +47,9 @@ export function RouteForm() {
     setNotes(existing.notes ?? '')
     setHasPriority(!!existing.hasPriority)
     setPriorityNotes(existing.priorityNotes ?? '')
+    setPlannedVehicleCount(
+      existing.plannedVehicleCount != null ? String(existing.plannedVehicleCount) : '',
+    )
   }, [existing])
 
   const filteredDealerships = useMemo(() => {
@@ -74,6 +78,7 @@ export function RouteForm() {
         notes: notes || null,
         hasPriority,
         priorityNotes: hasPriority ? priorityNotes || null : null,
+        plannedVehicleCount: plannedVehicleCount ? Number(plannedVehicleCount) : null,
       }
       if (isNew) return (await api.post<Route>('/routes', payload)).data
       return (await api.put<Route>(`/routes/${id}`, payload)).data
@@ -143,6 +148,18 @@ export function RouteForm() {
               Saída de todas as viagens deste roteiro: <strong>06:00</strong>
             </p>
           </div>
+          <Input
+            label="Qtd. de placas previstas"
+            type="number"
+            min={1}
+            value={plannedVehicleCount}
+            onChange={(e) => setPlannedVehicleCount(e.target.value)}
+            placeholder="Ex.: 3"
+          />
+          <p className="sm:col-span-2 -mt-2 text-xs text-[var(--color-text-muted)]">
+            Meta de cobertura: o dashboard e a operação acompanham quantas placas já foram
+            definidas vs. o previsto.
+          </p>
           <Input label="Região" value={region} onChange={(e) => setRegion(e.target.value)} />
           <div className="sm:col-span-2">
             <Textarea label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />

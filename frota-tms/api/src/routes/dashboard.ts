@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { TripStatus, VehicleStatus, VehicleType } from '../types/enums';
+import { TripStatus, VehicleStatus, VehicleType, RouteStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
-import { isOverdue } from '../utils/status';
+import { isOverdue, routeDepartureAt } from '../utils/status';
 import { addDays, startOfDay, subDays, format } from 'date-fns';
 
 const router = Router();
@@ -11,6 +11,7 @@ router.use(authenticate);
 router.get('/', async (_req, res) => {
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
+  const dayAfter = addDays(today, 2);
 
   const [
     fleet,
@@ -18,19 +19,27 @@ router.get('/', async (_req, res) => {
     carretasAvailable,
     emViagem,
     emManutencao,
+    bloqueados,
     openTrips,
     dealershipTripCounts,
     tripsLast14,
     priorityRoutes,
+    awaitingPlatesRoutes,
+    pendingRoutes,
   ] = await Promise.all([
     prisma.vehicle.count(),
     prisma.vehicle.count({ where: { type: VehicleType.TRUCK, status: VehicleStatus.DISPONIVEL } }),
     prisma.vehicle.count({ where: { type: VehicleType.CARRETA, status: VehicleStatus.DISPONIVEL } }),
     prisma.vehicle.count({ where: { status: VehicleStatus.EM_VIAGEM } }),
     prisma.vehicle.count({ where: { status: VehicleStatus.EM_MANUTENCAO } }),
+    prisma.vehicle.count({ where: { status: VehicleStatus.BLOQUEADO } }),
     prisma.trip.findMany({
       where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
-      include: { dealership: true },
+      include: {
+        dealership: true,
+        vehicle: { select: { id: true, plate: true } },
+        route: { select: { id: true, name: true } },
+      },
     }),
     prisma.trip.groupBy({
       by: ['dealershipId'],
@@ -45,18 +54,56 @@ router.get('/', async (_req, res) => {
     prisma.route.count({
       where: {
         hasPriority: true,
-        status: { in: ['AGUARDANDO_PLACAS', 'EM_ANDAMENTO'] },
+        status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.EM_ANDAMENTO] },
       },
+    }),
+    prisma.route.count({
+      where: { status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.RASCUNHO] } },
+    }),
+    prisma.route.findMany({
+      where: {
+        status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.RASCUNHO, RouteStatus.EM_ANDAMENTO] },
+        date: { gte: today, lt: dayAfter },
+      },
+      include: {
+        vehicles: true,
+        dealerships: { include: { dealership: { select: { name: true, city: true } } }, orderBy: { order: 'asc' } },
+        dealership: { select: { name: true, city: true } },
+        unavailabilities: true,
+      },
+      orderBy: { date: 'asc' },
     }),
   ]);
 
   const retornamHoje = openTrips.filter(
-    (t) => t.expectedReturn >= today && t.expectedReturn < tomorrow
+    (t) => t.expectedReturn >= today && t.expectedReturn < tomorrow,
   ).length;
   const retornamAmanha = openTrips.filter(
-    (t) => t.expectedReturn >= tomorrow && t.expectedReturn < addDays(today, 2)
+    (t) => t.expectedReturn >= tomorrow && t.expectedReturn < dayAfter,
   ).length;
   const atrasadas = openTrips.filter((t) => isOverdue(t.expectedReturn, t.returnedAt)).length;
+  const atrasadasSemJustificativa = openTrips.filter(
+    (t) => isOverdue(t.expectedReturn, t.returnedAt) && !t.delayReason,
+  ).length;
+
+  // Placas que já deveriam ter voltado (previsão <= agora) e ainda estão fora
+  const deveriamEstarDisponiveis = openTrips.filter((t) => t.expectedReturn <= new Date()).length;
+
+  // Justificativas pendentes em roteiros aguardando placas (placa fora que já deveria ter retornado até o load)
+  const pendingPlateRoutes = await prisma.route.findMany({
+    where: { status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.RASCUNHO] } },
+    include: { unavailabilities: true },
+  });
+
+  let justificativasPendentes = 0;
+  for (const route of pendingPlateRoutes) {
+    const loadAt = routeDepartureAt(route.date);
+    const reported = new Set(route.unavailabilities.map((u) => u.vehicleId));
+    const overdueOpen = openTrips.filter(
+      (t) => t.expectedReturn <= loadAt && !reported.has(t.vehicleId),
+    );
+    justificativasPendentes += overdueOpen.length;
+  }
 
   const dealershipIds = dealershipTripCounts.map((d) => d.dealershipId);
   const dealerships = await prisma.dealership.findMany({ where: { id: { in: dealershipIds } } });
@@ -90,6 +137,28 @@ router.get('/', async (_req, res) => {
     tripsPerDay.push({ date: key, count });
   }
 
+  const hojeCarregamento = pendingRoutes.map((r) => {
+    const dest =
+      r.dealerships.length > 0
+        ? r.dealerships.map((rd) => rd.dealership.city).join(', ')
+        : r.dealership?.city ?? '';
+    const assigned = r.vehicles.length;
+    const planned = r.plannedVehicleCount ?? null;
+    return {
+      id: r.id,
+      name: r.name,
+      date: r.date,
+      hasPriority: r.hasPriority,
+      status: r.status,
+      cities: dest,
+      assignedPlates: assigned,
+      plannedPlates: planned,
+      coverage:
+        planned && planned > 0 ? Math.min(100, Math.round((assigned / planned) * 100)) : null,
+      justifications: r.unavailabilities.length,
+    };
+  });
+
   res.json({
     fleet: {
       total: fleet,
@@ -97,10 +166,20 @@ router.get('/', async (_req, res) => {
       carretasAvailable,
       emViagem,
       emManutencao,
+      bloqueados,
       retornamHoje,
       retornamAmanha,
       atrasadas,
+      atrasadasSemJustificativa,
+      deveriamEstarDisponiveis,
     },
+    ops: {
+      awaitingPlates: awaitingPlatesRoutes,
+      priorityRoutes,
+      justificativasPendentes,
+      atrasadasSemJustificativa,
+    },
+    hojeCarregamento,
     topDealership: ranking[0] ?? null,
     avgTravelDays: Math.round(avgTravelDays * 10) / 10,
     tripsPerDay,

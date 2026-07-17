@@ -53,6 +53,7 @@ export function createRoutesRouter(io: Server) {
     notes: z.string().optional().nullable(),
     hasPriority: z.boolean().optional(),
     priorityNotes: z.string().optional().nullable(),
+    plannedVehicleCount: z.number().int().positive().optional().nullable(),
   });
 
   router.get('/', async (req, res) => {
@@ -162,16 +163,33 @@ export function createRoutesRouter(io: Server) {
           ...enriched,
           unavailableReasonCode: statusLabel,
           loadDate: loadAt,
+          // Já deveria estar livre para carregar nesta data (previsão de retorno <= 06:00 do roteiro)
+          shouldBeAvailable: !!(open && open.expectedReturn <= loadAt) ||
+            v.status === VehicleStatus.BLOQUEADO ||
+            v.status === VehicleStatus.EM_MANUTENCAO,
+          needsJustification: !report,
         });
       }
     }
+
+    const criticalPending = unavailable.filter(
+      (u) => (u as { shouldBeAvailable?: boolean }).shouldBeAvailable && !u.report,
+    ).length;
 
     res.json({
       routeId: route.id,
       routeName: route.name,
       loadAt,
+      plannedVehicleCount: route.plannedVehicleCount,
+      assignedCount: await prisma.routeVehicle.count({ where: { routeId: route.id } }),
       available,
       unavailable,
+      summary: {
+        available: available.length,
+        unavailable: unavailable.length,
+        criticalPendingJustifications: criticalPending,
+        justified: unavailable.filter((u) => !!u.report).length,
+      },
     });
   });
 
@@ -304,6 +322,7 @@ export function createRoutesRouter(io: Server) {
         notes: parsed.data.notes?.trim() || null,
         hasPriority,
         priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
+        plannedVehicleCount: parsed.data.plannedVehicleCount ?? null,
         createdById: req.user!.id,
         dealerships: {
           create: ordered.map((d, order) => ({
@@ -341,6 +360,9 @@ export function createRoutesRouter(io: Server) {
     if (rest.hasPriority === false) data.priorityNotes = null;
     if (typeof rest.name === 'string') data.name = rest.name.trim();
     if (rest.notes !== undefined) data.notes = rest.notes?.trim() || null;
+    if (rest.plannedVehicleCount !== undefined) {
+      data.plannedVehicleCount = rest.plannedVehicleCount;
+    }
 
     if (dealershipIds?.length) {
       const dealerships = await prisma.dealership.findMany({

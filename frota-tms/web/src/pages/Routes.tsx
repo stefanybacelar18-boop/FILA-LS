@@ -57,7 +57,7 @@ export function Routes() {
     <div>
       <PageHeader
         title="Roteiros"
-        description="Planejamento de entregas por concessionária(s)"
+        description="Admin lança o roteiro (início 06:00) · operação define placas e justifica indisponíveis"
         actions={
           isAdmin ? (
             <Link
@@ -99,7 +99,7 @@ export function Routes() {
             <thead>
               <tr>
                 <th>Roteiro</th>
-                <th>Data</th>
+                <th>Início</th>
                 <th>Concessionárias</th>
                 <th>Status</th>
                 <th>Placas</th>
@@ -110,6 +110,12 @@ export function Routes() {
             <tbody>
               {data.map((r) => {
                 const pending = r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO'
+                const assigned = r.vehicles?.length ?? 0
+                const planned = r.plannedVehicleCount
+                const coverage =
+                  planned && planned > 0
+                    ? Math.min(100, Math.round((assigned / planned) * 100))
+                    : null
                 return (
                   <tr key={r.id}>
                     <td>
@@ -124,7 +130,7 @@ export function Routes() {
                         ) : (
                           <span className="font-medium">{r.name}</span>
                         )}
-                        {r.hasPriority && <Badge tone="warning">Carga Prioritária</Badge>}
+                        {r.hasPriority && <Badge tone="warning">Prioridade</Badge>}
                       </div>
                       {r.hasPriority && r.priorityNotes && (
                         <p className="text-xs text-amber-700 dark:text-amber-400">{r.priorityNotes}</p>
@@ -133,7 +139,10 @@ export function Routes() {
                         <p className="text-xs text-[var(--color-text-muted)]">{r.region}</p>
                       )}
                     </td>
-                    <td>{formatDate(r.date)}</td>
+                    <td>
+                      {formatDate(r.date)}
+                      <span className="block text-xs text-[var(--color-text-muted)]">06:00</span>
+                    </td>
                     <td>
                       {(() => {
                         const names =
@@ -164,7 +173,26 @@ export function Routes() {
                         {routeStatusLabels[r.status]}
                       </Badge>
                     </td>
-                    <td>{r.vehicles?.length ?? 0}</td>
+                    <td>
+                      {planned != null ? (
+                        <span>
+                          {assigned}/{planned}
+                          {coverage != null && (
+                            <span
+                              className={
+                                coverage >= 100
+                                  ? ' ml-1 text-xs text-green-600'
+                                  : ' ml-1 text-xs text-amber-600'
+                              }
+                            >
+                              {coverage}%
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        assigned
+                      )}
+                    </td>
                     <td>{r.createdBy.name}</td>
                     {(isAdmin || canAssign) && (
                       <td>

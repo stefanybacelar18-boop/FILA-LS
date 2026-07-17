@@ -115,6 +115,7 @@ export interface Route {
   status: RouteStatus
   hasPriority: boolean
   priorityNotes?: string | null
+  plannedVehicleCount?: number | null
   createdAt: string
   updatedAt: string
   dealershipId: string | null
@@ -189,10 +190,31 @@ export interface DashboardData {
     carretasAvailable: number
     emViagem: number
     emManutencao: number
+    bloqueados?: number
     retornamHoje: number
     retornamAmanha: number
     atrasadas: number
+    atrasadasSemJustificativa?: number
+    deveriamEstarDisponiveis?: number
   }
+  ops?: {
+    awaitingPlates: number
+    priorityRoutes: number
+    justificativasPendentes: number
+    atrasadasSemJustificativa: number
+  }
+  hojeCarregamento?: {
+    id: string
+    name: string
+    date: string
+    hasPriority: boolean
+    status: string
+    cities: string
+    assignedPlates: number
+    plannedPlates: number | null
+    coverage: number | null
+    justifications: number
+  }[]
   topDealership: { dealershipId: string; name: string; city: string; trips: number } | null
   avgTravelDays: number
   tripsPerDay: { date: string; count: number }[]

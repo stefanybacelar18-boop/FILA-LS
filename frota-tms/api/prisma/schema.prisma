@@ -75,6 +75,8 @@ model Route {
   status        String   @default("AGUARDANDO_PLACAS")
   hasPriority   Boolean  @default(false)
   priorityNotes String?
+  // Meta de placas que o admin espera neste carregamento (cobertura operacional)
+  plannedVehicleCount Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

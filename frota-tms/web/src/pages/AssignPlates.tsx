@@ -40,14 +40,24 @@ interface PlatesBoardVehicle extends Vehicle {
   } | null
   unavailableReasonCode?: string
   loadDate?: string
+  shouldBeAvailable?: boolean
+  needsJustification?: boolean
 }
 
 interface PlatesBoard {
   routeId: string
   routeName: string
   loadAt: string
+  plannedVehicleCount?: number | null
+  assignedCount?: number
   available: PlatesBoardVehicle[]
   unavailable: PlatesBoardVehicle[]
+  summary?: {
+    available: number
+    unavailable: number
+    criticalPendingJustifications: number
+    justified: number
+  }
 }
 
 function citiesOf(route: Route): string[] {
@@ -330,6 +340,15 @@ export function AssignPlates() {
   const activeVehicle = available.find((v) => v.id === activeId)
 
   const pendingJustification = unavailable.filter((v) => !v.report)
+  const criticalPending = unavailable.filter((v) => v.shouldBeAvailable && !v.report)
+  const coverage =
+    board?.plannedVehicleCount && board.plannedVehicleCount > 0
+      ? Math.min(
+          100,
+          Math.round(((selected.length || board.assignedCount || 0) / board.plannedVehicleCount) * 100),
+        )
+      : null
+  const canConfirm = selected.length > 0 && criticalPending.length === 0
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -403,6 +422,24 @@ export function AssignPlates() {
                 <strong>
                   {formatDate(selectedRoute.date)} às 06:00
                 </strong>
+                {board?.plannedVehicleCount != null && (
+                  <>
+                    <span className="text-[var(--color-text-muted)]"> · Meta: </span>
+                    <strong>
+                      {selected.length}/{board.plannedVehicleCount} placas
+                    </strong>
+                    {coverage != null && (
+                      <span
+                        className={cn(
+                          'ml-1 text-sm font-semibold',
+                          coverage >= 100 ? 'text-green-600' : 'text-amber-600',
+                        )}
+                      >
+                        ({coverage}%)
+                      </span>
+                    )}
+                  </>
+                )}
                 {dealers.length > 0 && (
                   <>
                     <span className="text-[var(--color-text-muted)]"> · Previsão de retorno: </span>
@@ -419,6 +456,19 @@ export function AssignPlates() {
               </p>
             )}
           </div>
+
+          {criticalPending.length > 0 && (
+            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm">
+              <p className="font-semibold text-[var(--color-danger)]">
+                {criticalPending.length} placa(s) já deveriam estar disponíveis e ainda sem
+                justificativa.
+              </p>
+              <p className="mt-1 text-[var(--color-text-muted)]">
+                Antes de confirmar o roteiro, justifique no passo 3 (motivo + previsão de
+                disponibilidade). Isso evita carregar com buraco na frota sem registro.
+              </p>
+            </div>
+          )}
 
           <p className="mb-3 text-lg font-semibold">2. Placas disponíveis (automação de retorno)</p>
 
@@ -499,12 +549,18 @@ export function AssignPlates() {
 
                 <Button
                   className="mt-4 h-12 w-full text-base"
-                  disabled={selected.length === 0}
+                  disabled={!canConfirm}
                   onClick={() => setConfirmOpen(true)}
                   loading={assignMutation.isPending}
                 >
                   Confirmar {selected.length > 0 ? `(${selected.length})` : ''}
                 </Button>
+                {criticalPending.length > 0 && (
+                  <p className="mt-2 text-center text-xs text-[var(--color-danger)]">
+                    Justifique as {criticalPending.length} placa(s) críticas para liberar a
+                    confirmação
+                  </p>
+                )}
               </section>
             </div>
 
@@ -541,10 +597,22 @@ export function AssignPlates() {
                 {unavailable.map((v) => (
                   <div
                     key={v.id}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3"
+                    className={cn(
+                      'flex flex-wrap items-center gap-3 rounded-xl border px-3 py-3',
+                      v.shouldBeAvailable && !v.report
+                        ? 'border-red-500/40 bg-red-500/5'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface)]',
+                    )}
                   >
                     <div className="min-w-0 flex-1">
-                      <PlateBadge plate={v.plate} color={v.color} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <PlateBadge plate={v.plate} color={v.color} />
+                        {v.shouldBeAvailable && (
+                          <span className="rounded bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-[var(--color-danger)]">
+                            Já deveria ter retornado
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                         {vehicleStatusLabels[v.status as VehicleStatus] ?? v.status}
                         {v.expectedReturn ? ` · retorno prev. ${formatDate(v.expectedReturn)}` : ''}
