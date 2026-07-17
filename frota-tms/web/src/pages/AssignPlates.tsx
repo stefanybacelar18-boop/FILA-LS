@@ -338,6 +338,28 @@ export function AssignPlates() {
                 {dealers.map((d) => d.name).join(' · ')}
               </p>
             )}
+            {selectedRoute && (
+              <p className="mt-2 text-sm">
+                <span className="text-[var(--color-text-muted)]">Saída (data do roteiro): </span>
+                <strong>{formatDate(selectedRoute.date)}</strong>
+                {dealers.length > 0 && (
+                  <>
+                    <span className="text-[var(--color-text-muted)]"> · Previsão de retorno: </span>
+                    <strong>
+                      {formatDate(
+                        new Date(
+                          new Date(selectedRoute.date).getTime() +
+                            Math.ceil(
+                              Math.max(...dealers.map((d) => d.avgTravelDays)) * 86400000,
+                            ),
+                        ).toISOString(),
+                      )}
+                    </strong>
+                    <span className="text-[var(--color-text-muted)]"> (automática pela distância)</span>
+                  </>
+                )}
+              </p>
+            )}
           </div>
 
           {/* PASSO 2 */}

@@ -135,6 +135,11 @@ export interface Trip {
   returnedAt: string | null
   status: TripStatus
   notes: string | null
+  delayReason?: string | null
+  delayReportedAt?: string | null
+  delayReportedBy?: { id?: string; name: string } | null
+  unavailableReason?: string | null
+  unavailableAt?: string | null
   createdAt: string
   updatedAt: string
   vehicleId: string
@@ -148,6 +153,7 @@ export interface Trip {
   returnedById: string | null
   returnedBy: { id?: string; name: string } | null
   overdue?: boolean
+  needsDelayReason?: boolean
   color?: PlateColor
 }
 

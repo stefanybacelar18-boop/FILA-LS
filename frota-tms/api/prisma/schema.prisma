@@ -21,6 +21,7 @@ model User {
   routesCreated  Route[]          @relation("RouteCreatedBy")
   tripsAssigned  Trip[]           @relation("TripAssignedBy")
   tripsReturned  Trip[]           @relation("TripReturnedBy")
+  tripsDelayReport Trip[]         @relation("TripDelayReportedBy")
   vehicleHistory VehicleHistory[]
 }
 
@@ -142,6 +143,14 @@ model Trip {
   returnedAt     DateTime?
   status         String    @default("EM_ANDAMENTO")
   notes          String?
+  // Justificativa quando passa da previsão (empresa terceira / operação)
+  delayReason       String?
+  delayReportedAt   DateTime?
+  delayReportedById String?
+  delayReportedBy   User?     @relation("TripDelayReportedBy", fields: [delayReportedById], references: [id])
+  // Veículo indisponível para novo carregamento até liberar
+  unavailableReason String?
+  unavailableAt     DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { Role, TripStatus, VehicleStatus, RouteStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
@@ -7,6 +8,19 @@ import { isOverdue, vehicleColor } from '../utils/status';
 import { addDays, startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
+
+const delayReportSchema = z.object({
+  reason: z.string().min(5, 'Informe o motivo com ao menos 5 caracteres'),
+  /** Se true, marca o veículo como indisponível (bloqueado) até o retorno */
+  markUnavailable: z.boolean().optional(),
+  unavailableReason: z.string().optional().nullable(),
+});
+
+const returnSchema = z.object({
+  /** Obrigatório se a viagem passou da previsão */
+  delayReason: z.string().min(5).optional(),
+  notes: z.string().optional().nullable(),
+});
 
 export function createTripsRouter(io: Server) {
   const router = Router();
@@ -42,6 +56,7 @@ export function createTripsRouter(io: Server) {
         route: true,
         assignedBy: { select: { id: true, name: true } },
         returnedBy: { select: { id: true, name: true } },
+        delayReportedBy: { select: { id: true, name: true } },
       },
       orderBy: { departureAt: 'desc' },
     });
@@ -51,7 +66,8 @@ export function createTripsRouter(io: Server) {
         ...t,
         overdue: isOverdue(t.expectedReturn, t.returnedAt),
         color: vehicleColor(t.vehicle.status, t.expectedReturn),
-      }))
+        needsDelayReason: isOverdue(t.expectedReturn, t.returnedAt) && !t.delayReason,
+      })),
     );
   });
 
@@ -68,6 +84,7 @@ export function createTripsRouter(io: Server) {
         dealership: true,
         route: true,
         assignedBy: { select: { name: true } },
+        delayReportedBy: { select: { name: true } },
       },
       orderBy: { expectedReturn: 'asc' },
     });
@@ -76,6 +93,7 @@ export function createTripsRouter(io: Server) {
       ...t,
       overdue: isOverdue(t.expectedReturn, t.returnedAt),
       color: vehicleColor(t.vehicle.status, t.expectedReturn),
+      needsDelayReason: isOverdue(t.expectedReturn, t.returnedAt) && !t.delayReason,
     });
 
     const day3 = addDays(today, 3);
@@ -102,7 +120,104 @@ export function createTripsRouter(io: Server) {
     });
   });
 
+  /**
+   * Empresa terceira / operação informa atraso ou indisponibilidade
+   * (antes do retorno físico).
+   */
+  router.post('/:id/delay-report', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
+    const parsed = delayReportSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Informe o motivo (mín. 5 caracteres)' });
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: paramId(req) },
+      include: { vehicle: true },
+    });
+    if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (trip.status === TripStatus.RETORNOU || trip.status === TripStatus.CANCELADO) {
+      return res.status(400).json({ error: 'Viagem já finalizada' });
+    }
+
+    const now = new Date();
+    const overdue = isOverdue(trip.expectedReturn, trip.returnedAt);
+    const markUnavailable = !!parsed.data.markUnavailable;
+    const unavailableText =
+      parsed.data.unavailableReason?.trim() ||
+      (markUnavailable ? parsed.data.reason.trim() : null);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const t = await tx.trip.update({
+        where: { id: trip.id },
+        data: {
+          status: overdue || trip.status === TripStatus.ATRASADO ? TripStatus.ATRASADO : trip.status,
+          delayReason: parsed.data.reason.trim(),
+          delayReportedAt: now,
+          delayReportedById: req.user!.id,
+          ...(markUnavailable
+            ? {
+                unavailableReason: unavailableText,
+                unavailableAt: now,
+              }
+            : {}),
+        },
+        include: {
+          vehicle: true,
+          dealership: true,
+          route: true,
+          delayReportedBy: { select: { name: true } },
+        },
+      });
+
+      if (markUnavailable) {
+        await tx.vehicle.update({
+          where: { id: trip.vehicleId },
+          data: { status: VehicleStatus.BLOQUEADO },
+        });
+        await tx.vehicleHistory.create({
+          data: {
+            vehicleId: trip.vehicleId,
+            userId: req.user!.id,
+            tripId: trip.id,
+            action: 'INDISPONIVEL',
+            fromStatus: trip.vehicle.status,
+            toStatus: VehicleStatus.BLOQUEADO,
+            details: unavailableText || parsed.data.reason.trim(),
+          },
+        });
+      } else {
+        await tx.vehicleHistory.create({
+          data: {
+            vehicleId: trip.vehicleId,
+            userId: req.user!.id,
+            tripId: trip.id,
+            action: 'JUSTIFICATIVA_ATRASO',
+            fromStatus: trip.vehicle.status,
+            toStatus: trip.vehicle.status,
+            details: parsed.data.reason.trim(),
+          },
+        });
+      }
+
+      return t;
+    });
+
+    await audit('DELAY_REPORT', 'Trip', {
+      userId: req.user!.id,
+      entityId: trip.id,
+      details: `${trip.vehicle.plate}: ${parsed.data.reason.trim().slice(0, 120)}`,
+    });
+    io.emit('fleet:changed', { action: 'delay-report', tripId: trip.id });
+    io.emit('trips:changed', { action: 'delay-report' });
+    res.json(updated);
+  });
+
   router.post('/:id/return', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
+    const parsed = returnSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Dados inválidos' });
+    }
+
     const trip = await prisma.trip.findUnique({
       where: { id: paramId(req) },
       include: { vehicle: true, route: true, dealership: true },
@@ -110,6 +225,16 @@ export function createTripsRouter(io: Server) {
     if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
     if (trip.status === TripStatus.RETORNOU) {
       return res.status(400).json({ error: 'Viagem já finalizada' });
+    }
+
+    const overdue = isOverdue(trip.expectedReturn, null) || trip.status === TripStatus.ATRASADO;
+    const delayReason = (parsed.data.delayReason || trip.delayReason || '').trim();
+    if (overdue && delayReason.length < 5) {
+      return res.status(400).json({
+        error:
+          'Viagem fora da previsão: informe a justificativa do atraso antes de liberar o veículo para novo carregamento.',
+        code: 'DELAY_REASON_REQUIRED',
+      });
     }
 
     const returnedAt = new Date();
@@ -120,11 +245,23 @@ export function createTripsRouter(io: Server) {
           status: TripStatus.RETORNOU,
           returnedAt,
           returnedById: req.user!.id,
+          notes: parsed.data.notes?.trim() || trip.notes,
+          ...(overdue && delayReason
+            ? {
+                delayReason,
+                delayReportedAt: trip.delayReportedAt ?? returnedAt,
+                delayReportedById: trip.delayReportedById ?? req.user!.id,
+              }
+            : {}),
+          // ao retornar, limpa indisponibilidade da viagem
+          unavailableReason: null,
+          unavailableAt: null,
         },
         include: {
           vehicle: true,
           dealership: true,
           returnedBy: { select: { name: true } },
+          delayReportedBy: { select: { name: true } },
         },
       });
       await tx.vehicle.update({
@@ -137,9 +274,11 @@ export function createTripsRouter(io: Server) {
           userId: req.user!.id,
           tripId: trip.id,
           action: 'RETORNO',
-          fromStatus: VehicleStatus.EM_VIAGEM,
+          fromStatus: trip.vehicle.status,
           toStatus: VehicleStatus.DISPONIVEL,
-          details: `Retornou de ${trip.dealership.name}`,
+          details: overdue
+            ? `Retornou de ${trip.dealership.name} (atraso: ${delayReason})`
+            : `Retornou de ${trip.dealership.name}`,
         },
       });
 
@@ -166,7 +305,7 @@ export function createTripsRouter(io: Server) {
     await audit('RETURN', 'Trip', {
       userId: req.user!.id,
       entityId: trip.id,
-      details: trip.vehicle.plate,
+      details: overdue ? `${trip.vehicle.plate} (c/ justificativa)` : trip.vehicle.plate,
     });
     io.emit('fleet:changed', { action: 'return', tripId: trip.id });
     io.emit('trips:changed', { action: 'return' });

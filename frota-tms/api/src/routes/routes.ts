@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { expectedReturnDate } from '../utils/status';
+import { startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 
@@ -249,7 +250,8 @@ export function createRoutesRouter(io: Server) {
 
     const farthest = farthestDealership(linked);
     const destNames = linked.map((d) => d.name).join(', ');
-    const departureAt = new Date();
+    // Saída = data do roteiro (definida na criação), não o momento do clique
+    const departureAt = startOfDay(new Date(route.date));
     const expectedReturn = expectedReturnDate(departureAt, farthest.avgTravelDays);
 
     try {

@@ -73,3 +73,15 @@ export const searchTypeLabels: Record<string, string> = {
   motorista: 'Motorista',
   roteiro: 'Roteiro',
 }
+
+/** Motivos comuns para a empresa terceira justificar atraso / indisponibilidade */
+export const delayReasonPresets = [
+  'Quebra mecânica / manutenção na estrada',
+  'Acidente ou pane',
+  'Estrada interditada / condições climáticas',
+  'Atraso na descarga na concessionária',
+  'Aguardando autorização / documentação',
+  'Motorista indisponível',
+  'Outro (descrever abaixo)',
+] as const
+
