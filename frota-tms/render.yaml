@@ -1,0 +1,42 @@
+# Render Blueprint — apenas FrotaTMS (pasta frota-tms)
+# No dashboard Render: New → Blueprint → selecione este repositório
+# e defina Root Directory = frota-tms (ou use este arquivo via path).
+#
+# IMPORTANTE: não altera nem faz deploy do FilaDock (Next.js na raiz).
+
+services:
+  - type: web
+    name: frota-tms
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: |
+      npm install --prefix web && npm run build --prefix web &&
+      npm install --prefix api &&
+      sed -i 's/provider = "sqlite"/provider = "postgresql"/' api/prisma/schema.prisma &&
+      npx prisma generate --schema api/prisma/schema.prisma &&
+      npm run build --prefix api &&
+      mkdir -p api/public && cp -r web/dist/* api/public/
+    startCommand: |
+      cd api && npx prisma db push && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: CORS_ORIGIN
+        value: '*'
+      - key: SEED_ON_START
+        value: 'false'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: frota-tms-db
+          property: connectionString
+
+databases:
+  - name: frota-tms-db
+    plan: free

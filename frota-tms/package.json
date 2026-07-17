@@ -2,7 +2,7 @@
   "name": "frota-tms",
   "version": "1.0.0",
   "private": true,
-  "description": "Sistema de Roteirização e Gestão de Frota para Carregamentos",
+  "description": "Sistema de Roteirização e Gestão de Frota (independente do FilaDock)",
   "scripts": {
     "dev": "concurrently -n api,web -c teal,cyan \"npm run dev --prefix api\" \"npm run dev --prefix web\"",
     "dev:api": "npm run dev --prefix api",
@@ -10,7 +10,10 @@
     "build": "npm run build --prefix api && npm run build --prefix web",
     "db:seed": "npm run db:seed --prefix api",
     "db:migrate": "npm run db:migrate --prefix api",
-    "setup": "npm install --prefix api && npm install --prefix web && npm run db:push --prefix api && npm run db:seed --prefix api"
+    "setup": "npm install --prefix api && npm install --prefix web && npm run db:push --prefix api && npm run db:seed --prefix api",
+    "backup": "bash ./scripts/backup.sh",
+    "docker:up": "docker compose up --build -d",
+    "docker:bootstrap": "SEED_ON_START=true FORCE_SEED=true docker compose up --build -d"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

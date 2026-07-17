@@ -1,40 +1,54 @@
+# FrotaTMS — produção (PostgreSQL + API servindo o front)
+# Isolado do FilaDock. Uso: docker compose up --build
+#
+# Bootstrap (primeira vez):
+#   SEED_ON_START=true FORCE_SEED=true docker compose up --build
+#
+# Depois: nunca use SEED_ON_START (preserva dados).
+
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: frota
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frota_change_me}
+      POSTGRES_DB: frota_tms
+    volumes:
+      - frota_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U frota -d frota_tms']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   api:
     build:
-      context: ./api
+      context: .
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: file:./data/prod.db
-      JWT_SECRET: change-me-in-production
-      CORS_ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://frota:${POSTGRES_PASSWORD:-frota_change_me}@db:5432/frota_tms
+      JWT_SECRET: ${JWT_SECRET:-troque-este-jwt-secret-agora-32chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
       PORT: 4000
+      NODE_ENV: production
+      SEED_ON_START: ${SEED_ON_START:-false}
+      FORCE_SEED: ${FORCE_SEED:-false}
     ports:
-      - "4000:4000"
-    volumes:
-      - frota_data:/app/data
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    ports:
-      - "5173:80"
+      - "${PORT:-4000}:4000"
     depends_on:
-      - api
-
-  # Opcional: PostgreSQL para produção.
-  # 1) Altere provider no schema.prisma para "postgresql"
-  # 2) Defina DATABASE_URL=postgresql://frota:frota@db:5432/frota_tms na api
-  # db:
-  #   image: postgres:16-alpine
-  #   environment:
-  #     POSTGRES_USER: frota
-  #     POSTGRES_PASSWORD: frota
-  #     POSTGRES_DB: frota_tms
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - frota_pg:/var/lib/postgresql/data
+      db:
+        condition: service_healthy
+    volumes:
+      - frota_backups:/app/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  frota_data:
+  frota_pg:
+  frota_backups:

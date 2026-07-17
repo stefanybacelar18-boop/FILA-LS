@@ -1,122 +1,100 @@
 # FrotaTMS — Roteirização e Gestão de Frota
 
-Sistema web profissional para gerenciamento de roteirização de veículos de transporte, focado em operações logísticas de carregamento. Substitui o controle manual em papel com interface no estilo TMS/ERP (TOTVS, SAP).
+> **Sistema independente do FilaDock.** Todo o código vive em `frota-tms/`.  
+> Não altera nem depende do app Next.js na raiz do repositório.
+
+Sistema web para gerenciamento de roteirização de veículos (truck/carreta), focado em operações de carregamento de motos para concessionárias.
 
 ## Stack
 
 | Camada | Tecnologia |
 |--------|------------|
 | Front-end | React 19 + TypeScript + Vite + Tailwind CSS |
-| Back-end | Node.js + Express + Socket.IO |
-| Banco | SQLite (dev) via Prisma — PostgreSQL pronto via Docker |
-| Auth | JWT + perfis (Admin / Operação / Consulta) |
+| Back-end | Node.js + Express + Socket.IO (JWT) |
+| Banco | SQLite (dev local) · **PostgreSQL (produção / Docker)** |
+| Auth | JWT + perfis Admin / Operação / Consulta |
 | Relatórios | Excel (ExcelJS) e PDF (PDFKit) |
-| Realtime | Socket.IO |
 
 ## Módulos
 
-1. **Cadastro da Frota** — placa, tipo, modelo, capacidade, situação com cores
-2. **Concessionárias** — cidade, região, distância, tempo médio, filtro rápido
-3. **Roteiros** — criação com destaque de carga prioritária
-4. **Definir Placas** — tela exclusiva com seleção e drag-and-drop
-5. **Produtos Prioritários** — vencimento com cores e painel 30/15/7/hoje/vencidos
-6. **Controle de Viagens** — saída, previsão automática, atraso em vermelho
-7. **Retornos** — hoje / amanhã / 2 dias / atraso + botão Retornou
-8. **Dashboard** — KPIs, gráficos e ranking
-9. **Histórico** — por placa, concessionária, período, usuário, tipo
-10. **Pesquisa Inteligente** — placa, produto, lote, motorista, roteiro, cidade
-11. **Usuários e Auditoria** — perfis e log de alterações
-12. **Relatórios** — PDF e Excel
+1. **Frota** — placa, tipo, capacidade (motos), motorista padrão, cores de status  
+2. **Concessionárias** — cidade, região, distância, tempo médio, tipo permitido  
+3. **Roteiros** — multi-concessionária + carga prioritária (manual)  
+4. **Definir Placas** — tela exclusiva (Usar/Tirar + drag-and-drop)  
+5. **Viagens / Retornos** — previsão, atraso, confirmação de retorno  
+6. **Dashboard** — KPIs e ranking  
+7. **Histórico / Busca / Relatórios**  
+8. **Usuários e Auditoria** — perfis + troca de senha pelo próprio usuário  
 
-## Início rápido
+## Início rápido (dev local — SQLite)
 
 ```bash
 cd frota-tms
 npm install
-npm run setup          # instala deps, cria DB e seed
+npm run setup          # deps + DB + seed
 npm run dev            # API :4000 + Web :5173
 ```
 
 Acesse http://localhost:5173
 
-### Contas demo
+### Contas demo (só desenvolvimento)
 
 | E-mail | Senha | Perfil |
 |--------|-------|--------|
 | admin@frotatms.com | admin123 | Administrador |
-| operacao@frotatms.com | operacao123 | Operação (placas/retornos) |
-| consulta@frotatms.com | consulta123 | Somente leitura |
+| operacao@frotatms.com | operacao123 | Operação |
+| consulta@frotatms.com | consulta123 | Consulta |
+
+> Em produção: troque as senhas no menu do usuário (**Trocar senha**) e use `JWT_SECRET` forte.
+
+## Produção (Docker + PostgreSQL)
+
+```bash
+cd frota-tms
+cp .env.example .env   # edite POSTGRES_PASSWORD e JWT_SECRET
+
+# Primeiro bootstrap (cria admin + frota/concessionárias):
+SEED_ON_START=true FORCE_SEED=true docker compose up --build -d
+
+# Uso contínuo (NÃO rode seed de novo):
+docker compose up --build -d
+```
+
+Acesse http://localhost:4000 — a API já serve o front.
+
+Backup:
+
+```bash
+./scripts/backup.sh
+```
+
+Guia completo: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)
 
 ## Cores das placas
 
 | Cor | Significado |
 |-----|-------------|
-| 🟢 Verde | Disponível |
-| 🟡 Amarelo | Em carregamento |
-| 🔵 Azul | Retorna hoje |
-| 🟠 Laranja | Retorna amanhã |
-| 🔴 Vermelho | Em viagem / atraso |
-| ⚫ Preto | Manutenção / bloqueado |
-
-## Produtos prioritários
-
-| Dias restantes | Cor |
-|----------------|-----|
-| > 30 | Verde |
-| 15–30 | Amarelo |
-| < 15 | Laranja |
-| < 7 | Vermelho piscando |
-
-## Docker (PostgreSQL + stack)
-
-```bash
-cd frota-tms
-docker compose up --build
-```
-
-Para produção com PostgreSQL, altere em `api/prisma/schema.prisma`:
-
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
-
-E defina `DATABASE_URL=postgresql://frota:frota@db:5432/frota_tms` no `.env`.
+| Verde | Disponível / em prazo (2+ dias) |
+| Amarelo | Em carregamento |
+| Azul | Retorna hoje |
+| Laranja | Retorna amanhã |
+| Vermelho | Atraso |
+| Preto | Manutenção / bloqueado |
 
 ## Estrutura
 
 ```
-frota-tms/
-├── api/                 # Express + Prisma + Socket.IO
-│   ├── prisma/          # schema, migrations, seed
-│   └── src/
-│       ├── routes/      # camadas de API
-│       ├── middleware/  # JWT + RBAC
-│       ├── services/    # auditoria
-│       └── utils/       # cores, prazos
-└── web/                 # React + Vite
-    └── src/
-        ├── pages/       # módulos da UI
-        ├── components/  # layout + UI reutilizável
-        ├── stores/      # auth + tema
-        └── lib/         # api, socket, labels
+frota-tms/          ← único lugar deste sistema (isolado do FilaDock)
+├── api/            Express + Prisma + Socket.IO
+├── web/            React + Vite
+├── Dockerfile      Imagem única (web + api + Postgres-ready)
+├── docker-compose.yml
+├── render.yaml     Blueprint Render (opcional)
+└── scripts/backup.sh
 ```
 
-## API (resumo)
+## Isolamento do FilaDock
 
-- `POST /api/auth/login` — autenticação
-- `GET/POST /api/vehicles` — frota
-- `GET/POST /api/dealerships` — concessionárias
-- `GET/POST /api/routes` — roteiros
-- `POST /api/routes/:id/assign-plates` — definir placas
-- `GET/POST /api/products` — produtos prioritários
-- `GET /api/trips/returns` + `POST /api/trips/:id/return`
-- `GET /api/dashboard` — métricas
-- `GET /api/search?q=` — pesquisa inteligente
-- `GET /api/reports/excel/:type` e `/pdf/:type`
-
-## Expansão futura
-
-Arquitetura em camadas preparada para integração com rastreamento GPS, mapas, BI e ERP.
+- **FilaDock** = app Next.js na raiz do repo (`src/`, `package.json` raiz, etc.)  
+- **FrotaTMS** = pasta `frota-tms/` apenas  
+- Deploys, seeds e Docker deste sistema **não** devem apontar para a raiz do FilaDock.

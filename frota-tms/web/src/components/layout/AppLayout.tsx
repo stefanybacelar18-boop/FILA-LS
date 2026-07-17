@@ -20,12 +20,16 @@ import {
   X,
   ChevronDown,
   Search,
+  KeyRound,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
 import { roleLabels } from '../../lib/labels'
 import type { Role } from '../../types'
+import { api } from '../../lib/api'
+import { Button, Input, Modal } from '../ui'
+
 interface NavItem {
   to: string
   label: string
@@ -58,6 +62,12 @@ export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenu, setUserMenu] = useState(false)
   const [q, setQ] = useState('')
+  const [pwdOpen, setPwdOpen] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [pwdError, setPwdError] = useState('')
+  const [pwdOk, setPwdOk] = useState('')
+  const [pwdLoading, setPwdLoading] = useState(false)
 
   useEffect(() => {
     applyTheme()
@@ -84,6 +94,26 @@ export function AppLayout() {
     queryClient.clear()
     logout()
     navigate('/login')
+  }
+
+  async function onChangePassword(e: FormEvent) {
+    e.preventDefault()
+    setPwdError('')
+    setPwdOk('')
+    setPwdLoading(true)
+    try {
+      await api.post('/auth/change-password', { currentPassword, newPassword })
+      setPwdOk('Senha alterada com sucesso.')
+      setCurrentPassword('')
+      setNewPassword('')
+    } catch (err: unknown) {
+      setPwdError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível alterar a senha.',
+      )
+    } finally {
+      setPwdLoading(false)
+    }
   }
 
   return (
@@ -198,12 +228,25 @@ export function AppLayout() {
                     aria-label="Fechar menu"
                     onClick={() => setUserMenu(false)}
                   />
-                  <div className="absolute right-0 z-20 mt-1 w-48 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]">
+                  <div className="absolute right-0 z-20 mt-1 w-52 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]">
                     <div className="border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)] sm:hidden">
                       {user?.name}
                       <br />
                       {user ? roleLabels[user.role] : ''}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenu(false)
+                        setPwdOpen(true)
+                        setPwdError('')
+                        setPwdOk('')
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--color-surface-2)]"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                      Trocar senha
+                    </button>
                     <button
                       type="button"
                       onClick={handleLogout}
@@ -223,6 +266,50 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <Modal
+        open={pwdOpen}
+        onClose={() => setPwdOpen(false)}
+        title="Trocar senha"
+      >
+        <form onSubmit={onChangePassword} className="space-y-3">
+          <Input
+            label="Senha atual"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
+          <Input
+            label="Nova senha"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            minLength={6}
+          />
+          {pwdError && (
+            <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+              {pwdError}
+            </p>
+          )}
+          {pwdOk && (
+            <p className="rounded border border-teal-500/30 bg-teal-500/10 px-3 py-2 text-sm text-teal-800 dark:text-teal-200">
+              {pwdOk}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={() => setPwdOpen(false)}>
+              Fechar
+            </Button>
+            <Button type="submit" loading={pwdLoading}>
+              Salvar
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

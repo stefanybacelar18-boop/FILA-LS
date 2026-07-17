@@ -1,30 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { Role } from '../types/enums';
-import { prisma } from '../lib/prisma';
+import { getJwtSecret, resolveAuthUserFromToken, type AuthUser } from '../lib/token';
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  role: Role;
-}
+export type { AuthUser };
 
 export interface AuthRequest extends Request {
   user?: AuthUser;
 }
 
-function resolveSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (process.env.NODE_ENV === 'production') {
-    if (!secret || secret === 'dev-secret' || secret.length < 24) {
-      throw new Error('JWT_SECRET forte é obrigatório em produção');
-    }
-  }
-  return secret || 'dev-secret';
-}
-
-const JWT_SECRET = resolveSecret();
+const JWT_SECRET = getJwtSecret();
 
 export function signToken(user: AuthUser): string {
   const options: SignOptions = {
@@ -38,25 +23,12 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Não autenticado' });
   }
-  try {
-    const payload = jwt.verify(header.slice(7), JWT_SECRET) as AuthUser;
-    const dbUser = await prisma.user.findUnique({
-      where: { id: payload.id },
-      select: { id: true, email: true, name: true, role: true, active: true },
-    });
-    if (!dbUser || !dbUser.active) {
-      return res.status(401).json({ error: 'Usuário inativo ou inválido' });
-    }
-    req.user = {
-      id: dbUser.id,
-      email: dbUser.email,
-      name: dbUser.name,
-      role: dbUser.role as Role,
-    };
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Token inválido ou expirado' });
+  const user = await resolveAuthUserFromToken(header.slice(7));
+  if (!user) {
+    return res.status(401).json({ error: 'Token inválido, expirado ou usuário inativo' });
   }
+  req.user = user;
+  next();
 }
 
 export function authorize(...roles: Role[]) {

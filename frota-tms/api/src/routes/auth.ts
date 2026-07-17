@@ -47,6 +47,32 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
   res.json(user);
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
+
+/** Qualquer usuário autenticado pode trocar a própria senha */
+router.post('/change-password', authenticate, async (req: AuthRequest, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Nova senha deve ter ao menos 6 caracteres' });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+  const ok = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
+  if (!ok) return res.status(400).json({ error: 'Senha atual incorreta' });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await bcrypt.hash(parsed.data.newPassword, 10) },
+  });
+  await audit('CHANGE_PASSWORD', 'User', { userId: user.id, entityId: user.id });
+  res.json({ ok: true });
+});
+
 const createUserSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
