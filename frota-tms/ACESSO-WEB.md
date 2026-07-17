@@ -4,17 +4,20 @@
 
 ## URL pública (túnel — pode expirar)
 
-**https://youth-connector-tin-berkeley.trycloudflare.com**
+**https://whom-institutional-quarter-approval.trycloudflare.com**
 
 ## Login demo (somente teste)
 
 | Perfil | E-mail | Senha |
 |--------|--------|-------|
 | Admin | admin@frotatms.com | admin123 |
-| Operação | operacao@frotatms.com | operacao123 |
+| Operação (empresa terceira) | operacao@frotatms.com | operacao123 |
 | Consulta | consulta@frotatms.com | consulta123 |
 
-Em produção, troque as senhas pelo menu do usuário (**Trocar senha**).
+## Novidade: atraso / indisponível
+
+Em **Viagens** ou **Retornos** → **Informar** → motivo + opção de bloquear o veículo.  
+Se passou da previsão, o **Retornou** exige justificativa para liberar novo carregamento.
 
 ## Produção permanente
 
