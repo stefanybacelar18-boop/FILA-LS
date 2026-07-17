@@ -77,8 +77,9 @@ function TripSection({
 export function Returns() {
   const qc = useQueryClient()
   const [confirmTrip, setConfirmTrip] = useState<Trip | null>(null)
+  const [error, setError] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['returns'],
     queryFn: async () => (await api.get<ReturnsPanel>('/trips/returns')).data,
   })
@@ -91,10 +92,17 @@ export function Returns() {
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       setConfirmTrip(null)
+      setError('')
+    },
+    onError: (err: unknown) => {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível registrar o retorno.',
+      )
     },
   })
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <div className="flex justify-center py-20">
         <Spinner size="lg" />
@@ -102,12 +110,26 @@ export function Returns() {
     )
   }
 
+  if (isError || !data) {
+    return (
+      <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+        Não foi possível carregar os retornos. Tente novamente.
+      </p>
+    )
+  }
+
   return (
     <div>
       <PageHeader
         title="Retornos"
-        description="Veículos com retorno previsto hoje, amanhã, em 2 dias ou em atraso"
+        description="Todas as viagens abertas, agrupadas por previsão de retorno"
       />
+
+      {error && (
+        <p className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+          {error}
+        </p>
+      )}
 
       <div className="grid gap-4">
         <TripSection
@@ -131,6 +153,12 @@ export function Returns() {
         <TripSection
           title="Em 2 dias"
           trips={data.in2Days}
+          tone="text-[var(--color-text-muted)]"
+          onReturn={setConfirmTrip}
+        />
+        <TripSection
+          title="Depois (3+ dias)"
+          trips={data.later ?? []}
           tone="text-[var(--color-text-muted)]"
           onReturn={setConfirmTrip}
         />

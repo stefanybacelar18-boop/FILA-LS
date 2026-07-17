@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 import { paramId } from '../utils/params';
+import { vehicleColor, isOverdue } from '../utils/status';
 
 const router = Router();
 router.use(authenticate);
@@ -10,7 +12,7 @@ router.get('/vehicle/:id', async (req, res) => {
   const vehicle = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
   if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
 
-  const [history, trips] = await Promise.all([
+  const [history, trips, activeTrip] = await Promise.all([
     prisma.vehicleHistory.findMany({
       where: { vehicleId: paramId(req) },
       include: { user: { select: { name: true } } },
@@ -26,9 +28,29 @@ router.get('/vehicle/:id', async (req, res) => {
       },
       orderBy: { departureAt: 'desc' },
     }),
+    prisma.trip.findFirst({
+      where: { vehicleId: paramId(req), status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
+      orderBy: { departureAt: 'desc' },
+    }),
   ]);
 
-  res.json({ vehicle, history, trips });
+  res.json({
+    vehicle: {
+      ...vehicle,
+      color: vehicleColor(vehicle.status, activeTrip?.expectedReturn),
+      expectedReturn: activeTrip?.expectedReturn ?? null,
+      activeTripId: activeTrip?.id ?? null,
+    },
+    history,
+    trips: trips.map((t) => ({
+      ...t,
+      overdue: isOverdue(t.expectedReturn, t.returnedAt),
+      color: vehicleColor(
+        t.status === 'RETORNOU' ? 'DISPONIVEL' : 'EM_VIAGEM',
+        t.expectedReturn,
+      ),
+    })),
+  });
 });
 
 router.get('/trips', async (req, res) => {
@@ -59,10 +81,16 @@ router.get('/trips', async (req, res) => {
     orderBy: { departureAt: 'desc' },
     take: 500,
   });
-  res.json(trips);
+  res.json(
+    trips.map((t) => ({
+      ...t,
+      overdue: isOverdue(t.expectedReturn, t.returnedAt),
+      color: vehicleColor(t.vehicle.status, t.expectedReturn),
+    })),
+  );
 });
 
-router.get('/audit', async (req, res) => {
+router.get('/audit', authorize(Role.ADMIN), async (_req, res) => {
   const logs = await prisma.auditLog.findMany({
     include: { user: { select: { name: true, email: true } } },
     orderBy: { createdAt: 'desc' },

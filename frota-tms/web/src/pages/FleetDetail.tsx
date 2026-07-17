@@ -50,7 +50,21 @@ export function FleetDetail() {
       <PageHeader
         title={vehicle.plate}
         description={`${vehicle.brand} ${vehicle.model} · ${vehicleTypeLabels[vehicle.type]} · ${vehicle.year}`}
-        actions={<PlateBadge plate={vehicle.plate} color={vehicle.color ?? 'green'} />}
+        actions={
+          <PlateBadge
+            plate={vehicle.plate}
+            color={
+              vehicle.color ??
+              (vehicle.status === 'EM_VIAGEM'
+                ? 'blue'
+                : vehicle.status === 'EM_MANUTENCAO' || vehicle.status === 'BLOQUEADO'
+                  ? 'black'
+                  : vehicle.status === 'EM_CARREGAMENTO'
+                    ? 'yellow'
+                    : 'green')
+            }
+          />
+        }
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

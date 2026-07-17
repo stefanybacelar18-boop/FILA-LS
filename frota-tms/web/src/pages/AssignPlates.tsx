@@ -42,6 +42,20 @@ function dealersOf(route: Route) {
   return route.dealership ? [route.dealership] : []
 }
 
+/** Interseção das regras allowedVehicle de todos os destinos. null = qualquer tipo. */
+function allowedTypesForRoute(route: Route): Set<'TRUCK' | 'CARRETA'> | null {
+  const dealers = dealersOf(route)
+  if (dealers.length === 0) return null
+  let allowed: Set<'TRUCK' | 'CARRETA'> = new Set(['TRUCK', 'CARRETA'])
+  for (const d of dealers) {
+    if (d.allowedVehicle === 'AMBOS') continue
+    if (d.allowedVehicle === 'TRUCK' || d.allowedVehicle === 'CARRETA') {
+      allowed = new Set([...allowed].filter((t) => t === d.allowedVehicle))
+    }
+  }
+  return allowed
+}
+
 function PlateRow({
   vehicle,
   onAction,
@@ -151,6 +165,7 @@ export function AssignPlates() {
   const selectedRoute = routes.find((r) => r.id === routeId)
   const cities = selectedRoute ? citiesOf(selectedRoute) : []
   const dealers = selectedRoute ? dealersOf(selectedRoute) : []
+  const allowedTypes = selectedRoute ? allowedTypesForRoute(selectedRoute) : null
 
   const { data: available = [], isLoading: loadingAvailable } = useQuery({
     queryKey: ['vehicles', 'available'],
@@ -161,13 +176,14 @@ export function AssignPlates() {
     const q = plateSearch.trim().toLowerCase()
     return available.filter((v) => {
       if (selected.includes(v.id)) return false
+      if (allowedTypes && !allowedTypes.has(v.type)) return false
       if (!q) return true
       return (
         v.plate.toLowerCase().includes(q) ||
         (v.defaultDriver?.toLowerCase().includes(q) ?? false)
       )
     })
-  }, [available, selected, plateSearch])
+  }, [available, selected, plateSearch, allowedTypes])
 
   const selectedVehicles = available.filter((v) => selected.includes(v.id))
 
@@ -326,6 +342,19 @@ export function AssignPlates() {
 
           {/* PASSO 2 */}
           <p className="mb-3 text-lg font-semibold">2. Placas</p>
+
+          {allowedTypes && allowedTypes.size < 2 && (
+            <p className="mb-3 rounded-xl bg-amber-500/15 px-4 py-2 text-sm text-amber-900 dark:text-amber-100">
+              Este roteiro aceita apenas{' '}
+              <strong>{[...allowedTypes].join(' / ')}</strong> (regra das concessionárias).
+            </p>
+          )}
+          {allowedTypes && allowedTypes.size === 0 && (
+            <p className="mb-3 rounded-xl bg-red-500/10 px-4 py-3 text-base text-[var(--color-danger)]">
+              Destinos incompatíveis (tipos de veículo conflitantes). Revise as concessionárias do
+              roteiro.
+            </p>
+          )}
 
           <div className="mb-4">
             <label className="mb-1 block text-sm font-medium">Motorista (opcional)</label>

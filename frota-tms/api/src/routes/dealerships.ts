@@ -25,8 +25,10 @@ const schema = z.object({
 });
 
 router.get('/', async (req, res) => {
-  const { state, region, q } = req.query;
+  const { state, region, q, includeInactive } = req.query;
   const where: Record<string, unknown> = {};
+  // Por padrão só ativas (evita montar roteiro com concessionária desativada)
+  if (includeInactive !== 'true') where.active = true;
   if (state) where.state = String(state).toUpperCase();
   if (region) where.region = { contains: String(region) };
   if (q) {

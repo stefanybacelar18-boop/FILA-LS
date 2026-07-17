@@ -13,8 +13,8 @@ export function Login() {
   const login = useAuthStore((s) => s.login)
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggle)
-  const [email, setEmail] = useState('admin@frotatms.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -93,9 +93,11 @@ export function Login() {
               Entrar
             </Button>
           </div>
-          <p className="mt-4 text-center text-xs text-[var(--color-text-muted)]">
-            Demo: admin / operação / consulta @frotatms.com
-          </p>
+          {import.meta.env.DEV && (
+            <p className="mt-4 text-center text-xs text-[var(--color-text-muted)]">
+              Dev: admin@frotatms.com / admin123
+            </p>
+          )}
         </form>
       </div>
     </div>

@@ -84,16 +84,30 @@ router.post('/users', authenticate, authorize(Role.ADMIN), async (req: AuthReque
   res.status(201).json(user);
 });
 
+const updateUserSchema = z.object({
+  name: z.string().min(2).optional(),
+  role: z.enum([Role.ADMIN, Role.OPERACAO, Role.CONSULTA]).optional(),
+  active: z.boolean().optional(),
+  password: z.string().min(6).optional(),
+});
+
 router.patch('/users/:id', authenticate, authorize(Role.ADMIN), async (req: AuthRequest, res) => {
-  const { name, role, active, password } = req.body;
+  const parsed = updateUserSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() });
+
+  const id = paramId(req);
+  if (parsed.data.active === false && id === req.user!.id) {
+    return res.status(400).json({ error: 'Não é possível desativar o próprio usuário' });
+  }
+
   const data: Record<string, unknown> = {};
-  if (name) data.name = name;
-  if (role) data.role = role;
-  if (typeof active === 'boolean') data.active = active;
-  if (password) data.passwordHash = await bcrypt.hash(password, 10);
+  if (parsed.data.name) data.name = parsed.data.name.trim();
+  if (parsed.data.role) data.role = parsed.data.role;
+  if (typeof parsed.data.active === 'boolean') data.active = parsed.data.active;
+  if (parsed.data.password) data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
   const user = await prisma.user.update({
-    where: { id: paramId(req) },
+    where: { id },
     data,
     select: { id: true, name: true, email: true, role: true, active: true },
   });

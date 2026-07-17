@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   Truck,
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
 
 export function AppLayout() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const theme = useThemeStore((s) => s.theme)
@@ -79,6 +81,7 @@ export function AppLayout() {
   }
 
   function handleLogout() {
+    queryClient.clear()
     logout()
     navigate('/login')
   }

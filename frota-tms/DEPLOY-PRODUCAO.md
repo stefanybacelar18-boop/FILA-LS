@@ -25,13 +25,22 @@ npm install --prefix api && npm install --prefix web \
   && npm run build --prefix api
 ```
 
-Start:
+Start (primeiro deploy — bootstrap com seed):
 
 ```bash
 cd api && mkdir -p data && DATABASE_URL=file:./data/prod.db npx prisma db push \
-  && npx tsx prisma/seed.ts \
-  && node dist/index.js
+  && FORCE_SEED=true SEED_ON_START=true npx tsx prisma/seed.ts \
+  && JWT_SECRET="(chave-forte-24+)" NODE_ENV=production node dist/index.js
 ```
+
+Start (produção contínua — **sem seed**, preserva dados):
+
+```bash
+cd api && mkdir -p data && DATABASE_URL=file:./data/prod.db npx prisma db push \
+  && JWT_SECRET="(chave-forte-24+)" NODE_ENV=production node dist/index.js
+```
+
+> ⚠️ Nunca rode o seed em produção após o go-live: ele apaga frota, roteiros e viagens.
 
 ## Opção B — Railway
 
@@ -48,7 +57,8 @@ Configure `VITE_API_URL` no build do front se a API estiver em outro domínio.
 ## Checklist pós-deploy
 
 - [ ] Abrir `/api/health` → `{ ok: true }`
-- [ ] Login com `admin@frotatms.com` / `admin123`
-- [ ] Trocar senhas em produção
-- [ ] Trocar `JWT_SECRET`
-- [ ] (Opcional) migrar SQLite → PostgreSQL
+- [ ] Login com usuário criado no bootstrap (trocar senha imediatamente)
+- [ ] `JWT_SECRET` forte (≥24 chars) definido; `NODE_ENV=production`
+- [ ] Seed **não** roda a cada restart (`SEED_ON_START` desligado)
+- [ ] (Recomendado) migrar SQLite → PostgreSQL antes de volume alto
+- [ ] CORS restrito ao domínio do front

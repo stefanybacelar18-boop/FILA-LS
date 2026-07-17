@@ -35,6 +35,12 @@ function loadJson<T>(filename: string): T {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' && process.env.FORCE_SEED !== 'true') {
+    throw new Error(
+      'Seed recusado em produção (apagaria dados). Use FORCE_SEED=true apenas no bootstrap inicial.',
+    );
+  }
+
   console.log('Seeding FrotaTMS (real ops data)...');
 
   await prisma.auditLog.deleteMany();

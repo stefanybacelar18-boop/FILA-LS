@@ -31,13 +31,23 @@ function farthestDealership(dealerships: DealershipRow[]): DealershipRow {
   })[0];
 }
 
+/** Vehicle type must be allowed by EVERY stop (AMBOS = any). */
+function vehicleAllowedAtAllStops(vehicleType: string, dealerships: DealershipRow[]): DealershipRow | null {
+  for (const d of dealerships) {
+    if (d.allowedVehicle !== 'AMBOS' && d.allowedVehicle !== vehicleType) {
+      return d;
+    }
+  }
+  return null;
+}
+
 export function createRoutesRouter(io: Server) {
   const router = Router();
   router.use(authenticate);
 
   const schema = z.object({
     name: z.string().min(2),
-    date: z.string(),
+    date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Data inválida'),
     dealershipIds: z.array(z.string()).min(1),
     region: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
@@ -51,6 +61,9 @@ export function createRoutesRouter(io: Server) {
     if (status) where.status = String(status);
     if (date) {
       const d = new Date(String(date));
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ error: 'Data inválida' });
+      }
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
       where.date = { gte: d, lt: next };
@@ -96,10 +109,10 @@ export function createRoutesRouter(io: Server) {
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() });
 
     const dealerships = await prisma.dealership.findMany({
-      where: { id: { in: parsed.data.dealershipIds } },
+      where: { id: { in: parsed.data.dealershipIds }, active: true },
     });
     if (dealerships.length !== parsed.data.dealershipIds.length) {
-      return res.status(404).json({ error: 'Uma ou mais concessionárias não encontradas' });
+      return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas ou inativas' });
     }
 
     const ordered = parsed.data.dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
@@ -110,13 +123,13 @@ export function createRoutesRouter(io: Server) {
 
     const route = await prisma.route.create({
       data: {
-        name: parsed.data.name,
+        name: parsed.data.name.trim(),
         date: new Date(parsed.data.date),
         dealershipId: ordered[0]?.id,
         region,
-        notes: parsed.data.notes,
+        notes: parsed.data.notes?.trim() || null,
         hasPriority,
-        priorityNotes: hasPriority ? parsed.data.priorityNotes ?? null : null,
+        priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
         createdById: req.user!.id,
         dealerships: {
           create: ordered.map((d, order) => ({
@@ -144,18 +157,23 @@ export function createRoutesRouter(io: Server) {
     const routeId = paramId(req);
     const existing = await prisma.route.findUnique({ where: { id: routeId } });
     if (!existing) return res.status(404).json({ error: 'Roteiro não encontrado' });
+    if (existing.status === RouteStatus.CANCELADO || existing.status === RouteStatus.CONCLUIDO) {
+      return res.status(400).json({ error: 'Roteiro finalizado não pode ser editado' });
+    }
 
     const { dealershipIds, date, ...rest } = parsed.data;
     const data: Record<string, unknown> = { ...rest };
     if (date) data.date = new Date(date);
     if (rest.hasPriority === false) data.priorityNotes = null;
+    if (typeof rest.name === 'string') data.name = rest.name.trim();
+    if (rest.notes !== undefined) data.notes = rest.notes?.trim() || null;
 
     if (dealershipIds?.length) {
       const dealerships = await prisma.dealership.findMany({
-        where: { id: { in: dealershipIds } },
+        where: { id: { in: dealershipIds }, active: true },
       });
       if (dealerships.length !== dealershipIds.length) {
-        return res.status(404).json({ error: 'Uma ou mais concessionárias não encontradas' });
+        return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas ou inativas' });
       }
       const ordered = dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
       data.dealershipId = ordered[0]?.id;
@@ -201,6 +219,8 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Selecione ao menos uma placa' });
     }
 
+    const uniqueVehicleIds = [...new Set(vehicleIds)];
+
     const route = await prisma.route.findUnique({
       where: { id: paramId(req) },
       include: {
@@ -209,7 +229,11 @@ export function createRoutesRouter(io: Server) {
       },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
-    if (route.status === RouteStatus.CANCELADO || route.status === RouteStatus.CONCLUIDO) {
+    if (
+      route.status !== RouteStatus.AGUARDANDO_PLACAS &&
+      route.status !== RouteStatus.RASCUNHO &&
+      route.status !== RouteStatus.EM_ANDAMENTO
+    ) {
       return res.status(400).json({ error: 'Roteiro não aceita novas placas' });
     }
 
@@ -225,85 +249,119 @@ export function createRoutesRouter(io: Server) {
 
     const farthest = farthestDealership(linked);
     const destNames = linked.map((d) => d.name).join(', ');
+    const departureAt = new Date();
+    const expectedReturn = expectedReturnDate(departureAt, farthest.avgTravelDays);
 
-    const results = [];
-    for (const vehicleId of vehicleIds) {
-      const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
-      if (!vehicle) return res.status(404).json({ error: `Veículo ${vehicleId} não encontrado` });
-      if (vehicle.status !== VehicleStatus.DISPONIVEL) {
-        return res.status(400).json({ error: `Placa ${vehicle.plate} não está disponível` });
-      }
+    try {
+      const results = await prisma.$transaction(async (tx) => {
+        const trips = [];
 
-      const openTrip = await prisma.trip.findFirst({
-        where: { vehicleId, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+        for (const vehicleId of uniqueVehicleIds) {
+          const vehicle = await tx.vehicle.findUnique({ where: { id: vehicleId } });
+          if (!vehicle) {
+            throw Object.assign(new Error(`Veículo ${vehicleId} não encontrado`), { status: 404 });
+          }
+
+          // Atomic claim: only succeed if still DISPONIVEL
+          const claimed = await tx.vehicle.updateMany({
+            where: { id: vehicleId, status: VehicleStatus.DISPONIVEL },
+            data: { status: VehicleStatus.EM_VIAGEM },
+          });
+          if (claimed.count !== 1) {
+            throw Object.assign(new Error(`Placa ${vehicle.plate} não está disponível`), {
+              status: 400,
+            });
+          }
+
+          const openTrip = await tx.trip.findFirst({
+            where: { vehicleId, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          });
+          if (openTrip) {
+            throw Object.assign(
+              new Error(`Placa ${vehicle.plate} já está em outro roteiro/viagem`),
+              { status: 409 },
+            );
+          }
+
+          const blockedBy = vehicleAllowedAtAllStops(vehicle.type, linked);
+          if (blockedBy) {
+            throw Object.assign(
+              new Error(
+                `Placa ${vehicle.plate} (${vehicle.type}) não permitida em ${blockedBy.name} (${blockedBy.allowedVehicle})`,
+              ),
+              { status: 400 },
+            );
+          }
+
+          const resolvedDriver =
+            drivers?.[vehicleId]?.trim() ||
+            driverName?.trim() ||
+            vehicle.defaultDriver ||
+            null;
+
+          await tx.routeVehicle.upsert({
+            where: {
+              routeId_vehicleId: { routeId: route.id, vehicleId },
+            },
+            create: { routeId: route.id, vehicleId },
+            update: { assignedAt: new Date() },
+          });
+
+          const t = await tx.trip.create({
+            data: {
+              vehicleId,
+              dealershipId: farthest.id,
+              routeId: route.id,
+              driverName: resolvedDriver,
+              departureAt,
+              expectedReturn,
+              assignedById: req.user!.id,
+              status: TripStatus.EM_ANDAMENTO,
+            },
+            include: { vehicle: true, dealership: true },
+          });
+
+          await tx.vehicleHistory.create({
+            data: {
+              vehicleId,
+              userId: req.user!.id,
+              tripId: t.id,
+              action: 'SAIDA',
+              fromStatus: VehicleStatus.DISPONIVEL,
+              toStatus: VehicleStatus.EM_VIAGEM,
+              details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name})`,
+            },
+          });
+
+          trips.push(t);
+        }
+
+        await tx.route.update({
+          where: { id: route.id },
+          data: { status: RouteStatus.EM_ANDAMENTO },
+        });
+
+        return trips;
       });
-      if (openTrip) {
-        return res.status(409).json({ error: `Placa ${vehicle.plate} já está em outro roteiro/viagem` });
-      }
 
-      const allowed = farthest.allowedVehicle;
-      if (allowed !== 'AMBOS' && vehicle.type !== allowed) {
-        return res.status(400).json({
-          error: `Placa ${vehicle.plate} (${vehicle.type}) não permitida nesta concessionária (${allowed})`,
-        });
-      }
-
-      const departureAt = new Date();
-      const expectedReturn = expectedReturnDate(departureAt, farthest.avgTravelDays);
-      const resolvedDriver =
-        drivers?.[vehicleId]?.trim() ||
-        driverName?.trim() ||
-        vehicle.defaultDriver ||
-        null;
-
-      const trip = await prisma.$transaction(async (tx) => {
-        await tx.routeVehicle.create({ data: { routeId: route.id, vehicleId } });
-        await tx.vehicle.update({
-          where: { id: vehicleId },
-          data: { status: VehicleStatus.EM_VIAGEM },
-        });
-        const t = await tx.trip.create({
-          data: {
-            vehicleId,
-            dealershipId: farthest.id,
-            routeId: route.id,
-            driverName: resolvedDriver,
-            departureAt,
-            expectedReturn,
-            assignedById: req.user!.id,
-            status: TripStatus.EM_ANDAMENTO,
-          },
-          include: { vehicle: true, dealership: true },
-        });
-        await tx.vehicleHistory.create({
-          data: {
-            vehicleId,
-            userId: req.user!.id,
-            tripId: t.id,
-            action: 'SAIDA',
-            fromStatus: VehicleStatus.DISPONIVEL,
-            toStatus: VehicleStatus.EM_VIAGEM,
-            details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name})`,
-          },
-        });
-        return t;
+      await audit('ASSIGN_PLATES', 'Route', {
+        userId: req.user!.id,
+        entityId: route.id,
+        details: `${uniqueVehicleIds.length} placa(s)`,
       });
-      results.push(trip);
+      io.emit('fleet:changed', { action: 'assign', routeId: route.id });
+      io.emit('trips:changed', { action: 'create' });
+      io.emit('routes:changed', { action: 'assign', id: route.id });
+      res.status(201).json({ trips: results });
+    } catch (err) {
+      const e = err as Error & { status?: number };
+      const status = e.status ?? 500;
+      if (status >= 400 && status < 500) {
+        return res.status(status).json({ error: e.message });
+      }
+      console.error('assign-plates failed', err);
+      return res.status(500).json({ error: 'Falha ao atribuir placas' });
     }
-
-    await prisma.route.update({
-      where: { id: route.id },
-      data: { status: RouteStatus.EM_ANDAMENTO },
-    });
-
-    await audit('ASSIGN_PLATES', 'Route', {
-      userId: req.user!.id,
-      entityId: route.id,
-      details: `${vehicleIds.length} placa(s)`,
-    });
-    io.emit('fleet:changed', { action: 'assign', routeId: route.id });
-    io.emit('trips:changed', { action: 'create' });
-    res.status(201).json({ trips: results });
   });
 
   router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {

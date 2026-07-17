@@ -208,6 +208,7 @@ export interface ReturnsPanel {
   today: Trip[]
   tomorrow: Trip[]
   in2Days: Trip[]
+  later: Trip[]
   overdue: Trip[]
 }
 

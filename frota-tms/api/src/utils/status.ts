@@ -13,10 +13,10 @@ export function vehicleColor(
     const today = startOfDay(new Date());
     const ret = startOfDay(expectedReturn);
     const days = differenceInCalendarDays(ret, today);
-    if (days < 0) return 'red';
-    if (days === 0) return 'blue';
-    if (days === 1) return 'orange';
-    return 'red';
+    if (days < 0) return 'red'; // atraso
+    if (days === 0) return 'blue'; // retorna hoje
+    if (days === 1) return 'orange'; // retorna amanhã
+    return 'green'; // em prazo (2+ dias)
   }
   if (status === VehicleStatus.EM_VIAGEM) return 'red';
   return 'green';

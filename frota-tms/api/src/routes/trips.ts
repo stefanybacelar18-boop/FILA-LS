@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { isOverdue, vehicleColor } from '../utils/status';
-import { addDays, startOfDay, endOfDay } from 'date-fns';
+import { addDays, startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 
@@ -78,13 +78,27 @@ export function createTripsRouter(io: Server) {
       color: vehicleColor(t.vehicle.status, t.expectedReturn),
     });
 
+    const day3 = addDays(today, 3);
+    const overdueIds = new Set(
+      open
+        .filter((t) => t.expectedReturn < today || t.status === TripStatus.ATRASADO)
+        .map((t) => t.id),
+    );
+
     res.json({
-      today: open.filter((t) => t.expectedReturn >= today && t.expectedReturn < tomorrow).map(mapTrip),
-      tomorrow: open.filter((t) => t.expectedReturn >= tomorrow && t.expectedReturn < dayAfter).map(mapTrip),
-      in2Days: open
-        .filter((t) => t.expectedReturn >= dayAfter && t.expectedReturn < addDays(today, 3))
+      today: open
+        .filter((t) => !overdueIds.has(t.id) && t.expectedReturn >= today && t.expectedReturn < tomorrow)
         .map(mapTrip),
-      overdue: open.filter((t) => t.expectedReturn < today || t.status === TripStatus.ATRASADO).map(mapTrip),
+      tomorrow: open
+        .filter((t) => !overdueIds.has(t.id) && t.expectedReturn >= tomorrow && t.expectedReturn < dayAfter)
+        .map(mapTrip),
+      in2Days: open
+        .filter((t) => !overdueIds.has(t.id) && t.expectedReturn >= dayAfter && t.expectedReturn < day3)
+        .map(mapTrip),
+      later: open
+        .filter((t) => !overdueIds.has(t.id) && t.expectedReturn >= day3)
+        .map(mapTrip),
+      overdue: open.filter((t) => overdueIds.has(t.id)).map(mapTrip),
     });
   });
 
@@ -137,8 +151,11 @@ export function createTripsRouter(io: Server) {
           },
         });
         if (remaining === 0) {
-          await tx.route.update({
-            where: { id: trip.routeId },
+          await tx.route.updateMany({
+            where: {
+              id: trip.routeId,
+              status: { in: [RouteStatus.EM_ANDAMENTO, RouteStatus.AGUARDANDO_PLACAS] },
+            },
             data: { status: RouteStatus.CONCLUIDO },
           });
         }

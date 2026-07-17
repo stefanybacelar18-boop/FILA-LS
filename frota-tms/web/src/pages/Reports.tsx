@@ -30,6 +30,14 @@ export function Reports() {
 
   async function download(format: 'excel' | 'pdf', type: string) {
     setError('')
+    if (type === 'historico-placa' && !vehicleId) {
+      setError('Selecione uma placa para o relatório de histórico.')
+      return
+    }
+    if (type === 'periodo' && (!from || !to)) {
+      setError('Informe o período (De / Até) para este relatório.')
+      return
+    }
     setLoading(`${format}-${type}`)
     try {
       const params = new URLSearchParams()
@@ -62,7 +70,7 @@ export function Reports() {
           value={vehicleId}
           onChange={(e) => setVehicleId(e.target.value)}
           options={vehicles.map((v) => ({ value: v.id, label: v.plate }))}
-          placeholder="Selecione se necessário"
+          placeholder="Obrigatório para histórico-placa"
         />
       </div>
 
@@ -73,36 +81,43 @@ export function Reports() {
       )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {reportTypes.map((r) => (
-          <Card key={r.type} title={r.label}>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                loading={loading === `excel-${r.type}`}
-                onClick={() => void download('excel', r.type)}
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                Excel
-              </Button>
-              {r.type !== 'historico-placa' && (
+        {reportTypes.map((r) => {
+          const needsPlate = r.type === 'historico-placa' && !vehicleId
+          const needsPeriod = r.type === 'periodo' && (!from || !to)
+          const disabled = needsPlate || needsPeriod
+          return (
+            <Card key={r.type} title={r.label}>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  variant="outline"
-                  loading={loading === `pdf-${r.type}`}
-                  onClick={() => void download('pdf', r.type)}
+                  variant="secondary"
+                  loading={loading === `excel-${r.type}`}
+                  disabled={disabled}
+                  onClick={() => void download('excel', r.type)}
                 >
-                  <FileText className="h-4 w-4" />
-                  PDF
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Excel
                 </Button>
-              )}
-              <span className="ml-auto inline-flex items-center text-xs text-[var(--color-text-muted)]">
-                <Download className="mr-1 h-3.5 w-3.5" />
-                Download
-              </span>
-            </div>
-          </Card>
-        ))}
+                {r.type !== 'historico-placa' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={loading === `pdf-${r.type}`}
+                    disabled={disabled}
+                    onClick={() => void download('pdf', r.type)}
+                  >
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </Button>
+                )}
+                <span className="ml-auto inline-flex items-center text-xs text-[var(--color-text-muted)]">
+                  <Download className="mr-1 h-3.5 w-3.5" />
+                  Download
+                </span>
+              </div>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )

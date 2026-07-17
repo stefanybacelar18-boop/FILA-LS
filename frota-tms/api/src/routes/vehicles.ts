@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { VehicleStatus, VehicleType, Role } from '../types/enums';
+import { VehicleStatus, VehicleType, Role, TripStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
@@ -75,7 +75,11 @@ router.get('/', async (req, res) => {
 
 router.get('/available', async (_req, res) => {
   const vehicles = await prisma.vehicle.findMany({
-    where: { status: VehicleStatus.DISPONIVEL },
+    where: {
+      status: VehicleStatus.DISPONIVEL,
+      // Exclui placas com viagem aberta mesmo se status estiver dessincronizado
+      trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
+    },
     orderBy: { plate: 'asc' },
   });
   res.json(await Promise.all(vehicles.map(enrichVehicle)));
@@ -151,13 +155,25 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
 });
 
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+  const id = paramId(req);
   const active = await prisma.trip.findFirst({
-    where: { vehicleId: paramId(req), status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
+    where: { vehicleId: id, status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
   });
   if (active) return res.status(400).json({ error: 'Veículo em viagem não pode ser excluído' });
 
-  await prisma.vehicle.delete({ where: { id: paramId(req) } });
-  await audit('DELETE', 'Vehicle', { userId: req.user!.id, entityId: paramId(req) });
+  const historical = await prisma.trip.count({ where: { vehicleId: id } });
+  if (historical > 0) {
+    return res.status(400).json({
+      error: 'Veículo possui histórico de viagens e não pode ser excluído. Altere o status para BLOQUEADO.',
+    });
+  }
+
+  try {
+    await prisma.vehicle.delete({ where: { id } });
+  } catch {
+    return res.status(400).json({ error: 'Não foi possível excluir o veículo (vínculos existentes)' });
+  }
+  await audit('DELETE', 'Vehicle', { userId: req.user!.id, entityId: id });
   res.status(204).send();
 });
 

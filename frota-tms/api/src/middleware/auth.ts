@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { Role } from '../types/enums';
+import { prisma } from '../lib/prisma';
 
 export interface AuthUser {
   id: string;
@@ -13,7 +14,17 @@ export interface AuthRequest extends Request {
   user?: AuthUser;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+function resolveSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret || secret === 'dev-secret' || secret.length < 24) {
+      throw new Error('JWT_SECRET forte é obrigatório em produção');
+    }
+  }
+  return secret || 'dev-secret';
+}
+
+const JWT_SECRET = resolveSecret();
 
 export function signToken(user: AuthUser): string {
   const options: SignOptions = {
@@ -22,14 +33,26 @@ export function signToken(user: AuthUser): string {
   return jwt.sign({ ...user }, JWT_SECRET, options);
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Não autenticado' });
   }
   try {
     const payload = jwt.verify(header.slice(7), JWT_SECRET) as AuthUser;
-    req.user = payload;
+    const dbUser = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: { id: true, email: true, name: true, role: true, active: true },
+    });
+    if (!dbUser || !dbUser.active) {
+      return res.status(401).json({ error: 'Usuário inativo ou inválido' });
+    }
+    req.user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role as Role,
+    };
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido ou expirado' });

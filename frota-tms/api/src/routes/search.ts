@@ -1,13 +1,15 @@
 import { Router } from 'express';
+import { Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthRequest, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json({ results: [] });
+  const isAdmin = req.user?.role === Role.ADMIN;
 
   const [vehicles, dealerships, trips, routes] = await Promise.all([
     prisma.vehicle.findMany({
@@ -66,13 +68,15 @@ router.get('/', async (req, res) => {
       subtitle: `${v.capacityMotos} motos · ${v.defaultDriver ?? 'sem motorista'} · ${v.status}`,
       href: `/frota/${v.id}`,
     })),
-    ...dealerships.map((d) => ({
-      type: 'concessionaria' as const,
-      id: d.id,
-      title: d.name,
-      subtitle: `${d.city}/${d.state} · ${d.region}`,
-      href: `/concessionarias`,
-    })),
+    ...dealerships
+      .filter((d) => d.active !== false)
+      .map((d) => ({
+        type: 'concessionaria' as const,
+        id: d.id,
+        title: d.name,
+        subtitle: `${d.city}/${d.state} · ${d.region}`,
+        href: `/concessionarias`,
+      })),
     ...trips
       .filter((t) => t.driverName)
       .map((t) => ({
@@ -92,7 +96,7 @@ router.get('/', async (req, res) => {
         id: r.id,
         title: r.name,
         subtitle: names,
-        href: `/roteiros/${r.id}`,
+        href: isAdmin ? `/roteiros/${r.id}` : `/roteiros`,
       };
     }),
   ];
