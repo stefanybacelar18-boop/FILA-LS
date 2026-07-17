@@ -2,9 +2,9 @@
 
 > Sistema **separado** do FilaDock.
 
-## URL pública
+## URL pública (ativa)
 
-**https://treasures-edit-engineers-mounted.trycloudflare.com**
+**https://native-collect-chicago-keen.trycloudflare.com**
 
 ## Login
 
@@ -16,8 +16,8 @@
 
 ## O que validar
 
-1. Dashboard → alertas e carregamento de hoje  
-2. Admin → Novo roteiro (06:00 + prioridade + meta de placas)  
-3. Definir Placas → disponíveis + justificar indisponíveis  
+1. **Dashboard** — alertas e carregamento de hoje (06:00)  
+2. **Roteiros** — data + 06:00 + prioridade + meta de placas  
+3. **Definir Placas** — disponíveis + justificar indisponíveis  
 
-Deploy: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)
+Deploy permanente: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)
