@@ -4,15 +4,7 @@
 
 ## URL pública (túnel — pode expirar)
 
-Reinicie o túnel se o link abaixo não abrir. Enquanto o agente Cloud estiver ativo:
-
-Verifique o terminal Cloudflare atual ou rode:
-
-```bash
-cd frota-tms/api && CORS_ORIGIN='*' npm run dev
-# em outro terminal:
-cloudflared tunnel --url http://127.0.0.1:4000
-```
+**https://youth-connector-tin-berkeley.trycloudflare.com**
 
 ## Login demo (somente teste)
 
@@ -22,8 +14,8 @@ cloudflared tunnel --url http://127.0.0.1:4000
 | Operação | operacao@frotatms.com | operacao123 |
 | Consulta | consulta@frotatms.com | consulta123 |
 
-Em produção, troque as senhas pelo menu do usuário.
+Em produção, troque as senhas pelo menu do usuário (**Trocar senha**).
 
 ## Produção permanente
 
-Ver [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md) (Docker/Render — sem afetar o FilaDock).
+Ver [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md) (Docker/Render — **não** afeta o FilaDock).
