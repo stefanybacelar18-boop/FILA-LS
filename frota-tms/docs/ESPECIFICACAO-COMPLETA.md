@@ -6,6 +6,12 @@ Documento de handoff para outras IAs / engenheiros / produto.
 
 Última atualização: Jul/2026.
 
+> **Evolução operacional (Mesa):** ver também `AUDITORIA-PRODUTO.md`.  
+> Novas telas Admin: `/mesa`, `/meu-dia`, `/planejamento`, `/alertas`.  
+> Handoff: rota `RASCUNHO` → **Enviar para Operação** → `AGUARDANDO_PLACAS`.  
+> Operação: tela simplificada com cobertura (Necessário / Selecionados / Faltam).  
+> API planejamento: `/api/planning/*` + import stub Excel.
+
 ---
 
 ## 0. Como usar este documento com outra IA

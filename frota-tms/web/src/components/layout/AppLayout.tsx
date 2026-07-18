@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  LayoutDashboard,
   Truck,
   Building2,
   Route,
@@ -21,6 +20,10 @@ import {
   ChevronDown,
   Search,
   KeyRound,
+  LayoutGrid,
+  CalendarDays,
+  Bell,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -33,23 +36,42 @@ import { Button, Input, Modal } from '../ui'
 interface NavItem {
   to: string
   label: string
-  icon: typeof LayoutDashboard
+  icon: typeof LayoutGrid
   roles?: Role[]
 }
 
-const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/frota', label: 'Frota', icon: Truck },
-  { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
-  { to: '/roteiros', label: 'Roteiros', icon: Route },
-  { to: '/definir-placas', label: 'Definir Placas', icon: Tags, roles: ['ADMIN', 'OPERACAO'] },
-  { to: '/viagens', label: 'Viagens', icon: MapPinned },
-  { to: '/retornos', label: 'Retornos', icon: RotateCcw, roles: ['ADMIN', 'OPERACAO'] },
-  { to: '/historico', label: 'Histórico', icon: History },
-  { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
-  { to: '/usuarios', label: 'Usuários', icon: Users, roles: ['ADMIN'] },
-  { to: '/auditoria', label: 'Auditoria', icon: Shield, roles: ['ADMIN'] },
-]
+/** Menus enxutos por papel — fluxo linear, poucos cliques */
+const navByRole: Record<Role, NavItem[]> = {
+  ADMIN: [
+    { to: '/mesa', label: 'Mesa', icon: LayoutGrid },
+    { to: '/meu-dia', label: 'Meu Dia', icon: CalendarDays },
+    { to: '/planejamento', label: 'Planejamento', icon: ClipboardList },
+    { to: '/alertas', label: 'Alertas', icon: Bell },
+    { to: '/roteiros', label: 'Roteiros', icon: Route },
+    { to: '/frota', label: 'Frota', icon: Truck },
+    { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
+    { to: '/retornos', label: 'Retornos', icon: RotateCcw },
+    { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
+    { to: '/usuarios', label: 'Usuários', icon: Users },
+    { to: '/auditoria', label: 'Auditoria', icon: Shield },
+  ],
+  OPERACAO: [
+    { to: '/definir-placas', label: 'Definir Placas', icon: Tags },
+    { to: '/alertas', label: 'Alertas', icon: Bell },
+    { to: '/retornos', label: 'Retornos', icon: RotateCcw },
+    { to: '/viagens', label: 'Viagens', icon: MapPinned },
+    { to: '/frota', label: 'Frota', icon: Truck },
+  ],
+  CONSULTA: [
+    { to: '/planejamento', label: 'Planejamento', icon: ClipboardList },
+    { to: '/alertas', label: 'Alertas', icon: Bell },
+    { to: '/roteiros', label: 'Roteiros', icon: Route },
+    { to: '/frota', label: 'Frota', icon: Truck },
+    { to: '/viagens', label: 'Viagens', icon: MapPinned },
+    { to: '/historico', label: 'Histórico', icon: History },
+    { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
+  ],
+}
 
 export function AppLayout() {
   const navigate = useNavigate()
@@ -73,14 +95,10 @@ export function AppLayout() {
     applyTheme()
   }, [applyTheme])
 
-  const items = useMemo(
-    () =>
-      navItems.filter((item) => {
-        if (!item.roles) return true
-        return user?.role && item.roles.includes(user.role)
-      }),
-    [user?.role],
-  )
+  const items = useMemo(() => {
+    if (!user?.role) return []
+    return navByRole[user.role] ?? []
+  }, [user?.role])
 
   function onSearch(e: FormEvent) {
     e.preventDefault()
@@ -116,6 +134,9 @@ export function AppLayout() {
     }
   }
 
+  const homePath =
+    user?.role === 'ADMIN' ? '/mesa' : user?.role === 'OPERACAO' ? '/definir-placas' : '/planejamento'
+
   return (
     <div className="flex min-h-screen">
       {sidebarOpen && (
@@ -134,7 +155,7 @@ export function AppLayout() {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
-          <Link to="/" className="font-display text-lg font-bold tracking-tight text-white">
+          <Link to={homePath} className="font-display text-xl font-bold tracking-tight text-white">
             Frota<span className="text-teal-400">TMS</span>
           </Link>
           <button
@@ -147,30 +168,30 @@ export function AppLayout() {
           </button>
         </div>
 
-        <nav className="scrollbar-thin flex-1 space-y-0.5 overflow-y-auto p-3">
+        <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto p-3">
           {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
+              end={item.to === '/' || item.to === homePath}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-lg px-3 py-3 text-base font-semibold transition-colors',
                   isActive
                     ? 'bg-teal-600/90 text-white'
                     : 'hover:bg-[var(--color-bg-sidebar-hover)] hover:text-white',
                 )
               }
             >
-              <item.icon className="h-4 w-4 shrink-0 opacity-80" />
+              <item.icon className="h-5 w-5 shrink-0 opacity-90" />
               {item.label}
             </NavLink>
           ))}
         </nav>
 
         <div className="border-t border-white/10 p-3 text-xs text-slate-400">
-          Sistema de roteirização de frota
+          {user ? roleLabels[user.role] : ''} · operação logística
         </div>
       </aside>
 
@@ -190,8 +211,8 @@ export function AppLayout() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar placa, roteiro, concessionária…"
-              className="h-9 w-full rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] pr-3 pl-9 text-sm outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20"
+              placeholder="Buscar placa, roteiro, cidade…"
+              className="h-10 w-full rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] pr-3 pl-9 text-base outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20"
             />
           </form>
 
@@ -267,11 +288,7 @@ export function AppLayout() {
         </main>
       </div>
 
-      <Modal
-        open={pwdOpen}
-        onClose={() => setPwdOpen(false)}
-        title="Trocar senha"
-      >
+      <Modal open={pwdOpen} onClose={() => setPwdOpen(false)} title="Trocar senha">
         <form onSubmit={onChangePassword} className="space-y-3">
           <Input
             label="Senha atual"

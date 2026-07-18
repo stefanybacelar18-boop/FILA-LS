@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn'
 import { Spinner } from './Spinner'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline'
-type Size = 'sm' | 'md' | 'lg'
+type Size = 'sm' | 'md' | 'lg' | 'xl'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
@@ -25,7 +25,8 @@ const variants: Record<Variant, string> = {
 const sizes: Record<Size, string> = {
   sm: 'h-8 px-3 text-xs gap-1.5',
   md: 'h-9 px-4 text-sm gap-2',
-  lg: 'h-11 px-5 text-sm gap-2',
+  lg: 'h-11 px-5 text-base gap-2',
+  xl: 'h-14 px-6 text-lg gap-2 font-semibold',
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

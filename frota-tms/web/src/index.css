@@ -221,3 +221,20 @@ h4,
   background: var(--color-border-strong);
   border-radius: 999px;
 }
+
+/* Telas operacionais: fonte maior, contraste alto, menos ruído */
+.ops-readable {
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.ops-readable button {
+  min-height: 2.75rem;
+}
+
+.ops-readable input,
+.ops-readable select,
+.ops-readable textarea {
+  font-size: 1.05rem;
+  min-height: 2.75rem;
+}

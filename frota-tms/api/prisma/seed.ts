@@ -45,6 +45,9 @@ async function main() {
 
   await prisma.auditLog.deleteMany();
   await prisma.vehicleHistory.deleteMany();
+  await prisma.plateUnavailability.deleteMany();
+  await prisma.planningCity.deleteMany();
+  await prisma.importBatch.deleteMany();
   await prisma.routeProduct.deleteMany();
   await prisma.routeVehicle.deleteMany();
   await prisma.routeDealership.deleteMany();
@@ -127,11 +130,36 @@ async function main() {
     });
   }
 
+  // Cidades pendentes de exemplo na Mesa (agrupadas como notas)
+  const sampleCities = await prisma.dealership.findMany({
+    where: { active: true },
+    orderBy: { city: 'asc' },
+    take: 12,
+  });
+  const seen = new Set<string>();
+  for (const d of sampleCities) {
+    const key = d.city.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await prisma.planningCity.create({
+      data: {
+        city: d.city.trim(),
+        state: d.state,
+        noteCount: 4 + Math.floor(Math.random() * 15),
+        dealershipId: d.id,
+        source: 'DEMO',
+        status: 'PENDENTE',
+      },
+    });
+  }
+
   const vehicleCount = await prisma.vehicle.count();
   const dealershipCount = await prisma.dealership.count();
+  const planningCount = await prisma.planningCity.count();
   console.log('Seed OK');
   console.log(`  Vehicles: ${vehicleCount}`);
   console.log(`  Dealerships: ${dealershipCount}`);
+  console.log(`  Planning cities: ${planningCount}`);
   console.log('Users:');
   console.log('  admin@frotatms.com / admin123');
   console.log('  operacao@frotatms.com / operacao123');

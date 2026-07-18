@@ -17,14 +17,17 @@ Sistema web para gerenciamento de roteirização de veículos (truck/carreta), f
 
 ## Módulos
 
-1. **Frota** — placa, tipo, capacidade (motos), motorista padrão, cores de status  
-2. **Concessionárias** — cidade, região, distância, tempo médio, tipo permitido  
-3. **Roteiros** — multi-concessionária + carga prioritária (manual)  
-4. **Definir Placas** — tela exclusiva (Usar/Tirar + drag-and-drop)  
-5. **Viagens / Retornos** — previsão, atraso, confirmação de retorno  
-6. **Dashboard** — KPIs e ranking  
-7. **Histórico / Busca / Relatórios**  
-8. **Usuários e Auditoria** — perfis + troca de senha pelo próprio usuário  
+1. **Mesa de Roteirização** (Admin) — notas/cidades → montar rotas → enviar à Operação  
+2. **Meu Dia / Planejamento / Alertas** — visão do planejador e central de alertas  
+3. **Frota** — placa, tipo, capacidade (motos), motorista padrão, cores de status  
+4. **Concessionárias** — cidade, região, distância, tempo médio, tipo permitido  
+5. **Roteiros** — multi-concessionária + prioridade manual + meta de veículos  
+6. **Definir Placas** (Operação) — tela simples: rota → placas → cobertura → confirmar  
+7. **Viagens / Retornos** — previsão, atraso, confirmação de retorno  
+8. **Histórico / Busca / Relatórios / Exportação do dia**  
+9. **Usuários e Auditoria**  
+
+Docs: `docs/AUDITORIA-PRODUTO.md`, `docs/ESPECIFICACAO-COMPLETA.md`
 
 ## Início rápido (dev local — SQLite)
 

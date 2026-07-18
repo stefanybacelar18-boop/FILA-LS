@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
@@ -168,7 +169,8 @@ function DropArea({ empty, children }: { empty: boolean; children: React.ReactNo
 
 export function AssignPlates() {
   const qc = useQueryClient()
-  const [routeId, setRouteId] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [routeId, setRouteId] = useState(searchParams.get('routeId') || '')
   const [selected, setSelected] = useState<string[]>([])
   const [driverName, setDriverName] = useState('')
   const [driverTouched, setDriverTouched] = useState(false)
@@ -190,14 +192,22 @@ export function AssignPlates() {
     queryFn: async () => (await api.get<Route[]>('/routes')).data,
   })
 
+  // Operação só vê o que o Admin já enviou (AGUARDANDO_PLACAS)
   const assignableRoutes = useMemo(
-    () => routes.filter((r) => r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO'),
+    () =>
+      routes
+        .filter((r) => r.status === 'AGUARDANDO_PLACAS')
+        .sort((a, b) => Number(b.hasPriority) - Number(a.hasPriority)),
     [routes],
   )
 
+  useEffect(() => {
+    const fromUrl = searchParams.get('routeId')
+    if (fromUrl && fromUrl !== routeId) setRouteId(fromUrl)
+  }, [searchParams, routeId])
+
   const selectedRoute = routes.find((r) => r.id === routeId)
   const cities = selectedRoute ? citiesOf(selectedRoute) : []
-  const dealers = selectedRoute ? dealersOf(selectedRoute) : []
   const allowedTypes = selectedRoute ? allowedTypesForRoute(selectedRoute) : null
 
   const { data: board, isLoading: loadingBoard } = useQuery({
@@ -311,6 +321,7 @@ export function AssignPlates() {
 
   function pickRoute(id: string) {
     setRouteId(id)
+    setSearchParams(id ? { routeId: id } : {})
     setSelected([])
     setDriverName('')
     setDriverTouched(false)
@@ -341,29 +352,34 @@ export function AssignPlates() {
 
   const pendingJustification = unavailable.filter((v) => !v.report)
   const criticalPending = unavailable.filter((v) => v.shouldBeAvailable && !v.report)
+  const needed = board?.plannedVehicleCount ?? selectedRoute?.plannedVehicleCount ?? null
+  const alreadyAssigned = board?.assignedCount ?? 0
+  const selectedTotal = selected.length
+  const effectiveAssigned = alreadyAssigned + selectedTotal
+  const missing =
+    needed != null && needed > 0 ? Math.max(0, needed - effectiveAssigned) : null
+  const excess =
+    needed != null && needed > 0 ? Math.max(0, effectiveAssigned - needed) : null
   const coverage =
-    board?.plannedVehicleCount && board.plannedVehicleCount > 0
-      ? Math.min(
-          100,
-          Math.round(((selected.length || board.assignedCount || 0) / board.plannedVehicleCount) * 100),
-        )
+    needed != null && needed > 0
+      ? Math.min(100, Math.round((effectiveAssigned / needed) * 100))
       : null
   const canConfirm = selected.length > 0 && criticalPending.length === 0
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="ops-readable mx-auto max-w-5xl">
       <PageHeader
-        title="Definir Placas"
-        description="Lista disponível pela automação de retorno · Indisponíveis exigem motivo + previsão"
+        title="Operação — Definir Placas"
+        description="Escolha a rota · selecione as placas · confirme. Só isso."
       />
 
       {okMsg && (
-        <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-base font-medium text-teal-900 dark:text-teal-100">
+        <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-lg font-medium text-teal-900 dark:text-teal-100">
           {okMsg}
         </p>
       )}
 
-      <p className="mb-3 text-lg font-semibold">1. Roteiro pendente</p>
+      <p className="mb-3 text-2xl font-bold">1. Escolha a rota</p>
 
       {loadingRoutes ? (
         <div className="flex justify-center py-10">
@@ -408,52 +424,47 @@ export function AssignPlates() {
 
       {!routeId ? null : (
         <>
-          <div className="mb-6 rounded-xl bg-[var(--color-surface-2)] px-4 py-3 text-base">
-            <p>
-              <span className="font-semibold">{selectedRoute?.name}</span>
-              {cities.length > 0 && <> → {cities.join(', ')}</>}
+          <div className="mb-6 rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
+            <p className="text-2xl font-bold">
+              {selectedRoute?.name}
               {selectedRoute?.hasPriority && (
-                <span className="ml-2 text-sm text-amber-700 dark:text-amber-300">· Prioritário</span>
+                <span className="ml-2 text-lg text-amber-700 dark:text-amber-300">★ Prioridade</span>
               )}
             </p>
-            {selectedRoute && (
-              <p className="mt-2 text-sm">
-                <span className="text-[var(--color-text-muted)]">Início / saída: </span>
-                <strong>
-                  {formatDate(selectedRoute.date)} às 06:00
-                </strong>
-                {board?.plannedVehicleCount != null && (
-                  <>
-                    <span className="text-[var(--color-text-muted)]"> · Meta: </span>
-                    <strong>
-                      {selected.length}/{board.plannedVehicleCount} placas
-                    </strong>
-                    {coverage != null && (
-                      <span
-                        className={cn(
-                          'ml-1 text-sm font-semibold',
-                          coverage >= 100 ? 'text-green-600' : 'text-amber-600',
-                        )}
-                      >
-                        ({coverage}%)
-                      </span>
-                    )}
-                  </>
-                )}
-                {dealers.length > 0 && (
-                  <>
-                    <span className="text-[var(--color-text-muted)]"> · Previsão de retorno: </span>
-                    <strong>
-                      {formatDate(
-                        new Date(
-                          new Date(`${toInputDate(selectedRoute.date)}T06:00:00`).getTime() +
-                            Math.ceil(Math.max(...dealers.map((d) => d.avgTravelDays)) * 86400000),
-                        ).toISOString(),
-                      )}
-                    </strong>
-                  </>
-                )}
-              </p>
+            <p className="mt-1 text-lg text-[var(--color-text-muted)]">
+              {cities.length > 0 ? cities.join(', ') : '—'} · {formatDate(selectedRoute?.date)} 06:00
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <CoverageStat label="Necessário" value={needed ?? '—'} />
+              <CoverageStat label="Selecionados" value={selectedTotal} tone="text-[var(--color-primary)]" />
+              <CoverageStat
+                label={missing != null && missing > 0 ? 'Faltam' : excess && excess > 0 ? 'Excesso' : 'Faltam'}
+                value={missing != null && missing > 0 ? missing : excess && excess > 0 ? excess : 0}
+                tone={
+                  missing != null && missing > 0
+                    ? 'text-amber-700'
+                    : excess && excess > 0
+                      ? 'text-blue-700'
+                      : 'text-green-700'
+                }
+              />
+              <CoverageStat
+                label="Cobertura"
+                value={coverage != null ? `${coverage}%` : '—'}
+                tone={coverage != null && coverage >= 100 ? 'text-green-700' : 'text-amber-700'}
+              />
+            </div>
+            {coverage != null && (
+              <div className="mt-3 h-4 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+                <div
+                  className={cn(
+                    'h-full rounded-full',
+                    coverage >= 100 ? 'bg-green-600' : 'bg-amber-500',
+                  )}
+                  style={{ width: `${coverage}%` }}
+                />
+              </div>
             )}
           </div>
 
@@ -470,7 +481,7 @@ export function AssignPlates() {
             </div>
           )}
 
-          <p className="mb-3 text-lg font-semibold">2. Placas disponíveis (automação de retorno)</p>
+          <p className="mb-3 text-2xl font-bold">2. Selecione as placas</p>
 
           {allowedTypes && allowedTypes.size < 2 && allowedTypes.size > 0 && (
             <p className="mb-3 rounded-xl bg-amber-500/15 px-4 py-2 text-sm text-amber-900 dark:text-amber-100">
@@ -548,17 +559,22 @@ export function AssignPlates() {
                 </DropArea>
 
                 <Button
-                  className="mt-4 h-12 w-full text-base"
+                  className="mt-4 h-16 w-full text-xl font-bold"
+                  size="lg"
                   disabled={!canConfirm}
                   onClick={() => setConfirmOpen(true)}
                   loading={assignMutation.isPending}
                 >
-                  Confirmar {selected.length > 0 ? `(${selected.length})` : ''}
+                  Confirmar {selected.length > 0 ? `(${selected.length} placas)` : ''}
                 </Button>
                 {criticalPending.length > 0 && (
-                  <p className="mt-2 text-center text-xs text-[var(--color-danger)]">
-                    Justifique as {criticalPending.length} placa(s) críticas para liberar a
-                    confirmação
+                  <p className="mt-2 text-center text-base font-semibold text-[var(--color-danger)]">
+                    Justifique as {criticalPending.length} placa(s) críticas para liberar
+                  </p>
+                )}
+                {missing != null && missing > 0 && selected.length > 0 && (
+                  <p className="mt-2 text-center text-base text-amber-700">
+                    Ainda faltam {missing} veículo(s) para a meta — você pode confirmar parcial.
                   </p>
                 )}
               </section>
@@ -667,7 +683,9 @@ export function AssignPlates() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => assignMutation.mutate()}
         title="Confirmar placas?"
-        message={`Enviar ${selected.length} placa(s) para ${selectedRoute?.name} — saída ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00?`}
+        message={`Rota: ${selectedRoute?.name}
+Necessário: ${needed ?? '—'} · Selecionados: ${selectedTotal} · Faltam: ${missing ?? '—'} · Cobertura: ${coverage != null ? `${coverage}%` : '—'}
+Saída ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00.`}
         confirmLabel="Sim, confirmar"
         loading={assignMutation.isPending}
       />
@@ -719,6 +737,23 @@ export function AssignPlates() {
           </div>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+function CoverageStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string | number
+  tone?: string
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--color-surface-2)] px-3 py-3 text-center">
+      <p className="text-sm font-medium text-[var(--color-text-muted)]">{label}</p>
+      <p className={cn('text-3xl font-bold', tone)}>{value}</p>
     </div>
   )
 }

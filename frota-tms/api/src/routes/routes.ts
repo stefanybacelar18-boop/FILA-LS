@@ -313,6 +313,8 @@ export function createRoutesRouter(io: Server) {
     const joinedRegions = [...new Set(ordered.map((d) => d.region))].join(' / ');
     const region = parsed.data.region ?? (joinedRegions || ordered[0]?.region);
 
+    // Formulário clássico: cria já pronto para operação (compatível).
+    // A Mesa de Roteirização cria RASCUNHO e usa "Enviar para Operação".
     const route = await prisma.route.create({
       data: {
         name: parsed.data.name.trim(),
@@ -323,6 +325,10 @@ export function createRoutesRouter(io: Server) {
         hasPriority,
         priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
         plannedVehicleCount: parsed.data.plannedVehicleCount ?? null,
+        status: RouteStatus.AGUARDANDO_PLACAS,
+        readyForOperation: true,
+        sentToOperationAt: new Date(),
+        sentToOperationById: req.user!.id,
         createdById: req.user!.id,
         dealerships: {
           create: ordered.map((d, order) => ({
@@ -340,7 +346,51 @@ export function createRoutesRouter(io: Server) {
 
     await audit('CREATE', 'Route', { userId: req.user!.id, entityId: route.id, details: route.name });
     io.emit('routes:changed', { action: 'create', id: route.id });
+    io.emit('planning:changed', { action: 'route-create', id: route.id });
     res.status(201).json(route);
+  });
+
+  /** Handoff: rascunho → operação (atalho; preferir /planning/routes/:id/send) */
+  router.post('/:id/send-to-operation', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const routeId = paramId(req);
+    const route = await prisma.route.findUnique({
+      where: { id: routeId },
+      include: { dealerships: true },
+    });
+    if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+    if (route.status !== RouteStatus.RASCUNHO) {
+      return res.status(400).json({ error: 'Só rascunhos podem ser enviados para a operação' });
+    }
+    if (route.dealerships.length === 0) {
+      return res.status(400).json({ error: 'Roteiro sem concessionárias' });
+    }
+    if (!route.plannedVehicleCount || route.plannedVehicleCount < 1) {
+      return res.status(400).json({ error: 'Defina a quantidade de veículos necessários' });
+    }
+
+    const updated = await prisma.route.update({
+      where: { id: routeId },
+      data: {
+        status: RouteStatus.AGUARDANDO_PLACAS,
+        readyForOperation: true,
+        sentToOperationAt: new Date(),
+        sentToOperationById: req.user!.id,
+      },
+      include: {
+        ...routeDealershipInclude,
+        dealership: true,
+        vehicles: { include: { vehicle: true } },
+      },
+    });
+
+    await audit('SEND_TO_OPERATION', 'Route', {
+      userId: req.user!.id,
+      entityId: routeId,
+      details: route.name,
+    });
+    io.emit('routes:changed', { action: 'send', id: routeId });
+    io.emit('planning:changed', { action: 'send', id: routeId });
+    res.json(updated);
   });
 
   router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {

@@ -213,7 +213,7 @@ export function Dashboard() {
                     {canOperate && (
                       <td>
                         {r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO' ? (
-                          <Link to="/definir-placas">
+                          <Link to={`/definir-placas?routeId=${r.id}`}>
                             <Button size="sm" variant="secondary">
                               <Tags className="h-3.5 w-3.5" />
                               Placas

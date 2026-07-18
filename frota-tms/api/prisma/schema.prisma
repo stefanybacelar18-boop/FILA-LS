@@ -19,11 +19,13 @@ model User {
 
   auditLogs      AuditLog[]
   routesCreated  Route[]          @relation("RouteCreatedBy")
+  routesSent     Route[]          @relation("RouteSentBy")
   tripsAssigned  Trip[]           @relation("TripAssignedBy")
   tripsReturned  Trip[]           @relation("TripReturnedBy")
   tripsDelayReport Trip[]         @relation("TripDelayReportedBy")
   plateUnavailabilities PlateUnavailability[]
   vehicleHistory VehicleHistory[]
+  importBatches  ImportBatch[]
 }
 
 model Vehicle {
@@ -64,6 +66,7 @@ model Dealership {
   routeLinks RouteDealership[]
   trips      Trip[]
   routes     Route[]           @relation("RoutePrimaryDealership")
+  planningCities PlanningCity[]
 }
 
 model Route {
@@ -77,6 +80,11 @@ model Route {
   priorityNotes String?
   // Meta de placas que o admin espera neste carregamento (cobertura operacional)
   plannedVehicleCount Int?
+  // Handoff papel → operação (terceira)
+  readyForOperation Boolean  @default(false)
+  sentToOperationAt DateTime?
+  sentToOperationById String?
+  sentToOperationBy   User?  @relation("RouteSentBy", fields: [sentToOperationById], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -90,6 +98,7 @@ model Route {
   trips       Trip[]
   products    RouteProduct[]
   unavailabilities PlateUnavailability[]
+  planningCities PlanningCity[]
 }
 
 model RouteDealership {
@@ -215,4 +224,42 @@ model AuditLog {
 
   userId String?
   user   User?  @relation(fields: [userId], references: [id])
+}
+
+// Cidades/notas na mesa (substitui o papel). status: PENDENTE | EM_ROTA | ENVIADA
+model PlanningCity {
+  id           String   @id @default(cuid())
+  city         String
+  state        String?
+  noteCount    Int      @default(1)
+  status       String   @default("PENDENTE")
+  source       String   @default("MANUAL") // MANUAL | EXCEL | DEMO
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dealershipId String?
+  dealership   Dealership? @relation(fields: [dealershipId], references: [id])
+  routeId      String?
+  route        Route?      @relation(fields: [routeId], references: [id])
+  importBatchId String?
+  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id])
+
+  @@index([status])
+  @@index([city])
+}
+
+// Lote de importação Excel (arquitetura preparada)
+model ImportBatch {
+  id          String   @id @default(cuid())
+  filename    String?
+  status      String   @default("PENDING") // PENDING | PREVIEW | COMMITTED | FAILED
+  rowCount    Int      @default(0)
+  previewJson String?  // JSON string com linhas normalizadas
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById String?
+  createdBy   User? @relation(fields: [createdById], references: [id])
+  cities      PlanningCity[]
 }

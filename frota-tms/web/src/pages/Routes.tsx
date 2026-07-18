@@ -109,7 +109,7 @@ export function Routes() {
             </thead>
             <tbody>
               {data.map((r) => {
-                const pending = r.status === 'AGUARDANDO_PLACAS' || r.status === 'RASCUNHO'
+                const pending = r.status === 'AGUARDANDO_PLACAS'
                 const assigned = r.vehicles?.length ?? 0
                 const planned = r.plannedVehicleCount
                 const coverage =
@@ -199,7 +199,7 @@ export function Routes() {
                         <div className="flex justify-end gap-1">
                           {canAssign && pending && (
                             <Link
-                              to="/definir-placas"
+                              to={`/definir-placas?routeId=${r.id}`}
                               className="inline-flex h-8 items-center gap-1 rounded px-2 text-sm text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)]"
                               title="Definir placas"
                             >
