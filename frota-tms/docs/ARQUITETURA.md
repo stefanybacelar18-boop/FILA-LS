@@ -28,7 +28,8 @@ web (React)  --HTTP/JWT-->  api (Express)
 
 1. Placa só entra em viagem se `status === DISPONIVEL` e sem trip aberta (claim atômico).
 2. Saída oficial = data do roteiro às **06:00**.
-3. Previsão de retorno = saída + `ceil(avgTravelDays)` do destino **mais longe**.
+3. Previsão de retorno = distância **PAD (−12.809004, −38.428719) → concessionária mais longe**  
+   `(km * 2) / 400` dias; `expectedReturn = saída 06:00 + ceil(dias)`.
 4. Tipo do veículo deve ser permitido em **todos** os destinos.
 5. Placa crítica sem justificativa trava Confirmar em Definir Placas.
 6. Retorno atrasado exige `delayReason`.

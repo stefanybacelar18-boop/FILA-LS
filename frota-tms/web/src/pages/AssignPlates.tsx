@@ -39,6 +39,21 @@ interface PlatesBoard {
   loadAt: string
   plannedVehicleCount?: number | null
   assignedCount?: number
+  returnForecast?: {
+    basis: 'PAD_DISTANCE'
+    pad: { lat: number; lng: number }
+    formula?: string
+    farthestDealership: {
+      id: string
+      name: string
+      city: string
+      distanceKm: number
+      avgTravelDays: number
+      source: string
+    }
+    departureAt: string
+    expectedReturn: string
+  } | null
   available: PlatesBoardVehicle[]
   unavailable: PlatesBoardVehicle[]
   summary?: {
@@ -319,6 +334,22 @@ export function AssignPlates() {
         title={selectedRoute?.name ?? 'Rota'}
         description={`${formatDate(selectedRoute?.date)} · 06:00${cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa`}
       />
+
+      {board?.returnForecast && (
+        <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
+          <p className="font-medium">Previsão de retorno (PAD → concessionária)</p>
+          <p className="mt-1 text-[var(--color-text-muted)]">
+            Destino mais longe:{' '}
+            <strong className="text-[var(--color-text)]">
+              {board.returnForecast.farthestDealership.name}
+            </strong>{' '}
+            ({board.returnForecast.farthestDealership.city}) ·{' '}
+            {board.returnForecast.farthestDealership.distanceKm.toFixed(1)} km do PAD ·{' '}
+            {board.returnForecast.farthestDealership.avgTravelDays} dias · retorno{' '}
+            {formatDate(board.returnForecast.expectedReturn)}
+          </p>
+        </div>
+      )}
 
       {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
       {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}

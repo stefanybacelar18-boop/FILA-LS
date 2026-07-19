@@ -106,6 +106,30 @@ export interface RouteDealership {
   dealership: Dealership
 }
 
+export interface ReturnForecast {
+  basis: 'PAD_DISTANCE'
+  pad: { lat: number; lng: number }
+  formula?: string
+  farthestDealership: {
+    id: string
+    name: string
+    city: string
+    distanceKm: number
+    avgTravelDays: number
+    source: 'coords' | 'city' | 'stored'
+  }
+  stops?: {
+    id: string
+    name: string
+    city: string
+    distanceKm: number
+    avgTravelDays: number
+    source: 'coords' | 'city' | 'stored'
+  }[]
+  departureAt: string
+  expectedReturn: string
+}
+
 export interface Route {
   id: string
   name: string
@@ -126,6 +150,7 @@ export interface Route {
   vehicles?: RouteVehicle[]
   trips?: Trip[]
   _count?: { trips: number }
+  returnForecast?: ReturnForecast | null
 }
 
 export interface Trip {

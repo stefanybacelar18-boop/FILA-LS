@@ -204,17 +204,24 @@ Função `routeDepartureAt(route.date)`:
 
 **Toda viagem** do roteiro usa esse horário como `departureAt`.
 
-### 5.3 Destino mais longe (farthest)
+### 5.3 Destino mais longe (PAD × concessionárias)
 
-Usado para `trip.dealershipId` e previsão de retorno:
+Usado para `trip.dealershipId` e previsão de retorno.
 
-1. Maior `avgTravelDays`  
-2. Empate → maior `distanceKm`  
+**PAD** (coordenadas oficiais): `-12.809004, -38.428719`
+
+Para cada parada do roteiro:
+
+1. Distância haversine **PAD → coordenadas da cidade** da concessionária  
+2. Dias médios = `(distanceKm * 2) / 400` (ida+volta, mín. 1 dia)  
+3. Escolhe o destino com **maior distância do PAD** (empate → maior dias)
 
 ```
-expectedReturn = departureAt + ceil(farthest.avgTravelDays)
+expectedReturn = departureAt + ceil(padAvgTravelDays do destino mais longe)
 ```
 
+O cálculo é feito **ao vivo** na atribuição de placa (não depende só do campo armazenado).
+Campos `Dealership.distanceKm` / `avgTravelDays` são espelho persistido do mesmo cálculo.
 ### 5.4 Tipo de veículo permitido
 
 Cada concessionária: `allowedVehicle` = `TRUCK` | `CARRETA` | `AMBOS`  

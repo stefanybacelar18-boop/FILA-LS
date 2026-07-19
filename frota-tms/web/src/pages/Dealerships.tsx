@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { api } from '../lib/api'
 import type { AllowedVehicleType, Dealership } from '../types'
 import {
@@ -22,9 +22,11 @@ const emptyForm = {
   city: '',
   state: '',
   region: '',
-  distanceKm: 0,
-  avgTravelDays: 1,
   allowedVehicle: 'AMBOS' as AllowedVehicleType,
+}
+
+type DealershipWithPad = Dealership & {
+  pad?: { distanceKm: number; avgTravelDays: number; lat: number; lng: number } | null
 }
 
 export function Dealerships() {
@@ -34,14 +36,20 @@ export function Dealerships() {
   const [state, setState] = useState('')
   const [region, setRegion] = useState('')
   const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<Dealership | null>(null)
+  const [editing, setEditing] = useState<DealershipWithPad | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data: meta } = useQuery({
     queryKey: ['dealerships', 'meta'],
     queryFn: async () =>
-      (await api.get<{ states: string[]; regions: string[] }>('/dealerships/filters/meta')).data,
+      (
+        await api.get<{
+          states: string[]
+          regions: string[]
+          pad?: { lat: number; lng: number; formula: string; kmPerDay: number }
+        }>('/dealerships/filters/meta')
+      ).data,
   })
 
   const { data = [], isLoading } = useQuery({
@@ -51,7 +59,7 @@ export function Dealerships() {
       if (q) params.q = q
       if (state) params.state = state
       if (region) params.region = region
-      return (await api.get<Dealership[]>('/dealerships', { params })).data
+      return (await api.get<DealershipWithPad[]>('/dealerships', { params })).data
     },
   })
 
@@ -60,8 +68,6 @@ export function Dealerships() {
       const payload = {
         ...form,
         state: form.state.toUpperCase(),
-        distanceKm: Number(form.distanceKm),
-        avgTravelDays: Number(form.avgTravelDays),
       }
       if (editing) return api.put(`/dealerships/${editing.id}`, payload)
       return api.post('/dealerships', payload)
@@ -71,6 +77,14 @@ export function Dealerships() {
       setOpen(false)
       setEditing(null)
       setForm(emptyForm)
+    },
+  })
+
+  const recalcMutation = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ updated: number; skipped: number }>('/dealerships/recalculate-from-pad')).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['dealerships'] })
     },
   })
 
@@ -88,15 +102,13 @@ export function Dealerships() {
     setOpen(true)
   }
 
-  function openEdit(d: Dealership) {
+  function openEdit(d: DealershipWithPad) {
     setEditing(d)
     setForm({
       name: d.name,
       city: d.city,
       state: d.state,
       region: d.region,
-      distanceKm: d.distanceKm,
-      avgTravelDays: d.avgTravelDays,
       allowedVehicle: d.allowedVehicle,
     })
     setOpen(true)
@@ -111,16 +123,40 @@ export function Dealerships() {
     <div>
       <PageHeader
         title="Concessionárias"
-        description="Destinos e regras de veículo permitido"
+        description={
+          meta?.pad
+            ? `Distância e tempo calculados do PAD (${meta.pad.lat}, ${meta.pad.lng}) · ${meta.pad.formula}`
+            : 'Distância e tempo calculados a partir do PAD'
+        }
         actions={
           isAdmin ? (
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Nova concessionária
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => recalcMutation.mutate()}
+                loading={recalcMutation.isPending}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Recalcular do PAD
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Nova concessionária
+              </Button>
+            </div>
           ) : undefined
         }
       />
+
+      {recalcMutation.isSuccess && (
+        <p className="mb-3 text-sm text-[var(--color-success)]">
+          Recalculado: {recalcMutation.data.updated} atualizadas
+          {recalcMutation.data.skipped > 0
+            ? ` · ${recalcMutation.data.skipped} sem coordenadas de cidade`
+            : ''}
+          .
+        </p>
+      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <SearchInput value={q} onChange={setQ} placeholder="Buscar nome, código, cidade ou região…" />
@@ -154,8 +190,8 @@ export function Dealerships() {
                 <th>Cidade/UF</th>
                 <th>Telefone</th>
                 <th>Região</th>
-                <th>Distância</th>
-                <th>Tempo médio</th>
+                <th>Dist. PAD</th>
+                <th>Retorno (dias)</th>
                 <th>Status</th>
                 {isAdmin && <th />}
               </tr>
@@ -170,8 +206,8 @@ export function Dealerships() {
                   </td>
                   <td className="text-xs">{d.phone ?? '—'}</td>
                   <td>{d.region}</td>
-                  <td>{d.distanceKm} km</td>
-                  <td>{d.avgTravelDays} dias</td>
+                  <td>{(d.pad?.distanceKm ?? d.distanceKm).toFixed(1)} km</td>
+                  <td>{d.pad?.avgTravelDays ?? d.avgTravelDays} dias</td>
                   <td>
                     <Badge tone={d.active ? 'success' : 'default'}>
                       {d.active ? 'Ativa' : 'Inativa'}
@@ -252,21 +288,10 @@ export function Dealerships() {
               { value: 'CARRETA', label: 'Carreta' },
             ]}
           />
-          <Input
-            label="Distância (km)"
-            type="number"
-            value={form.distanceKm}
-            onChange={(e) => setForm({ ...form, distanceKm: Number(e.target.value) })}
-            required
-          />
-          <Input
-            label="Tempo médio (dias)"
-            type="number"
-            step="0.5"
-            value={form.avgTravelDays}
-            onChange={(e) => setForm({ ...form, avgTravelDays: Number(e.target.value) })}
-            required
-          />
+          <p className="sm:col-span-2 text-xs text-[var(--color-text-muted)]">
+            Distância e previsão de retorno são calculadas automaticamente: PAD → cidade da
+            concessionária (ida+volta ÷ 400 km/dia).
+          </p>
         </form>
       </Modal>
 

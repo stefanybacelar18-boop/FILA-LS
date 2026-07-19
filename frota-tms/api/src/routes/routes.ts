@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { expectedReturnDate, routeDepartureAt, vehicleColor } from '../utils/status';
+import { resolveTravelFromPad, PAD_LAT, PAD_LNG } from '../utils/geo';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 
@@ -18,16 +19,39 @@ const routeDealershipInclude = {
 type DealershipRow = {
   id: string;
   name: string;
+  city: string;
   distanceKm: number;
   avgTravelDays: number;
   allowedVehicle: string;
 };
 
-/** Farthest dealership: highest avgTravelDays, then distanceKm */
-function farthestDealership(dealerships: DealershipRow[]): DealershipRow {
-  return [...dealerships].sort((a, b) => {
-    if (b.avgTravelDays !== a.avgTravelDays) return b.avgTravelDays - a.avgTravelDays;
-    return b.distanceKm - a.distanceKm;
+type DealershipWithPadTravel = DealershipRow & {
+  padDistanceKm: number;
+  padAvgTravelDays: number;
+  padSource: 'coords' | 'city' | 'stored';
+};
+
+/** Enriquece com distância/dias calculados do PAD (coordenadas) → cidade. */
+function withPadTravel(d: DealershipRow): DealershipWithPadTravel {
+  const travel = resolveTravelFromPad({
+    city: d.city,
+    distanceKm: d.distanceKm,
+    avgTravelDays: d.avgTravelDays,
+  });
+  return {
+    ...d,
+    padDistanceKm: travel.distanceKm,
+    padAvgTravelDays: travel.avgTravelDays,
+    padSource: travel.source,
+  };
+}
+
+/** Destino mais longe do PAD (maior distância km; desempate por dias). */
+function farthestDealershipFromPad(dealerships: DealershipRow[]): DealershipWithPadTravel {
+  const enriched = dealerships.map(withPadTravel);
+  return [...enriched].sort((a, b) => {
+    if (b.padDistanceKm !== a.padDistanceKm) return b.padDistanceKm - a.padDistanceKm;
+    return b.padAvgTravelDays - a.padAvgTravelDays;
   })[0];
 }
 
@@ -97,10 +121,44 @@ export function createRoutesRouter(io: Server) {
    *   + justificativa/previsão se o operador já informou
    */
   router.get('/:id/plates-board', authorize(Role.ADMIN, Role.OPERACAO), async (req, res) => {
-    const route = await prisma.route.findUnique({ where: { id: paramId(req) } });
+    const route = await prisma.route.findUnique({
+      where: { id: paramId(req) },
+      include: {
+        ...routeDealershipInclude,
+        dealership: true,
+      },
+    });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
     const loadAt = routeDepartureAt(route.date);
+
+    const linked: DealershipRow[] =
+      route.dealerships.length > 0
+        ? route.dealerships.map((rd) => rd.dealership)
+        : route.dealership
+          ? [route.dealership]
+          : [];
+
+    let returnForecast = null;
+    if (linked.length > 0) {
+      const farthest = farthestDealershipFromPad(linked);
+      const expectedReturn = expectedReturnDate(loadAt, farthest.padAvgTravelDays);
+      returnForecast = {
+        basis: 'PAD_DISTANCE' as const,
+        pad: { lat: PAD_LAT, lng: PAD_LNG },
+        formula: '(distanceKm * 2) / 400',
+        farthestDealership: {
+          id: farthest.id,
+          name: farthest.name,
+          city: farthest.city,
+          distanceKm: farthest.padDistanceKm,
+          avgTravelDays: farthest.padAvgTravelDays,
+          source: farthest.padSource,
+        },
+        departureAt: loadAt,
+        expectedReturn,
+      };
+    }
 
     const [vehicles, reports] = await Promise.all([
       prisma.vehicle.findMany({ orderBy: { plate: 'asc' } }),
@@ -182,6 +240,7 @@ export function createRoutesRouter(io: Server) {
       loadAt,
       plannedVehicleCount: route.plannedVehicleCount,
       assignedCount: await prisma.routeVehicle.count({ where: { routeId: route.id } }),
+      returnForecast,
       available,
       unavailable,
       summary: {
@@ -293,7 +352,48 @@ export function createRoutesRouter(io: Server) {
       },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
-    res.json(route);
+
+    const linked: DealershipRow[] =
+      route.dealerships.length > 0
+        ? route.dealerships.map((rd) => rd.dealership)
+        : route.dealership
+          ? [route.dealership]
+          : [];
+
+    let returnForecast = null;
+    if (linked.length > 0) {
+      const farthest = farthestDealershipFromPad(linked);
+      const departureAt = routeDepartureAt(route.date);
+      const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
+      returnForecast = {
+        basis: 'PAD_DISTANCE' as const,
+        pad: { lat: PAD_LAT, lng: PAD_LNG },
+        formula: '(distanceKm * 2) / 400',
+        farthestDealership: {
+          id: farthest.id,
+          name: farthest.name,
+          city: farthest.city,
+          distanceKm: farthest.padDistanceKm,
+          avgTravelDays: farthest.padAvgTravelDays,
+          source: farthest.padSource,
+        },
+        stops: linked.map((d) => {
+          const t = withPadTravel(d);
+          return {
+            id: t.id,
+            name: t.name,
+            city: t.city,
+            distanceKm: t.padDistanceKm,
+            avgTravelDays: t.padAvgTravelDays,
+            source: t.padSource,
+          };
+        }),
+        departureAt,
+        expectedReturn,
+      };
+    }
+
+    res.json({ ...route, returnForecast });
   });
 
   router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
@@ -504,11 +604,12 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Roteiro sem concessionárias' });
     }
 
-    const farthest = farthestDealership(linked);
+    // Previsão SEMPRE pelo PAD (coordenadas) × concessionária mais distante
+    const farthest = farthestDealershipFromPad(linked);
     const destNames = linked.map((d) => d.name).join(', ');
     // Saída = data do roteiro às 06:00 (regra operacional)
     const departureAt = routeDepartureAt(route.date);
-    const expectedReturn = expectedReturnDate(departureAt, farthest.avgTravelDays);
+    const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
 
     try {
       const results = await prisma.$transaction(async (tx) => {
@@ -587,7 +688,7 @@ export function createRoutesRouter(io: Server) {
               action: 'SAIDA',
               fromStatus: VehicleStatus.DISPONIVEL,
               toStatus: VehicleStatus.EM_VIAGEM,
-              details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name})`,
+              details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name}, ${farthest.padDistanceKm} km do PAD, ${farthest.padAvgTravelDays} dias)`,
             },
           });
 
@@ -608,12 +709,28 @@ export function createRoutesRouter(io: Server) {
       await audit('ASSIGN_PLATES', 'Route', {
         userId: req.user!.id,
         entityId: route.id,
-        details: `1 placa`,
+        details: `1 placa · retorno PAD→${farthest.name} (${farthest.padDistanceKm} km / ${farthest.padAvgTravelDays} dias)`,
       });
       io.emit('fleet:changed', { action: 'assign', routeId: route.id });
       io.emit('trips:changed', { action: 'create' });
       io.emit('routes:changed', { action: 'assign', id: route.id });
-      res.status(201).json({ trips: results });
+      res.status(201).json({
+        trips: results,
+        returnForecast: {
+          basis: 'PAD_DISTANCE',
+          pad: { lat: PAD_LAT, lng: PAD_LNG },
+          farthestDealership: {
+            id: farthest.id,
+            name: farthest.name,
+            city: farthest.city,
+            distanceKm: farthest.padDistanceKm,
+            avgTravelDays: farthest.padAvgTravelDays,
+            source: farthest.padSource,
+          },
+          departureAt,
+          expectedReturn,
+        },
+      });
     } catch (err) {
       const e = err as Error & { status?: number };
       const status = e.status ?? 500;
