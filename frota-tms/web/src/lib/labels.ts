@@ -35,8 +35,8 @@ export const vehicleStatusLabels: Record<VehicleStatus, string> = {
 }
 
 export const routeStatusLabels: Record<RouteStatus, string> = {
-  RASCUNHO: 'Rascunho',
-  AGUARDANDO_PLACAS: 'Aguardando placas',
+  RASCUNHO: 'Montando',
+  AGUARDANDO_PLACAS: 'Com Operação',
   EM_ANDAMENTO: 'Em andamento',
   CONCLUIDO: 'Concluído',
   CANCELADO: 'Cancelado',

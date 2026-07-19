@@ -22,7 +22,6 @@ export function RouteForm() {
   const [notes, setNotes] = useState('')
   const [hasPriority, setHasPriority] = useState(false)
   const [priorityNotes, setPriorityNotes] = useState('')
-  const [plannedVehicleCount, setPlannedVehicleCount] = useState('')
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -47,9 +46,6 @@ export function RouteForm() {
     setNotes(existing.notes ?? '')
     setHasPriority(!!existing.hasPriority)
     setPriorityNotes(existing.priorityNotes ?? '')
-    setPlannedVehicleCount(
-      existing.plannedVehicleCount != null ? String(existing.plannedVehicleCount) : '',
-    )
   }, [existing])
 
   const filteredDealerships = useMemo(() => {
@@ -62,13 +58,12 @@ export function RouteForm() {
         d.city.toLowerCase().includes(q) ||
         d.state.toLowerCase().includes(q) ||
         d.region.toLowerCase().includes(q) ||
-        (d.code?.toLowerCase().includes(q) ?? false) ||
-        (d.phone?.toLowerCase().includes(q) ?? false),
+        (d.code?.toLowerCase().includes(q) ?? false),
     )
   }, [dealerships, dealerSearch])
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (disponibilizar: boolean) => {
       if (dealershipIds.length < 1) throw new Error('Selecione ao menos uma concessionária')
       const payload = {
         name,
@@ -78,13 +73,25 @@ export function RouteForm() {
         notes: notes || null,
         hasPriority,
         priorityNotes: hasPriority ? priorityNotes || null : null,
-        plannedVehicleCount: plannedVehicleCount ? Number(plannedVehicleCount) : 1,
+        plannedVehicleCount: 1,
       }
-      if (isNew) return (await api.post<Route>('/routes', payload)).data
-      return (await api.put<Route>(`/routes/${id}`, payload)).data
+      let route: Route
+      if (isNew) {
+        route = (await api.post<Route>('/routes', payload)).data
+      } else {
+        route = (await api.put<Route>(`/routes/${id}`, payload)).data
+      }
+      if (disponibilizar && route.status === 'RASCUNHO') {
+        route = (await api.post<Route>(`/routes/${route.id}/send-to-operation`)).data
+      }
+      return route
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['routes'] })
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['routes'] }),
+        qc.invalidateQueries({ queryKey: ['planning-alerts'] }),
+        qc.invalidateQueries({ queryKey: ['dashboard'] }),
+      ])
       navigate('/roteiros')
     },
   })
@@ -102,8 +109,13 @@ export function RouteForm() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
-    saveMutation.mutate()
+    saveMutation.mutate(false)
   }
+
+  const alreadySent =
+    existing?.status === 'AGUARDANDO_PLACAS' ||
+    existing?.status === 'EM_ANDAMENTO' ||
+    existing?.status === 'CONCLUIDO'
 
   if (!isNew && isLoading) {
     return (
@@ -114,7 +126,7 @@ export function RouteForm() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <Link
         to="/roteiros"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -125,50 +137,32 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Admin define data de início (saída sempre às 06:00), destinos e se a carga é prioritária"
+        description="Monte o roteiro e disponibilize para a Operação escolher 1 placa."
       />
 
-      <form
-        onSubmit={onSubmit}
-        className="max-w-3xl space-y-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Input label="Nome do roteiro" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
+      <form onSubmit={onSubmit} className="space-y-5">
+        <div className="space-y-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <Input
+            label="Nome do roteiro"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="Ex.: Salvador + Feira"
+          />
           <div>
             <Input
-              label="Data de início"
+              label="Data do carregamento"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
             />
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              Saída de todas as viagens deste roteiro: <strong>06:00</strong>
-            </p>
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">Saída sempre às 06:00</p>
           </div>
-          <Input
-            label="Qtd. de placas previstas"
-            type="number"
-            min={1}
-            value={plannedVehicleCount}
-            onChange={(e) => setPlannedVehicleCount(e.target.value)}
-            placeholder="Ex.: 3"
-          />
-          <p className="sm:col-span-2 -mt-2 text-xs text-[var(--color-text-muted)]">
-            Meta de cobertura: o dashboard e a operação acompanham quantas placas já foram
-            definidas vs. o previsto.
-          </p>
           <Input label="Região" value={region} onChange={(e) => setRegion(e.target.value)} />
-          <div className="sm:col-span-2">
-            <Textarea label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-        </div>
+          <Textarea label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
 
-        <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-          <p className="mb-2 text-sm font-medium">Prioridade de carga</p>
-          <label className="flex cursor-pointer items-start gap-3">
+          <label className="flex cursor-pointer items-start gap-3 pt-1">
             <input
               type="checkbox"
               checked={hasPriority}
@@ -176,51 +170,44 @@ export function RouteForm() {
               className="mt-1 accent-[var(--color-primary)]"
             />
             <span>
-              <span className="font-medium">Este roteiro tem carga prioritária</span>
+              <span className="text-sm font-medium">Prioridade</span>
               <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
-                Marque o que é prioridade. O que não marcar fica como carga normal.
+                Marque se este carregamento é prioritário
               </span>
             </span>
           </label>
           {hasPriority && (
-            <div className="mt-3">
-              <Textarea
-                label="O que é prioritário (descreva)"
-                value={priorityNotes}
-                onChange={(e) => setPriorityNotes(e.target.value)}
-                placeholder="Ex.: pedido urgente, vencimento próximo, cliente X…"
-              />
-            </div>
+            <Textarea
+              label="Motivo da prioridade"
+              value={priorityNotes}
+              onChange={(e) => setPriorityNotes(e.target.value)}
+              placeholder="Ex.: pedido urgente, cliente X…"
+            />
           )}
         </div>
 
-        <div>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">
-              Concessionárias <span className="text-[var(--color-danger)]">*</span>
-              <span className="ml-2 font-normal text-[var(--color-text-muted)]">
-                ({dealershipIds.length} selecionada{dealershipIds.length === 1 ? '' : 's'} ·{' '}
-                {dealerships.filter((d) => d.active).length} na lista)
-              </span>
-            </p>
-          </div>
+        <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <p className="mb-2 text-sm font-medium">
+            Destinos <span className="text-[var(--color-danger)]">*</span>
+            <span className="ml-2 font-normal text-[var(--color-text-muted)]">
+              {dealershipIds.length} selecionada{dealershipIds.length === 1 ? '' : 's'}
+            </span>
+          </p>
 
           <div className="relative mb-2">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
             <input
               type="search"
               value={dealerSearch}
               onChange={(e) => setDealerSearch(e.target.value)}
-              placeholder="Buscar por nome, código, cidade, UF ou região…"
-              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-primary)]"
+              placeholder="Buscar cidade ou concessionária…"
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] py-2 pr-3 pl-9 text-sm outline-none focus:border-[var(--color-primary)]"
             />
           </div>
 
-          <div className="max-h-72 space-y-1 overflow-y-auto rounded border border-[var(--color-border)] p-2">
+          <div className="max-h-64 space-y-0.5 overflow-y-auto">
             {filteredDealerships.length === 0 && (
-              <p className="p-2 text-sm text-[var(--color-text-muted)]">
-                Nenhuma concessionária encontrada com esse filtro.
-              </p>
+              <p className="p-2 text-sm text-[var(--color-text-muted)]">Nenhuma encontrada.</p>
             )}
             {filteredDealerships.map((d) => {
               const checked = dealershipIds.includes(d.id)
@@ -228,7 +215,7 @@ export function RouteForm() {
                 <label
                   key={d.id}
                   className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm hover:bg-[var(--color-surface-2)]',
+                    'flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-[var(--color-surface-2)]',
                     checked && 'bg-[var(--color-primary-muted)]',
                   )}
                 >
@@ -238,38 +225,47 @@ export function RouteForm() {
                     onChange={() => toggleDealership(d.id)}
                     className="accent-[var(--color-primary)]"
                   />
-                    <span className="min-w-0 flex-1">
-                      <span className="font-medium">{d.name}</span>
-                      <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                        {d.code ? `${d.code} · ` : ''}
-                        {d.city}/{d.state} · {d.region} · {d.distanceKm} km · {d.avgTravelDays}d
-                      </span>
-                    </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium">{d.city}</span>
+                    <span className="text-[var(--color-text-muted)]"> · {d.name}</span>
+                  </span>
                 </label>
               )
             })}
           </div>
-          {dealershipIds.length < 1 && (
-            <p className="mt-1 text-xs text-[var(--color-danger)]">Selecione ao menos uma concessionária</p>
-          )}
         </div>
 
         {saveMutation.isError && (
           <p className="text-sm text-[var(--color-danger)]">
-            {(saveMutation.error as { response?: { data?: { error?: string } }; message?: string })?.response
-              ?.data?.error ??
+            {(saveMutation.error as { response?: { data?: { error?: string } }; message?: string })
+              ?.response?.data?.error ??
               (saveMutation.error as Error)?.message ??
-              'Erro ao salvar roteiro'}
+              'Erro ao salvar'}
           </p>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => navigate('/roteiros')}>
             Cancelar
           </Button>
-          <Button type="submit" loading={saveMutation.isPending} disabled={dealershipIds.length < 1}>
+          <Button
+            type="submit"
+            variant="secondary"
+            loading={saveMutation.isPending}
+            disabled={dealershipIds.length < 1 || alreadySent || saveMutation.isPending}
+          >
             Salvar
           </Button>
+          {!alreadySent && (
+            <Button
+              type="button"
+              loading={saveMutation.isPending}
+              disabled={dealershipIds.length < 1 || saveMutation.isPending}
+              onClick={() => saveMutation.mutate(true)}
+            >
+              Disponibilizar para Operação
+            </Button>
+          )}
         </div>
       </form>
     </div>

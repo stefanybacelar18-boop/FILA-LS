@@ -83,8 +83,8 @@ export function AlertsCenter() {
               </Button>
             </Link>
           ) : (
-            <Link to="/mesa">
-              <Button size="lg">Abrir Mesa</Button>
+            <Link to="/roteiros">
+              <Button size="lg">Abrir Roteiros</Button>
             </Link>
           )
         }

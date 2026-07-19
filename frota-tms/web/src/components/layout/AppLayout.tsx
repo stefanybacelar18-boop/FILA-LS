@@ -21,9 +21,7 @@ import {
   Search,
   KeyRound,
   LayoutGrid,
-  CalendarDays,
   Bell,
-  ClipboardList,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -42,16 +40,13 @@ interface NavItem {
 const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   ADMIN: {
     primary: [
-      { to: '/mesa', label: 'Mesa', icon: LayoutGrid },
-      { to: '/meu-dia', label: 'Meu Dia', icon: CalendarDays },
-      { to: '/planejamento', label: 'Planejamento', icon: ClipboardList },
+      { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/alertas', label: 'Alertas', icon: Bell },
+      { to: '/retornos', label: 'Retornos', icon: RotateCcw },
     ],
     secondary: [
-      { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/frota', label: 'Frota', icon: Truck },
       { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
-      { to: '/retornos', label: 'Retornos', icon: RotateCcw },
       { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
       { to: '/usuarios', label: 'Usuários', icon: Users },
       { to: '/auditoria', label: 'Auditoria', icon: Shield },
@@ -70,9 +65,8 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   },
   CONSULTA: {
     primary: [
-      { to: '/planejamento', label: 'Planejamento', icon: ClipboardList },
-      { to: '/alertas', label: 'Alertas', icon: Bell },
       { to: '/roteiros', label: 'Roteiros', icon: Route },
+      { to: '/alertas', label: 'Alertas', icon: Bell },
       { to: '/frota', label: 'Frota', icon: Truck },
     ],
     secondary: [
@@ -136,7 +130,7 @@ export function AppLayout() {
   }, [user?.role])
 
   const homePath =
-    user?.role === 'ADMIN' ? '/mesa' : user?.role === 'OPERACAO' ? '/definir-placas' : '/planejamento'
+    user?.role === 'ADMIN' ? '/roteiros' : user?.role === 'OPERACAO' ? '/definir-placas' : '/roteiros'
 
   function onSearch(e: FormEvent) {
     e.preventDefault()

@@ -230,7 +230,7 @@ export function AssignPlates() {
     <div className="ops-readable mx-auto max-w-3xl">
       <PageHeader
         title="Definir Placa"
-        description="Escolha a rota do Admin · selecione 1 veículo · confirme. Se não puder carregar, informe atraso ou quebra."
+        description="Escolha a rota disponibilizada pelo Admin · 1 placa · confirme. Se não puder carregar, informe atraso ou quebra."
       />
 
       {okMsg && (

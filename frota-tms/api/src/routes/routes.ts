@@ -313,8 +313,7 @@ export function createRoutesRouter(io: Server) {
     const joinedRegions = [...new Set(ordered.map((d) => d.region))].join(' / ');
     const region = parsed.data.region ?? (joinedRegions || ordered[0]?.region);
 
-    // Formulário clássico: cria já pronto para operação (compatível).
-    // A Mesa de Roteirização cria RASCUNHO e usa "Enviar para Operação".
+    // Admin monta o roteiro; só vai à Operação após "Disponibilizar"
     const route = await prisma.route.create({
       data: {
         name: parsed.data.name.trim(),
@@ -324,11 +323,9 @@ export function createRoutesRouter(io: Server) {
         notes: parsed.data.notes?.trim() || null,
         hasPriority,
         priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
-        plannedVehicleCount: parsed.data.plannedVehicleCount ?? null,
-        status: RouteStatus.AGUARDANDO_PLACAS,
-        readyForOperation: true,
-        sentToOperationAt: new Date(),
-        sentToOperationById: req.user!.id,
+        plannedVehicleCount: 1,
+        status: RouteStatus.RASCUNHO,
+        readyForOperation: false,
         createdById: req.user!.id,
         dealerships: {
           create: ordered.map((d, order) => ({

@@ -22,10 +22,7 @@ import { Reports } from './pages/Reports'
 import { Users } from './pages/Users'
 import { Audit } from './pages/Audit'
 import { Search } from './pages/Search'
-import { PlanningBoard } from './pages/PlanningBoard'
-import { MyDay } from './pages/MyDay'
 import { AlertsCenter } from './pages/AlertsCenter'
-import { PlanningOverview } from './pages/PlanningOverview'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,9 +64,8 @@ function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
 
 function HomeRedirect() {
   const role = useAuthStore((s) => s.user?.role)
-  if (role === 'ADMIN') return <Navigate to="/mesa" replace />
   if (role === 'OPERACAO') return <Navigate to="/definir-placas" replace />
-  return <Navigate to="/planejamento" replace />
+  return <Navigate to="/roteiros" replace />
 }
 
 export default function App() {
@@ -87,30 +83,9 @@ export default function App() {
               }
             >
               <Route index element={<HomeRedirect />} />
-              <Route
-                path="mesa"
-                element={
-                  <RoleGate roles={['ADMIN']}>
-                    <PlanningBoard />
-                  </RoleGate>
-                }
-              />
-              <Route
-                path="meu-dia"
-                element={
-                  <RoleGate roles={['ADMIN']}>
-                    <MyDay />
-                  </RoleGate>
-                }
-              />
-              <Route
-                path="planejamento"
-                element={
-                  <RoleGate roles={['ADMIN', 'CONSULTA']}>
-                    <PlanningOverview />
-                  </RoleGate>
-                }
-              />
+              <Route path="mesa" element={<Navigate to="/roteiros" replace />} />
+              <Route path="meu-dia" element={<Navigate to="/roteiros" replace />} />
+              <Route path="planejamento" element={<Navigate to="/roteiros" replace />} />
               <Route path="alertas" element={<AlertsCenter />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="frota" element={<Fleet />} />

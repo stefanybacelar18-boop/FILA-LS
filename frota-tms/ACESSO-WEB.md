@@ -1,10 +1,14 @@
-# Acesso web — FrotaTMS (demo)
+# Acesso web — FrotaTMS
 
-**Link:** https://like-additional-reputation-pty.trycloudflare.com
+**Link:** https://appreciation-guns-nomination-clearance.trycloudflare.com
 
-| Perfil | E-mail | Senha |
-|--------|--------|-------|
-| Admin | admin@frotatms.com | admin123 |
-| Operação | operacao@frotatms.com | operacao123 |
+## Fluxo
 
-Visual limpo · 1 placa por rota.
+1. Admin cria roteiro e **Disponibiliza**
+2. Operação escolhe **1 placa**
+3. Se não carregar → informar atraso/quebra
+
+| Perfil | Login |
+|--------|-------|
+| Admin | admin@frotatms.com / admin123 |
+| Operação | operacao@frotatms.com / operacao123 |
