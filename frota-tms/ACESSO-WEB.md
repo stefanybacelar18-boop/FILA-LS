@@ -1,24 +1,29 @@
 # Acesso web — FrotaTMS (demo)
 
-**Link público (túnel Cloudflare):**  
-https://herbs-preparation-received-algorithms.trycloudflare.com
+**Link público:**  
+https://cholesterol-thursday-design-childrens.trycloudflare.com
 
 > Túnel temporário: se expirar, peça para reativar.
 
 ## Logins
 
-| Perfil | E-mail | Senha | O que testar |
-|--------|--------|-------|--------------|
-| **Admin** | admin@frotatms.com | admin123 | Mesa, Meu Dia, Planejamento, Alertas |
-| **Operação** | operacao@frotatms.com | operacao123 | Definir Placas (simples) |
-| **Consulta** | consulta@frotatms.com | consulta123 | Somente leitura |
+| Perfil | E-mail | Senha |
+|--------|--------|-------|
+| **Admin** | admin@frotatms.com | admin123 |
+| **Operação** | operacao@frotatms.com | operacao123 |
+| **Consulta** | consulta@frotatms.com | consulta123 |
 
-## Roteiro rápido de teste
+## Regra atual
 
-1. Entre como **Admin** → cai na **Mesa de Roteirização**
-2. Veja cidades pendentes (ex.: Salvador com N notas)
-3. Arraste uma cidade para **Nova rota**
-4. Clique **Definir meta / prioridade** → informe qtd. de veículos → Marcar pronta
-5. Clique **Enviar para Operação**
-6. Saia e entre como **Operação** → **Definir Placas**
-7. Escolha a rota → selecione placas → veja **Necessário / Selecionados / Faltam / Cobertura** → Confirmar
+- **1 placa por rota** (nada mais)
+- Admin monta e envia rotas na **Mesa**
+- Operação vê todas as rotas enviadas e escolhe **1 veículo**
+- Operação registra **atraso / quebra** quando o veículo não carrega
+
+## Teste rápido
+
+1. Admin → Mesa → arraste cidades → Marcar pronta → **Enviar para Operação**
+2. Operação → Definir Placa → escolha a rota → escolha **1 placa** → Confirmar
+3. Se um veículo não puder carregar → **Informar atraso/quebra** (motivo + previsão)
+
+Roteiros anteriores foram **zerados** (banco limpo para este teste).

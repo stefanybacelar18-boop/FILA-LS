@@ -78,7 +78,7 @@ export function RouteForm() {
         notes: notes || null,
         hasPriority,
         priorityNotes: hasPriority ? priorityNotes || null : null,
-        plannedVehicleCount: plannedVehicleCount ? Number(plannedVehicleCount) : null,
+        plannedVehicleCount: plannedVehicleCount ? Number(plannedVehicleCount) : 1,
       }
       if (isNew) return (await api.post<Route>('/routes', payload)).data
       return (await api.put<Route>(`/routes/${id}`, payload)).data

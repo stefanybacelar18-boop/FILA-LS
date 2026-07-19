@@ -365,7 +365,7 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Roteiro sem concessionárias' });
     }
     if (!route.plannedVehicleCount || route.plannedVehicleCount < 1) {
-      return res.status(400).json({ error: 'Defina a quantidade de veículos necessários' });
+      // 1 placa por rota
     }
 
     const updated = await prisma.route.update({
@@ -373,6 +373,7 @@ export function createRoutesRouter(io: Server) {
       data: {
         status: RouteStatus.AGUARDANDO_PLACAS,
         readyForOperation: true,
+        plannedVehicleCount: 1,
         sentToOperationAt: new Date(),
         sentToOperationById: req.user!.id,
       },
@@ -386,7 +387,7 @@ export function createRoutesRouter(io: Server) {
     await audit('SEND_TO_OPERATION', 'Route', {
       userId: req.user!.id,
       entityId: routeId,
-      details: route.name,
+      details: `${route.name} · 1 placa`,
     });
     io.emit('routes:changed', { action: 'send', id: routeId });
     io.emit('planning:changed', { action: 'send', id: routeId });
@@ -454,33 +455,46 @@ export function createRoutesRouter(io: Server) {
     res.json(route);
   });
 
-  /** Assign plates to route (operação) — exclusive screen action */
+  /** Assign plates to route (operação) — 1 placa por rota */
   router.post('/:id/assign-plates', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
-    const { vehicleIds, driverName, drivers } = req.body as {
-      vehicleIds: string[];
+    const { vehicleIds, vehicleId, driverName, drivers } = req.body as {
+      vehicleIds?: string[];
+      vehicleId?: string;
       driverName?: string;
       drivers?: Record<string, string>;
     };
-    if (!Array.isArray(vehicleIds) || vehicleIds.length === 0) {
-      return res.status(400).json({ error: 'Selecione ao menos uma placa' });
-    }
 
-    const uniqueVehicleIds = [...new Set(vehicleIds)];
+    // Aceita vehicleId único ou vehicleIds[0] — regra: exatamente 1 placa por rota
+    const rawIds = vehicleId
+      ? [vehicleId]
+      : Array.isArray(vehicleIds)
+        ? vehicleIds
+        : [];
+    const uniqueVehicleIds = [...new Set(rawIds.filter(Boolean))];
+    if (uniqueVehicleIds.length === 0) {
+      return res.status(400).json({ error: 'Selecione a placa do veículo' });
+    }
+    if (uniqueVehicleIds.length > 1) {
+      return res.status(400).json({ error: 'Esta rota aceita apenas 1 placa' });
+    }
 
     const route = await prisma.route.findUnique({
       where: { id: paramId(req) },
       include: {
         ...routeDealershipInclude,
         dealership: true,
+        vehicles: true,
+        trips: { where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
       },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
-    if (
-      route.status !== RouteStatus.AGUARDANDO_PLACAS &&
-      route.status !== RouteStatus.RASCUNHO &&
-      route.status !== RouteStatus.EM_ANDAMENTO
-    ) {
-      return res.status(400).json({ error: 'Roteiro não aceita novas placas' });
+    if (route.status !== RouteStatus.AGUARDANDO_PLACAS) {
+      return res.status(400).json({
+        error: 'Só rotas enviadas pelo Admin (aguardando placas) podem receber veículo',
+      });
+    }
+    if (route.vehicles.length > 0 || route.trips.length > 0) {
+      return res.status(400).json({ error: 'Esta rota já tem placa definida' });
     }
 
     const linked: DealershipRow[] =
@@ -503,15 +517,15 @@ export function createRoutesRouter(io: Server) {
       const results = await prisma.$transaction(async (tx) => {
         const trips = [];
 
-        for (const vehicleId of uniqueVehicleIds) {
-          const vehicle = await tx.vehicle.findUnique({ where: { id: vehicleId } });
+        for (const vid of uniqueVehicleIds) {
+          const vehicle = await tx.vehicle.findUnique({ where: { id: vid } });
           if (!vehicle) {
-            throw Object.assign(new Error(`Veículo ${vehicleId} não encontrado`), { status: 404 });
+            throw Object.assign(new Error(`Veículo ${vid} não encontrado`), { status: 404 });
           }
 
           // Atomic claim: only succeed if still DISPONIVEL
           const claimed = await tx.vehicle.updateMany({
-            where: { id: vehicleId, status: VehicleStatus.DISPONIVEL },
+            where: { id: vid, status: VehicleStatus.DISPONIVEL },
             data: { status: VehicleStatus.EM_VIAGEM },
           });
           if (claimed.count !== 1) {
@@ -521,7 +535,7 @@ export function createRoutesRouter(io: Server) {
           }
 
           const openTrip = await tx.trip.findFirst({
-            where: { vehicleId, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+            where: { vehicleId: vid, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
           });
           if (openTrip) {
             throw Object.assign(
@@ -541,22 +555,22 @@ export function createRoutesRouter(io: Server) {
           }
 
           const resolvedDriver =
-            drivers?.[vehicleId]?.trim() ||
+            drivers?.[vid]?.trim() ||
             driverName?.trim() ||
             vehicle.defaultDriver ||
             null;
 
           await tx.routeVehicle.upsert({
             where: {
-              routeId_vehicleId: { routeId: route.id, vehicleId },
+              routeId_vehicleId: { routeId: route.id, vehicleId: vid },
             },
-            create: { routeId: route.id, vehicleId },
+            create: { routeId: route.id, vehicleId: vid },
             update: { assignedAt: new Date() },
           });
 
           const t = await tx.trip.create({
             data: {
-              vehicleId,
+              vehicleId: vid,
               dealershipId: farthest.id,
               routeId: route.id,
               driverName: resolvedDriver,
@@ -570,7 +584,7 @@ export function createRoutesRouter(io: Server) {
 
           await tx.vehicleHistory.create({
             data: {
-              vehicleId,
+              vehicleId: vid,
               userId: req.user!.id,
               tripId: t.id,
               action: 'SAIDA',
@@ -585,7 +599,10 @@ export function createRoutesRouter(io: Server) {
 
         await tx.route.update({
           where: { id: route.id },
-          data: { status: RouteStatus.EM_ANDAMENTO },
+          data: {
+            status: RouteStatus.EM_ANDAMENTO,
+            plannedVehicleCount: 1,
+          },
         });
 
         return trips;
@@ -594,7 +611,7 @@ export function createRoutesRouter(io: Server) {
       await audit('ASSIGN_PLATES', 'Route', {
         userId: req.user!.id,
         entityId: route.id,
-        details: `${uniqueVehicleIds.length} placa(s)`,
+        details: `1 placa`,
       });
       io.emit('fleet:changed', { action: 'assign', routeId: route.id });
       io.emit('trips:changed', { action: 'create' });

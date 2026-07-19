@@ -1,18 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core'
-import { GripVertical, Search } from 'lucide-react'
+import { AlertTriangle, Check, Wrench } from 'lucide-react'
 import { api } from '../lib/api'
 import type { PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
@@ -39,8 +28,6 @@ interface PlatesBoardVehicle extends Vehicle {
     reportedAt: string
     reportedBy: { id: string; name: string }
   } | null
-  unavailableReasonCode?: string
-  loadDate?: string
   shouldBeAvailable?: boolean
   needsJustification?: boolean
 }
@@ -53,12 +40,6 @@ interface PlatesBoard {
   assignedCount?: number
   available: PlatesBoardVehicle[]
   unavailable: PlatesBoardVehicle[]
-  summary?: {
-    available: number
-    unavailable: number
-    criticalPendingJustifications: number
-    justified: number
-  }
 }
 
 function citiesOf(route: Route): string[] {
@@ -91,92 +72,22 @@ function allowedTypesForRoute(route: Route): Set<'TRUCK' | 'CARRETA'> | null {
   return allowed
 }
 
-function PlateRow({
-  vehicle,
-  onAction,
-  actionLabel,
-  draggable,
-  extra,
-}: {
-  vehicle: { id: string; plate: string; color: PlateColor; capacityMotos: number; defaultDriver: string | null }
-  onAction: () => void
-  actionLabel: string
-  draggable?: boolean
-  extra?: string
-}) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: vehicle.id,
-    data: { vehicle },
-    disabled: !draggable,
-  })
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3',
-        isDragging && 'opacity-40',
-      )}
-    >
-      {draggable && (
-        <button
-          type="button"
-          className="cursor-grab touch-none p-1 text-[var(--color-text-muted)]"
-          {...listeners}
-          {...attributes}
-          aria-label="Arrastar"
-        >
-          <GripVertical className="h-5 w-5" />
-        </button>
-      )}
-      <div className="min-w-0 flex-1">
-        <PlateBadge plate={vehicle.plate} color={vehicle.color} />
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          {vehicle.capacityMotos} motos
-          {vehicle.defaultDriver ? ` · ${vehicle.defaultDriver}` : ''}
-        </p>
-        {extra && <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{extra}</p>}
-      </div>
-      <Button variant={draggable ? 'primary' : 'secondary'} size="sm" onClick={onAction}>
-        {actionLabel}
-      </Button>
-    </div>
-  )
-}
-
-function DropArea({ empty, children }: { empty: boolean; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: 'route-drop' })
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'min-h-[240px] space-y-2 rounded-xl border-2 border-dashed p-3 transition',
-        isOver
-          ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]/50'
-          : 'border-[var(--color-border)] bg-[var(--color-surface-2)]/40',
-      )}
-    >
-      {empty ? (
-        <p className="py-16 text-center text-base text-[var(--color-text-muted)]">
-          Toque em <strong>Usar</strong> ou arraste a placa para cá
-        </p>
-      ) : (
-        children
-      )}
-    </div>
-  )
-}
+/** Motivos focados em atraso / quebra (operação) */
+const cannotLoadPresets = [
+  'Quebra mecânica',
+  'Atraso no retorno da viagem anterior',
+  'Veículo em manutenção',
+  'Acidente ou pane',
+  'Motorista indisponível',
+  'Outro (descrever abaixo)',
+] as const
 
 export function AssignPlates() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [routeId, setRouteId] = useState(searchParams.get('routeId') || '')
-  const [selected, setSelected] = useState<string[]>([])
-  const [driverName, setDriverName] = useState('')
-  const [driverTouched, setDriverTouched] = useState(false)
-  const [plateSearch, setPlateSearch] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [activeId, setActiveId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
 
@@ -185,18 +96,20 @@ export function AssignPlates() {
   const [reason, setReason] = useState('')
   const [forecastDate, setForecastDate] = useState('')
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
-
   const { data: routes = [], isLoading: loadingRoutes } = useQuery({
     queryKey: ['routes'],
     queryFn: async () => (await api.get<Route[]>('/routes')).data,
   })
 
-  // Operação só vê o que o Admin já enviou (AGUARDANDO_PLACAS)
-  const assignableRoutes = useMemo(
+  // Só o que o Admin já enviou — e ainda sem placa
+  const pendingRoutes = useMemo(
     () =>
       routes
-        .filter((r) => r.status === 'AGUARDANDO_PLACAS')
+        .filter(
+          (r) =>
+            r.status === 'AGUARDANDO_PLACAS' &&
+            (!r.vehicles || r.vehicles.length === 0),
+        )
         .sort((a, b) => Number(b.hasPriority) - Number(a.hasPriority)),
     [routes],
   )
@@ -216,72 +129,46 @@ export function AssignPlates() {
     enabled: !!routeId,
   })
 
-  const available = board?.available ?? []
+  const available = useMemo(() => {
+    const list = board?.available ?? []
+    if (!allowedTypes) return list
+    return list.filter((v) => allowedTypes.has(v.type))
+  }, [board?.available, allowedTypes])
+
   const unavailable = board?.unavailable ?? []
-
-  const pool = useMemo(() => {
-    const q = plateSearch.trim().toLowerCase()
-    return available.filter((v) => {
-      if (selected.includes(v.id)) return false
-      if (allowedTypes && !allowedTypes.has(v.type)) return false
-      if (!q) return true
-      return (
-        v.plate.toLowerCase().includes(q) ||
-        (v.defaultDriver?.toLowerCase().includes(q) ?? false)
-      )
-    })
-  }, [available, selected, plateSearch, allowedTypes])
-
-  const selectedVehicles = available.filter((v) => selected.includes(v.id))
-
-  useEffect(() => {
-    if (driverTouched) return
-    if (selectedVehicles.length === 1 && selectedVehicles[0].defaultDriver) {
-      setDriverName(selectedVehicles[0].defaultDriver)
-    } else if (selectedVehicles.length === 0) {
-      setDriverName('')
-    } else {
-      const drivers = [...new Set(selectedVehicles.map((v) => v.defaultDriver).filter(Boolean))]
-      setDriverName(drivers.length === 1 ? (drivers[0] as string) : '')
-    }
-  }, [selectedVehicles, driverTouched])
+  const selectedVehicle = available.find((v) => v.id === selectedId) ?? null
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      const drivers: Record<string, string> = {}
-      for (const v of selectedVehicles) {
-        const name = driverName.trim() || v.defaultDriver
-        if (name) drivers[v.id] = name
-      }
+      if (!selectedId) throw new Error('Sem placa')
       return api.post(`/routes/${routeId}/assign-plates`, {
-        vehicleIds: selected,
-        driverName: driverName.trim() || undefined,
-        drivers,
+        vehicleId: selectedId,
+        vehicleIds: [selectedId],
+        driverName: selectedVehicle?.defaultDriver || undefined,
       })
     },
     onSuccess: async () => {
-      const n = selected.length
-      const name = selectedRoute?.name ?? 'roteiro'
-      setSelected([])
-      setDriverName('')
-      setDriverTouched(false)
+      const plate = selectedVehicle?.plate ?? ''
+      const name = selectedRoute?.name ?? 'rota'
+      setSelectedId(null)
       setConfirmOpen(false)
       setError('')
       setRouteId('')
-      setPlateSearch('')
-      setOkMsg(`${n} placa(s) definida(s) em "${name}". Roteiro saiu da pendência.`)
+      setSearchParams({})
+      setOkMsg(`Placa ${plate} confirmada na rota "${name}".`)
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['routes'] }),
         qc.invalidateQueries({ queryKey: ['vehicles'] }),
         qc.invalidateQueries({ queryKey: ['trips'] }),
         qc.invalidateQueries({ queryKey: ['dashboard'] }),
         qc.invalidateQueries({ queryKey: ['plates-board'] }),
+        qc.invalidateQueries({ queryKey: ['planning-alerts'] }),
       ])
     },
     onError: (err: unknown) => {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'Não foi possível atribuir. Tente de novo.',
+          'Não foi possível confirmar a placa.',
       )
       setConfirmOpen(false)
     },
@@ -308,13 +195,13 @@ export function AssignPlates() {
       setReason('')
       setForecastDate('')
       setError('')
-      setOkMsg('Indisponibilidade registrada com previsão de disponibilidade.')
+      setOkMsg('Atraso/quebra registrado com previsão de disponibilidade.')
       await qc.invalidateQueries({ queryKey: ['plates-board', routeId] })
     },
     onError: (err: unknown) => {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'Não foi possível salvar a justificativa.',
+          'Não foi possível salvar o registro.',
       )
     },
   })
@@ -322,370 +209,236 @@ export function AssignPlates() {
   function pickRoute(id: string) {
     setRouteId(id)
     setSearchParams(id ? { routeId: id } : {})
-    setSelected([])
-    setDriverName('')
-    setDriverTouched(false)
+    setSelectedId(null)
     setError('')
     setOkMsg('')
-    setPlateSearch('')
   }
 
-  function addPlate(id: string) {
-    setSelected((prev) => (prev.includes(id) ? prev : [...prev, id]))
-    setOkMsg('')
+  function openJustify(v: PlatesBoardVehicle) {
+    setError('')
+    setJustifyVehicle(v)
+    setPreset('')
+    setReason(v.report?.reason ?? '')
+    setForecastDate(
+      v.report?.availableAtForecast
+        ? toInputDate(v.report.availableAtForecast)
+        : toInputDate(selectedRoute?.date ?? new Date()),
+    )
   }
-
-  function removePlate(id: string) {
-    setSelected((prev) => prev.filter((x) => x !== id))
-  }
-
-  function onDragStart(e: DragStartEvent) {
-    setActiveId(String(e.active.id))
-  }
-
-  function onDragEnd(e: DragEndEvent) {
-    setActiveId(null)
-    if (e.over?.id === 'route-drop') addPlate(String(e.active.id))
-  }
-
-  const activeVehicle = available.find((v) => v.id === activeId)
-
-  const pendingJustification = unavailable.filter((v) => !v.report)
-  const criticalPending = unavailable.filter((v) => v.shouldBeAvailable && !v.report)
-  const needed = board?.plannedVehicleCount ?? selectedRoute?.plannedVehicleCount ?? null
-  const alreadyAssigned = board?.assignedCount ?? 0
-  const selectedTotal = selected.length
-  const effectiveAssigned = alreadyAssigned + selectedTotal
-  const missing =
-    needed != null && needed > 0 ? Math.max(0, needed - effectiveAssigned) : null
-  const excess =
-    needed != null && needed > 0 ? Math.max(0, effectiveAssigned - needed) : null
-  const coverage =
-    needed != null && needed > 0
-      ? Math.min(100, Math.round((effectiveAssigned / needed) * 100))
-      : null
-  const canConfirm = selected.length > 0 && criticalPending.length === 0
 
   return (
-    <div className="ops-readable mx-auto max-w-5xl">
+    <div className="ops-readable mx-auto max-w-3xl">
       <PageHeader
-        title="Operação — Definir Placas"
-        description="Escolha a rota · selecione as placas · confirme. Só isso."
+        title="Definir Placa"
+        description="Escolha a rota do Admin · selecione 1 veículo · confirme. Se não puder carregar, informe atraso ou quebra."
       />
 
       {okMsg && (
-        <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-lg font-medium text-teal-900 dark:text-teal-100">
-          {okMsg}
+        <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-lg font-medium">{okMsg}</p>
+      )}
+      {error && (
+        <p className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-lg text-[var(--color-danger)]">
+          {error}
         </p>
       )}
 
-      <p className="mb-3 text-2xl font-bold">1. Escolha a rota</p>
-
-      {loadingRoutes ? (
-        <div className="flex justify-center py-10">
-          <Spinner size="lg" />
-        </div>
-      ) : assignableRoutes.length === 0 ? (
-        <EmptyState title="Nenhuma pendência" description="Todos os roteiros já têm placa definida." />
-      ) : (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2">
-          {assignableRoutes.map((r) => {
-            const c = citiesOf(r)
-            const active = r.id === routeId
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => pickRoute(r.id)}
-                className={cn(
-                  'min-h-[88px] rounded-xl border-2 px-4 py-4 text-left transition',
-                  active
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                    : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-lg font-semibold">{r.name}</span>
-                  {r.hasPriority && (
-                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
-                      Prioridade
-                    </span>
+      {/* PASSO 1 — Rotas do Admin */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-2xl font-bold">1. Rotas do Admin</h2>
+        {loadingRoutes ? (
+          <div className="flex justify-center py-10">
+            <Spinner size="lg" />
+          </div>
+        ) : pendingRoutes.length === 0 ? (
+          <EmptyState
+            title="Nenhuma rota aguardando"
+            description="Quando o Admin enviar uma rota, ela aparece aqui."
+          />
+        ) : (
+          <div className="space-y-3">
+            {pendingRoutes.map((r) => {
+              const c = citiesOf(r)
+              const active = r.id === routeId
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => pickRoute(r.id)}
+                  className={cn(
+                    'flex w-full min-h-[96px] flex-col items-start rounded-2xl border-2 px-5 py-4 text-left transition',
+                    active
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
+                      : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/50',
                   )}
-                </div>
-                <p className="mt-1 text-base text-[var(--color-text-muted)]">
-                  {formatDate(r.date)} · 06:00
-                  {c.length > 0 ? ` · ${c.join(', ')}` : ''}
-                </p>
-              </button>
-            )
-          })}
-        </div>
-      )}
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span className="text-xl font-bold">{r.name}</span>
+                    {r.hasPriority && (
+                      <span className="rounded-lg bg-amber-500/25 px-3 py-1 text-sm font-bold text-amber-900 dark:text-amber-100">
+                        ★ Prioridade
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-lg text-[var(--color-text-muted)]">
+                    {formatDate(r.date)} · 06:00
+                    {c.length > 0 ? ` · ${c.join(', ')}` : ''}
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-[var(--color-primary)]">
+                    Precisa de 1 placa
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {!routeId ? null : (
         <>
-          <div className="mb-6 rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
-            <p className="text-2xl font-bold">
-              {selectedRoute?.name}
-              {selectedRoute?.hasPriority && (
-                <span className="ml-2 text-lg text-amber-700 dark:text-amber-300">★ Prioridade</span>
-              )}
-            </p>
-            <p className="mt-1 text-lg text-[var(--color-text-muted)]">
-              {cities.length > 0 ? cities.join(', ') : '—'} · {formatDate(selectedRoute?.date)} 06:00
-            </p>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <CoverageStat label="Necessário" value={needed ?? '—'} />
-              <CoverageStat label="Selecionados" value={selectedTotal} tone="text-[var(--color-primary)]" />
-              <CoverageStat
-                label={missing != null && missing > 0 ? 'Faltam' : excess && excess > 0 ? 'Excesso' : 'Faltam'}
-                value={missing != null && missing > 0 ? missing : excess && excess > 0 ? excess : 0}
-                tone={
-                  missing != null && missing > 0
-                    ? 'text-amber-700'
-                    : excess && excess > 0
-                      ? 'text-blue-700'
-                      : 'text-green-700'
-                }
-              />
-              <CoverageStat
-                label="Cobertura"
-                value={coverage != null ? `${coverage}%` : '—'}
-                tone={coverage != null && coverage >= 100 ? 'text-green-700' : 'text-amber-700'}
-              />
-            </div>
-            {coverage != null && (
-              <div className="mt-3 h-4 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
-                <div
-                  className={cn(
-                    'h-full rounded-full',
-                    coverage >= 100 ? 'bg-green-600' : 'bg-amber-500',
-                  )}
-                  style={{ width: `${coverage}%` }}
-                />
-              </div>
-            )}
-          </div>
-
-          {criticalPending.length > 0 && (
-            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm">
-              <p className="font-semibold text-[var(--color-danger)]">
-                {criticalPending.length} placa(s) já deveriam estar disponíveis e ainda sem
-                justificativa.
-              </p>
-              <p className="mt-1 text-[var(--color-text-muted)]">
-                Antes de confirmar o roteiro, justifique no passo 3 (motivo + previsão de
-                disponibilidade). Isso evita carregar com buraco na frota sem registro.
-              </p>
-            </div>
-          )}
-
-          <p className="mb-3 text-2xl font-bold">2. Selecione as placas</p>
-
-          {allowedTypes && allowedTypes.size < 2 && allowedTypes.size > 0 && (
-            <p className="mb-3 rounded-xl bg-amber-500/15 px-4 py-2 text-sm text-amber-900 dark:text-amber-100">
-              Este roteiro aceita apenas <strong>{[...allowedTypes].join(' / ')}</strong>
-            </p>
-          )}
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium">Motorista (opcional)</label>
-            <input
-              value={driverName}
-              onChange={(e) => {
-                setDriverTouched(true)
-                setDriverName(e.target.value)
-              }}
-              placeholder="Se vazio, usa o motorista da placa"
-              className="h-12 w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-base outline-none focus:border-[var(--color-primary)]"
-            />
-          </div>
-
-          {error && (
-            <p className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-base text-[var(--color-danger)]">
-              {error}
-            </p>
-          )}
-
-          <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section>
-                <h3 className="mb-2 text-base font-semibold">Disponíveis ({pool.length})</h3>
-                <div className="relative mb-3">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-                  <input
-                    type="search"
-                    value={plateSearch}
-                    onChange={(e) => setPlateSearch(e.target.value)}
-                    placeholder="Buscar placa…"
-                    className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-10 pr-3 text-base outline-none focus:border-[var(--color-primary)]"
-                  />
-                </div>
-                <div className="max-h-[400px] space-y-2 overflow-y-auto pr-1">
-                  {loadingBoard ? (
-                    <div className="flex justify-center py-12">
-                      <Spinner size="lg" />
-                    </div>
-                  ) : pool.length === 0 ? (
-                    <p className="py-8 text-center text-base text-[var(--color-text-muted)]">
-                      {selected.length > 0 ? 'Todas já estão no roteiro →' : 'Nenhuma placa livre'}
-                    </p>
-                  ) : (
-                    pool.map((v) => (
-                      <PlateRow
-                        key={v.id}
-                        vehicle={v}
-                        draggable
-                        actionLabel="Usar"
-                        onAction={() => addPlate(v.id)}
-                      />
-                    ))
-                  )}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-2 text-base font-semibold">No roteiro ({selected.length})</h3>
-                <DropArea empty={selected.length === 0}>
-                  {selectedVehicles.map((v) => (
-                    <PlateRow
-                      key={v.id}
-                      vehicle={v}
-                      actionLabel="Tirar"
-                      onAction={() => removePlate(v.id)}
-                    />
-                  ))}
-                </DropArea>
-
-                <Button
-                  className="mt-4 h-16 w-full text-xl font-bold"
-                  size="lg"
-                  disabled={!canConfirm}
-                  onClick={() => setConfirmOpen(true)}
-                  loading={assignMutation.isPending}
-                >
-                  Confirmar {selected.length > 0 ? `(${selected.length} placas)` : ''}
-                </Button>
-                {criticalPending.length > 0 && (
-                  <p className="mt-2 text-center text-base font-semibold text-[var(--color-danger)]">
-                    Justifique as {criticalPending.length} placa(s) críticas para liberar
-                  </p>
-                )}
-                {missing != null && missing > 0 && selected.length > 0 && (
-                  <p className="mt-2 text-center text-base text-amber-700">
-                    Ainda faltam {missing} veículo(s) para a meta — você pode confirmar parcial.
-                  </p>
-                )}
-              </section>
-            </div>
-
-            <DragOverlay>
-              {activeVehicle ? (
-                <div className="rounded-xl border bg-[var(--color-surface)] px-4 py-3 shadow-lg">
-                  <PlateBadge plate={activeVehicle.plate} color={activeVehicle.color} />
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-
-          {/* Indisponíveis — operador justifica */}
-          <div className="mt-8">
-            <p className="mb-2 text-lg font-semibold">3. Placas indisponíveis para esta data</p>
-            <p className="mb-3 text-sm text-[var(--color-text-muted)]">
-              Se a placa não pode carregar em {selectedRoute ? formatDate(selectedRoute.date) : '—'}{' '}
-              às 06:00, o operador deve justificar e informar a previsão de disponibilidade.
-              {pendingJustification.length > 0 && (
-                <span className="ml-1 font-medium text-[var(--color-danger)]">
-                  ({pendingJustification.length} sem justificativa)
-                </span>
-              )}
+          {/* PASSO 2 — Escolher 1 placa */}
+          <section className="mb-8">
+            <h2 className="mb-1 text-2xl font-bold">2. Escolha 1 placa</h2>
+            <p className="mb-4 text-lg text-[var(--color-text-muted)]">
+              Rota <strong>{selectedRoute?.name}</strong>
+              {cities.length > 0 ? ` → ${cities.join(', ')}` : ''}
             </p>
 
             {loadingBoard ? (
-              <div className="flex justify-center py-8">
-                <Spinner />
+              <div className="flex justify-center py-12">
+                <Spinner size="lg" />
               </div>
-            ) : unavailable.length === 0 ? (
-              <EmptyState title="Nenhuma placa indisponível" description="Toda a frota elegível está livre." />
+            ) : available.length === 0 ? (
+              <EmptyState
+                title="Nenhuma placa disponível"
+                description="Use a seção abaixo para informar atraso ou quebra das placas que deveriam carregar."
+              />
             ) : (
-              <div className="max-h-[420px] space-y-2 overflow-y-auto">
+              <div className="space-y-2">
+                {available.map((v) => {
+                  const active = selectedId === v.id
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSelectedId(v.id)}
+                      className={cn(
+                        'flex w-full items-center gap-4 rounded-2xl border-2 px-4 py-4 text-left transition',
+                        active
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
+                          : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2',
+                          active
+                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                            : 'border-[var(--color-border-strong)]',
+                        )}
+                      >
+                        {active && <Check className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <PlateBadge plate={v.plate} color={v.color as PlateColor} />
+                        <p className="mt-1 text-base text-[var(--color-text-muted)]">
+                          {v.capacityMotos} motos
+                          {v.defaultDriver ? ` · ${v.defaultDriver}` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <Button
+              className="mt-5 h-16 w-full text-xl font-bold"
+              size="xl"
+              disabled={!selectedId}
+              onClick={() => setConfirmOpen(true)}
+              loading={assignMutation.isPending}
+            >
+              Confirmar placa {selectedVehicle ? selectedVehicle.plate : ''}
+            </Button>
+          </section>
+
+          {/* PASSO 3 — Informar atraso / quebra */}
+          <section className="mb-8 rounded-2xl border-2 border-amber-500/40 bg-amber-500/5 p-5">
+            <h2 className="mb-2 flex items-center gap-2 text-2xl font-bold text-amber-900 dark:text-amber-100">
+              <Wrench className="h-7 w-7" />
+              3. Informar atraso ou quebra
+            </h2>
+            <p className="mb-4 text-lg text-[var(--color-text-muted)]">
+              Se um veículo <strong>não vai carregar</strong> nesta rota (atraso, quebra, manutenção),
+              registre aqui o motivo e a previsão de quando volta a ficar disponível.
+            </p>
+
+            {unavailable.length === 0 ? (
+              <p className="text-lg text-[var(--color-text-muted)]">
+                Nenhuma placa indisponível no momento.
+              </p>
+            ) : (
+              <div className="space-y-3">
                 {unavailable.map((v) => (
                   <div
                     key={v.id}
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-xl border px-3 py-3',
+                      'flex flex-wrap items-center gap-3 rounded-xl border-2 bg-[var(--color-surface)] px-4 py-4',
                       v.shouldBeAvailable && !v.report
-                        ? 'border-red-500/40 bg-red-500/5'
-                        : 'border-[var(--color-border)] bg-[var(--color-surface)]',
+                        ? 'border-red-500/50'
+                        : 'border-[var(--color-border)]',
                     )}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <PlateBadge plate={v.plate} color={v.color} />
+                        <PlateBadge plate={v.plate} color={v.color as PlateColor} />
                         {v.shouldBeAvailable && (
-                          <span className="rounded bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-[var(--color-danger)]">
-                            Já deveria ter retornado
+                          <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-2 py-1 text-sm font-bold text-[var(--color-danger)]">
+                            <AlertTriangle className="h-4 w-4" /> Já deveria ter retornado
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      <p className="mt-1 text-base text-[var(--color-text-muted)]">
                         {vehicleStatusLabels[v.status as VehicleStatus] ?? v.status}
                         {v.expectedReturn ? ` · retorno prev. ${formatDate(v.expectedReturn)}` : ''}
                       </p>
                       {v.report ? (
-                        <p className="mt-1 text-sm">
-                          <span className="font-medium">Justificativa:</span> {v.report.reason}
-                          <span className="block text-xs text-[var(--color-text-muted)]">
-                            Disp. prevista: {formatDate(v.report.availableAtForecast)} · por{' '}
-                            {v.report.reportedBy.name}
+                        <p className="mt-2 text-base">
+                          <strong>Registrado:</strong> {v.report.reason}
+                          <span className="block text-sm text-[var(--color-text-muted)]">
+                            Disp. prevista: {formatDate(v.report.availableAtForecast)}
                           </span>
                         </p>
                       ) : (
-                        <p className="mt-1 text-xs font-medium text-[var(--color-danger)]">
-                          Pendente de justificativa
+                        <p className="mt-1 text-base font-semibold text-[var(--color-danger)]">
+                          Sem registro de atraso/quebra
                         </p>
                       )}
                     </div>
                     <Button
-                      size="sm"
+                      size="lg"
                       variant={v.report ? 'secondary' : 'primary'}
-                      onClick={() => {
-                        setError('')
-                        setJustifyVehicle(v)
-                        setPreset('')
-                        setReason(v.report?.reason ?? '')
-                        setForecastDate(
-                          v.report?.availableAtForecast
-                            ? toInputDate(v.report.availableAtForecast)
-                            : toInputDate(selectedRoute?.date ?? new Date()),
-                        )
-                      }}
+                      onClick={() => openJustify(v)}
                     >
-                      {v.report ? 'Atualizar' : 'Justificar'}
+                      {v.report ? 'Atualizar' : 'Informar atraso/quebra'}
                     </Button>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </>
-      )}
-
-      {!routeId && assignableRoutes.length > 0 && (
-        <p className="mt-2 text-center text-base text-[var(--color-text-muted)]">
-          Toque em um roteiro para continuar
-        </p>
       )}
 
       <ConfirmModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => assignMutation.mutate()}
-        title="Confirmar placas?"
+        title="Confirmar 1 placa nesta rota?"
         message={`Rota: ${selectedRoute?.name}
-Necessário: ${needed ?? '—'} · Selecionados: ${selectedTotal} · Faltam: ${missing ?? '—'} · Cobertura: ${coverage != null ? `${coverage}%` : '—'}
-Saída ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00.`}
+Placa: ${selectedVehicle?.plate ?? '—'}
+Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00
+(Esta rota aceita somente 1 veículo.)`}
         confirmLabel="Sim, confirmar"
         loading={assignMutation.isPending}
       />
@@ -693,28 +446,28 @@ Saída ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00.`}
       <Modal
         open={!!justifyVehicle}
         onClose={() => setJustifyVehicle(null)}
-        title={`Indisponível — ${justifyVehicle?.plate ?? ''}`}
+        title={`Atraso / quebra — ${justifyVehicle?.plate ?? ''}`}
       >
-        <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Informe por que esta placa não estará disponível para carregar em{' '}
-            <strong>{selectedRoute ? formatDate(selectedRoute.date) : ''}</strong> às 06:00 e a
-            previsão de quando volta a ficar disponível.
+        <div className="space-y-4">
+          <p className="text-base text-[var(--color-text-muted)]">
+            Informe por que a placa <strong>{justifyVehicle?.plate}</strong> não carrega em{' '}
+            <strong>{selectedRoute ? formatDate(selectedRoute.date) : ''}</strong> às 06:00.
           </p>
           <Select
             label="Motivo"
             value={preset}
             onChange={(e) => setPreset(e.target.value)}
-            options={delayReasonPresets.map((label) => ({ value: label, label }))}
+            options={[...cannotLoadPresets, ...delayReasonPresets.filter((p) => !(cannotLoadPresets as readonly string[]).includes(p))].map(
+              (label) => ({ value: label, label }),
+            )}
             placeholder="Selecione"
           />
           <Textarea
-            label="Justificativa"
+            label="Detalhes"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="Descreva o motivo…"
-            required
+            placeholder="Descreva o atraso ou a quebra…"
           />
           <Input
             label="Previsão de disponibilidade"
@@ -724,36 +477,20 @@ Saída ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00.`}
             required
           />
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setJustifyVehicle(null)}>
+            <Button variant="secondary" size="lg" onClick={() => setJustifyVehicle(null)}>
               Cancelar
             </Button>
             <Button
+              size="lg"
               loading={justifyMutation.isPending}
               disabled={composedReason().length < 5 || !forecastDate}
               onClick={() => justifyMutation.mutate()}
             >
-              Salvar
+              Salvar registro
             </Button>
           </div>
         </div>
       </Modal>
-    </div>
-  )
-}
-
-function CoverageStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string | number
-  tone?: string
-}) {
-  return (
-    <div className="rounded-xl bg-[var(--color-surface-2)] px-3 py-3 text-center">
-      <p className="text-sm font-medium text-[var(--color-text-muted)]">{label}</p>
-      <p className={cn('text-3xl font-bold', tone)}>{value}</p>
     </div>
   )
 }

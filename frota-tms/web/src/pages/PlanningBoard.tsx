@@ -130,7 +130,6 @@ export function PlanningBoard() {
   const [newCity, setNewCity] = useState('')
   const [newCount, setNewCount] = useState('1')
   const [editRoute, setEditRoute] = useState<BoardRoute | null>(null)
-  const [metaVehicles, setMetaVehicles] = useState('')
   const [routeNotes, setRouteNotes] = useState('')
   const [priority, setPriority] = useState(false)
   const [priorityNotes, setPriorityNotes] = useState('')
@@ -218,7 +217,7 @@ export function PlanningBoard() {
     mutationFn: () => {
       if (!editRoute) return Promise.reject()
       return api.patch(`/planning/routes/${editRoute.id}`, {
-        plannedVehicleCount: Math.max(1, Number(metaVehicles) || 1),
+        plannedVehicleCount: 1,
         notes: routeNotes.trim() || null,
         hasPriority: priority,
         priorityNotes: priority ? priorityNotes.trim() || null : null,
@@ -227,7 +226,7 @@ export function PlanningBoard() {
     },
     onSuccess: async () => {
       setEditRoute(null)
-      setOkMsg('Rota atualizada e marcada como pronta.')
+      setOkMsg('Rota atualizada e marcada como pronta (1 placa).')
       await invalidate()
     },
     onError: (err: unknown) => {
@@ -280,7 +279,6 @@ export function PlanningBoard() {
 
   function openEdit(route: BoardRoute) {
     setEditRoute(route)
-    setMetaVehicles(String(route.plannedVehicleCount || 1))
     setRouteNotes(route.notes || '')
     setPriority(!!route.hasPriority)
     setPriorityNotes(route.priorityNotes || '')
@@ -308,7 +306,7 @@ export function PlanningBoard() {
     <div className="ops-readable mx-auto max-w-[1600px]">
       <PageHeader
         title="Mesa de Roteirização"
-        description="Como no papel: agrupe cidades → monte rotas → envie para a Operação"
+        description="Como no papel: agrupe cidades → monte rotas (1 placa cada) → envie para a Operação"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button size="lg" variant="secondary" onClick={() => setAddOpen(true)}>
@@ -470,14 +468,9 @@ export function PlanningBoard() {
               {formatDate(editRoute.date)} ·{' '}
               {editRoute.dealerships.map((d) => d.dealership.city).join(', ')}
             </p>
-            <Input
-              label="Quantidade de veículos necessários"
-              type="number"
-              min={1}
-              value={metaVehicles}
-              onChange={(e) => setMetaVehicles(e.target.value)}
-              className="text-xl font-bold"
-            />
+            <p className="rounded-xl bg-[var(--color-surface-2)] px-4 py-3 text-lg font-semibold">
+              Esta rota usa <strong>1 placa</strong> (regra operacional).
+            </p>
             <label className="flex items-center gap-3 text-lg font-semibold">
               <input
                 type="checkbox"
@@ -563,7 +556,7 @@ function RouteCard({
         </div>
         <div>
           <dt className="text-[var(--color-text-muted)]">Veículos</dt>
-          <dd className="text-xl font-bold">{route.plannedVehicleCount ?? '—'}</dd>
+          <dd className="text-xl font-bold">1 placa</dd>
         </div>
         <div>
           <dt className="text-[var(--color-text-muted)]">Status</dt>

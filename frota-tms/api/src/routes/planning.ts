@@ -296,7 +296,7 @@ export function createPlanningRouter(io: Server) {
           notes: parsed.data.notes?.trim() || null,
           hasPriority: !!parsed.data.hasPriority,
           priorityNotes: parsed.data.hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
-          plannedVehicleCount: parsed.data.plannedVehicleCount ?? null,
+          plannedVehicleCount: 1,
           status: RouteStatus.RASCUNHO,
           readyForOperation: false,
           createdById: req.user!.id,
@@ -508,7 +508,11 @@ export function createPlanningRouter(io: Server) {
       return res.status(400).json({ error: 'Roteiro sem cidades/concessionárias' });
     }
     if (!route.plannedVehicleCount || route.plannedVehicleCount < 1) {
-      return res.status(400).json({ error: 'Defina a quantidade de veículos necessários' });
+      // Regra operacional: 1 placa por rota
+      await prisma.route.update({
+        where: { id: routeId },
+        data: { plannedVehicleCount: 1 },
+      });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -521,6 +525,7 @@ export function createPlanningRouter(io: Server) {
         data: {
           status: RouteStatus.AGUARDANDO_PLACAS,
           readyForOperation: true,
+          plannedVehicleCount: 1,
           sentToOperationAt: new Date(),
           sentToOperationById: req.user!.id,
         },
@@ -531,7 +536,7 @@ export function createPlanningRouter(io: Server) {
     await audit('SEND_TO_OPERATION', 'Route', {
       userId: req.user!.id,
       entityId: routeId,
-      details: `${route.name} · meta ${route.plannedVehicleCount}`,
+      details: `${route.name} · 1 placa`,
     });
     io.emit('planning:changed', { action: 'send', id: routeId });
     io.emit('routes:changed', { action: 'send', id: routeId });
