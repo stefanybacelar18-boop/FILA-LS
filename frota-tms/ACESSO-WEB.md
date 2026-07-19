@@ -1,14 +1,6 @@
-# Acesso web — FrotaTMS
+# Acesso
 
-**Link:** https://appreciation-guns-nomination-clearance.trycloudflare.com
+**Link:** https://fourth-acer-jacket-matter.trycloudflare.com
 
-## Fluxo
-
-1. Admin cria roteiro e **Disponibiliza**
-2. Operação escolhe **1 placa**
-3. Se não carregar → informar atraso/quebra
-
-| Perfil | Login |
-|--------|-------|
-| Admin | admin@frotatms.com / admin123 |
-| Operação | operacao@frotatms.com / operacao123 |
+Admin: admin@frotatms.com / admin123
+Operação: operacao@frotatms.com / operacao123

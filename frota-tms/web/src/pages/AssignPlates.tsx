@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check } from 'lucide-react'
 import { api } from '../lib/api'
 import type { PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
@@ -20,7 +20,8 @@ import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
-interface PlatesBoardVehicle extends Vehicle {
+interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
+  expectedReturn?: string | null
   report?: {
     id: string
     reason: string
@@ -40,6 +41,12 @@ interface PlatesBoard {
   assignedCount?: number
   available: PlatesBoardVehicle[]
   unavailable: PlatesBoardVehicle[]
+  summary?: {
+    available: number
+    unavailable: number
+    criticalPendingJustifications: number
+    justified: number
+  }
 }
 
 function citiesOf(route: Route): string[] {
@@ -72,7 +79,6 @@ function allowedTypesForRoute(route: Route): Set<'TRUCK' | 'CARRETA'> | null {
   return allowed
 }
 
-/** Motivos focados em atraso / quebra (operação) */
 const cannotLoadPresets = [
   'Quebra mecânica',
   'Atraso no retorno da viagem anterior',
@@ -90,6 +96,7 @@ export function AssignPlates() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
+  const [showProblems, setShowProblems] = useState(false)
 
   const [justifyVehicle, setJustifyVehicle] = useState<PlatesBoardVehicle | null>(null)
   const [preset, setPreset] = useState('')
@@ -101,14 +108,12 @@ export function AssignPlates() {
     queryFn: async () => (await api.get<Route[]>('/routes')).data,
   })
 
-  // Só o que o Admin já enviou — e ainda sem placa
   const pendingRoutes = useMemo(
     () =>
       routes
         .filter(
           (r) =>
-            r.status === 'AGUARDANDO_PLACAS' &&
-            (!r.vehicles || r.vehicles.length === 0),
+            r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
         )
         .sort((a, b) => Number(b.hasPriority) - Number(a.hasPriority)),
     [routes],
@@ -135,7 +140,18 @@ export function AssignPlates() {
     return list.filter((v) => allowedTypes.has(v.type))
   }, [board?.available, allowedTypes])
 
-  const unavailable = board?.unavailable ?? []
+  // Só placas que JÁ DEVERIAM ter voltado (previsão ≤ 06:00) ou bloqueadas —
+  // não listar toda a frota em viagem (isso polui e confunde)
+  const overdueOrBlocked = useMemo(
+    () => (board?.unavailable ?? []).filter((v) => v.shouldBeAvailable),
+    [board?.unavailable],
+  )
+  const pendingReport = overdueOrBlocked.filter((v) => !v.report)
+  const returningLaterCount = useMemo(
+    () => (board?.unavailable ?? []).filter((v) => !v.shouldBeAvailable).length,
+    [board?.unavailable],
+  )
+
   const selectedVehicle = available.find((v) => v.id === selectedId) ?? null
 
   const assignMutation = useMutation({
@@ -155,6 +171,7 @@ export function AssignPlates() {
       setError('')
       setRouteId('')
       setSearchParams({})
+      setShowProblems(false)
       setOkMsg(`Placa ${plate} confirmada na rota "${name}".`)
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['routes'] }),
@@ -195,7 +212,7 @@ export function AssignPlates() {
       setReason('')
       setForecastDate('')
       setError('')
-      setOkMsg('Atraso/quebra registrado com previsão de disponibilidade.')
+      setOkMsg('Indisponibilidade registrada (atraso/quebra).')
       await qc.invalidateQueries({ queryKey: ['plates-board', routeId] })
     },
     onError: (err: unknown) => {
@@ -208,10 +225,18 @@ export function AssignPlates() {
 
   function pickRoute(id: string) {
     setRouteId(id)
-    setSearchParams(id ? { routeId: id } : {})
+    setSearchParams({ routeId: id })
     setSelectedId(null)
     setError('')
     setOkMsg('')
+    setShowProblems(false)
+  }
+
+  function backToList() {
+    setRouteId('')
+    setSearchParams({})
+    setSelectedId(null)
+    setShowProblems(false)
   }
 
   function openJustify(v: PlatesBoardVehicle) {
@@ -226,240 +251,281 @@ export function AssignPlates() {
     )
   }
 
-  return (
-    <div className="ops-readable mx-auto max-w-3xl">
-      <PageHeader
-        title="Definir Placa"
-        description="Escolha a rota disponibilizada pelo Admin · 1 placa · confirme. Se não puder carregar, informe atraso ou quebra."
-      />
+  // ——— Lista de rotas (sem detalhe) ———
+  if (!routeId) {
+    return (
+      <div className="ops-readable mx-auto max-w-2xl">
+        <PageHeader
+          title="Definir Placa"
+          description="Escolha a rota · veja placas disponíveis pela previsão de retorno · confirme 1 placa."
+        />
+        {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
+        {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
 
-      {okMsg && (
-        <p className="mb-4 rounded-xl bg-teal-600/15 px-4 py-3 text-lg font-medium">{okMsg}</p>
-      )}
-      {error && (
-        <p className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-lg text-[var(--color-danger)]">
-          {error}
-        </p>
-      )}
-
-      {/* PASSO 1 — Rotas do Admin */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold">1. Rotas do Admin</h2>
         {loadingRoutes ? (
-          <div className="flex justify-center py-10">
+          <div className="flex justify-center py-16">
             <Spinner size="lg" />
           </div>
         ) : pendingRoutes.length === 0 ? (
           <EmptyState
-            title="Nenhuma rota aguardando"
-            description="Quando o Admin enviar uma rota, ela aparece aqui."
+            title="Nenhuma rota aguardando placa"
+            description="Quando o Admin disponibilizar um roteiro, ele aparece aqui."
           />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {pendingRoutes.map((r) => {
               const c = citiesOf(r)
-              const active = r.id === routeId
               return (
                 <button
                   key={r.id}
                   type="button"
                   onClick={() => pickRoute(r.id)}
-                  className={cn(
-                    'flex w-full min-h-[88px] flex-col items-start rounded-xl border px-4 py-3 text-left transition',
-                    active
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
-                  )}
+                  className="flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-left transition hover:border-[var(--color-primary)]/40"
                 >
                   <div className="flex w-full items-center justify-between gap-2">
-                    <span className="text-lg font-semibold">{r.name}</span>
+                    <span className="text-base font-semibold">{r.name}</span>
                     {r.hasPriority && (
-                      <span className="rounded-lg bg-amber-500/10 px-3 py-1 text-sm font-semibold text-amber-800 dark:text-amber-100">
-                        ★ Prioridade
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        Prioridade
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 text-base text-[var(--color-text-muted)]">
+                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                     {formatDate(r.date)} · 06:00
                     {c.length > 0 ? ` · ${c.join(', ')}` : ''}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-[var(--color-primary)]">
-                    Precisa de 1 placa
                   </p>
                 </button>
               )
             })}
           </div>
         )}
-      </section>
+      </div>
+    )
+  }
 
-      {!routeId ? null : (
-        <>
-          {/* PASSO 2 — Escolher 1 placa */}
-          <section className="mb-8">
-            <h2 className="mb-1 text-lg font-semibold">2. Escolha 1 placa</h2>
-            <p className="mb-4 text-base text-[var(--color-text-muted)]">
-              Rota <strong>{selectedRoute?.name}</strong>
-              {cities.length > 0 ? ` → ${cities.join(', ')}` : ''}
-            </p>
+  // ——— Detalhe da rota (tela focada) ———
+  return (
+    <div className="ops-readable mx-auto max-w-2xl">
+      <button
+        type="button"
+        onClick={backToList}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Voltar às rotas
+      </button>
 
-            {loadingBoard ? (
-              <div className="flex justify-center py-12">
-                <Spinner size="lg" />
-              </div>
-            ) : available.length === 0 ? (
-              <EmptyState
-                title="Nenhuma placa disponível"
-                description="Use a seção abaixo para informar atraso ou quebra das placas que deveriam carregar."
-              />
-            ) : (
-              <div className="space-y-2">
-                {available.map((v) => {
-                  const active = selectedId === v.id
-                  return (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setSelectedId(v.id)}
-                      className={cn(
-                        'flex w-full items-center gap-4 rounded-xl border px-4 py-3 text-left transition',
-                        active
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                          : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/30',
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
-                          active
-                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                            : 'border-[var(--color-border-strong)]',
-                        )}
-                      >
-                        {active && <Check className="h-4 w-4" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <PlateBadge plate={v.plate} color={v.color as PlateColor} />
-                        <p className="mt-1 text-base text-[var(--color-text-muted)]">
-                          {v.capacityMotos} motos
-                          {v.defaultDriver ? ` · ${v.defaultDriver}` : ''}
-                        </p>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+      <PageHeader
+        title={selectedRoute?.name ?? 'Rota'}
+        description={`${formatDate(selectedRoute?.date)} · 06:00${cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa`}
+      />
 
-            <Button
-              className="mt-5 w-full font-semibold"
-              size="xl"
-              disabled={!selectedId}
-              onClick={() => setConfirmOpen(true)}
-              loading={assignMutation.isPending}
-            >
-              Confirmar placa {selectedVehicle ? selectedVehicle.plate : ''}
-            </Button>
-          </section>
+      {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
+      {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}
 
-          {/* PASSO 3 — Informar atraso / quebra */}
-          <section className="mb-8 rounded-2xl border bg-[var(--color-surface)] p-5">
-            <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
-              <Wrench className="h-5 w-5 text-[var(--color-text-muted)]" />
-              3. Informar atraso ou quebra
-            </h2>
-            <p className="mb-4 text-base text-[var(--color-text-muted)]">
-              Se um veículo <strong>não vai carregar</strong> nesta rota (atraso, quebra, manutenção),
-              registre aqui o motivo e a previsão de quando volta a ficar disponível.
-            </p>
+      {pendingReport.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-red-500/25 bg-red-500/5 px-4 py-3">
+          <p className="text-sm">
+            <AlertTriangle className="mr-1.5 inline h-4 w-4 text-[var(--color-danger)]" />
+            <strong>{pendingReport.length}</strong> placa(s) já deveriam ter retornado (pela
+            previsão) e ainda não têm registro.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setShowProblems(true)}>
+            Informar indisponibilidade
+          </Button>
+        </div>
+      )}
 
-            {unavailable.length === 0 ? (
-              <p className="text-base text-[var(--color-text-muted)]">
-                Nenhuma placa indisponível no momento.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {unavailable.map((v) => (
+      <section className="mb-6">
+        <h2 className="mb-1 text-base font-semibold">Placas disponíveis</h2>
+        <p className="mb-3 text-sm text-[var(--color-text-muted)]">
+          Liberadas pela previsão de retorno (já de volta e sem viagem aberta).
+          {returningLaterCount > 0 && (
+            <> · {returningLaterCount} ainda em viagem com retorno depois desta data.</>
+          )}
+        </p>
+
+        {loadingBoard ? (
+          <div className="flex justify-center py-12">
+            <Spinner size="lg" />
+          </div>
+        ) : available.length === 0 ? (
+          <EmptyState
+            title="Nenhuma placa disponível agora"
+            description={
+              pendingReport.length > 0
+                ? 'Há placas que já deveriam ter voltado. Informe atraso/quebra.'
+                : 'Aguarde o retorno das viagens ou verifique a frota.'
+            }
+            action={
+              pendingReport.length > 0 ? (
+                <Button variant="secondary" onClick={() => setShowProblems(true)}>
+                  Informar atraso/quebra
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="space-y-2">
+            {available.map((v) => {
+              const active = selectedId === v.id
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setSelectedId(v.id)}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-[var(--radius)] border px-4 py-3 text-left transition',
+                    active
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/30',
+                  )}
+                >
                   <div
-                    key={v.id}
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-xl border bg-[var(--color-surface)] px-4 py-3',
-                      v.shouldBeAvailable && !v.report
-                        ? 'border-red-500/50'
-                        : 'border-[var(--color-border)]',
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
+                      active
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                        : 'border-[var(--color-border-strong)]',
                     )}
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <PlateBadge plate={v.plate} color={v.color as PlateColor} />
-                        {v.shouldBeAvailable && (
-                          <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-2 py-1 text-sm font-bold text-[var(--color-danger)]">
-                            <AlertTriangle className="h-4 w-4" /> Já deveria ter retornado
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 text-base text-[var(--color-text-muted)]">
-                        {vehicleStatusLabels[v.status as VehicleStatus] ?? v.status}
-                        {v.expectedReturn ? ` · retorno prev. ${formatDate(v.expectedReturn)}` : ''}
-                      </p>
-                      {v.report ? (
-                        <p className="mt-2 text-base">
-                          <strong>Registrado:</strong> {v.report.reason}
-                          <span className="block text-sm text-[var(--color-text-muted)]">
-                            Disp. prevista: {formatDate(v.report.availableAtForecast)}
-                          </span>
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-sm font-medium text-[var(--color-text-muted)]">
-                          Sem registro de atraso/quebra
-                        </p>
+                    {active && <Check className="h-3.5 w-3.5" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <PlateBadge plate={v.plate} color={v.color as PlateColor} />
+                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      Disponível
+                      {v.capacityMotos ? ` · ${v.capacityMotos} motos` : ''}
+                      {v.defaultDriver ? ` · ${v.defaultDriver}` : ''}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <Button
+          className="mt-4 w-full"
+          size="lg"
+          disabled={!selectedId}
+          onClick={() => setConfirmOpen(true)}
+          loading={assignMutation.isPending}
+        >
+          Confirmar {selectedVehicle ? selectedVehicle.plate : 'placa'}
+        </Button>
+
+        {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
+          <button
+            type="button"
+            className="mt-3 w-full text-center text-sm text-[var(--color-text-muted)] underline-offset-2 hover:underline"
+            onClick={() => setShowProblems(true)}
+          >
+            Ver placas com atraso/quebra já registrados
+          </button>
+        )}
+      </section>
+
+      {/* Painel só quando necessário — não lista toda frota em viagem */}
+      {showProblems && (
+        <section className="mb-8 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Indisponibilidade (atraso / quebra)</h2>
+            <Button size="sm" variant="ghost" onClick={() => setShowProblems(false)}>
+              Fechar
+            </Button>
+          </div>
+          <p className="mb-3 text-sm text-[var(--color-text-muted)]">
+            Apenas placas que <strong>já deveriam ter retornado</strong> até{' '}
+            {selectedRoute ? formatDate(selectedRoute.date) : '—'} 06:00 (pela previsão da viagem)
+            ou estão bloqueadas/manutenção.
+          </p>
+
+          {overdueOrBlocked.length === 0 ? (
+            <p className="text-sm text-[var(--color-text-muted)]">Nenhuma pendência.</p>
+          ) : (
+            <div className="space-y-2">
+              {overdueOrBlocked.map((v) => (
+                <div
+                  key={v.id}
+                  className={cn(
+                    'flex flex-wrap items-center gap-3 rounded-[var(--radius)] border px-3 py-3',
+                    !v.report
+                      ? 'border-red-500/30 bg-red-500/5'
+                      : 'border-[var(--color-border)]',
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <PlateBadge plate={v.plate} color={v.color as PlateColor} />
+                      {!v.report && (
+                        <span className="text-xs font-medium text-[var(--color-danger)]">
+                          Já deveria ter retornado
+                        </span>
                       )}
                     </div>
-                    <Button
-                      size="lg"
-                      variant={v.report ? 'secondary' : 'primary'}
-                      onClick={() => openJustify(v)}
-                    >
-                      {v.report ? 'Atualizar' : 'Informar atraso/quebra'}
-                    </Button>
+                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      {vehicleStatusLabels[v.status as VehicleStatus] ?? v.status}
+                      {v.expectedReturn
+                        ? ` · previsão era ${formatDate(v.expectedReturn)}`
+                        : ''}
+                    </p>
+                    {v.report && (
+                      <p className="mt-1 text-sm">
+                        {v.report.reason}
+                        <span className="block text-xs text-[var(--color-text-muted)]">
+                          Disp. prevista: {formatDate(v.report.availableAtForecast)}
+                        </span>
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+                  <Button
+                    size="sm"
+                    variant={v.report ? 'secondary' : 'primary'}
+                    onClick={() => openJustify(v)}
+                  >
+                    {v.report ? 'Atualizar' : 'Informar'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <ConfirmModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => assignMutation.mutate()}
-        title="Confirmar 1 placa nesta rota?"
+        title="Confirmar placa?"
         message={`Rota: ${selectedRoute?.name}
 Placa: ${selectedVehicle?.plate ?? '—'}
-Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00
-(Esta rota aceita somente 1 veículo.)`}
-        confirmLabel="Sim, confirmar"
+Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00`}
+        confirmLabel="Confirmar"
         loading={assignMutation.isPending}
       />
 
       <Modal
         open={!!justifyVehicle}
         onClose={() => setJustifyVehicle(null)}
-        title={`Atraso / quebra — ${justifyVehicle?.plate ?? ''}`}
+        title={`Indisponível — ${justifyVehicle?.plate ?? ''}`}
       >
-        <div className="space-y-4">
-          <p className="text-base text-[var(--color-text-muted)]">
-            Informe por que a placa <strong>{justifyVehicle?.plate}</strong> não carrega em{' '}
-            <strong>{selectedRoute ? formatDate(selectedRoute.date) : ''}</strong> às 06:00.
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Esta placa deveria estar disponível para{' '}
+            <strong>{selectedRoute ? formatDate(selectedRoute.date) : ''}</strong> às 06:00. Informe
+            o motivo (atraso ou quebra) e a nova previsão.
           </p>
           <Select
             label="Motivo"
             value={preset}
             onChange={(e) => setPreset(e.target.value)}
-            options={[...cannotLoadPresets, ...delayReasonPresets.filter((p) => !(cannotLoadPresets as readonly string[]).includes(p))].map(
-              (label) => ({ value: label, label }),
-            )}
+            options={[
+              ...cannotLoadPresets,
+              ...delayReasonPresets.filter(
+                (p) => !(cannotLoadPresets as readonly string[]).includes(p),
+              ),
+            ].map((label) => ({ value: label, label }))}
             placeholder="Selecione"
           />
           <Textarea
@@ -467,7 +533,7 @@ Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="Descreva o atraso ou a quebra…"
+            placeholder="Descreva…"
           />
           <Input
             label="Previsão de disponibilidade"
@@ -477,16 +543,15 @@ Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00
             required
           />
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="lg" onClick={() => setJustifyVehicle(null)}>
+            <Button variant="secondary" onClick={() => setJustifyVehicle(null)}>
               Cancelar
             </Button>
             <Button
-              size="lg"
               loading={justifyMutation.isPending}
               disabled={composedReason().length < 5 || !forecastDate}
               onClick={() => justifyMutation.mutate()}
             >
-              Salvar registro
+              Salvar
             </Button>
           </div>
         </div>
