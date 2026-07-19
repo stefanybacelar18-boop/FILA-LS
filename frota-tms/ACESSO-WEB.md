@@ -1,23 +1,24 @@
-# Acesso de teste — FrotaTMS
+# Acesso web — FrotaTMS (demo)
 
-> Sistema **separado** do FilaDock.
+**Link público (túnel Cloudflare):**  
+https://herbs-preparation-received-algorithms.trycloudflare.com
 
-## URL pública (ativa)
+> Túnel temporário: se expirar, peça para reativar.
 
-**https://native-collect-chicago-keen.trycloudflare.com**
+## Logins
 
-## Login
+| Perfil | E-mail | Senha | O que testar |
+|--------|--------|-------|--------------|
+| **Admin** | admin@frotatms.com | admin123 | Mesa, Meu Dia, Planejamento, Alertas |
+| **Operação** | operacao@frotatms.com | operacao123 | Definir Placas (simples) |
+| **Consulta** | consulta@frotatms.com | consulta123 | Somente leitura |
 
-| Perfil | E-mail | Senha |
-|--------|--------|-------|
-| Admin | admin@frotatms.com | admin123 |
-| Operação | operacao@frotatms.com | operacao123 |
-| Consulta | consulta@frotatms.com | consulta123 |
+## Roteiro rápido de teste
 
-## O que validar
-
-1. **Dashboard** — alertas e carregamento de hoje (06:00)  
-2. **Roteiros** — data + 06:00 + prioridade + meta de placas  
-3. **Definir Placas** — disponíveis + justificar indisponíveis  
-
-Deploy permanente: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)
+1. Entre como **Admin** → cai na **Mesa de Roteirização**
+2. Veja cidades pendentes (ex.: Salvador com N notas)
+3. Arraste uma cidade para **Nova rota**
+4. Clique **Definir meta / prioridade** → informe qtd. de veículos → Marcar pronta
+5. Clique **Enviar para Operação**
+6. Saia e entre como **Operação** → **Definir Placas**
+7. Escolha a rota → selecione placas → veja **Necessário / Selecionados / Faltam / Cobertura** → Confirmar
