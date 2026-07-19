@@ -13,20 +13,20 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<Variant, string> = {
   primary:
-    'bg-[var(--color-primary)] text-[var(--color-primary-fg)] hover:bg-[var(--color-primary-hover)] shadow-[var(--shadow-sm)]',
+    'bg-[var(--color-primary)] text-[var(--color-primary-fg)] hover:bg-[var(--color-primary-hover)]',
   secondary:
-    'bg-[var(--color-surface-2)] text-[var(--color-text)] border border-[var(--color-border)] hover:bg-[var(--color-border)]',
+    'bg-[var(--color-surface)] text-[var(--color-text)] border border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
   ghost: 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]',
   danger: 'bg-[var(--color-danger)] text-white hover:opacity-90',
   outline:
-    'bg-transparent border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)]',
+    'bg-transparent border border-[var(--color-border-strong)] text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]',
 }
 
 const sizes: Record<Size, string> = {
   sm: 'h-8 px-3 text-xs gap-1.5',
-  md: 'h-9 px-4 text-sm gap-2',
-  lg: 'h-11 px-5 text-base gap-2',
-  xl: 'h-14 px-6 text-lg gap-2 font-semibold',
+  md: 'h-10 px-4 text-sm gap-2',
+  lg: 'h-11 px-5 text-sm gap-2',
+  xl: 'h-12 px-6 text-base gap-2 font-semibold',
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -35,7 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center rounded-[var(--radius)] font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none',
+        'inline-flex items-center justify-center rounded-[var(--radius)] font-medium transition-colors disabled:opacity-45 disabled:pointer-events-none',
         variants[variant],
         sizes[size],
         className,
