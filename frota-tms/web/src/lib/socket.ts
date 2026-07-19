@@ -8,7 +8,10 @@ export function getSocket(): Socket {
     socket = io('/', {
       path: '/socket.io',
       autoConnect: false,
-      auth: () => ({ token: getToken() }),
+      // socket.io v4 chama auth(cb) — precisa invocar o callback
+      auth: (cb: (data: { token: string | null }) => void) => {
+        cb({ token: getToken() })
+      },
     })
   }
   return socket

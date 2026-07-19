@@ -417,7 +417,8 @@ export function createRoutesRouter(io: Server) {
     const route = await prisma.route.create({
       data: {
         name: parsed.data.name.trim(),
-        date: new Date(parsed.data.date),
+        // Persist as noon UTC so calendar day is stable in BR/US timezones
+        date: new Date(`${parsed.data.date.slice(0, 10)}T12:00:00.000Z`),
         dealershipId: ordered[0]?.id,
         region,
         notes: parsed.data.notes?.trim() || null,

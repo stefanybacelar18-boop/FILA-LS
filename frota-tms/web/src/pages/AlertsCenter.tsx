@@ -54,16 +54,30 @@ function AlertBlock({
 
 export function AlertsCenter() {
   const canOps = useAuthStore((s) => s.hasRole('OPERACAO', 'ADMIN'))
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['planning-alerts'],
     queryFn: async () => (await api.get<AlertsData>('/planning/alerts')).data,
     refetchInterval: 20_000,
   })
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <div className="flex justify-center py-20">
         <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center">
+        <p className="mb-3 text-sm text-[var(--color-danger)]">
+          {(error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            'Não foi possível carregar os alertas.'}
+        </p>
+        <Button variant="secondary" onClick={() => void refetch()}>
+          Tentar de novo
+        </Button>
       </div>
     )
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Search } from 'lucide-react'
@@ -22,6 +22,7 @@ export function RouteForm() {
   const [notes, setNotes] = useState('')
   const [hasPriority, setHasPriority] = useState(false)
   const [priorityNotes, setPriorityNotes] = useState('')
+  const createdIdRef = useRef<string | null>(null)
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -76,10 +77,12 @@ export function RouteForm() {
         plannedVehicleCount: 1,
       }
       let route: Route
-      if (isNew) {
+      const editingId = (!isNew && id) || createdIdRef.current
+      if (!editingId) {
         route = (await api.post<Route>('/routes', payload)).data
+        createdIdRef.current = route.id
       } else {
-        route = (await api.put<Route>(`/routes/${id}`, payload)).data
+        route = (await api.put<Route>(`/routes/${editingId}`, payload)).data
       }
       if (disponibilizar && route.status === 'RASCUNHO') {
         route = (await api.post<Route>(`/routes/${route.id}/send-to-operation`)).data
@@ -87,12 +90,19 @@ export function RouteForm() {
       return route
     },
     onSuccess: async () => {
+      createdIdRef.current = null
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['routes'] }),
         qc.invalidateQueries({ queryKey: ['planning-alerts'] }),
         qc.invalidateQueries({ queryKey: ['dashboard'] }),
       ])
       navigate('/roteiros')
+    },
+    onError: () => {
+      // Se criou e falhou no send, troca URL para o id criado (evita duplicar)
+      if (isNew && createdIdRef.current) {
+        navigate(`/roteiros/${createdIdRef.current}`, { replace: true })
+      }
     },
   })
 
@@ -113,9 +123,11 @@ export function RouteForm() {
   }
 
   const alreadySent =
-    existing?.status === 'AGUARDANDO_PLACAS' ||
-    existing?.status === 'EM_ANDAMENTO' ||
-    existing?.status === 'CONCLUIDO'
+    existing?.status === 'EM_ANDAMENTO' || existing?.status === 'CONCLUIDO' || existing?.status === 'CANCELADO'
+
+  const canEdit = !alreadySent
+  const canSend =
+    !alreadySent && existing?.status !== 'AGUARDANDO_PLACAS' && (isNew || existing?.status === 'RASCUNHO')
 
   if (!isNew && isLoading) {
     return (
@@ -252,11 +264,11 @@ export function RouteForm() {
             type="submit"
             variant="secondary"
             loading={saveMutation.isPending}
-            disabled={dealershipIds.length < 1 || alreadySent || saveMutation.isPending}
+            disabled={dealershipIds.length < 1 || !canEdit || saveMutation.isPending}
           >
             Salvar
           </Button>
-          {!alreadySent && (
+          {canSend && (
             <Button
               type="button"
               loading={saveMutation.isPending}
@@ -265,6 +277,11 @@ export function RouteForm() {
             >
               Disponibilizar para Operação
             </Button>
+          )}
+          {existing?.status === 'AGUARDANDO_PLACAS' && (
+            <p className="w-full text-right text-xs text-[var(--color-text-muted)]">
+              Já disponível para Operação — você ainda pode salvar ajustes.
+            </p>
           )}
         </div>
       </form>

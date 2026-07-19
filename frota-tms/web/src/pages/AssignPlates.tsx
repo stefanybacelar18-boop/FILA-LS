@@ -81,9 +81,12 @@ function dealersOf(route: Route) {
   return route.dealership ? [route.dealership] : []
 }
 
-function allowedTypesForRoute(route: Route): Set<'TRUCK' | 'CARRETA'> | null {
+function allowedTypesForRoute(route: Route): {
+  types: Set<'TRUCK' | 'CARRETA'> | null
+  incompatible: boolean
+} {
   const dealers = dealersOf(route)
-  if (dealers.length === 0) return null
+  if (dealers.length === 0) return { types: null, incompatible: false }
   let allowed: Set<'TRUCK' | 'CARRETA'> = new Set(['TRUCK', 'CARRETA'])
   for (const d of dealers) {
     if (d.allowedVehicle === 'AMBOS') continue
@@ -91,7 +94,8 @@ function allowedTypesForRoute(route: Route): Set<'TRUCK' | 'CARRETA'> | null {
       allowed = new Set([...allowed].filter((t) => t === d.allowedVehicle))
     }
   }
-  return allowed
+  if (allowed.size === 0) return { types: allowed, incompatible: true }
+  return { types: allowed, incompatible: false }
 }
 
 const cannotLoadPresets = [
@@ -118,10 +122,11 @@ export function AssignPlates() {
   const [reason, setReason] = useState('')
   const [forecastDate, setForecastDate] = useState('')
 
-  const { data: routes = [], isLoading: loadingRoutes } = useQuery({
-    queryKey: ['routes'],
-    queryFn: async () => (await api.get<Route[]>('/routes')).data,
-  })
+  const { data: routes = [], isLoading: loadingRoutes, isError: routesError, error: routesErr } =
+    useQuery({
+      queryKey: ['routes'],
+      queryFn: async () => (await api.get<Route[]>('/routes')).data,
+    })
 
   const pendingRoutes = useMemo(
     () =>
@@ -141,9 +146,16 @@ export function AssignPlates() {
 
   const selectedRoute = routes.find((r) => r.id === routeId)
   const cities = selectedRoute ? citiesOf(selectedRoute) : []
-  const allowedTypes = selectedRoute ? allowedTypesForRoute(selectedRoute) : null
+  const typeRule = selectedRoute ? allowedTypesForRoute(selectedRoute) : null
+  const allowedTypes = typeRule?.types ?? null
+  const incompatibleTypes = !!typeRule?.incompatible
 
-  const { data: board, isLoading: loadingBoard } = useQuery({
+  const {
+    data: board,
+    isLoading: loadingBoard,
+    isError: boardError,
+    error: boardErr,
+  } = useQuery({
     queryKey: ['plates-board', routeId],
     queryFn: async () => (await api.get<PlatesBoard>(`/routes/${routeId}/plates-board`)).data,
     enabled: !!routeId,
@@ -151,9 +163,28 @@ export function AssignPlates() {
 
   const available = useMemo(() => {
     const list = board?.available ?? []
-    if (!allowedTypes) return list
+    if (!allowedTypes || incompatibleTypes) return list
     return list.filter((v) => allowedTypes.has(v.type))
-  }, [board?.available, allowedTypes])
+  }, [board?.available, allowedTypes, incompatibleTypes])
+
+  // Rota inválida na URL → volta à lista
+  useEffect(() => {
+    if (!routeId || loadingRoutes || routesError) return
+    if (!selectedRoute) {
+      setError('Roteiro não encontrado.')
+      setRouteId('')
+      setSearchParams({})
+      return
+    }
+    if (
+      selectedRoute.status !== 'AGUARDANDO_PLACAS' ||
+      (selectedRoute.vehicles && selectedRoute.vehicles.length > 0)
+    ) {
+      setError('Este roteiro já não está aguardando placa.')
+      setRouteId('')
+      setSearchParams({})
+    }
+  }, [routeId, loadingRoutes, routesError, selectedRoute, setSearchParams])
 
   // Só placas que JÁ DEVERIAM ter voltado (previsão ≤ 06:00) ou bloqueadas —
   // não listar toda a frota em viagem (isso polui e confunde)
@@ -202,7 +233,6 @@ export function AssignPlates() {
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
           'Não foi possível confirmar a placa.',
       )
-      setConfirmOpen(false)
     },
   })
 
@@ -281,6 +311,14 @@ export function AssignPlates() {
           <div className="flex justify-center py-16">
             <Spinner size="lg" />
           </div>
+        ) : routesError ? (
+          <EmptyState
+            title="Não foi possível carregar as rotas"
+            description={
+              (routesErr as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+              'Verifique a conexão e tente novamente.'
+            }
+          />
         ) : pendingRoutes.length === 0 ? (
           <EmptyState
             title="Nenhuma rota aguardando placa"
@@ -380,6 +418,19 @@ export function AssignPlates() {
           <div className="flex justify-center py-12">
             <Spinner size="lg" />
           </div>
+        ) : boardError ? (
+          <EmptyState
+            title="Erro ao carregar placas"
+            description={
+              (boardErr as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+              'Tente voltar e abrir a rota de novo.'
+            }
+          />
+        ) : incompatibleTypes ? (
+          <EmptyState
+            title="Roteiro com tipos de veículo incompatíveis"
+            description="Há destinos que aceitam só Truck e outros só Carreta. Peça ao Admin ajustar as concessionárias."
+          />
         ) : available.length === 0 ? (
           <EmptyState
             title="Nenhuma placa disponível agora"
@@ -531,7 +582,9 @@ export function AssignPlates() {
         title="Confirmar placa?"
         message={`Rota: ${selectedRoute?.name}
 Placa: ${selectedVehicle?.plate ?? '—'}
-Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00`}
+Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00${
+          error && confirmOpen ? `\n\nErro: ${error}` : ''
+        }`}
         confirmLabel="Confirmar"
         loading={assignMutation.isPending}
       />
