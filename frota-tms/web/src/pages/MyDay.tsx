@@ -36,10 +36,10 @@ function RouteList({
   empty: string
 }) {
   return (
-    <section className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-      <h2 className="text-xl font-bold">
+    <section className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <h2 className="text-lg font-semibold">
         {title}{' '}
-        <span className="text-[var(--color-primary)]">({items.length})</span>
+        <span className="text-[var(--color-text-muted)]">({items.length})</span>
       </h2>
       {items.length === 0 ? (
         <p className="mt-4 text-lg text-[var(--color-text-muted)]">{empty}</p>
@@ -48,11 +48,11 @@ function RouteList({
           {items.map((r) => (
             <li
               key={r.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--color-border)] px-4 py-3"
             >
               <div>
                 <p className="text-lg font-bold">
-                  {r.hasPriority && <span className="mr-2 text-amber-600">★</span>}
+                  {r.hasPriority && <span className="mr-2 text-[var(--color-text-muted)]">★</span>}
                   {r.name}
                 </p>
                 <p className="text-base text-[var(--color-text-muted)]">
@@ -103,17 +103,17 @@ export function MyDay() {
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <p className="text-base text-[var(--color-text-muted)]">Criadas hoje</p>
-          <p className="text-4xl font-bold">{data.createdToday.length}</p>
+          <p className="text-3xl font-semibold">{data.createdToday.length}</p>
         </div>
-        <div className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <p className="text-base text-[var(--color-text-muted)]">Aguardando placas</p>
-          <p className="text-4xl font-bold text-amber-600">{data.awaitingPlates.length}</p>
+          <p className="text-3xl font-semibold">{data.awaitingPlates.length}</p>
         </div>
-        <div className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <p className="text-base text-[var(--color-text-muted)]">Em montagem</p>
-          <p className="text-4xl font-bold">{data.draftingCount}</p>
+          <p className="text-3xl font-semibold">{data.draftingCount}</p>
         </div>
       </div>
 

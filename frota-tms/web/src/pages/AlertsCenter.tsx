@@ -32,21 +32,19 @@ function AlertBlock({
   title,
   count,
   icon: Icon,
-  tone,
   children,
 }: {
   title: string
   count: number
   icon: typeof AlertTriangle
-  tone: string
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-      <header className="mb-3 flex items-center gap-3">
-        <Icon className={`h-7 w-7 ${tone}`} />
-        <h2 className="text-xl font-bold">
-          {title} <span className={tone}>({count})</span>
+    <section className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <header className="mb-3 flex items-center gap-2">
+        <Icon className="h-5 w-5 text-[var(--color-text-muted)]" />
+        <h2 className="text-lg font-semibold">
+          {title} <span className="text-[var(--color-text-muted)]">({count})</span>
         </h2>
       </header>
       {children}
@@ -103,15 +101,15 @@ export function AlertsCenter() {
         ].map((k) => (
           <div
             key={k.label}
-            className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+            className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           >
             <p className="text-base text-[var(--color-text-muted)]">{k.label}</p>
-            <p className={`text-4xl font-bold ${k.tone}`}>{k.value}</p>
+            <p className={`text-3xl font-semibold ${k.tone}`}>{k.value}</p>
           </div>
         ))}
       </div>
 
-      <AlertBlock title="Rotas sem placas" count={c.semPlacas} icon={Tags} tone="text-amber-600">
+      <AlertBlock title="Rotas sem placas" count={c.semPlacas} icon={Tags}>
         {data.semPlacas.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">Nenhuma</p>
         ) : (
@@ -119,7 +117,7 @@ export function AlertsCenter() {
             {data.semPlacas.map((r) => (
               <li key={r.id} className="flex justify-between gap-2 text-lg">
                 <span>
-                  {r.hasPriority && <Star className="mr-1 inline h-4 w-4 text-amber-500" />}
+                  {r.hasPriority && <Star className="mr-1 inline h-4 w-4 text-[var(--color-text-muted)]" />}
                   {r.name}
                 </span>
                 <span className="font-semibold">
@@ -131,7 +129,7 @@ export function AlertsCenter() {
         )}
       </AlertBlock>
 
-      <AlertBlock title="Rotas críticas" count={c.criticas} icon={AlertTriangle} tone="text-red-600">
+      <AlertBlock title="Rotas críticas" count={c.criticas} icon={AlertTriangle}>
         {data.criticas.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">Nenhuma</p>
         ) : (
@@ -143,7 +141,7 @@ export function AlertsCenter() {
         )}
       </AlertBlock>
 
-      <AlertBlock title="Veículos atrasados" count={c.atrasados} icon={Clock} tone="text-red-600">
+      <AlertBlock title="Veículos atrasados" count={c.atrasados} icon={Clock}>
         {data.atrasados.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">Nenhum</p>
         ) : (
@@ -158,7 +156,7 @@ export function AlertsCenter() {
         )}
       </AlertBlock>
 
-      <AlertBlock title="Veículos bloqueados / manutenção" count={c.bloqueados} icon={Ban} tone="text-slate-700">
+      <AlertBlock title="Veículos bloqueados / manutenção" count={c.bloqueados} icon={Ban}>
         {data.bloqueados.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">Nenhum</p>
         ) : (
@@ -172,7 +170,7 @@ export function AlertsCenter() {
         )}
       </AlertBlock>
 
-      <AlertBlock title="Retornos previstos hoje" count={c.retornosHoje} icon={Clock} tone="text-blue-600">
+      <AlertBlock title="Retornos previstos hoje" count={c.retornosHoje} icon={Clock}>
         {data.retornosHoje.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">Nenhum</p>
         ) : (
@@ -186,7 +184,7 @@ export function AlertsCenter() {
         )}
       </AlertBlock>
 
-      <AlertBlock title="Retornos previstos amanhã" count={c.retornosAmanha} icon={Clock} tone="text-orange-600">
+      <AlertBlock title="Retornos previstos amanhã" count={c.retornosAmanha} icon={Clock}>
         {data.retornosAmanha.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">Nenhum</p>
         ) : (

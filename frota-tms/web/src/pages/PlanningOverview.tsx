@@ -86,11 +86,11 @@ export function PlanningOverview() {
         <Stat label="Completas / ok" value={data.completas.length} tone="text-green-600" />
       </div>
 
-      <div className="mb-6 rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <div className="mb-6 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-base text-[var(--color-text-muted)]">Cobertura do dia</p>
-            <p className="text-4xl font-bold">
+            <p className="text-3xl font-semibold">
               {t.assignedVehicles} / {t.plannedVehicles || '—'} veículos
             </p>
             <p className="mt-1 text-lg">
@@ -98,7 +98,7 @@ export function PlanningOverview() {
               {t.coverage != null ? ` · Cobertura ${t.coverage}%` : ''}
             </p>
           </div>
-          <p className="text-5xl font-bold text-[var(--color-primary)]">
+          <p className="text-3xl font-semibold text-[var(--color-primary)]">
             {t.coverage != null ? `${t.coverage}%` : '—'}
           </p>
         </div>
@@ -117,8 +117,8 @@ export function PlanningOverview() {
         </div>
       </div>
 
-      <section className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-        <h2 className="mb-4 text-xl font-bold">Rotas do dia</h2>
+      <section className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <h2 className="mb-4 text-lg font-semibold">Rotas do dia</h2>
         {data.routesToday.length === 0 ? (
           <p className="text-lg text-[var(--color-text-muted)]">
             Nenhuma rota para hoje. Monte na Mesa.
@@ -128,11 +128,11 @@ export function PlanningOverview() {
             {data.routesToday.map((r) => (
               <li
                 key={r.id}
-                className="grid gap-2 rounded-xl border border-[var(--color-border)] px-4 py-3 md:grid-cols-[1fr_auto_auto] md:items-center"
+                className="grid gap-2 rounded-[var(--radius)] border border-[var(--color-border)] px-4 py-3 md:grid-cols-[1fr_auto_auto] md:items-center"
               >
                 <div>
                   <p className="text-lg font-bold">
-                    {r.hasPriority && <span className="mr-1 text-amber-600">★</span>}
+                    {r.hasPriority && <span className="mr-1 text-[var(--color-text-muted)]">★</span>}
                     {r.name}
                   </p>
                   <p className="text-base text-[var(--color-text-muted)]">
@@ -162,9 +162,9 @@ export function PlanningOverview() {
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
-    <div className="rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <p className="text-base text-[var(--color-text-muted)]">{label}</p>
-      <p className={cn('text-4xl font-bold', tone)}>{value}</p>
+      <p className={cn('text-3xl font-semibold', tone)}>{value}</p>
     </div>
   )
 }
