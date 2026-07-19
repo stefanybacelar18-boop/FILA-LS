@@ -244,7 +244,7 @@ export function AssignPlates() {
 
       {/* PASSO 1 — Rotas do Admin */}
       <section className="mb-8">
-        <h2 className="mb-3 text-2xl font-bold">1. Rotas do Admin</h2>
+        <h2 className="mb-3 text-lg font-semibold">1. Rotas do Admin</h2>
         {loadingRoutes ? (
           <div className="flex justify-center py-10">
             <Spinner size="lg" />
@@ -265,25 +265,25 @@ export function AssignPlates() {
                   type="button"
                   onClick={() => pickRoute(r.id)}
                   className={cn(
-                    'flex w-full min-h-[96px] flex-col items-start rounded-2xl border-2 px-5 py-4 text-left transition',
+                    'flex w-full min-h-[88px] flex-col items-start rounded-xl border px-4 py-3 text-left transition',
                     active
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                      : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/50',
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
                   )}
                 >
                   <div className="flex w-full items-center justify-between gap-2">
-                    <span className="text-xl font-bold">{r.name}</span>
+                    <span className="text-lg font-semibold">{r.name}</span>
                     {r.hasPriority && (
-                      <span className="rounded-lg bg-amber-500/25 px-3 py-1 text-sm font-bold text-amber-900 dark:text-amber-100">
+                      <span className="rounded-lg bg-amber-500/10 px-3 py-1 text-sm font-semibold text-amber-800 dark:text-amber-100">
                         ★ Prioridade
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 text-lg text-[var(--color-text-muted)]">
+                  <p className="mt-2 text-base text-[var(--color-text-muted)]">
                     {formatDate(r.date)} · 06:00
                     {c.length > 0 ? ` · ${c.join(', ')}` : ''}
                   </p>
-                  <p className="mt-1 text-base font-semibold text-[var(--color-primary)]">
+                  <p className="mt-1 text-sm font-medium text-[var(--color-primary)]">
                     Precisa de 1 placa
                   </p>
                 </button>
@@ -297,8 +297,8 @@ export function AssignPlates() {
         <>
           {/* PASSO 2 — Escolher 1 placa */}
           <section className="mb-8">
-            <h2 className="mb-1 text-2xl font-bold">2. Escolha 1 placa</h2>
-            <p className="mb-4 text-lg text-[var(--color-text-muted)]">
+            <h2 className="mb-1 text-lg font-semibold">2. Escolha 1 placa</h2>
+            <p className="mb-4 text-base text-[var(--color-text-muted)]">
               Rota <strong>{selectedRoute?.name}</strong>
               {cities.length > 0 ? ` → ${cities.join(', ')}` : ''}
             </p>
@@ -322,21 +322,21 @@ export function AssignPlates() {
                       type="button"
                       onClick={() => setSelectedId(v.id)}
                       className={cn(
-                        'flex w-full items-center gap-4 rounded-2xl border-2 px-4 py-4 text-left transition',
+                        'flex w-full items-center gap-4 rounded-xl border px-4 py-3 text-left transition',
                         active
                           ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                          : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
+                          : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/30',
                       )}
                     >
                       <div
                         className={cn(
-                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2',
+                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
                           active
                             ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
                             : 'border-[var(--color-border-strong)]',
                         )}
                       >
-                        {active && <Check className="h-5 w-5" />}
+                        {active && <Check className="h-4 w-4" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <PlateBadge plate={v.plate} color={v.color as PlateColor} />
@@ -352,7 +352,7 @@ export function AssignPlates() {
             )}
 
             <Button
-              className="mt-5 h-16 w-full text-xl font-bold"
+              className="mt-5 w-full font-semibold"
               size="xl"
               disabled={!selectedId}
               onClick={() => setConfirmOpen(true)}
@@ -363,18 +363,18 @@ export function AssignPlates() {
           </section>
 
           {/* PASSO 3 — Informar atraso / quebra */}
-          <section className="mb-8 rounded-2xl border-2 border-amber-500/40 bg-amber-500/5 p-5">
-            <h2 className="mb-2 flex items-center gap-2 text-2xl font-bold text-amber-900 dark:text-amber-100">
-              <Wrench className="h-7 w-7" />
+          <section className="mb-8 rounded-2xl border bg-[var(--color-surface)] p-5">
+            <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
+              <Wrench className="h-5 w-5 text-[var(--color-text-muted)]" />
               3. Informar atraso ou quebra
             </h2>
-            <p className="mb-4 text-lg text-[var(--color-text-muted)]">
+            <p className="mb-4 text-base text-[var(--color-text-muted)]">
               Se um veículo <strong>não vai carregar</strong> nesta rota (atraso, quebra, manutenção),
               registre aqui o motivo e a previsão de quando volta a ficar disponível.
             </p>
 
             {unavailable.length === 0 ? (
-              <p className="text-lg text-[var(--color-text-muted)]">
+              <p className="text-base text-[var(--color-text-muted)]">
                 Nenhuma placa indisponível no momento.
               </p>
             ) : (
@@ -383,7 +383,7 @@ export function AssignPlates() {
                   <div
                     key={v.id}
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-xl border-2 bg-[var(--color-surface)] px-4 py-4',
+                      'flex flex-wrap items-center gap-3 rounded-xl border bg-[var(--color-surface)] px-4 py-3',
                       v.shouldBeAvailable && !v.report
                         ? 'border-red-500/50'
                         : 'border-[var(--color-border)]',
@@ -410,7 +410,7 @@ export function AssignPlates() {
                           </span>
                         </p>
                       ) : (
-                        <p className="mt-1 text-base font-semibold text-[var(--color-danger)]">
+                        <p className="mt-1 text-sm font-medium text-[var(--color-text-muted)]">
                           Sem registro de atraso/quebra
                         </p>
                       )}
