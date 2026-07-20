@@ -269,7 +269,7 @@ export function Routes() {
                           {r.hasPriority && (
                             <div className="flex flex-wrap items-center gap-1.5">
                               <Badge tone="danger">Prioridade · vencimento</Badge>
-                              {r.priorityExpiryDate && (
+                              {r.priorityExpiryDate ? (
                                 <span
                                   className={
                                     new Date(r.priorityExpiryDate) < new Date()
@@ -278,6 +278,10 @@ export function Routes() {
                                   }
                                 >
                                   menor venc.: {formatDate(r.priorityExpiryDate)}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-[var(--color-danger)]">
+                                  falta informar o vencimento
                                 </span>
                               )}
                             </div>

@@ -247,12 +247,23 @@ export function createPlanningRouter(io: Server) {
       name: z.string().optional(),
       hasPriority: z.boolean().optional(),
       priorityNotes: z.string().optional().nullable(),
+      priorityExpiryDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de vencimento inválida')
+        .optional()
+        .nullable(),
       plannedVehicleCount: z.number().int().positive().optional().nullable(),
       notes: z.string().optional().nullable(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos para montar a rota' });
 
+    const hasPriority = !!parsed.data.hasPriority;
+    if (hasPriority && !parsed.data.priorityExpiryDate) {
+      return res.status(400).json({
+        error: 'Informe a menor data de vencimento para roteiro prioritário',
+      });
+    }
     const cities = await prisma.planningCity.findMany({
       where: { id: { in: parsed.data.planningCityIds }, status: 'PENDENTE' },
       include: { dealership: true },
@@ -294,8 +305,12 @@ export function createPlanningRouter(io: Server) {
           dealershipId: ordered[0].id,
           region,
           notes: parsed.data.notes?.trim() || null,
-          hasPriority: !!parsed.data.hasPriority,
-          priorityNotes: parsed.data.hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
+          hasPriority,
+          priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
+          priorityExpiryDate:
+            hasPriority && parsed.data.priorityExpiryDate
+              ? new Date(`${parsed.data.priorityExpiryDate.slice(0, 10)}T12:00:00.000Z`)
+              : null,
           plannedVehicleCount: 1,
           status: RouteStatus.RASCUNHO,
           readyForOperation: false,
@@ -453,6 +468,11 @@ export function createPlanningRouter(io: Server) {
       date: z.string().optional(),
       hasPriority: z.boolean().optional(),
       priorityNotes: z.string().optional().nullable(),
+      priorityExpiryDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de vencimento inválida')
+        .optional()
+        .nullable(),
       plannedVehicleCount: z.number().int().positive().optional().nullable(),
       notes: z.string().optional().nullable(),
       readyForOperation: z.boolean().optional(),
@@ -472,9 +492,32 @@ export function createPlanningRouter(io: Server) {
     if (parsed.data.date) data.date = new Date(parsed.data.date);
     if (parsed.data.hasPriority !== undefined) {
       data.hasPriority = parsed.data.hasPriority;
-      if (!parsed.data.hasPriority) data.priorityNotes = null;
+      if (!parsed.data.hasPriority) {
+        data.priorityNotes = null;
+        data.priorityExpiryDate = null;
+      }
     }
-    if (parsed.data.priorityNotes !== undefined) data.priorityNotes = parsed.data.priorityNotes;
+    if (parsed.data.priorityNotes !== undefined) {
+      data.priorityNotes = parsed.data.priorityNotes?.trim() || null;
+    }
+    if (parsed.data.priorityExpiryDate !== undefined) {
+      data.priorityExpiryDate = parsed.data.priorityExpiryDate
+        ? new Date(`${parsed.data.priorityExpiryDate.slice(0, 10)}T12:00:00.000Z`)
+        : null;
+    }
+    const nextPriority =
+      parsed.data.hasPriority !== undefined ? parsed.data.hasPriority : route.hasPriority;
+    const nextExpiry =
+      parsed.data.priorityExpiryDate !== undefined
+        ? parsed.data.priorityExpiryDate
+        : route.priorityExpiryDate
+          ? route.priorityExpiryDate.toISOString().slice(0, 10)
+          : null;
+    if (nextPriority && !nextExpiry) {
+      return res.status(400).json({
+        error: 'Informe a menor data de vencimento para roteiro prioritário',
+      });
+    }
     if (parsed.data.plannedVehicleCount !== undefined) {
       data.plannedVehicleCount = parsed.data.plannedVehicleCount;
     }
@@ -506,6 +549,12 @@ export function createPlanningRouter(io: Server) {
     }
     if (route.dealerships.length === 0) {
       return res.status(400).json({ error: 'Roteiro sem cidades/concessionárias' });
+    }
+    if (route.hasPriority && !route.priorityExpiryDate) {
+      return res.status(400).json({
+        error:
+          'Roteiro prioritário sem menor data de vencimento. Informe o vencimento antes de disponibilizar.',
+      });
     }
     if (!route.plannedVehicleCount || route.plannedVehicleCount < 1) {
       // Regra operacional: 1 placa por rota

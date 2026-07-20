@@ -268,16 +268,27 @@ export function RouteForm() {
             <div className="space-y-3 border-t border-amber-500/20 pt-4">
               <div>
                 <Input
-                  label="Menor vencimento *"
+                  label="Menor data de vencimento *"
                   type="date"
                   value={priorityExpiryDate}
                   onChange={(e) => setPriorityExpiryDate(e.target.value)}
                   required={hasPriority}
                 />
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  Pode ser data retroativa (já vencido). O operador precisa se atentar a essa data.
+                  Obrigatória. Pode ser retroativa. A Operação verá esta data em destaque ao definir
+                  a placa.
                 </p>
               </div>
+
+              {hasPriority && !priorityExpiryDate && (
+                <div className="flex items-start gap-2 rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-800 dark:text-red-200">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Informe a menor data de vencimento. Sem ela, o operador não sabe qual data
+                    retroativa coletar.
+                  </span>
+                </div>
+              )}
 
               {expiryPast && priorityExpiryDate && (
                 <div className="flex items-start gap-2 rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-800 dark:text-red-200">

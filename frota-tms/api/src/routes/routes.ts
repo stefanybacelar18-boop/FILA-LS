@@ -251,6 +251,17 @@ export function createRoutesRouter(io: Server) {
       loadAt,
       plannedVehicleCount: route.plannedVehicleCount,
       assignedCount: await prisma.routeVehicle.count({ where: { routeId: route.id } }),
+      hasPriority: route.hasPriority,
+      priorityExpiryDate: route.priorityExpiryDate,
+      priorityNotes: route.priorityNotes,
+      route: {
+        id: route.id,
+        name: route.name,
+        date: route.date,
+        hasPriority: route.hasPriority,
+        priorityExpiryDate: route.priorityExpiryDate,
+        priorityNotes: route.priorityNotes,
+      },
       returnForecast,
       available,
       unavailable,
@@ -481,6 +492,12 @@ export function createRoutesRouter(io: Server) {
     }
     if (route.dealerships.length === 0) {
       return res.status(400).json({ error: 'Roteiro sem concessionárias' });
+    }
+    if (route.hasPriority && !route.priorityExpiryDate) {
+      return res.status(400).json({
+        error:
+          'Roteiro prioritário sem menor data de vencimento. Edite o roteiro e informe o vencimento antes de disponibilizar.',
+      });
     }
     if (!route.plannedVehicleCount || route.plannedVehicleCount < 1) {
       // 1 placa por rota

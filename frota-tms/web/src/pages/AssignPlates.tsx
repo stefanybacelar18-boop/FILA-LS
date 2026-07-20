@@ -39,6 +39,17 @@ interface PlatesBoard {
   loadAt: string
   plannedVehicleCount?: number | null
   assignedCount?: number
+  hasPriority?: boolean
+  priorityExpiryDate?: string | null
+  priorityNotes?: string | null
+  route?: {
+    id: string
+    name: string
+    date: string
+    hasPriority: boolean
+    priorityExpiryDate?: string | null
+    priorityNotes?: string | null
+  }
   returnForecast?: {
     basis: 'PAD_DISTANCE'
     pad: { lat: number; lng: number }
@@ -407,28 +418,55 @@ export function AssignPlates() {
         description={`${formatDate(selectedRoute?.date)} · 06:00${cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa`}
       />
 
-      {selectedRoute?.hasPriority && (
-        <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 px-4 py-3 text-sm">
-          <p className="font-semibold text-[var(--color-danger)]">
-            Prioridade por vencimento
-          </p>
-          <p className="mt-1 text-[var(--color-text)]">
-            Menor vencimento:{' '}
-            <strong>
-              {selectedRoute.priorityExpiryDate
-                ? formatDate(selectedRoute.priorityExpiryDate)
-                : '—'}
-            </strong>
-            {selectedRoute.priorityExpiryDate &&
-            toInputDate(selectedRoute.priorityExpiryDate) <= toInputDate(new Date())
-              ? ' · atentar: data vencida ou é hoje'
-              : ''}
-          </p>
-          {selectedRoute.priorityNotes && (
-            <p className="mt-1 text-[var(--color-text-muted)]">{selectedRoute.priorityNotes}</p>
-          )}
-        </div>
-      )}
+      {(() => {
+        const priority =
+          board?.route?.hasPriority ??
+          board?.hasPriority ??
+          selectedRoute?.hasPriority ??
+          false
+        if (!priority) return null
+        const expiry =
+          board?.route?.priorityExpiryDate ??
+          board?.priorityExpiryDate ??
+          selectedRoute?.priorityExpiryDate ??
+          null
+        const notes =
+          board?.route?.priorityNotes ??
+          board?.priorityNotes ??
+          selectedRoute?.priorityNotes ??
+          null
+        const expiryPast =
+          !!expiry && toInputDate(expiry) <= toInputDate(new Date())
+        return (
+          <div className="mb-4 rounded-[var(--radius)] border-2 border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-4">
+            <p className="text-sm font-semibold tracking-wide text-[var(--color-danger)] uppercase">
+              Prioridade por vencimento
+            </p>
+            <p className="mt-2 text-[var(--color-text)]">
+              Menor vencimento — atentar ao coletar
+              {expiryPast ? ' (pode ser data retroativa)' : ''}:
+            </p>
+            {expiry ? (
+              <p
+                className={cn(
+                  'mt-1 text-3xl font-bold tracking-tight',
+                  expiryPast ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
+                )}
+              >
+                {formatDate(expiry)}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm font-semibold text-[var(--color-danger)]">
+                Data não informada pelo Admin — peça para editar o roteiro e gravar o menor
+                vencimento.
+              </p>
+            )}
+            {notes && (
+              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{notes}</p>
+            )}
+          </div>
+        )
+      })()}
 
       {board?.returnForecast && (
         <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
