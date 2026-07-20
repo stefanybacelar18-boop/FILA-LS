@@ -315,7 +315,9 @@ export function Routes() {
                               </p>
                               <p className="text-xs text-[var(--color-text-muted)]">
                                 {r.returnForecast.farthestDealership
-                                  ? `${r.returnForecast.farthestDealership.avgTravelDays} dias · PAD`
+                                  ? r.returnForecast.farthestDealership.avgTravelDays === 0
+                                    ? 'mesmo dia · PAD'
+                                    : `${r.returnForecast.farthestDealership.avgTravelDays} dias · PAD`
                                   : 'pelo PAD'}
                               </p>
                             </div>
@@ -353,7 +355,7 @@ export function Routes() {
                       </td>
                       <td className="px-4 py-3.5 align-middle">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {awaitingPlate && isOps && (
+                          {awaitingPlate && (isOps || isAdmin) && (
                             <Link to={`/definir-placas?routeId=${r.id}`}>
                               <Button size="sm">Definir placa</Button>
                             </Link>

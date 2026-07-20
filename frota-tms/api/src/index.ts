@@ -20,6 +20,7 @@ import searchRoutes from './routes/search';
 import reportsRoutes from './routes/reports';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
+import { resolveTravelFromPad } from './utils/geo';
 
 const app = express();
 const server = http.createServer(app);
@@ -124,6 +125,33 @@ server.listen(PORT, '0.0.0.0', () => {
       if (n > 0) console.log(`Motoristas sincronizados a partir das placas: ${n}`);
     })
     .catch((err) => console.warn('Sync de motoristas:', err?.message ?? err));
+
+  // Atualiza dias de viagem (inclui regra de retorno no mesmo dia)
+  void (async () => {
+    const all = await prisma.dealership.findMany();
+    let n = 0;
+    for (const d of all) {
+      const travel = resolveTravelFromPad({
+        city: d.city,
+        distanceKm: d.distanceKm,
+        avgTravelDays: d.avgTravelDays,
+      });
+      if (
+        Math.abs(travel.distanceKm - d.distanceKm) > 0.05 ||
+        Math.abs(travel.avgTravelDays - d.avgTravelDays) > 0.05
+      ) {
+        await prisma.dealership.update({
+          where: { id: d.id },
+          data: {
+            distanceKm: travel.distanceKm,
+            avgTravelDays: travel.avgTravelDays,
+          },
+        });
+        n += 1;
+      }
+    }
+    if (n > 0) console.log(`Concessionárias com previsão PAD atualizada: ${n}`);
+  })().catch((err) => console.warn('Sync PAD dealerships:', err?.message ?? err));
 });
 
 export { io };

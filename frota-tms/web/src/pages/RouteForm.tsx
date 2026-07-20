@@ -357,7 +357,8 @@ export function RouteForm() {
                     <span className="font-medium">{d.city}</span>
                     <span className="text-[var(--color-text-muted)]"> · {d.name}</span>
                     <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
-                      {d.distanceKm.toFixed(0)} km do PAD · {d.avgTravelDays} dias
+                      {d.distanceKm.toFixed(0)} km do PAD ·{' '}
+                      {d.avgTravelDays === 0 ? 'mesmo dia' : `${d.avgTravelDays} dias`}
                     </span>
                   </span>
                 </label>

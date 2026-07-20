@@ -346,7 +346,7 @@ export function AssignPlates() {
       <div className="page-desktop max-w-3xl">
         <PageHeader
           title="Pendentes de placa"
-          description="Prioridade no topo — comece pelas placas com vencimento."
+          description="Prioridade no topo — Admin e Operação podem definir placa."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
@@ -489,7 +489,9 @@ export function AssignPlates() {
               <p className="truncate text-xs text-[var(--color-text-muted)]">
                 {board.returnForecast.farthestDealership.city} ·{' '}
                 {board.returnForecast.farthestDealership.distanceKm.toFixed(0)} km ·{' '}
-                {board.returnForecast.farthestDealership.avgTravelDays} dias
+                {board.returnForecast.farthestDealership.avgTravelDays === 0
+                  ? 'mesmo dia'
+                  : `${board.returnForecast.farthestDealership.avgTravelDays} dias`}
               </p>
             </div>
           )}

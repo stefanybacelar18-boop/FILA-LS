@@ -35,6 +35,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   ADMIN: {
     primary: [
       { to: '/roteiros', label: 'Roteiros', icon: Route },
+      { to: '/definir-placas', label: 'Pendentes de placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
     ],
     secondary: [

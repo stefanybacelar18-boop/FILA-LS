@@ -41,11 +41,44 @@ export function distanceFromBase(lat: number, lng: number): number {
 
 /**
  * Dias médios de viagem (ida+volta) a partir da distância PAD→destino.
- * Fórmula: (distanceKm * 2) / 400, mínimo 1 dia.
+ * Fórmula: (distanceKm * 2) / 400, mínimo 1 dia
+ * (exceto cidades de retorno no mesmo dia — ver SAME_DAY_RETURN_CITIES).
  */
 export function avgTravelDaysFromDistance(distanceKm: number): number {
   const days = (distanceKm * 2) / TRAVEL_KM_PER_DAY;
   return Math.max(1, Math.round(days * 10) / 10);
+}
+
+/**
+ * Cidades que, na operação real, em geral voltam para carregar no mesmo dia.
+ * Previsão de retorno = data de saída (0 dias além da saída 06:00).
+ */
+export const SAME_DAY_RETURN_CITIES = new Set([
+  'CAMACARI',
+  'LAURO',
+  'LAURO DE FREITAS',
+  'SALVADOR',
+  'CANDEIAS',
+  'SANTO AMARO',
+  'FEIRA DE SANTANA',
+  'SANTO ESTEVAO',
+  'SANTO ANTONIO',
+  'SANTO ANTONIO DE JESUS',
+]);
+
+export function isSameDayReturnCity(city: string): boolean {
+  const key = normalizeCityKey(city);
+  if (SAME_DAY_RETURN_CITIES.has(key)) return true;
+  if (key.startsWith('LAURO ')) return true;
+  if (key.startsWith('SANTO ANTONIO')) return true;
+  return false;
+}
+
+function applyOperationalTravelDays(city: string, travel: PadTravel): PadTravel {
+  if (isSameDayReturnCity(city)) {
+    return { ...travel, avgTravelDays: 0 };
+  }
+  return travel;
 }
 
 /** @deprecated use avgTravelDaysFromDistance */
@@ -64,21 +97,29 @@ export type PadTravel = {
 /** Resolve coordenadas da cidade (mapa local) e calcula distância/dias a partir do PAD. */
 export function travelFromPadByCity(city: string): PadTravel | null {
   const key = normalizeCityKey(city);
-  const coords = CITY_COORDS[key];
+  // aliases curtos → chave do mapa
+  const mapKey =
+    key === 'LAURO'
+      ? 'LAURO DE FREITAS'
+      : key === 'SANTO ANTONIO'
+        ? 'SANTO ANTONIO DE JESUS'
+        : key;
+  const coords = CITY_COORDS[mapKey] ?? CITY_COORDS[key];
   if (!coords) return null;
   const distanceKm = distanceFromPad(coords.lat, coords.lng);
-  return {
+  return applyOperationalTravelDays(city, {
     distanceKm,
     avgTravelDays: avgTravelDaysFromDistance(distanceKm),
     lat: coords.lat,
     lng: coords.lng,
     source: 'city',
-  };
+  });
 }
 
 /**
  * Calcula (ou reaproveita) distância/dias PAD→concessionária.
  * Prioridade: coordenadas da cidade mapeada; senão valores já persistidos.
+ * Aplica regra operacional de retorno no mesmo dia quando couber.
  */
 export function resolveTravelFromPad(input: {
   city: string;
@@ -89,16 +130,16 @@ export function resolveTravelFromPad(input: {
   if (fromCity) return fromCity;
   const distanceKm = Math.max(0, Number(input.distanceKm ?? 0));
   const avgTravelDays =
-    input.avgTravelDays != null && Number(input.avgTravelDays) > 0
+    input.avgTravelDays != null && Number(input.avgTravelDays) >= 0
       ? Number(input.avgTravelDays)
       : avgTravelDaysFromDistance(distanceKm || 1);
-  return {
+  return applyOperationalTravelDays(input.city, {
     distanceKm,
     avgTravelDays,
     lat: PAD_LAT,
     lng: PAD_LNG,
     source: 'stored',
-  };
+  });
 }
 
 /** Approximate city centers (BA / SE) */

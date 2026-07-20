@@ -45,7 +45,9 @@ export function routeDepartureAt(routeDate: Date | string): Date {
 }
 
 export function expectedReturnDate(departure: Date, avgTravelDays: number): Date {
-  return addDays(departure, Math.ceil(avgTravelDays));
+  // 0 = retorno no mesmo dia (cidades próximas / regra operacional)
+  const days = Math.max(0, Math.ceil(avgTravelDays));
+  return addDays(departure, days);
 }
 
 export function isOverdue(expectedReturn: Date, returnedAt?: Date | null): boolean {

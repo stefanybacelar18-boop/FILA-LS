@@ -25,7 +25,7 @@ const schema = z.object({
   phone: z.string().optional().nullable(),
   /** Opcional: se omitido, calcula automaticamente PAD → cidade */
   distanceKm: z.number().nonnegative().optional(),
-  avgTravelDays: z.number().positive().optional(),
+  avgTravelDays: z.number().nonnegative().optional(),
   allowedVehicle: z
     .enum([AllowedVehicleType.TRUCK, AllowedVehicleType.CARRETA, AllowedVehicleType.AMBOS])
     .default(AllowedVehicleType.AMBOS),
