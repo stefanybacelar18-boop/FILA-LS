@@ -1,6 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, Paperclip } from 'lucide-react'
+import {
+  AlertTriangle,
+  Check,
+  FileText,
+  ImageIcon,
+  Paperclip,
+  Upload,
+  X,
+} from 'lucide-react'
 import { api, getToken } from '../lib/api'
 import type { ReturnsPanel, Trip } from '../types'
 import {
@@ -18,6 +26,219 @@ import {
 import { delayReasonPresets } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
+
+const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,application/pdf'
+const MAX_FILES = 6
+const MAX_BYTES = 8 * 1024 * 1024
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function EvidenceUploader({
+  files,
+  onChange,
+  error,
+}: {
+  files: File[]
+  onChange: (files: File[]) => void
+  error?: string
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+  const [localError, setLocalError] = useState('')
+  const [previews, setPreviews] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const next: Record<string, string> = {}
+    const urls: string[] = []
+    for (const f of files) {
+      if (f.type.startsWith('image/')) {
+        const url = URL.createObjectURL(f)
+        next[`${f.name}-${f.size}-${f.lastModified}`] = url
+        urls.push(url)
+      }
+    }
+    setPreviews(next)
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [files])
+
+  function mergeFiles(incoming: FileList | File[]) {
+    setLocalError('')
+    const list = Array.from(incoming)
+    const accepted: File[] = []
+    for (const f of list) {
+      const okType =
+        /^image\/(jpeg|png|webp|gif)$/i.test(f.type) || f.type === 'application/pdf'
+      if (!okType) {
+        setLocalError('Use apenas fotos (JPG, PNG, WEBP) ou PDF.')
+        continue
+      }
+      if (f.size > MAX_BYTES) {
+        setLocalError(`"${f.name}" passa de 8 MB.`)
+        continue
+      }
+      accepted.push(f)
+    }
+    const merged = [...files]
+    for (const f of accepted) {
+      const dup = merged.some(
+        (x) => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified,
+      )
+      if (!dup) merged.push(f)
+    }
+    if (merged.length > MAX_FILES) {
+      setLocalError(`Máximo de ${MAX_FILES} arquivos.`)
+      onChange(merged.slice(0, MAX_FILES))
+      return
+    }
+    onChange(merged)
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    if (e.dataTransfer.files?.length) mergeFiles(e.dataTransfer.files)
+  }
+
+  function onInputChange(e: ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) mergeFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  function removeAt(index: number) {
+    onChange(files.filter((_, i) => i !== index))
+  }
+
+  const showError = error || localError
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-text)]">
+            Evidências <span className="text-[var(--color-danger)]">*</span>
+          </p>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Fotos do problema ou PDF · obrigatório para registrar
+          </p>
+        </div>
+        {files.length > 0 && (
+          <span className="rounded-full bg-[var(--color-primary-muted)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-primary)]">
+            {files.length}/{MAX_FILES}
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragEnter={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          setDragging(false)
+        }}
+        onDrop={onDrop}
+        className={cn(
+          'flex w-full flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-4 py-8 text-center transition',
+          dragging
+            ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
+            : files.length === 0
+              ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/40 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-muted)]'
+              : 'border-[var(--color-border)] bg-[var(--color-surface-2)]/50 hover:border-[var(--color-primary)]/50',
+        )}
+      >
+        <span
+          className={cn(
+            'flex h-12 w-12 items-center justify-center rounded-full',
+            dragging || files.length === 0
+              ? 'bg-[var(--color-primary)] text-white'
+              : 'bg-[var(--color-surface)] text-[var(--color-primary)]',
+          )}
+        >
+          <Upload className="h-5 w-5" />
+        </span>
+        <span className="text-sm font-medium text-[var(--color-text)]">
+          {dragging ? 'Solte os arquivos aqui' : 'Arraste fotos aqui ou clique para anexar'}
+        </span>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          JPG, PNG, WEBP ou PDF · até {MAX_FILES} arquivos · máx. 8 MB cada
+        </span>
+        <span className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-primary)] shadow-sm ring-1 ring-[var(--color-border)]">
+          <Paperclip className="h-3.5 w-3.5" />
+          Escolher arquivos
+        </span>
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        className="sr-only"
+        onChange={onInputChange}
+      />
+
+      {files.length > 0 && (
+        <ul className="space-y-2">
+          {files.map((f, i) => {
+            const key = `${f.name}-${f.size}-${f.lastModified}`
+            const preview = previews[key]
+            const isPdf = f.type === 'application/pdf'
+            return (
+              <li
+                key={key}
+                className="flex items-center gap-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5"
+              >
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[var(--color-surface-2)]">
+                  {preview ? (
+                    <img src={preview} alt="" className="h-full w-full object-cover" />
+                  ) : isPdf ? (
+                    <FileText className="h-6 w-6 text-[var(--color-danger)]" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-[var(--color-text-muted)]" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{f.name}</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    {isPdf ? 'PDF' : 'Imagem'} · {formatBytes(f.size)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  className="rounded-md p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-danger)]"
+                  aria-label={`Remover ${f.name}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {showError && <p className="text-sm text-[var(--color-danger)]">{showError}</p>}
+      {files.length === 0 && !showError && (
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+          Anexe ao menos uma evidência para salvar o problema.
+        </p>
+      )}
+    </div>
+  )
+}
 
 function TripCard({
   trip,
@@ -76,9 +297,9 @@ function TripCard({
               href={`/uploads/trip-evidence/${e.filename}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:bg-[var(--color-surface-2)]"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-xs font-medium hover:border-[var(--color-primary)]/40"
             >
-              <Paperclip className="h-3 w-3" />
+              <Paperclip className="h-3.5 w-3.5 text-[var(--color-primary)]" />
               {e.originalName}
             </a>
           ))}
@@ -133,7 +354,7 @@ export function Returns() {
   const [preset, setPreset] = useState('')
   const [newExpectedReturn, setNewExpectedReturn] = useState('')
   const [markUnavailable, setMarkUnavailable] = useState(false)
-  const [files, setFiles] = useState<FileList | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState('')
 
   const { data, isLoading, isError } = useQuery({
@@ -150,7 +371,6 @@ export function Returns() {
   const returnMutation = useMutation({
     mutationFn: async () => {
       if (!confirmTrip) return
-      // Em atraso sem justificativa registrada: bloqueia — deve usar "Problemas"
       if (
         (confirmTrip.overdue || confirmTrip.status === 'ATRASADO') &&
         !confirmTrip.delayReason
@@ -190,14 +410,14 @@ export function Returns() {
       const text = composedReason()
       if (text.length < 5) throw new Error('Informe a justificativa')
       if (!newExpectedReturn) throw new Error('Informe a nova previsão de retorno')
-      if (!files || files.length < 1) throw new Error('Anexe ao menos uma evidência')
+      if (files.length < 1) throw new Error('Anexe ao menos uma evidência')
 
       const form = new FormData()
       form.append('reason', text)
       form.append('newExpectedReturn', newExpectedReturn)
       form.append('markUnavailable', markUnavailable ? 'true' : 'false')
       if (markUnavailable) form.append('unavailableReason', text)
-      Array.from(files).forEach((f) => form.append('evidence', f))
+      files.forEach((f) => form.append('evidence', f))
 
       const token = getToken()
       const res = await fetch(`/api/trips/${reportTrip.id}/delay-report`, {
@@ -220,7 +440,7 @@ export function Returns() {
       setPreset('')
       setNewExpectedReturn('')
       setMarkUnavailable(false)
-      setFiles(null)
+      setFiles([])
       setError('')
     },
     onError: (err: unknown) => {
@@ -239,8 +459,7 @@ export function Returns() {
     setPreset('')
     setDelayReason(t.delayReason ?? '')
     setMarkUnavailable(!!t.unavailableReason)
-    setFiles(null)
-    // default: +2 days from today
+    setFiles([])
     const d = new Date()
     d.setDate(d.getDate() + 2)
     setNewExpectedReturn(toInputDate(d))
@@ -275,7 +494,7 @@ export function Returns() {
         description="Confirme quem voltou. Se não retornou, registre o problema com justificativa, nova previsão e evidências."
       />
 
-      {error && (
+      {error && !reportTrip && (
         <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
           {error}
         </p>
@@ -355,21 +574,37 @@ export function Returns() {
 
       <Modal
         open={!!reportTrip}
-        onClose={() => setReportTrip(null)}
+        onClose={() => {
+          setReportTrip(null)
+          setFiles([])
+          setError('')
+        }}
         title={`Problemas — ${reportTrip?.vehicle.plate ?? ''}`}
         size="lg"
       >
-        <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Justificativa e evidências são obrigatórias. A nova previsão atualiza o retorno esperado.
-          </p>
-          <Select
-            label="Motivo"
-            value={preset}
-            onChange={(e) => setPreset(e.target.value)}
-            options={delayReasonPresets.map((label) => ({ value: label, label }))}
-            placeholder="Selecione um motivo"
-          />
+        <div className="space-y-5">
+          <div className="rounded-[var(--radius)] border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-100">
+            Informe o motivo, a nova previsão e anexe evidências. Sem evidência o registro não é
+            salvo.
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Motivo"
+              value={preset}
+              onChange={(e) => setPreset(e.target.value)}
+              options={delayReasonPresets.map((label) => ({ value: label, label }))}
+              placeholder="Selecione um motivo"
+            />
+            <Input
+              label="Nova previsão de retorno *"
+              type="date"
+              value={newExpectedReturn}
+              onChange={(e) => setNewExpectedReturn(e.target.value)}
+              required
+            />
+          </div>
+
           <Textarea
             label="Justificativa *"
             value={delayReason}
@@ -378,47 +613,45 @@ export function Returns() {
             placeholder="Por que não retornou? Descreva o problema…"
             required
           />
-          <Input
-            label="Nova previsão de retorno *"
-            type="date"
-            value={newExpectedReturn}
-            onChange={(e) => setNewExpectedReturn(e.target.value)}
-            required
-          />
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Evidências (fotos ou PDF) *
-            </label>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-              multiple
-              onChange={(e) => setFiles(e.target.files)}
-              className="block w-full text-sm"
-            />
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              Até 6 arquivos · máx. 8 MB cada
-            </p>
-          </div>
-          <label className="flex items-start gap-2 text-sm">
+
+          <EvidenceUploader files={files} onChange={setFiles} />
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)]/40 px-3 py-3 text-sm">
             <input
               type="checkbox"
-              className="mt-1"
+              className="mt-0.5 accent-[var(--color-primary)]"
               checked={markUnavailable}
               onChange={(e) => setMarkUnavailable(e.target.checked)}
             />
             <span>
-              Marcar veículo como <strong>indisponível</strong> até o retorno
+              <span className="font-medium">Marcar como indisponível</span>
+              <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                Bloqueia a placa para novo carregamento até o retorno
+              </span>
             </span>
           </label>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setReportTrip(null)}>
+
+          {error && reportTrip && (
+            <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 border-t border-[var(--color-border)] pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReportTrip(null)
+                setFiles([])
+                setError('')
+              }}
+            >
               Cancelar
             </Button>
             <Button
               loading={reportMutation.isPending}
               disabled={
-                composedReason().length < 5 || !newExpectedReturn || !files || files.length < 1
+                composedReason().length < 5 || !newExpectedReturn || files.length < 1
               }
               onClick={() => reportMutation.mutate()}
             >
@@ -430,4 +663,3 @@ export function Returns() {
     </div>
   )
 }
-
