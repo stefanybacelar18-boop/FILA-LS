@@ -1,0 +1,3 @@
+# FilaDock (Vercel) — não enviar o FrotaTMS no deploy do FilaDock.
+# FrotaTMS é outro sistema (pasta frota-tms/) e sobe em Render/Docker/Railway.
+frota-tms

@@ -1,0 +1,11 @@
+# Railway — APENAS FrotaTMS. Root Directory do serviço = frota-tms
+# Não use este arquivo no deploy Vercel do FilaDock.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"

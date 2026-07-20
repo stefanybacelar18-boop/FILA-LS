@@ -42,6 +42,7 @@ services:
         condition: service_healthy
     volumes:
       - frota_backups:/app/backups
+      - frota_uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/api/health']
@@ -52,3 +53,4 @@ services:
 volumes:
   frota_pg:
   frota_backups:
+  frota_uploads:

@@ -98,6 +98,7 @@ frota-tms/          ← único lugar deste sistema (isolado do FilaDock)
 
 ## Isolamento do FilaDock
 
-- **FilaDock** = app Next.js na raiz do repo (`src/`, `package.json` raiz, etc.)  
-- **FrotaTMS** = pasta `frota-tms/` apenas  
-- Deploys, seeds e Docker deste sistema **não** devem apontar para a raiz do FilaDock.
+- **FilaDock** = app Next.js na raiz do repo (`src/`, `package.json` raiz, etc.) — produção no **Vercel**  
+- **FrotaTMS** = pasta `frota-tms/` apenas — produção em **Docker / Render / Railway**  
+- Deploys, seeds e Docker deste sistema **não** devem apontar para a raiz do FilaDock  
+- Guia: [`DEPLOY-PRODUCAO.md`](./DEPLOY-PRODUCAO.md)

@@ -1,8 +1,12 @@
-# Render Blueprint — apenas FrotaTMS (pasta frota-tms)
-# No dashboard Render: New → Blueprint → selecione este repositório
-# e defina Root Directory = frota-tms (ou use este arquivo via path).
+# Render Blueprint — APENAS FrotaTMS (pasta frota-tms)
 #
-# IMPORTANTE: não altera nem faz deploy do FilaDock (Next.js na raiz).
+# Como usar (sem tocar no FilaDock / Vercel):
+# 1. render.com → New → Blueprint
+# 2. Repositório FILA-LS
+# 3. Blueprint Path: frota-tms/render.yaml
+# 4. Root Directory do serviço: frota-tms (já definido abaixo)
+#
+# NÃO conecte este serviço ao projeto Vercel do FilaDock.
 
 services:
   - type: web
@@ -11,14 +15,16 @@ services:
     plan: free
     rootDir: .
     buildCommand: |
-      npm install --prefix web && npm run build --prefix web &&
-      npm install --prefix api &&
-      sed -i 's/provider = "sqlite"/provider = "postgresql"/' api/prisma/schema.prisma &&
-      npx prisma generate --schema api/prisma/schema.prisma &&
-      npm run build --prefix api &&
+      chmod +x scripts/prepare-postgres-schema.sh
+      npm install --prefix web && npm run build --prefix web
+      npm install --prefix api
+      ./scripts/prepare-postgres-schema.sh api/prisma/schema.prisma
+      npx prisma generate --schema api/prisma/schema.prisma
+      npm run build --prefix api
       mkdir -p api/public && cp -r web/dist/* api/public/
     startCommand: |
       cd api && npx prisma db push && node dist/index.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -31,6 +37,8 @@ services:
       - key: CORS_ORIGIN
         value: '*'
       - key: SEED_ON_START
+        value: 'false'
+      - key: FORCE_SEED
         value: 'false'
       - key: DATABASE_URL
         fromDatabase:

@@ -1,17 +1,21 @@
 #!/bin/sh
 set -e
 
-mkdir -p /app/data /app/backups
+mkdir -p /app/data /app/backups /app/uploads/trip-evidence
 
 # Schema: se URL for Postgres e provider ainda for sqlite, ajusta em runtime
 if echo "${DATABASE_URL:-}" | grep -qiE '^postgres(ql)?://'; then
-  if grep -q 'provider = "sqlite"' prisma/schema.prisma 2>/dev/null; then
+  if [ -x ./scripts/prepare-postgres-schema.sh ]; then
+    ./scripts/prepare-postgres-schema.sh ./prisma/schema.prisma
+  elif grep -q 'provider = "sqlite"' prisma/schema.prisma 2>/dev/null; then
     echo "Ajustando Prisma provider → postgresql"
     sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
     if [ -f prisma/migrations/migration_lock.toml ]; then
       sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/migrations/migration_lock.toml || true
     fi
-    npx prisma generate
+  fi
+  if grep -q 'provider = "postgresql"' prisma/schema.prisma 2>/dev/null; then
+    npx prisma generate >/dev/null
   fi
   echo "Aplicando schema no PostgreSQL..."
 else
