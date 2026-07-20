@@ -610,9 +610,10 @@ export function createRoutesRouter(io: Server) {
 
   /** Assign plates to route (operação) — 1 placa por rota */
   router.post('/:id/assign-plates', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
-    const { vehicleIds, vehicleId, driverName, drivers } = req.body as {
+    const { vehicleIds, vehicleId, driverId, driverName, drivers } = req.body as {
       vehicleIds?: string[];
       vehicleId?: string;
+      driverId?: string;
       driverName?: string;
       drivers?: Record<string, string>;
     };
@@ -629,6 +630,32 @@ export function createRoutesRouter(io: Server) {
     }
     if (uniqueVehicleIds.length > 1) {
       return res.status(400).json({ error: 'Esta rota aceita apenas 1 placa' });
+    }
+
+    let resolvedDriverName: string | null = null;
+    if (driverId) {
+      const driver = await prisma.driver.findUnique({ where: { id: driverId } });
+      if (!driver || !driver.active) {
+        return res.status(400).json({ error: 'Selecione um motorista cadastrado e ativo' });
+      }
+      resolvedDriverName = driver.name;
+    } else {
+      const freeText =
+        drivers?.[uniqueVehicleIds[0]]?.trim() || driverName?.trim() || '';
+      if (freeText) {
+        const byName = await prisma.driver.findFirst({
+          where: { name: { equals: freeText }, active: true },
+        });
+        if (!byName) {
+          return res.status(400).json({
+            error: 'Motorista deve ser cadastrado. Cadastre em Motoristas ou escolha da lista.',
+          });
+        }
+        resolvedDriverName = byName.name;
+      }
+    }
+    if (!resolvedDriverName) {
+      return res.status(400).json({ error: 'Selecione o motorista da viagem' });
     }
 
     const route = await prisma.route.findUnique({
@@ -708,11 +735,7 @@ export function createRoutesRouter(io: Server) {
             );
           }
 
-          const resolvedDriver =
-            drivers?.[vid]?.trim() ||
-            driverName?.trim() ||
-            vehicle.defaultDriver ||
-            null;
+          const resolvedDriver = resolvedDriverName;
 
           await tx.routeVehicle.upsert({
             where: {

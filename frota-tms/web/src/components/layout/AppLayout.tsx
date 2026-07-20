@@ -9,6 +9,7 @@ import {
   RotateCcw,
   History,
   Users,
+  UserRound,
   Moon,
   Sun,
   LogOut,
@@ -38,6 +39,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
     ],
     secondary: [
       { to: '/frota', label: 'Frota', icon: Truck },
+      { to: '/motoristas', label: 'Motoristas', icon: UserRound },
       { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
       { to: '/usuarios', label: 'Usuários', icon: Users },
     ],
@@ -48,7 +50,10 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/roteiros', label: 'Todos roteiros', icon: Route },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
     ],
-    secondary: [{ to: '/frota', label: 'Frota', icon: Truck }],
+    secondary: [
+      { to: '/frota', label: 'Frota', icon: Truck },
+      { to: '/motoristas', label: 'Motoristas', icon: UserRound },
+    ],
   },
   CONSULTA: {
     primary: [

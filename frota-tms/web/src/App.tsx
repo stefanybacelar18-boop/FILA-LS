@@ -12,6 +12,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Fleet } from './pages/Fleet'
 import { FleetDetail } from './pages/FleetDetail'
 import { Dealerships } from './pages/Dealerships'
+import { Drivers } from './pages/Drivers'
 import { Routes as RoutesPage } from './pages/Routes'
 import { RouteForm } from './pages/RouteForm'
 import { AssignPlates } from './pages/AssignPlates'
@@ -91,6 +92,7 @@ export default function App() {
               <Route path="frota" element={<Fleet />} />
               <Route path="frota/:id" element={<FleetDetail />} />
               <Route path="concessionarias" element={<Dealerships />} />
+              <Route path="motoristas" element={<Drivers />} />
               <Route path="roteiros" element={<RoutesPage />} />
               <Route
                 path="roteiros/novo"

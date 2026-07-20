@@ -10,6 +10,7 @@ import { Server } from 'socket.io';
 import authRoutes from './routes/auth';
 import vehicleRoutes from './routes/vehicles';
 import dealershipRoutes from './routes/dealerships';
+import driverRoutes, { syncDriversFromVehicles } from './routes/drivers';
 import { createRoutesRouter } from './routes/routes';
 import { createTripsRouter } from './routes/trips';
 import { createPlanningRouter } from './routes/planning';
@@ -54,6 +55,7 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/dealerships', dealershipRoutes);
+app.use('/api/drivers', driverRoutes);
 app.use('/api/routes', createRoutesRouter(io));
 app.use('/api/trips', createTripsRouter(io));
 app.use('/api/planning', createPlanningRouter(io));
@@ -117,6 +119,11 @@ io.on('connection', (socket) => {
 const PORT = Number(process.env.PORT) || 4000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
+  void syncDriversFromVehicles()
+    .then((n) => {
+      if (n > 0) console.log(`Motoristas sincronizados a partir das placas: ${n}`);
+    })
+    .catch((err) => console.warn('Sync de motoristas:', err?.message ?? err));
 });
 
 export { io };

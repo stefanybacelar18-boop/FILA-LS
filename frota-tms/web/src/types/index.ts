@@ -51,6 +51,16 @@ export interface Vehicle {
   activeTripId: string | null
 }
 
+export interface Driver {
+  id: string
+  name: string
+  phone?: string | null
+  active: boolean
+  notes?: string | null
+  createdAt: string
+  updatedAt?: string
+}
+
 export interface Dealership {
   id: string
   code: string | null

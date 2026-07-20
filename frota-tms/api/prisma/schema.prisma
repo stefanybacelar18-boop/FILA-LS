@@ -49,6 +49,17 @@ model Vehicle {
   unavailabilities PlateUnavailability[]
 }
 
+// Motoristas cadastrados — usados na definição de placa
+model Driver {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  phone     String?
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Dealership {
   id             String   @id @default(cuid())
   code           String?

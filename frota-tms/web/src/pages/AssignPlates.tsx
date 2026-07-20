@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, Check } from 'lucide-react'
 import { api } from '../lib/api'
-import type { PlateColor, Route, Vehicle, VehicleStatus } from '../types'
+import type { Driver, PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
   PageHeader,
   Button,
@@ -123,6 +123,7 @@ export function AssignPlates() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [routeId, setRouteId] = useState(searchParams.get('routeId') || '')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedDriverId, setSelectedDriverId] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
@@ -181,6 +182,13 @@ export function AssignPlates() {
     enabled: !!routeId,
   })
 
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers', 'active'],
+    queryFn: async () =>
+      (await api.get<Driver[]>('/drivers', { params: { active: 'true' } })).data,
+    enabled: !!routeId,
+  })
+
   const available = useMemo(() => {
     const list = board?.available ?? []
     if (!allowedTypes || incompatibleTypes) return list
@@ -219,20 +227,34 @@ export function AssignPlates() {
   )
 
   const selectedVehicle = available.find((v) => v.id === selectedId) ?? null
+  const selectedDriver = drivers.find((d) => d.id === selectedDriverId) ?? null
+
+  function pickPlate(v: PlatesBoardVehicle) {
+    setSelectedId(v.id)
+    setError('')
+    const match = drivers.find(
+      (d) =>
+        v.defaultDriver &&
+        d.name.trim().toLowerCase() === v.defaultDriver.trim().toLowerCase(),
+    )
+    setSelectedDriverId(match?.id ?? '')
+  }
 
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!selectedId) throw new Error('Sem placa')
+      if (!selectedDriverId) throw new Error('Selecione o motorista')
       return api.post(`/routes/${routeId}/assign-plates`, {
         vehicleId: selectedId,
         vehicleIds: [selectedId],
-        driverName: selectedVehicle?.defaultDriver || undefined,
+        driverId: selectedDriverId,
       })
     },
     onSuccess: async () => {
       const plate = selectedVehicle?.plate ?? ''
       const name = selectedRoute?.name ?? 'rota'
       setSelectedId(null)
+      setSelectedDriverId('')
       setConfirmOpen(false)
       setError('')
       setRouteId('')
@@ -292,6 +314,7 @@ export function AssignPlates() {
     setRouteId(id)
     setSearchParams({ routeId: id })
     setSelectedId(null)
+    setSelectedDriverId('')
     setError('')
     setOkMsg('')
     setShowProblems(false)
@@ -301,6 +324,7 @@ export function AssignPlates() {
     setRouteId('')
     setSearchParams({})
     setSelectedId(null)
+    setSelectedDriverId('')
     setShowProblems(false)
   }
 
@@ -538,7 +562,7 @@ export function AssignPlates() {
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => setSelectedId(v.id)}
+                  onClick={() => pickPlate(v)}
                   className={cn(
                     'flex w-full items-center gap-3 rounded-[var(--radius)] border px-4 py-3 text-left transition',
                     active
@@ -561,7 +585,7 @@ export function AssignPlates() {
                     <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                       Disponível
                       {v.capacityMotos ? ` · ${v.capacityMotos} motos` : ''}
-                      {v.defaultDriver ? ` · ${v.defaultDriver}` : ''}
+                      {v.defaultDriver ? ` · padrão: ${v.defaultDriver}` : ''}
                     </p>
                   </div>
                 </button>
@@ -570,10 +594,39 @@ export function AssignPlates() {
           </div>
         )}
 
+        {selectedId && (
+          <div className="mt-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <Select
+              label="Motorista *"
+              value={selectedDriverId}
+              onChange={(e) => setSelectedDriverId(e.target.value)}
+              required
+              placeholder="Selecione o motorista"
+              options={drivers.map((d) => ({
+                value: d.id,
+                label:
+                  selectedVehicle?.defaultDriver &&
+                  d.name.trim().toLowerCase() ===
+                    selectedVehicle.defaultDriver.trim().toLowerCase()
+                    ? `${d.name} (padrão da placa)`
+                    : d.name,
+              }))}
+            />
+            {drivers.length === 0 && (
+              <p className="mt-2 text-sm text-[var(--color-danger)]">
+                Nenhum motorista cadastrado. Peça ao Admin cadastrar em Motoristas.
+              </p>
+            )}
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              Se o motorista padrão não puder ir, escolha outro da lista.
+            </p>
+          </div>
+        )}
+
         <Button
           className="mt-4 w-full"
           size="lg"
-          disabled={!selectedId}
+          disabled={!selectedId || !selectedDriverId}
           onClick={() => setConfirmOpen(true)}
           loading={assignMutation.isPending}
         >
@@ -665,6 +718,7 @@ export function AssignPlates() {
         title="Confirmar placa?"
         message={`Rota: ${selectedRoute?.name}
 Placa: ${selectedVehicle?.plate ?? '—'}
+Motorista: ${selectedDriver?.name ?? '—'}
 Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00${
           error && confirmOpen ? `\n\nErro: ${error}` : ''
         }`}
