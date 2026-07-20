@@ -122,7 +122,41 @@ export function createRoutesRouter(io: Server) {
         { createdAt: 'desc' },
       ],
     });
-    res.json(routes);
+
+    const withForecast = routes.map((route) => {
+      const linked: DealershipRow[] =
+        route.dealerships.length > 0
+          ? route.dealerships.map((rd) => rd.dealership)
+          : route.dealership
+            ? [route.dealership]
+            : [];
+      if (linked.length === 0) {
+        return { ...route, returnForecast: null };
+      }
+      const farthest = farthestDealershipFromPad(linked);
+      const departureAt = routeDepartureAt(route.date);
+      const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
+      return {
+        ...route,
+        returnForecast: {
+          basis: 'PAD_DISTANCE' as const,
+          pad: { lat: PAD_LAT, lng: PAD_LNG },
+          formula: '(distanceKm * 2) / 400',
+          farthestDealership: {
+            id: farthest.id,
+            name: farthest.name,
+            city: farthest.city,
+            distanceKm: farthest.padDistanceKm,
+            avgTravelDays: farthest.padAvgTravelDays,
+            source: farthest.padSource,
+          },
+          departureAt,
+          expectedReturn,
+        },
+      };
+    });
+
+    res.json(withForecast);
   });
 
   /**

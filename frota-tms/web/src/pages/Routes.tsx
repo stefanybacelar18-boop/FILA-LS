@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, Calendar } from 'lucide-react'
+import { Plus, Pencil, Ban, Send, MapPin, Calendar, Flag } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Route } from '../types'
 import {
@@ -137,7 +137,7 @@ export function Routes() {
     <div className="page-desktop max-w-[1280px]">
       <PageHeader
         title="Roteiros"
-        description="Prioridade no topo. Comece pelas placas dos roteiros com vencimento."
+        description="Prioridade no topo. Fim de viagem previsto pela distância do PAD."
         actions={
           isAdmin ? (
             <Link to="/roteiros/novo">
@@ -233,6 +233,7 @@ export function Routes() {
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
                   <th className="px-4 py-3 font-semibold">Descrição</th>
                   <th className="px-4 py-3 font-semibold">Início</th>
+                  <th className="px-4 py-3 font-semibold">Fim (previsão)</th>
                   <th className="px-4 py-3 font-semibold">Resumo da rota</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Placa</th>
@@ -296,6 +297,32 @@ export function Routes() {
                             <p className="text-xs text-[var(--color-text-muted)]">06:00</p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                        {r.returnForecast?.expectedReturn ? (
+                          <div
+                            className="inline-flex items-start gap-2"
+                            title={
+                              r.returnForecast.farthestDealership
+                                ? `PAD → ${r.returnForecast.farthestDealership.city} · ${r.returnForecast.farthestDealership.distanceKm.toFixed(0)} km · ${r.returnForecast.farthestDealership.avgTravelDays} dias`
+                                : 'Previsão pelo destino mais longe do PAD'
+                            }
+                          >
+                            <Flag className="mt-0.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                            <div>
+                              <p className="font-medium">
+                                {formatDate(r.returnForecast.expectedReturn)}
+                              </p>
+                              <p className="text-xs text-[var(--color-text-muted)]">
+                                {r.returnForecast.farthestDealership
+                                  ? `${r.returnForecast.farthestDealership.avgTravelDays} dias · PAD`
+                                  : 'pelo PAD'}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[var(--color-text-muted)]">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 align-middle">
                         {cities.length === 0 ? (
