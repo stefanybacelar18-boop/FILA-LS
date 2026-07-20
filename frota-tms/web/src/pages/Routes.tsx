@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send } from 'lucide-react'
+import { Plus, Pencil, Ban, Send, MapPin, Calendar } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Route } from '../types'
 import {
@@ -18,11 +18,19 @@ import { routeStatusLabels } from '../lib/labels'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
-function citiesOf(r: Route): string {
+function citiesList(r: Route): string[] {
   if (r.dealerships && r.dealerships.length > 0) {
-    return [...new Set(r.dealerships.map((rd) => rd.dealership.city))].join(', ')
+    return [...new Set(r.dealerships.map((rd) => rd.dealership.city))]
   }
-  return r.dealership?.city ?? '—'
+  return r.dealership?.city ? [r.dealership.city] : []
+}
+
+function statusTone(status: Route['status']) {
+  if (status === 'CANCELADO') return 'danger' as const
+  if (status === 'CONCLUIDO') return 'success' as const
+  if (status === 'EM_ANDAMENTO') return 'info' as const
+  if (status === 'AGUARDANDO_PLACAS') return 'primary' as const
+  return 'default' as const
 }
 
 type Tab = 'pendentes' | 'todos'
@@ -92,7 +100,7 @@ export function Routes() {
   })
 
   return (
-    <div>
+    <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Roteiros"
         description="Data de início + concessionárias. Previsão de retorno automática pelo PAD."
@@ -111,33 +119,51 @@ export function Routes() {
       {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}
       {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setTab('pendentes')}
-          className={cn(
-            'rounded-full px-4 py-1.5 text-sm font-medium transition',
-            tab === 'pendentes'
-              ? 'bg-[var(--color-primary)] text-white'
-              : 'bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-          )}
-        >
-          Pendentes de placa ({pending.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('todos')}
-          className={cn(
-            'rounded-full px-4 py-1.5 text-sm font-medium transition',
-            tab === 'todos'
-              ? 'bg-[var(--color-primary)] text-white'
-              : 'bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-          )}
-        >
-          Todos ({data.length})
-        </button>
-        <div className="min-w-[12rem] flex-1">
-          <SearchInput value={q} onChange={setQ} placeholder="Buscar roteiro ou cidade…" />
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+          <button
+            type="button"
+            onClick={() => setTab('pendentes')}
+            className={cn(
+              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+              tab === 'pendentes'
+                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+            )}
+          >
+            Pendentes de placa
+            <span
+              className={cn(
+                'ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs',
+                tab === 'pendentes' ? 'bg-white/20' : 'bg-[var(--color-surface-2)]',
+              )}
+            >
+              {pending.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('todos')}
+            className={cn(
+              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+              tab === 'todos'
+                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+            )}
+          >
+            Todos
+            <span
+              className={cn(
+                'ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs',
+                tab === 'todos' ? 'bg-white/20' : 'bg-[var(--color-surface-2)]',
+              )}
+            >
+              {data.length}
+            </span>
+          </button>
+        </div>
+        <div className="w-full sm:max-w-xs">
+          <SearchInput value={q} onChange={setQ} placeholder="Buscar descrição ou cidade…" />
         </div>
       </div>
 
@@ -166,103 +192,122 @@ export function Routes() {
           }
         />
       ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Roteiro</th>
-                <th>Início</th>
-                <th>Destinos</th>
-                <th>Status</th>
-                <th>Placa</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((r) => {
-                const plate = r.vehicles?.[0]?.vehicle?.plate
-                const awaitingPlate =
-                  r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      {isAdmin ? (
-                        <Link
-                          to={`/roteiros/${r.id}`}
-                          className="font-medium text-[var(--color-primary)] hover:underline"
-                        >
-                          {r.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">{r.name}</span>
-                      )}
-                    </td>
-                    <td>
-                      {formatDate(r.date)}
-                      <span className="block text-xs text-[var(--color-text-muted)]">06:00</span>
-                    </td>
-                    <td className="max-w-[14rem] truncate" title={citiesOf(r)}>
-                      {citiesOf(r)}
-                    </td>
-                    <td>
-                      <Badge
-                        tone={
-                          r.status === 'CANCELADO'
-                            ? 'danger'
-                            : r.status === 'CONCLUIDO'
-                              ? 'success'
-                              : r.status === 'EM_ANDAMENTO'
-                                ? 'info'
-                                : r.status === 'AGUARDANDO_PLACAS'
-                                  ? 'primary'
-                                  : 'default'
-                        }
-                      >
-                        {routeStatusLabels[r.status]}
-                      </Badge>
-                    </td>
-                    <td>
-                      {plate ? (
-                        <span className="font-medium tracking-wide">{plate}</span>
-                      ) : (
-                        <span className="text-[var(--color-text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="flex justify-end gap-1">
-                        {awaitingPlate && isOps && (
-                          <Link to={`/definir-placas?routeId=${r.id}`}>
-                            <Button size="sm">Definir placa</Button>
+        <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
+                  <th className="px-4 py-3 font-semibold">Descrição</th>
+                  <th className="px-4 py-3 font-semibold">Início</th>
+                  <th className="px-4 py-3 font-semibold">Resumo da rota</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Placa</th>
+                  <th className="px-4 py-3 text-right font-semibold">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((r) => {
+                  const plate = r.vehicles?.[0]?.vehicle?.plate
+                  const cities = citiesList(r)
+                  const awaitingPlate =
+                    r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
+                  return (
+                    <tr
+                      key={r.id}
+                      className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40"
+                    >
+                      <td className="px-4 py-3.5 align-top">
+                        {isAdmin ? (
+                          <Link
+                            to={`/roteiros/${r.id}`}
+                            className="font-medium text-[var(--color-text)] hover:text-[var(--color-primary)]"
+                          >
+                            {r.name}
                           </Link>
+                        ) : (
+                          <span className="font-medium text-[var(--color-text)]">{r.name}</span>
                         )}
-                        {isAdmin && r.status === 'RASCUNHO' && (
-                          <Button size="sm" variant="outline" onClick={() => setSendId(r.id)}>
-                            <Send className="h-3.5 w-3.5" />
-                            Disponibilizar
-                          </Button>
+                      </td>
+                      <td className="px-4 py-3.5 align-top whitespace-nowrap">
+                        <div className="inline-flex items-start gap-2">
+                          <Calendar className="mt-0.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                          <div>
+                            <p className="font-medium">{formatDate(r.date)}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">06:00</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        {cities.length === 0 ? (
+                          <span className="text-[var(--color-text-muted)]">—</span>
+                        ) : (
+                          <div className="flex max-w-md flex-wrap items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]" />
+                            {cities.map((city) => (
+                              <span
+                                key={city}
+                                className="rounded-md bg-[var(--color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--color-text)]"
+                              >
+                                {city}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                        {isAdmin && (
-                          <>
-                            <Link
-                              to={`/roteiros/${r.id}`}
-                              className="inline-flex h-8 items-center rounded px-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)]"
-                            >
-                              <Pencil className="h-4 w-4" />
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        {plate ? (
+                          <span className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-xs font-semibold tracking-wider">
+                            {plate}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-text-muted)]">Sem placa</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 align-top">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {awaitingPlate && isOps && (
+                            <Link to={`/definir-placas?routeId=${r.id}`}>
+                              <Button size="sm">Definir placa</Button>
                             </Link>
-                            {r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO' && (
-                              <Button variant="ghost" size="sm" onClick={() => setCancelId(r.id)}>
-                                <Ban className="h-4 w-4 text-[var(--color-danger)]" />
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                          )}
+                          {isAdmin && r.status === 'RASCUNHO' && (
+                            <Button size="sm" variant="outline" onClick={() => setSendId(r.id)}>
+                              <Send className="h-3.5 w-3.5" />
+                              Disponibilizar
+                            </Button>
+                          )}
+                          {isAdmin && (
+                            <>
+                              <Link
+                                to={`/roteiros/${r.id}`}
+                                title="Editar"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                              {r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO' && (
+                                <button
+                                  type="button"
+                                  title="Cancelar"
+                                  onClick={() => setCancelId(r.id)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-[var(--color-danger)]"
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
