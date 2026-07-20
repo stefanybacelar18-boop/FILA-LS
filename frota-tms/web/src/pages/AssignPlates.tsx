@@ -343,10 +343,10 @@ export function AssignPlates() {
   // ——— Lista de rotas (sem detalhe) ———
   if (!routeId) {
     return (
-      <div className="ops-readable page-desktop max-w-4xl">
+      <div className="page-desktop max-w-3xl">
         <PageHeader
           title="Pendentes de placa"
-          description="Prioridade no topo — comece adicionando placa pelos roteiros com vencimento."
+          description="Prioridade no topo — comece pelas placas com vencimento."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
@@ -382,8 +382,8 @@ export function AssignPlates() {
                   onClick={() => pickRoute(r.id)}
                   className={
                     r.hasPriority
-                      ? 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 px-4 py-4 text-left transition hover:border-[var(--color-danger)]/60'
-                      : 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-left transition hover:border-[var(--color-primary)]/40'
+                      ? 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 px-3.5 py-3 text-left transition hover:border-[var(--color-danger)]/60'
+                      : 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-3 text-left transition hover:border-[var(--color-primary)]/40'
                   }
                 >
                   <div className="flex w-full items-center justify-between gap-2">
@@ -425,104 +425,103 @@ export function AssignPlates() {
   }
 
   // ——— Detalhe da rota (tela focada) ———
+  const priority =
+    board?.route?.hasPriority ?? board?.hasPriority ?? selectedRoute?.hasPriority ?? false
+  const expiry =
+    board?.route?.priorityExpiryDate ??
+    board?.priorityExpiryDate ??
+    selectedRoute?.priorityExpiryDate ??
+    null
+  const expiryPast = !!expiry && toInputDate(expiry) <= toInputDate(new Date())
+
   return (
-    <div className="ops-readable page-desktop max-w-4xl">
+    <div className="page-desktop max-w-3xl">
       <button
         type="button"
         onClick={backToList}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        className="mb-2 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
       >
         <ArrowLeft className="h-4 w-4" />
         Voltar às rotas
       </button>
 
-      <PageHeader
-        title={selectedRoute?.name ?? 'Rota'}
-        description={`${formatDate(selectedRoute?.date)} · 06:00${cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa`}
-      />
+      <div className="mb-3">
+        <h1 className="text-xl font-semibold tracking-tight text-[var(--color-text)]">
+          {selectedRoute?.name ?? 'Rota'}
+        </h1>
+        <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+          {formatDate(selectedRoute?.date)} · 06:00
+          {cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa
+        </p>
+      </div>
 
-      {(() => {
-        const priority =
-          board?.route?.hasPriority ??
-          board?.hasPriority ??
-          selectedRoute?.hasPriority ??
-          false
-        if (!priority) return null
-        const expiry =
-          board?.route?.priorityExpiryDate ??
-          board?.priorityExpiryDate ??
-          selectedRoute?.priorityExpiryDate ??
-          null
-        const expiryPast =
-          !!expiry && toInputDate(expiry) <= toInputDate(new Date())
-        return (
-          <div className="mb-4 rounded-[var(--radius)] border-2 border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 px-4 py-4">
-            <p className="text-sm font-semibold tracking-wide text-[var(--color-danger)] uppercase">
-              Prioridade por vencimento
-            </p>
-            <p className="mt-2 text-sm text-[var(--color-text-muted)]">Menor vencimento</p>
-            {expiry ? (
-              <p
-                className={cn(
-                  'mt-0.5 text-3xl font-bold tracking-tight',
-                  expiryPast ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
-                )}
-              >
-                {formatDate(expiry)}
+      {(priority || board?.returnForecast) && (
+        <div className="mb-3 flex flex-wrap items-stretch gap-2">
+          {priority && (
+            <div className="min-w-[11rem] flex-1 rounded-[var(--radius)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 px-3 py-2">
+              <p className="text-[0.65rem] font-semibold tracking-wide text-[var(--color-danger)] uppercase">
+                Prioridade · vencimento
               </p>
-            ) : (
-              <p className="mt-1 text-sm font-semibold text-[var(--color-danger)]">
-                Data não informada pelo Admin — peça para editar o roteiro e gravar o menor
-                vencimento.
+              {expiry ? (
+                <p
+                  className={cn(
+                    'text-lg font-bold leading-tight',
+                    expiryPast ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
+                  )}
+                >
+                  {formatDate(expiry)}
+                </p>
+              ) : (
+                <p className="text-xs font-semibold text-[var(--color-danger)]">
+                  Sem data — Admin deve informar
+                </p>
+              )}
+            </div>
+          )}
+          {board?.returnForecast && (
+            <div className="min-w-[14rem] flex-[1.4] rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <p className="text-[0.65rem] font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
+                Fim previsto (PAD)
               </p>
-            )}
-          </div>
-        )
-      })()}
-
-      {board?.returnForecast && (
-        <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
-          <p className="font-medium">Previsão de retorno (PAD → concessionária)</p>
-          <p className="mt-1 text-[var(--color-text-muted)]">
-            Destino mais longe:{' '}
-            <strong className="text-[var(--color-text)]">
-              {board.returnForecast.farthestDealership.name}
-            </strong>{' '}
-            ({board.returnForecast.farthestDealership.city}) ·{' '}
-            {board.returnForecast.farthestDealership.distanceKm.toFixed(1)} km do PAD ·{' '}
-            {board.returnForecast.farthestDealership.avgTravelDays} dias · retorno{' '}
-            {formatDate(board.returnForecast.expectedReturn)}
-          </p>
+              <p className="text-lg font-bold leading-tight text-[var(--color-text)]">
+                {formatDate(board.returnForecast.expectedReturn)}
+              </p>
+              <p className="truncate text-xs text-[var(--color-text-muted)]">
+                {board.returnForecast.farthestDealership.city} ·{' '}
+                {board.returnForecast.farthestDealership.distanceKm.toFixed(0)} km ·{' '}
+                {board.returnForecast.farthestDealership.avgTravelDays} dias
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
-      {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}
+      {error && <p className="mb-2 text-sm text-[var(--color-danger)]">{error}</p>}
+      {okMsg && <p className="mb-2 text-sm text-[var(--color-success)]">{okMsg}</p>}
 
       {pendingReport.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-red-500/25 bg-red-500/5 px-4 py-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-red-500/25 bg-red-500/5 px-3 py-2">
           <p className="text-sm">
             <AlertTriangle className="mr-1.5 inline h-4 w-4 text-[var(--color-danger)]" />
-            <strong>{pendingReport.length}</strong> placa(s) já deveriam ter retornado (pela
-            previsão) e ainda não têm registro.
+            <strong>{pendingReport.length}</strong> placa(s) já deveriam ter retornado.
           </p>
           <Button size="sm" variant="outline" onClick={() => setShowProblems(true)}>
-            Informar indisponibilidade
+            Informar
           </Button>
         </div>
       )}
 
-      <section className="mb-6">
-        <h2 className="mb-1 text-base font-semibold">Placas disponíveis</h2>
-        <p className="mb-3 text-sm text-[var(--color-text-muted)]">
-          Liberadas pela previsão de retorno (já de volta e sem viagem aberta).
-          {returningLaterCount > 0 && (
-            <> · {returningLaterCount} ainda em viagem com retorno depois desta data.</>
-          )}
-        </p>
+      <section>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">Placa e motorista</h2>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {available.length} disponível{available.length === 1 ? '' : 'eis'}
+            {returningLaterCount > 0 ? ` · ${returningLaterCount} ainda em viagem` : ''}
+          </p>
+        </div>
 
         {loadingBoard ? (
-          <div className="flex justify-center py-12">
+          <div className="flex justify-center py-10">
             <Spinner size="lg" />
           </div>
         ) : boardError ? (
@@ -555,98 +554,101 @@ export function AssignPlates() {
             }
           />
         ) : (
-          <div className="space-y-2">
+          <div className="max-h-[min(52vh,28rem)] space-y-1.5 overflow-y-auto rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5">
             {available.map((v) => {
               const active = selectedId === v.id
               return (
-                <button
+                <div
                   key={v.id}
-                  type="button"
-                  onClick={() => pickPlate(v)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-[var(--radius)] border px-4 py-3 text-left transition',
+                    'rounded-md border transition',
                     active
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/30',
+                      : 'border-transparent hover:bg-[var(--color-surface-2)]/70',
                   )}
                 >
-                  <div
-                    className={cn(
-                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
-                      active
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                        : 'border-[var(--color-border-strong)]',
-                    )}
+                  <button
+                    type="button"
+                    onClick={() => pickPlate(v)}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left"
                   >
-                    {active && <Check className="h-3.5 w-3.5" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <PlateBadge plate={v.plate} color={v.color as PlateColor} />
-                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                      Disponível
-                      {v.capacityMotos ? ` · ${v.capacityMotos} motos` : ''}
-                      {v.defaultDriver ? ` · padrão: ${v.defaultDriver}` : ''}
-                    </p>
-                  </div>
-                </button>
+                    <div
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                        active
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                          : 'border-[var(--color-border-strong)]',
+                      )}
+                    >
+                      {active && <Check className="h-3 w-3" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <PlateBadge plate={v.plate} color={v.color as PlateColor} />
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          {v.capacityMotos ? `${v.capacityMotos} motos` : 'Disponível'}
+                          {v.defaultDriver ? ` · padrão ${v.defaultDriver}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+
+                  {active && (
+                    <div className="border-t border-[var(--color-primary)]/20 px-3 py-2.5">
+                      <Select
+                        label="Motorista *"
+                        value={selectedDriverId}
+                        onChange={(e) => setSelectedDriverId(e.target.value)}
+                        required
+                        placeholder="Selecione o motorista"
+                        options={drivers.map((d) => ({
+                          value: d.id,
+                          label:
+                            v.defaultDriver &&
+                            d.name.trim().toLowerCase() === v.defaultDriver.trim().toLowerCase()
+                              ? `${d.name} (padrão)`
+                              : d.name,
+                        }))}
+                      />
+                      {drivers.length === 0 && (
+                        <p className="mt-1.5 text-xs text-[var(--color-danger)]">
+                          Nenhum motorista cadastrado — cadastre em Motoristas.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
         )}
 
-        {selectedId && (
-          <div className="mt-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <Select
-              label="Motorista *"
-              value={selectedDriverId}
-              onChange={(e) => setSelectedDriverId(e.target.value)}
-              required
-              placeholder="Selecione o motorista"
-              options={drivers.map((d) => ({
-                value: d.id,
-                label:
-                  selectedVehicle?.defaultDriver &&
-                  d.name.trim().toLowerCase() ===
-                    selectedVehicle.defaultDriver.trim().toLowerCase()
-                    ? `${d.name} (padrão da placa)`
-                    : d.name,
-              }))}
-            />
-            {drivers.length === 0 && (
-              <p className="mt-2 text-sm text-[var(--color-danger)]">
-                Nenhum motorista cadastrado. Peça ao Admin cadastrar em Motoristas.
-              </p>
-            )}
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              Se o motorista padrão não puder ir, escolha outro da lista.
-            </p>
-          </div>
-        )}
-
-        <Button
-          className="mt-4 w-full"
-          size="lg"
-          disabled={!selectedId || !selectedDriverId}
-          onClick={() => setConfirmOpen(true)}
-          loading={assignMutation.isPending}
-        >
-          Confirmar {selectedVehicle ? selectedVehicle.plate : 'placa'}
-        </Button>
-
-        {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
-          <button
-            type="button"
-            className="mt-3 w-full text-center text-sm text-[var(--color-text-muted)] underline-offset-2 hover:underline"
-            onClick={() => setShowProblems(true)}
+        <div className="sticky bottom-0 z-10 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 pt-3 pb-1 backdrop-blur-sm">
+          <Button
+            className="w-full"
+            size="lg"
+            disabled={!selectedId || !selectedDriverId}
+            onClick={() => setConfirmOpen(true)}
+            loading={assignMutation.isPending}
           >
-            Ver placas com atraso/quebra já registrados
-          </button>
-        )}
+            {selectedVehicle
+              ? `Confirmar ${selectedVehicle.plate}${selectedDriver ? ` · ${selectedDriver.name}` : ''}`
+              : 'Selecione placa e motorista'}
+          </Button>
+          {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
+            <button
+              type="button"
+              className="mt-2 w-full text-center text-xs text-[var(--color-text-muted)] underline-offset-2 hover:underline"
+              onClick={() => setShowProblems(true)}
+            >
+              Ver placas com atraso/quebra já registrados
+            </button>
+          )}
+        </div>
       </section>
 
-      {/* Painel só quando necessário — não lista toda frota em viagem */}
       {showProblems && (
-        <section className="mb-8 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <section className="mt-4 mb-6 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Indisponibilidade (atraso / quebra)</h2>
             <Button size="sm" variant="ghost" onClick={() => setShowProblems(false)}>
