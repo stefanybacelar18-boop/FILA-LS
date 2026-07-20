@@ -300,27 +300,11 @@ export function Routes() {
                       </td>
                       <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                         {r.returnForecast?.expectedReturn ? (
-                          <div
-                            className="inline-flex items-start gap-2"
-                            title={
-                              r.returnForecast.farthestDealership
-                                ? `PAD → ${r.returnForecast.farthestDealership.city} · ${r.returnForecast.farthestDealership.distanceKm.toFixed(0)} km · ${r.returnForecast.farthestDealership.avgTravelDays} dias`
-                                : 'Previsão pelo destino mais longe do PAD'
-                            }
-                          >
-                            <Flag className="mt-0.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                            <div>
-                              <p className="font-medium">
-                                {formatDate(r.returnForecast.expectedReturn)}
-                              </p>
-                              <p className="text-xs text-[var(--color-text-muted)]">
-                                {r.returnForecast.farthestDealership
-                                  ? r.returnForecast.farthestDealership.avgTravelDays === 0
-                                    ? 'mesmo dia · PAD'
-                                    : `${r.returnForecast.farthestDealership.avgTravelDays} dias · PAD`
-                                  : 'pelo PAD'}
-                              </p>
-                            </div>
+                          <div className="inline-flex items-center gap-2">
+                            <Flag className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                            <p className="font-medium">
+                              {formatDate(r.returnForecast.expectedReturn)}
+                            </p>
                           </div>
                         ) : (
                           <span className="text-[var(--color-text-muted)]">—</span>
