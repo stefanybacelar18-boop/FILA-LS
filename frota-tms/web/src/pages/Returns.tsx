@@ -250,56 +250,93 @@ function TripCard({
   onProblem: () => void
 }) {
   const evidences = trip.evidences ?? []
+  const hasProblem = !!trip.delayReason || evidences.length > 0
+
   return (
     <div
       className={cn(
-        'rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4',
-        trip.overdue && 'border-red-500/30 bg-red-500/5',
+        'rounded-[var(--radius)] border bg-[var(--color-surface)] px-3.5 py-3',
+        trip.overdue
+          ? 'border-red-500/35 bg-red-500/5'
+          : hasProblem
+            ? 'border-amber-500/30 bg-amber-500/5'
+            : 'border-[var(--color-border)]',
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <PlateBadge plate={trip.vehicle.plate} color={trip.color ?? 'red'} />
-          <p className="mt-2 text-sm font-medium">{trip.dealership.name}</p>
-          <p className="text-xs text-[var(--color-text-muted)]">{trip.route?.name}</p>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            Saída {formatDate(trip.departureAt)} · Previsão{' '}
-            <span className={cn(trip.overdue && 'font-semibold text-[var(--color-danger)]')}>
-              {formatDate(trip.expectedReturn)}
-            </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <PlateBadge plate={trip.vehicle.plate} color={trip.color ?? 'red'} />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+              {trip.dealership.city}
+              <span className="font-normal text-[var(--color-text-muted)]">
+                {' '}
+                · {trip.dealership.name}
+              </span>
+            </p>
+            {trip.overdue && <Badge tone="danger">Em atraso</Badge>}
+            {hasProblem && !trip.overdue && <Badge tone="warning">Problema registrado</Badge>}
+          </div>
+
+          <p className="mt-0.5 truncate text-xs text-[var(--color-text-muted)]">
+            {trip.route?.name ?? 'Roteiro'}
+            {trip.driverName ? ` · Motorista: ${trip.driverName}` : ''}
           </p>
+
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+            <span>
+              <span className="text-[var(--color-text-muted)]">Saída </span>
+              <span className="font-medium">{formatDate(trip.departureAt)}</span>
+            </span>
+            <span>
+              <span className="text-[var(--color-text-muted)]">Previsão retorno </span>
+              <span
+                className={cn(
+                  'font-semibold',
+                  trip.overdue ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
+                )}
+              >
+                {formatDate(trip.expectedReturn)}
+              </span>
+            </span>
+          </div>
+
           {trip.delayReason && (
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              Justificativa: {trip.delayReason}
-              {evidences.length > 0 ? ` · ${evidences.length} evidência(s)` : ''}
+            <p className="mt-1.5 text-xs text-[var(--color-text)]">
+              <span className="text-[var(--color-text-muted)]">Justificativa: </span>
+              {trip.delayReason}
+              {trip.delayReportedBy?.name ? ` · por ${trip.delayReportedBy.name}` : ''}
             </p>
           )}
-          {trip.unavailableReason && (
-            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Marcado indisponível</p>
-          )}
         </div>
-        <div className="flex flex-col gap-2 sm:min-w-[11rem]">
-          <Button onClick={onReturn} className="w-full justify-center">
-            <Check className="h-4 w-4" />
+
+        <div className="flex shrink-0 flex-wrap gap-1.5 sm:flex-col sm:items-stretch">
+          <Button size="sm" onClick={onReturn}>
+            <Check className="h-3.5 w-3.5" />
             Retornou
           </Button>
-          <Button variant="secondary" onClick={onProblem} className="w-full justify-center">
-            <AlertTriangle className="h-4 w-4" />
-            Problemas na viagem
+          <Button size="sm" variant="secondary" onClick={onProblem}>
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Problema
           </Button>
         </div>
       </div>
+
       {evidences.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[var(--color-border)]/70 pt-2">
+          <span className="text-xs font-medium text-[var(--color-text-muted)]">
+            Evidências ({evidences.length}):
+          </span>
           {evidences.map((e) => (
             <a
               key={e.id}
               href={`/uploads/trip-evidence/${e.filename}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-xs font-medium hover:border-[var(--color-primary)]/40"
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs font-medium hover:border-[var(--color-primary)]/40"
             >
-              <Paperclip className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+              <Paperclip className="h-3 w-3 text-[var(--color-primary)]" />
               {e.originalName}
             </a>
           ))}
@@ -313,25 +350,38 @@ function Section({
   title,
   trips,
   tone,
+  hideIfEmpty,
   onReturn,
   onProblem,
 }: {
   title: string
   trips: Trip[]
   tone: string
+  hideIfEmpty?: boolean
   onReturn: (t: Trip) => void
   onProblem: (t: Trip) => void
 }) {
+  if (hideIfEmpty && trips.length === 0) return null
+
   return (
-    <section className="space-y-3">
+    <section className="space-y-2">
       <div className="flex items-center gap-2">
-        <h2 className={cn('text-base font-semibold', tone)}>{title}</h2>
-        <Badge>{trips.length}</Badge>
+        <h2 className={cn('text-sm font-semibold', tone)}>{title}</h2>
+        <span
+          className={cn(
+            'inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs font-semibold',
+            trips.length > 0
+              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+              : 'bg-[var(--color-surface-2)] text-[var(--color-text-muted)]',
+          )}
+        >
+          {trips.length}
+        </span>
       </div>
       {trips.length === 0 ? (
-        <EmptyState title="Nenhuma viagem" className="py-8" />
+        <p className="px-1 text-xs text-[var(--color-text-muted)]">Nenhuma viagem neste grupo.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-1.5">
           {trips.map((t) => (
             <TripCard
               key={t.id}
@@ -488,10 +538,10 @@ export function Returns() {
   }
 
   return (
-    <div className="page-desktop space-y-6">
+    <div className="page-desktop max-w-4xl space-y-4">
       <PageHeader
         title="Retornos"
-        description="Confirme quem voltou. Se não retornou, registre o problema com justificativa, nova previsão e evidências."
+        description="Confirme o retorno ou registre problema (justificativa + evidências). Admin e Operação veem os anexos neste card."
       />
 
       {error && !reportTrip && (
@@ -500,41 +550,85 @@ export function Returns() {
         </p>
       )}
 
-      <Section
-        title="Em atraso"
-        trips={data.overdue}
-        tone="text-[var(--color-danger)]"
-        onReturn={openReturn}
-        onProblem={openProblemHandler}
-      />
-      <Section
-        title="Previsão hoje"
-        trips={data.today}
-        tone="text-blue-600"
-        onReturn={openReturn}
-        onProblem={openProblemHandler}
-      />
-      <Section
-        title="Amanhã"
-        trips={data.tomorrow}
-        tone="text-orange-600"
-        onReturn={openReturn}
-        onProblem={openProblemHandler}
-      />
-      <Section
-        title="Em 2 dias"
-        trips={data.in2Days}
-        tone="text-[var(--color-text-muted)]"
-        onReturn={openReturn}
-        onProblem={openProblemHandler}
-      />
-      <Section
-        title="Depois"
-        trips={data.later ?? []}
-        tone="text-[var(--color-text-muted)]"
-        onReturn={openReturn}
-        onProblem={openProblemHandler}
-      />
+      <div className="flex flex-wrap gap-2 text-xs">
+        {[
+          { label: 'Em atraso', count: data.overdue.length, tone: 'text-[var(--color-danger)]' },
+          { label: 'Hoje', count: data.today.length, tone: 'text-blue-600' },
+          { label: 'Amanhã', count: data.tomorrow.length, tone: 'text-orange-600' },
+          {
+            label: 'Em 2 dias',
+            count: data.in2Days.length,
+            tone: 'text-[var(--color-text-muted)]',
+          },
+          {
+            label: 'Depois',
+            count: (data.later ?? []).length,
+            tone: 'text-[var(--color-text-muted)]',
+          },
+        ].map((s) => (
+          <span
+            key={s.label}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1"
+          >
+            <span className={cn('font-semibold', s.tone)}>{s.count}</span>
+            <span className="text-[var(--color-text-muted)]">{s.label}</span>
+          </span>
+        ))}
+      </div>
+
+      {data.overdue.length +
+        data.today.length +
+        data.tomorrow.length +
+        data.in2Days.length +
+        (data.later?.length ?? 0) ===
+      0 ? (
+        <EmptyState
+          title="Nenhuma viagem em aberto"
+          description="Quando houver placas em viagem, elas aparecem aqui por data de previsão."
+        />
+      ) : (
+        <div className="space-y-4">
+          <Section
+            title="Em atraso"
+            trips={data.overdue}
+            tone="text-[var(--color-danger)]"
+            onReturn={openReturn}
+            onProblem={openProblemHandler}
+          />
+          <Section
+            title="Previsão hoje"
+            trips={data.today}
+            tone="text-blue-600"
+            hideIfEmpty
+            onReturn={openReturn}
+            onProblem={openProblemHandler}
+          />
+          <Section
+            title="Amanhã"
+            trips={data.tomorrow}
+            tone="text-orange-600"
+            hideIfEmpty
+            onReturn={openReturn}
+            onProblem={openProblemHandler}
+          />
+          <Section
+            title="Em 2 dias"
+            trips={data.in2Days}
+            tone="text-[var(--color-text-muted)]"
+            hideIfEmpty
+            onReturn={openReturn}
+            onProblem={openProblemHandler}
+          />
+          <Section
+            title="Depois"
+            trips={data.later ?? []}
+            tone="text-[var(--color-text-muted)]"
+            hideIfEmpty
+            onReturn={openReturn}
+            onProblem={openProblemHandler}
+          />
+        </div>
+      )}
 
       <Modal
         open={!!confirmTrip}
@@ -566,8 +660,8 @@ export function Returns() {
           {(confirmTrip?.overdue || confirmTrip?.status === 'ATRASADO') &&
             !confirmTrip?.delayReason && (
               <p className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-                Esta viagem está em atraso. Feche e use <strong>Problemas na viagem</strong> para
-                registrar justificativa + evidências antes de confirmar.
+                Esta viagem está em atraso. Use <strong>Problema</strong> para registrar
+                justificativa + evidências antes de confirmar.
               </p>
             )}
           {confirmTrip?.delayReason && (
@@ -585,7 +679,7 @@ export function Returns() {
           setFiles([])
           setError('')
         }}
-        title={`Problemas — ${reportTrip?.vehicle.plate ?? ''}`}
+        title={`Problema — ${reportTrip?.vehicle.plate ?? ''}`}
         size="lg"
         footer={
           <>
@@ -611,13 +705,13 @@ export function Returns() {
           </>
         }
       >
-        <div className="space-y-5">
-          <div className="rounded-[var(--radius)] border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-100">
-            Informe o motivo, a nova previsão e anexe evidências. Sem evidência o registro não é
-            salvo.
-          </div>
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Motivo, nova previsão e evidência (foto/PDF). Admin e Operação veem os anexos em
+            Retornos.
+          </p>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <Select
               label="Motivo"
               value={preset}
@@ -638,14 +732,14 @@ export function Returns() {
             label="Justificativa *"
             value={delayReason}
             onChange={(e) => setDelayReason(e.target.value)}
-            rows={3}
-            placeholder="Por que não retornou? Descreva o problema…"
+            rows={2}
+            placeholder="Descreva o problema…"
             required
           />
 
           <EvidenceUploader files={files} onChange={setFiles} />
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)]/40 px-3 py-3 text-sm">
+          <label className="flex cursor-pointer items-start gap-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)]/40 px-3 py-2.5 text-sm">
             <input
               type="checkbox"
               className="mt-0.5 accent-[var(--color-primary)]"
@@ -653,9 +747,9 @@ export function Returns() {
               onChange={(e) => setMarkUnavailable(e.target.checked)}
             />
             <span>
-              <span className="font-medium">Marcar como indisponível</span>
+              <span className="font-medium">Marcar placa indisponível</span>
               <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
-                Bloqueia a placa para novo carregamento até o retorno
+                Bloqueia novo carregamento até o retorno
               </span>
             </span>
           </label>
