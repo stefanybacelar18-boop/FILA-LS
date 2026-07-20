@@ -1,6 +1,10 @@
-# Acesso
+# Acesso web — FrotaTMS
 
-**Link:** https://springer-operate-mystery-assignment.trycloudflare.com
+## Acesso rápido (teste)
+Clique em **Admin** ou **Operação** na tela de login.
 
-Admin: admin@frotatms.com / admin123
-Operação: operacao@frotatms.com / operacao123
+| Perfil | E-mail | Senha |
+|--------|--------|-------|
+| Admin | `a@a.com` | `1` |
+| Operação | `o@o.com` | `1` |
+| Consulta | `c@c.com` | `1` |

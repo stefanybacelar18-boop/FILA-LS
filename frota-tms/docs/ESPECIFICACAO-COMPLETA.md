@@ -491,9 +491,9 @@ Confirmar habilitado <=> criticalPending === 0 && selectedPlates.length > 0
 
 | Email | Senha | Role |
 |-------|-------|------|
-| admin@frotatms.com | admin123 | ADMIN |
-| operacao@frotatms.com | operacao123 | OPERACAO |
-| consulta@frotatms.com | consulta123 | CONSULTA |
+| a@a.com | 1 | ADMIN |
+| o@o.com | 1 | OPERACAO |
+| c@c.com | 1 | CONSULTA |
 
 - ~22 veículos + ~72 concessionárias (JSON em `api/prisma/data/`)  
 - Seed **apaga dados** — produção só com `FORCE_SEED=true` + `SEED_ON_START=true` no bootstrap  

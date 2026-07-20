@@ -44,9 +44,9 @@ Acesse http://localhost:5173
 
 | E-mail | Senha | Perfil |
 |--------|-------|--------|
-| admin@frotatms.com | admin123 | Administrador |
-| operacao@frotatms.com | operacao123 | Operação |
-| consulta@frotatms.com | consulta123 | Consulta |
+| a@a.com | 1 | Administrador |
+| o@o.com | 1 | Operação |
+| c@c.com | 1 | Consulta |
 
 > Em produção: troque as senhas no menu do usuário (**Trocar senha**) e use `JWT_SECRET` forte.
 

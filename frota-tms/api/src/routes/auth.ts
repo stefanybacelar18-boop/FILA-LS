@@ -10,7 +10,8 @@ import { paramId } from '../utils/params';
 const router = Router();
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  // Aceita e-mail curto de demo (ex.: a@a.com) ou legado
+  email: z.string().min(1).max(120),
   password: z.string().min(1),
 });
 
@@ -18,7 +19,8 @@ router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' });
 
-  const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
+  const email = parsed.data.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !user.active) return res.status(401).json({ error: 'Credenciais inválidas' });
 
   const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);

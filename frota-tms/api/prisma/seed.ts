@@ -61,25 +61,44 @@ async function main() {
   await prisma.user.create({
     data: {
       name: 'Administrador',
-      email: 'admin@frotatms.com',
-      passwordHash: await bcrypt.hash('admin123', 10),
+      email: 'a@a.com',
+      passwordHash: await bcrypt.hash('1', 10),
       role: Role.ADMIN,
     },
   });
   await prisma.user.create({
     data: {
       name: 'Operação Placas',
-      email: 'operacao@frotatms.com',
-      passwordHash: await bcrypt.hash('operacao123', 10),
+      email: 'o@o.com',
+      passwordHash: await bcrypt.hash('1', 10),
       role: Role.OPERACAO,
     },
   });
   await prisma.user.create({
     data: {
       name: 'Consulta',
-      email: 'consulta@frotatms.com',
-      passwordHash: await bcrypt.hash('consulta123', 10),
+      email: 'c@c.com',
+      passwordHash: await bcrypt.hash('1', 10),
       role: Role.CONSULTA,
+    },
+  });
+  // Atalhos legados (mesmo hash) — evita quebrar bookmarks antigos
+  await prisma.user.create({
+    data: {
+      name: 'Admin (legado)',
+      email: 'admin@frotatms.com',
+      passwordHash: await bcrypt.hash('admin123', 10),
+      role: Role.ADMIN,
+      active: true,
+    },
+  });
+  await prisma.user.create({
+    data: {
+      name: 'Operação (legado)',
+      email: 'operacao@frotatms.com',
+      passwordHash: await bcrypt.hash('operacao123', 10),
+      role: Role.OPERACAO,
+      active: true,
     },
   });
 
@@ -161,9 +180,9 @@ async function main() {
   console.log(`  Dealerships: ${dealershipCount}`);
   console.log(`  Planning cities: ${planningCount}`);
   console.log('Users:');
-  console.log('  admin@frotatms.com / admin123');
-  console.log('  operacao@frotatms.com / operacao123');
-  console.log('  consulta@frotatms.com / consulta123');
+  console.log('  a@a.com / 1  (Admin)');
+  console.log('  o@o.com / 1  (Operação)');
+  console.log('  c@c.com / 1  (Consulta)');
 }
 
 main()
