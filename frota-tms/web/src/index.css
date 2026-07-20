@@ -101,6 +101,8 @@ html,
 body,
 #root {
   min-height: 100%;
+  /* Produto voltado a PC / notebook */
+  min-width: 1100px;
 }
 
 body {
@@ -222,10 +224,15 @@ h4,
   border-radius: 999px;
 }
 
-/* Leitura operacional sem “gritar” */
+/* Leitura operacional */
 .ops-readable {
   font-size: 1rem;
   line-height: 1.5;
+}
+
+.page-desktop {
+  width: 100%;
+  margin-inline: auto;
 }
 
 .panel {

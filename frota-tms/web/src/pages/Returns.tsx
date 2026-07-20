@@ -151,7 +151,7 @@ function EvidenceUploader({
         }}
         onDrop={onDrop}
         className={cn(
-          'flex w-full flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-4 py-8 text-center transition',
+          'flex w-full flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-4 py-6 text-center transition',
           dragging
             ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
             : files.length === 0
@@ -488,7 +488,7 @@ export function Returns() {
   }
 
   return (
-    <div className="ops-readable mx-auto max-w-3xl space-y-6">
+    <div className="page-desktop space-y-6">
       <PageHeader
         title="Retornos"
         description="Confirme quem voltou. Se não retornou, registre o problema com justificativa, nova previsão e evidências."
@@ -536,7 +536,28 @@ export function Returns() {
         onProblem={openProblemHandler}
       />
 
-      <Modal open={!!confirmTrip} onClose={() => setConfirmTrip(null)} title="Confirmar retorno">
+      <Modal
+        open={!!confirmTrip}
+        onClose={() => setConfirmTrip(null)}
+        title="Confirmar retorno"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmTrip(null)}>
+              Cancelar
+            </Button>
+            <Button
+              loading={returnMutation.isPending}
+              disabled={
+                !!(confirmTrip?.overdue || confirmTrip?.status === 'ATRASADO') &&
+                !confirmTrip?.delayReason
+              }
+              onClick={() => returnMutation.mutate()}
+            >
+              Confirmar retorno
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-3">
           <p className="text-sm">
             Confirma o retorno da placa <strong>{confirmTrip?.vehicle.plate}</strong>? O veículo
@@ -554,21 +575,6 @@ export function Returns() {
               Justificativa já registrada: {confirmTrip.delayReason}
             </p>
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setConfirmTrip(null)}>
-              Cancelar
-            </Button>
-            <Button
-              loading={returnMutation.isPending}
-              disabled={
-                !!(confirmTrip?.overdue || confirmTrip?.status === 'ATRASADO') &&
-                !confirmTrip?.delayReason
-              }
-              onClick={() => returnMutation.mutate()}
-            >
-              Confirmar retorno
-            </Button>
-          </div>
         </div>
       </Modal>
 
@@ -581,6 +587,29 @@ export function Returns() {
         }}
         title={`Problemas — ${reportTrip?.vehicle.plate ?? ''}`}
         size="lg"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReportTrip(null)
+                setFiles([])
+                setError('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              loading={reportMutation.isPending}
+              disabled={
+                composedReason().length < 5 || !newExpectedReturn || files.length < 1
+              }
+              onClick={() => reportMutation.mutate()}
+            >
+              Salvar problema
+            </Button>
+          </>
+        }
       >
         <div className="space-y-5">
           <div className="rounded-[var(--radius)] border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-100">
@@ -588,7 +617,7 @@ export function Returns() {
             salvo.
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Motivo"
               value={preset}
@@ -636,28 +665,6 @@ export function Returns() {
               {error}
             </p>
           )}
-
-          <div className="flex justify-end gap-2 border-t border-[var(--color-border)] pt-4">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setReportTrip(null)
-                setFiles([])
-                setError('')
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              loading={reportMutation.isPending}
-              disabled={
-                composedReason().length < 5 || !newExpectedReturn || files.length < 1
-              }
-              onClick={() => reportMutation.mutate()}
-            >
-              Salvar problema
-            </Button>
-          </div>
         </div>
       </Modal>
     </div>

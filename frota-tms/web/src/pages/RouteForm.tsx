@@ -138,7 +138,7 @@ export function RouteForm() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="page-desktop max-w-3xl">
       <Link
         to="/roteiros"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"

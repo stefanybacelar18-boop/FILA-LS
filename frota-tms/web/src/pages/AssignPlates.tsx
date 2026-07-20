@@ -299,7 +299,7 @@ export function AssignPlates() {
   // ——— Lista de rotas (sem detalhe) ———
   if (!routeId) {
     return (
-      <div className="ops-readable mx-auto max-w-2xl">
+      <div className="ops-readable page-desktop max-w-4xl">
         <PageHeader
           title="Pendentes de placa"
           description="Roteiros aguardando placa · previsão de retorno pelo PAD · confirme 1 placa."
@@ -358,7 +358,7 @@ export function AssignPlates() {
 
   // ——— Detalhe da rota (tela focada) ———
   return (
-    <div className="ops-readable mx-auto max-w-2xl">
+    <div className="ops-readable page-desktop max-w-4xl">
       <button
         type="button"
         onClick={backToList}

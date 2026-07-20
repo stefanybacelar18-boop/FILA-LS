@@ -100,7 +100,7 @@ export function Routes() {
   })
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="page-desktop max-w-[1280px]">
       <PageHeader
         title="Roteiros"
         description="Data de início + concessionárias. Previsão de retorno automática pelo PAD."

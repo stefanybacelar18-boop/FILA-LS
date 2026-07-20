@@ -12,8 +12,6 @@ import {
   Moon,
   Sun,
   LogOut,
-  Menu,
-  X,
   ChevronDown,
   Search,
   KeyRound,
@@ -94,7 +92,6 @@ export function AppLayout() {
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggle)
   const applyTheme = useThemeStore((s) => s.apply)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenu, setUserMenu] = useState(false)
   const [q, setQ] = useState('')
   const [pwdOpen, setPwdOpen] = useState(false)
@@ -121,7 +118,6 @@ export function AppLayout() {
     const query = q.trim()
     if (query.length < 2) return
     navigate(`/busca?q=${encodeURIComponent(query)}`)
-    setSidebarOpen(false)
   }
 
   function handleLogout() {
@@ -151,65 +147,34 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {sidebarOpen && (
-        <button
-          type="button"
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-          aria-label="Fechar menu"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-56 flex-col bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)] transition-transform lg:static lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="flex h-14 items-center justify-between px-4">
+    <div className="flex min-h-screen min-w-[1100px]">
+      <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)]">
+        <div className="flex h-14 items-center px-5">
           <Link to={homePath} className="font-display text-lg font-semibold tracking-tight text-white">
             Frota<span className="text-teal-400">TMS</span>
           </Link>
-          <button
-            type="button"
-            className="rounded p-1 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
-        <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-2.5 pb-4">
-          <NavGroup items={groups.primary} onNavigate={() => setSidebarOpen(false)} />
+        <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+          <NavGroup items={groups.primary} onNavigate={() => undefined} />
           {groups.secondary.length > 0 && (
             <div>
               <p className="mb-1.5 px-3 text-[0.65rem] font-semibold tracking-wider text-white/30 uppercase">
                 Mais
               </p>
-              <NavGroup items={groups.secondary} onNavigate={() => setSidebarOpen(false)} />
+              <NavGroup items={groups.secondary} onNavigate={() => undefined} />
             </div>
           )}
         </nav>
 
-        <div className="px-4 py-3 text-[0.7rem] text-white/35">
+        <div className="px-5 py-3 text-[0.7rem] text-white/35">
           {user ? roleLabels[user.role] : ''}
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 md:px-5">
-          <button
-            type="button"
-            className="rounded-md p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-
-          <form onSubmit={onSearch} className="relative max-w-sm flex-1">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-6">
+          <form onSubmit={onSearch} className="relative w-80 max-w-full">
             <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
             <input
               value={q}
@@ -235,7 +200,7 @@ export function AppLayout() {
                 onClick={() => setUserMenu((v) => !v)}
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-[var(--color-surface-2)]"
               >
-                <span className="hidden font-medium sm:block">{user?.name}</span>
+                <span className="font-medium">{user?.name}</span>
                 <ChevronDown className="h-4 w-4 text-[var(--color-text-muted)]" />
               </button>
               {userMenu && (
@@ -275,7 +240,7 @@ export function AppLayout() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-6 xl:p-8">
           <Outlet />
         </main>
       </div>

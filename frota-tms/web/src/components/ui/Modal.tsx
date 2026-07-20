@@ -9,7 +9,7 @@ interface ModalProps {
   title: string
   children: ReactNode
   footer?: ReactNode
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
 export function Modal({ open, onClose, title, children, footer, size = 'md' }: ModalProps) {
@@ -18,14 +18,19 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open, onClose])
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <button
         type="button"
         aria-label="Fechar"
@@ -36,21 +41,24 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
         role="dialog"
         aria-modal
         className={cn(
-          'relative z-10 w-full rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]',
+          'relative z-10 flex w-full max-h-[min(92vh,880px)] flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]',
           size === 'sm' && 'max-w-md',
-          size === 'md' && 'max-w-lg',
-          size === 'lg' && 'max-w-2xl',
+          size === 'md' && 'max-w-xl',
+          size === 'lg' && 'max-w-3xl',
+          size === 'xl' && 'max-w-5xl',
         )}
       >
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3.5">
-          <h2 className="font-display text-base font-semibold">{title}</h2>
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
+          <h2 className="font-display text-lg font-semibold">{title}</h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Fechar">
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="px-5 py-4 text-sm">{children}</div>
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 py-5 text-sm">
+          {children}
+        </div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-[var(--color-border)] px-5 py-3">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
             {footer}
           </div>
         )}
