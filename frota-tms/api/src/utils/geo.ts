@@ -1,6 +1,7 @@
 /**
  * PAD (ponto de saída da frota) — coordenadas oficiais.
- * Toda previsão de retorno = distância PAD ↔ concessionária (ida+volta).
+ * Distância PAD ↔ concessionária para referência;
+ * dias de retorno preferem faixas operacionais (0 / 1 / 3 dias).
  */
 export const PAD_LAT = -12.809004;
 export const PAD_LNG = -38.428719;
@@ -41,8 +42,8 @@ export function distanceFromBase(lat: number, lng: number): number {
 
 /**
  * Dias médios de viagem (ida+volta) a partir da distância PAD→destino.
- * Fórmula: (distanceKm * 2) / 400, mínimo 1 dia
- * (exceto cidades de retorno no mesmo dia — ver SAME_DAY_RETURN_CITIES).
+ * Fallback quando a cidade não está nas faixas operacionais abaixo.
+ * Fórmula: (distanceKm * 2) / 400, mínimo 1 dia.
  */
 export function avgTravelDaysFromDistance(distanceKm: number): number {
   const days = (distanceKm * 2) / TRAVEL_KM_PER_DAY;
@@ -50,8 +51,8 @@ export function avgTravelDaysFromDistance(distanceKm: number): number {
 }
 
 /**
- * Cidades que, na operação real, em geral voltam para carregar no mesmo dia.
- * Previsão de retorno = data de saída (0 dias além da saída 06:00).
+ * Faixas operacionais de previsão de retorno (regra de negócio).
+ * 0 = mesmo dia · 1 = dia seguinte · 3 = três dias.
  */
 export const SAME_DAY_RETURN_CITIES = new Set([
   'CAMACARI',
@@ -64,19 +65,118 @@ export const SAME_DAY_RETURN_CITIES = new Set([
   'SANTO ESTEVAO',
   'SANTO ANTONIO',
   'SANTO ANTONIO DE JESUS',
+  'VALENCA',
+  'CRUZ',
+  'CRUZ DAS ALMAS',
+  'SERRINHA',
+  'RIBEIRA DO POMBAL',
+  'EUCLIDES',
+  'EUCLIDES DA CUNHA',
+  'ALAGOINHAS',
+  'E RIOS',
+  'E.RIOS',
+  'ENTRE RIOS',
+  'ESTANCIA',
+  'ARACAJU',
+  'NOSSA SENHORA DO SOCORRO',
+  'JEQUIE',
 ]);
 
+export const NEXT_DAY_RETURN_CITIES = new Set([
+  'ILHEUS',
+  'ITABUNA',
+  'IPIAU',
+  'SENHOR DO BONFIM',
+  'C FORMOSO',
+  'C.FORMOSO',
+  'CAMPO FORMOSO',
+  'JACOBINA',
+  'IRECE',
+  'ITAPETINGA',
+  'VITORIA DA CONQUISTA',
+  'VITORIA DA CONSQUISTA',
+  'TOBIAS',
+  'TOBIAS BARRETO',
+  'LAGARTO',
+  'ITABAIANA',
+  'GLORIA',
+  'NOSSA SENHORA DA GLORIA',
+  'IPIRA',
+  'ITABERABA',
+  'SEABRA',
+  'MACAUBAS',
+]);
+
+export const THREE_DAY_RETURN_CITIES = new Set([
+  'EUNAPOLIS',
+  'PORTO',
+  'PORTO SEGURO',
+  'ITAMARAJU',
+  'TEXEIRA',
+  'TEIXEIRA',
+  'TEIXEIRA DE FREITAS',
+  'BRUMADO',
+  'GUANAMBI',
+  'BOM JESUS DA LAPA',
+  'BOM JESUS DA LAAPA',
+  'SANTA MARIA DA VITORIA',
+]);
+
+/** Normaliza apelidos operacionais → chave canônica do mapa / faixas. */
+export function resolveCityAlias(cityKey: string): string {
+  const key = cityKey.replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+  if (key === 'LAURO') return 'LAURO DE FREITAS';
+  if (key === 'SANTO ANTONIO') return 'SANTO ANTONIO DE JESUS';
+  if (key === 'CRUZ') return 'CRUZ DAS ALMAS';
+  if (key === 'EUCLIDES') return 'EUCLIDES DA CUNHA';
+  if (key === 'E RIOS' || key === 'ERIOS') return 'ENTRE RIOS';
+  if (key === 'C FORMOSO' || key === 'CFORMOSO') return 'CAMPO FORMOSO';
+  if (key === 'VITORIA DA CONSQUISTA') return 'VITORIA DA CONQUISTA';
+  if (key === 'TOBIAS') return 'TOBIAS BARRETO';
+  if (key === 'GLORIA') return 'NOSSA SENHORA DA GLORIA';
+  if (key === 'PORTO') return 'PORTO SEGURO';
+  if (key === 'TEXEIRA' || key === 'TEIXEIRA') return 'TEIXEIRA DE FREITAS';
+  if (key === 'BOM JESUS DA LAAPA') return 'BOM JESUS DA LAPA';
+  return key;
+}
+
+/**
+ * Dias de retorno pela regra operacional (0 / 1 / 3).
+ * `null` = usar fórmula por distância.
+ */
+export function operationalReturnDays(city: string): number | null {
+  const raw = normalizeCityKey(city);
+  const key = resolveCityAlias(raw);
+  const candidates = [raw, key, raw.replace(/\./g, ' ').replace(/\s+/g, ' ').trim()];
+
+  for (const c of candidates) {
+    if (SAME_DAY_RETURN_CITIES.has(c)) return 0;
+    if (NEXT_DAY_RETURN_CITIES.has(c)) return 1;
+    if (THREE_DAY_RETURN_CITIES.has(c)) return 3;
+  }
+  if (key.startsWith('LAURO ')) return 0;
+  if (key.startsWith('SANTO ANTONIO')) return 0;
+  if (key.startsWith('CRUZ DAS')) return 0;
+  if (key.startsWith('EUCLIDES')) return 0;
+  if (key.startsWith('ENTRE RIOS')) return 0;
+  if (key.startsWith('CAMPO FORMOSO')) return 1;
+  if (key.startsWith('VITORIA DA CONQUISTA')) return 1;
+  if (key.startsWith('NOSSA SENHORA DA GLORIA')) return 1;
+  if (key.startsWith('TOBIAS')) return 1;
+  if (key.startsWith('PORTO SEGURO')) return 3;
+  if (key.startsWith('TEIXEIRA')) return 3;
+  if (key.startsWith('BOM JESUS DA LAPA')) return 3;
+  return null;
+}
+
 export function isSameDayReturnCity(city: string): boolean {
-  const key = normalizeCityKey(city);
-  if (SAME_DAY_RETURN_CITIES.has(key)) return true;
-  if (key.startsWith('LAURO ')) return true;
-  if (key.startsWith('SANTO ANTONIO')) return true;
-  return false;
+  return operationalReturnDays(city) === 0;
 }
 
 function applyOperationalTravelDays(city: string, travel: PadTravel): PadTravel {
-  if (isSameDayReturnCity(city)) {
-    return { ...travel, avgTravelDays: 0 };
+  const days = operationalReturnDays(city);
+  if (days !== null) {
+    return { ...travel, avgTravelDays: days };
   }
   return travel;
 }
@@ -96,15 +196,8 @@ export type PadTravel = {
 
 /** Resolve coordenadas da cidade (mapa local) e calcula distância/dias a partir do PAD. */
 export function travelFromPadByCity(city: string): PadTravel | null {
-  const key = normalizeCityKey(city);
-  // aliases curtos → chave do mapa
-  const mapKey =
-    key === 'LAURO'
-      ? 'LAURO DE FREITAS'
-      : key === 'SANTO ANTONIO'
-        ? 'SANTO ANTONIO DE JESUS'
-        : key;
-  const coords = CITY_COORDS[mapKey] ?? CITY_COORDS[key];
+  const key = resolveCityAlias(normalizeCityKey(city));
+  const coords = CITY_COORDS[key] ?? CITY_COORDS[normalizeCityKey(city)];
   if (!coords) return null;
   const distanceKm = distanceFromPad(coords.lat, coords.lng);
   return applyOperationalTravelDays(city, {

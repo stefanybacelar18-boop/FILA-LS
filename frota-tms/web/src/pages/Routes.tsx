@@ -137,7 +137,7 @@ export function Routes() {
     <div className="page-desktop max-w-[1280px]">
       <PageHeader
         title="Roteiros"
-        description="Prioridade no topo. Fim de viagem previsto pela distância do PAD."
+        description="Prioridade no topo. Fim de viagem: mesmo dia / 1 dia / 3 dias conforme a cidade (regra operacional)."
         actions={
           isAdmin ? (
             <Link to="/roteiros/novo">
