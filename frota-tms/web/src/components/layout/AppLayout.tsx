@@ -6,12 +6,9 @@ import {
   Building2,
   Route,
   Tags,
-  MapPinned,
   RotateCcw,
   History,
-  FileBarChart,
   Users,
-  Shield,
   Moon,
   Sun,
   LogOut,
@@ -20,8 +17,6 @@ import {
   ChevronDown,
   Search,
   KeyRound,
-  LayoutGrid,
-  Bell,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -34,46 +29,35 @@ import { Button, Input, Modal } from '../ui'
 interface NavItem {
   to: string
   label: string
-  icon: typeof LayoutGrid
+  icon: typeof Route
 }
 
 const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   ADMIN: {
     primary: [
       { to: '/roteiros', label: 'Roteiros', icon: Route },
-      { to: '/alertas', label: 'Alertas', icon: Bell },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
     ],
     secondary: [
       { to: '/frota', label: 'Frota', icon: Truck },
       { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
-      { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
       { to: '/usuarios', label: 'Usuários', icon: Users },
-      { to: '/auditoria', label: 'Auditoria', icon: Shield },
     ],
   },
   OPERACAO: {
     primary: [
-      { to: '/definir-placas', label: 'Definir Placa', icon: Tags },
-      { to: '/alertas', label: 'Alertas', icon: Bell },
+      { to: '/definir-placas', label: 'Pendentes de placa', icon: Tags },
+      { to: '/roteiros', label: 'Todos roteiros', icon: Route },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
     ],
-    secondary: [
-      { to: '/viagens', label: 'Viagens', icon: MapPinned },
-      { to: '/frota', label: 'Frota', icon: Truck },
-    ],
+    secondary: [{ to: '/frota', label: 'Frota', icon: Truck }],
   },
   CONSULTA: {
     primary: [
       { to: '/roteiros', label: 'Roteiros', icon: Route },
-      { to: '/alertas', label: 'Alertas', icon: Bell },
       { to: '/frota', label: 'Frota', icon: Truck },
     ],
-    secondary: [
-      { to: '/viagens', label: 'Viagens', icon: MapPinned },
-      { to: '/historico', label: 'Histórico', icon: History },
-      { to: '/relatorios', label: 'Relatórios', icon: FileBarChart },
-    ],
+    secondary: [{ to: '/historico', label: 'Histórico', icon: History }],
   },
 }
 

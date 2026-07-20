@@ -153,6 +153,16 @@ export interface Route {
   returnForecast?: ReturnForecast | null
 }
 
+export interface TripEvidence {
+  id: string
+  filename: string
+  originalName: string
+  mimeType: string
+  sizeBytes: number
+  createdAt: string
+  uploadedBy?: { name: string }
+}
+
 export interface Trip {
   id: string
   driverName: string | null
@@ -181,6 +191,7 @@ export interface Trip {
   overdue?: boolean
   needsDelayReason?: boolean
   color?: PlateColor
+  evidences?: TripEvidence[]
 }
 
 export interface VehicleHistory {

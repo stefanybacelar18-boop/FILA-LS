@@ -26,6 +26,7 @@ model User {
   plateUnavailabilities PlateUnavailability[]
   vehicleHistory VehicleHistory[]
   importBatches  ImportBatch[]
+  tripEvidences  TripEvidence[]
 }
 
 model Vehicle {
@@ -196,6 +197,22 @@ model Trip {
   assignedBy   User       @relation("TripAssignedBy", fields: [assignedById], references: [id])
   returnedById String?
   returnedBy   User?      @relation("TripReturnedBy", fields: [returnedById], references: [id])
+  evidences    TripEvidence[]
+}
+
+// Fotos / evidencias de atraso ou problema na viagem
+model TripEvidence {
+  id           String   @id @default(cuid())
+  filename     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  tripId       String
+  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
 }
 
 model VehicleHistory {

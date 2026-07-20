@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Route } from '../types'
-import { PageHeader, Button, Input, Textarea, Spinner } from '../components/ui'
+import { PageHeader, Button, Input, Spinner } from '../components/ui'
 import { toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
@@ -13,16 +13,11 @@ export function RouteForm() {
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const createdIdRef = useRef<string | null>(null)
 
-  const [name, setName] = useState('')
   const [date, setDate] = useState(toInputDate(new Date()))
   const [dealershipIds, setDealershipIds] = useState<string[]>([])
   const [dealerSearch, setDealerSearch] = useState('')
-  const [region, setRegion] = useState('')
-  const [notes, setNotes] = useState('')
-  const [hasPriority, setHasPriority] = useState(false)
-  const [priorityNotes, setPriorityNotes] = useState('')
-  const createdIdRef = useRef<string | null>(null)
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -37,17 +32,23 @@ export function RouteForm() {
 
   useEffect(() => {
     if (!existing) return
-    setName(existing.name)
     setDate(toInputDate(existing.date))
     const ids =
       existing.dealerships?.map((rd) => rd.dealershipId) ??
       (existing.dealershipId ? [existing.dealershipId] : [])
     setDealershipIds(ids)
-    setRegion(existing.region ?? '')
-    setNotes(existing.notes ?? '')
-    setHasPriority(!!existing.hasPriority)
-    setPriorityNotes(existing.priorityNotes ?? '')
   }, [existing])
+
+  const selectedDealers = useMemo(
+    () => dealerships.filter((d) => dealershipIds.includes(d.id)),
+    [dealerships, dealershipIds],
+  )
+
+  const autoName = useMemo(() => {
+    const cities = [...new Set(selectedDealers.map((d) => d.city))]
+    if (cities.length === 0) return ''
+    return cities.join(' · ')
+  }, [selectedDealers])
 
   const filteredDealerships = useMemo(() => {
     const q = dealerSearch.trim().toLowerCase()
@@ -58,7 +59,6 @@ export function RouteForm() {
         d.name.toLowerCase().includes(q) ||
         d.city.toLowerCase().includes(q) ||
         d.state.toLowerCase().includes(q) ||
-        d.region.toLowerCase().includes(q) ||
         (d.code?.toLowerCase().includes(q) ?? false),
     )
   }, [dealerships, dealerSearch])
@@ -66,14 +66,17 @@ export function RouteForm() {
   const saveMutation = useMutation({
     mutationFn: async (disponibilizar: boolean) => {
       if (dealershipIds.length < 1) throw new Error('Selecione ao menos uma concessionária')
+      const name = autoName || existing?.name || `Roteiro ${date}`
+      const region =
+        [...new Set(selectedDealers.map((d) => d.region))].join(' / ') || null
       const payload = {
         name,
         date,
         dealershipIds,
-        region: region || null,
-        notes: notes || null,
-        hasPriority,
-        priorityNotes: hasPriority ? priorityNotes || null : null,
+        region,
+        notes: null,
+        hasPriority: false,
+        priorityNotes: null,
         plannedVehicleCount: 1,
       }
       let route: Route
@@ -99,7 +102,6 @@ export function RouteForm() {
       navigate('/roteiros')
     },
     onError: () => {
-      // Se criou e falhou no send, troca URL para o id criado (evita duplicar)
       if (isNew && createdIdRef.current) {
         navigate(`/roteiros/${createdIdRef.current}`, { replace: true })
       }
@@ -107,14 +109,9 @@ export function RouteForm() {
   })
 
   function toggleDealership(did: string) {
-    setDealershipIds((prev) => {
-      const next = prev.includes(did) ? prev.filter((x) => x !== did) : [...prev, did]
-      const selected = dealerships.filter((d) => next.includes(d.id))
-      if (selected.length) {
-        setRegion([...new Set(selected.map((d) => d.region))].join(' / '))
-      }
-      return next
-    })
+    setDealershipIds((prev) =>
+      prev.includes(did) ? prev.filter((x) => x !== did) : [...prev, did],
+    )
   }
 
   function onSubmit(e: FormEvent) {
@@ -123,11 +120,14 @@ export function RouteForm() {
   }
 
   const alreadySent =
-    existing?.status === 'EM_ANDAMENTO' || existing?.status === 'CONCLUIDO' || existing?.status === 'CANCELADO'
-
+    existing?.status === 'EM_ANDAMENTO' ||
+    existing?.status === 'CONCLUIDO' ||
+    existing?.status === 'CANCELADO'
   const canEdit = !alreadySent
   const canSend =
-    !alreadySent && existing?.status !== 'AGUARDANDO_PLACAS' && (isNew || existing?.status === 'RASCUNHO')
+    !alreadySent &&
+    existing?.status !== 'AGUARDANDO_PLACAS' &&
+    (isNew || existing?.status === 'RASCUNHO')
 
   if (!isNew && isLoading) {
     return (
@@ -149,58 +149,33 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Monte o roteiro e disponibilize para a Operação escolher 1 placa."
+        description="Informe a data de início e as concessionárias. A previsão de retorno é calculada automaticamente pelo PAD."
       />
 
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="space-y-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <Input
-            label="Nome do roteiro"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="Ex.: Salvador + Feira"
-          />
           <div>
             <Input
-              label="Data do carregamento"
+              label="Data de início da viagem"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
             />
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">Saída sempre às 06:00</p>
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+              Saída às 06:00 · retorno previsto pelo destino mais longe do PAD
+            </p>
           </div>
-          <Input label="Região" value={region} onChange={(e) => setRegion(e.target.value)} />
-          <Textarea label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
-
-          <label className="flex cursor-pointer items-start gap-3 pt-1">
-            <input
-              type="checkbox"
-              checked={hasPriority}
-              onChange={(e) => setHasPriority(e.target.checked)}
-              className="mt-1 accent-[var(--color-primary)]"
-            />
-            <span>
-              <span className="text-sm font-medium">Prioridade</span>
-              <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
-                Marque se este carregamento é prioritário
-              </span>
-            </span>
-          </label>
-          {hasPriority && (
-            <Textarea
-              label="Motivo da prioridade"
-              value={priorityNotes}
-              onChange={(e) => setPriorityNotes(e.target.value)}
-              placeholder="Ex.: pedido urgente, cliente X…"
-            />
+          {autoName && (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Nome automático: <strong className="text-[var(--color-text)]">{autoName}</strong>
+            </p>
           )}
         </div>
 
         <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <p className="mb-2 text-sm font-medium">
-            Destinos <span className="text-[var(--color-danger)]">*</span>
+            Concessionárias <span className="text-[var(--color-danger)]">*</span>
             <span className="ml-2 font-normal text-[var(--color-text-muted)]">
               {dealershipIds.length} selecionada{dealershipIds.length === 1 ? '' : 's'}
             </span>
@@ -217,7 +192,7 @@ export function RouteForm() {
             />
           </div>
 
-          <div className="max-h-64 space-y-0.5 overflow-y-auto">
+          <div className="max-h-72 space-y-0.5 overflow-y-auto">
             {filteredDealerships.length === 0 && (
               <p className="p-2 text-sm text-[var(--color-text-muted)]">Nenhuma encontrada.</p>
             )}
@@ -240,6 +215,9 @@ export function RouteForm() {
                   <span className="min-w-0 flex-1">
                     <span className="font-medium">{d.city}</span>
                     <span className="text-[var(--color-text-muted)]"> · {d.name}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                      {d.distanceKm.toFixed(0)} km do PAD · {d.avgTravelDays} dias
+                    </span>
                   </span>
                 </label>
               )

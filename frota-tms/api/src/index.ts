@@ -62,6 +62,12 @@ app.use('/api/history', historyRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
 
+/** Evidências de atraso (fotos/PDF) */
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+fs.mkdirSync(path.join(uploadsDir, 'trip-evidence'), { recursive: true });
+app.use('/uploads', express.static(uploadsDir));
+
+
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
   res.status(500).json({ error: 'Erro interno do servidor' });
@@ -77,7 +83,7 @@ const webDistCandidates = [
 const webDist = webDistCandidates.find((p) => fs.existsSync(path.join(p, 'index.html')));
 if (webDist) {
   app.use(express.static(webDist));
-  app.get(/^(?!\/api\/|\/socket\.io\/).*/, (_req, res) => {
+  app.get(/^(?!\/api\/|\/socket\.io\/|\/uploads\/).*/, (_req, res) => {
     res.sendFile(path.join(webDist, 'index.html'));
   });
   console.log(`Serving frontend from ${webDist}`);

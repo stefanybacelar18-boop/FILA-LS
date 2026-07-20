@@ -301,8 +301,8 @@ export function AssignPlates() {
     return (
       <div className="ops-readable mx-auto max-w-2xl">
         <PageHeader
-          title="Definir Placa"
-          description="Escolha a rota · veja placas disponíveis pela previsão de retorno · confirme 1 placa."
+          title="Pendentes de placa"
+          description="Roteiros aguardando placa · previsão de retorno pelo PAD · confirme 1 placa."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
