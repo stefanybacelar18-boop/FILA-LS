@@ -60,23 +60,27 @@ Backup:
 
 ---
 
-## Opção B — Render (URL pública, sem Vercel)
+## Opção B — Render (URL pública, sem Vercel) — recomendado agora
 
-1. Conta em [render.com](https://render.com) → conecte o GitHub (mesmo repo).  
-2. **New → Blueprint**  
-   - Blueprint Path: `frota-tms/render.yaml`  
-   - Isso cria **serviço novo** `frota-tms` + Postgres — **não** mexe no Vercel.  
-3. Defina `JWT_SECRET` forte (ou use o gerado).  
-4. **Bootstrap único** (Shell do Render, uma vez):
+**One-click (só FrotaTMS — não mexe no FilaDock):**
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/stefanybacelar18-boop/FILA-LS)
+
+1. Abra o link acima (conta Render gratuita com GitHub).  
+2. Confirme o Blueprint `render.yaml` da **raiz** (serviço `frota-tms` + Postgres).  
+3. Clique **Apply** / Deploy.  
+4. Aguarde o build (~5–10 min) e abra a URL `https://frota-tms-xxxx.onrender.com`.  
+5. **Bootstrap único** (Shell do serviço no Render, uma vez):
 
 ```bash
 cd api && FORCE_SEED=true npx tsx prisma/seed.ts
 ```
 
-5. **Não** deixe `SEED_ON_START=true` no serviço.  
-6. Abra a URL `*.onrender.com` e teste `/api/health`.
+6. Login: `a@a.com` / `1` → **troque a senha**.  
+7. Confirme que o FilaDock (`https://fila-lsl.vercel.app`) segue normal.
 
-> No plano free do Render o disco é efêmero: evidências de viagem podem sumir após restart. Para anexos permanentes, preferir Docker na empresa ou disco persistente pago.
+> Alternativa manual: New → Blueprint → Path `frota-tms/render.yaml`.  
+> Disco free é efêmero para anexos; na empresa prefira Docker.
 
 ---
 
