@@ -63,6 +63,22 @@ export function RouteForm() {
     )
   }, [dealerships, dealerSearch])
 
+  function saveErrorMessage(err: unknown): string {
+    const ax = err as {
+      response?: { status?: number; data?: { error?: string } }
+      message?: string
+      code?: string
+    }
+    const status = ax.response?.status
+    if (status === 530 || status === 502 || status === 503 || status === 504) {
+      return 'Conexão com o servidor caiu (túnel). Atualize a página e tente salvar de novo.'
+    }
+    if (!ax.response && (ax.code === 'ERR_NETWORK' || ax.message?.includes('Network'))) {
+      return 'Sem conexão com o servidor. Verifique o link/túnel e tente novamente.'
+    }
+    return ax.response?.data?.error ?? ax.message ?? 'Erro ao salvar'
+  }
+
   const saveMutation = useMutation({
     mutationFn: async (disponibilizar: boolean) => {
       if (dealershipIds.length < 1) throw new Error('Selecione ao menos uma concessionária')
@@ -102,6 +118,7 @@ export function RouteForm() {
       navigate('/roteiros')
     },
     onError: () => {
+      // Se criou e falhou só no envio, fica na edição do roteiro criado
       if (isNew && createdIdRef.current) {
         navigate(`/roteiros/${createdIdRef.current}`, { replace: true })
       }
@@ -226,11 +243,8 @@ export function RouteForm() {
         </div>
 
         {saveMutation.isError && (
-          <p className="text-sm text-[var(--color-danger)]">
-            {(saveMutation.error as { response?: { data?: { error?: string } }; message?: string })
-              ?.response?.data?.error ??
-              (saveMutation.error as Error)?.message ??
-              'Erro ao salvar'}
+          <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+            {saveErrorMessage(saveMutation.error)}
           </p>
         )}
 
