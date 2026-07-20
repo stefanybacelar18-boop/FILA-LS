@@ -389,7 +389,6 @@ export function AssignPlates() {
                       }
                     >
                       Menor vencimento: {formatDate(r.priorityExpiryDate)}
-                      {expiryPast ? ' · atentar (vencido ou hoje)' : ''}
                     </p>
                   )}
                 </button>
@@ -430,11 +429,6 @@ export function AssignPlates() {
           board?.priorityExpiryDate ??
           selectedRoute?.priorityExpiryDate ??
           null
-        const notes =
-          board?.route?.priorityNotes ??
-          board?.priorityNotes ??
-          selectedRoute?.priorityNotes ??
-          null
         const expiryPast =
           !!expiry && toInputDate(expiry) <= toInputDate(new Date())
         return (
@@ -442,14 +436,11 @@ export function AssignPlates() {
             <p className="text-sm font-semibold tracking-wide text-[var(--color-danger)] uppercase">
               Prioridade por vencimento
             </p>
-            <p className="mt-2 text-[var(--color-text)]">
-              Menor vencimento — atentar ao coletar
-              {expiryPast ? ' (pode ser data retroativa)' : ''}:
-            </p>
+            <p className="mt-2 text-sm text-[var(--color-text-muted)]">Menor vencimento</p>
             {expiry ? (
               <p
                 className={cn(
-                  'mt-1 text-3xl font-bold tracking-tight',
+                  'mt-0.5 text-3xl font-bold tracking-tight',
                   expiryPast ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
                 )}
               >
@@ -460,9 +451,6 @@ export function AssignPlates() {
                 Data não informada pelo Admin — peça para editar o roteiro e gravar o menor
                 vencimento.
               </p>
-            )}
-            {notes && (
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{notes}</p>
             )}
           </div>
         )
