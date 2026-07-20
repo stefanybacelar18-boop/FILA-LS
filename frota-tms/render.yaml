@@ -1,0 +1,50 @@
+# Render Blueprint — APENAS FrotaTMS (pasta frota-tms)
+#
+# Como usar (sem tocar no FilaDock / Vercel):
+# 1. render.com → New → Blueprint
+# 2. Repositório FILA-LS
+# 3. Blueprint Path: frota-tms/render.yaml
+# 4. Root Directory do serviço: frota-tms (já definido abaixo)
+#
+# NÃO conecte este serviço ao projeto Vercel do FilaDock.
+
+services:
+  - type: web
+    name: frota-tms
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: |
+      chmod +x scripts/prepare-postgres-schema.sh
+      npm install --prefix web && npm run build --prefix web
+      npm install --prefix api
+      ./scripts/prepare-postgres-schema.sh api/prisma/schema.prisma
+      npx prisma generate --schema api/prisma/schema.prisma
+      npm run build --prefix api
+      mkdir -p api/public && cp -r web/dist/* api/public/
+    startCommand: |
+      cd api && npx prisma db push && node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: CORS_ORIGIN
+        value: '*'
+      - key: SEED_ON_START
+        value: 'false'
+      - key: FORCE_SEED
+        value: 'false'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: frota-tms-db
+          property: connectionString
+
+databases:
+  - name: frota-tms-db
+    plan: free

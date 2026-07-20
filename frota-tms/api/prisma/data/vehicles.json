@@ -1,0 +1,134 @@
+[
+  {
+    "plate": "EZU2D86",
+    "plateDisplay": "EZU2D86",
+    "capacityMotos": 52,
+    "defaultDriver": "JOBERVAL"
+  },
+  {
+    "plate": "EOE1F87",
+    "plateDisplay": "EOE1F87",
+    "capacityMotos": 52,
+    "defaultDriver": "JOBERVAL"
+  },
+  {
+    "plate": "SVS9H87",
+    "plateDisplay": "SVS9H87",
+    "capacityMotos": 50,
+    "defaultDriver": "ROSENILDO"
+  },
+  {
+    "plate": "TKX7D86",
+    "plateDisplay": "TKX7D86",
+    "capacityMotos": 50,
+    "defaultDriver": "SILVIO"
+  },
+  {
+    "plate": "BPQ1E82",
+    "plateDisplay": "BPQ1E82",
+    "capacityMotos": 50,
+    "defaultDriver": "LUIZ DOS ANJOS"
+  },
+  {
+    "plate": "EOE1581",
+    "plateDisplay": "EOE-1581",
+    "capacityMotos": 42,
+    "defaultDriver": "RICARDO"
+  },
+  {
+    "plate": "SUC6B93",
+    "plateDisplay": "SUC6B93",
+    "capacityMotos": 50,
+    "defaultDriver": "JEFFERSON"
+  },
+  {
+    "plate": "TME3H94",
+    "plateDisplay": "TME3H94",
+    "capacityMotos": 50,
+    "defaultDriver": "SAMUEL"
+  },
+  {
+    "plate": "DBB0377",
+    "plateDisplay": "DBB-0377",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "IAK2E92",
+    "plateDisplay": "IAK2E92",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RDM9A73",
+    "plateDisplay": "RDM9A73",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RDO6D52",
+    "plateDisplay": "RDO6D52",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RPD3B28",
+    "plateDisplay": "RPD3B28",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RPU3A35",
+    "plateDisplay": "RPU3A35",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "SKA7C96",
+    "plateDisplay": "SKA7C96",
+    "capacityMotos": 52,
+    "defaultDriver": null
+  },
+  {
+    "plate": "TGS2B62",
+    "plateDisplay": "TGS2B62",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "TMQ8A38",
+    "plateDisplay": "TMQ8A38",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "TMT4J56",
+    "plateDisplay": "TMT4J56",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "TNA2A01",
+    "plateDisplay": "TNA2A01",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RDO2D80",
+    "plateDisplay": "RDO2D80",
+    "capacityMotos": 70,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RPJ6D37",
+    "plateDisplay": "RPJ6D37",
+    "capacityMotos": 70,
+    "defaultDriver": null
+  },
+  {
+    "plate": "RPR6I22",
+    "plateDisplay": "RPR6I22",
+    "capacityMotos": 70,
+    "defaultDriver": null
+  }
+]

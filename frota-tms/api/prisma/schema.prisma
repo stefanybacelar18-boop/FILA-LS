@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("CONSULTA")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs      AuditLog[]
+  routesCreated  Route[]          @relation("RouteCreatedBy")
+  routesSent     Route[]          @relation("RouteSentBy")
+  tripsAssigned  Trip[]           @relation("TripAssignedBy")
+  tripsReturned  Trip[]           @relation("TripReturnedBy")
+  tripsDelayReport Trip[]         @relation("TripDelayReportedBy")
+  plateUnavailabilities PlateUnavailability[]
+  vehicleHistory VehicleHistory[]
+  importBatches  ImportBatch[]
+  tripEvidences  TripEvidence[]
+}
+
+model Vehicle {
+  id            String   @id @default(cuid())
+  plate         String   @unique
+  type          String
+  model         String
+  brand         String
+  year          Int
+  capacityMotos Float
+  defaultDriver String?
+  status        String   @default("DISPONIVEL")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  routeVehicles RouteVehicle[]
+  trips         Trip[]
+  history       VehicleHistory[]
+  unavailabilities PlateUnavailability[]
+}
+
+// Motoristas cadastrados — usados na definição de placa
+model Driver {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  phone     String?
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Dealership {
+  id             String   @id @default(cuid())
+  code           String?
+  name           String
+  city           String
+  state          String
+  region         String
+  phone          String?
+  distanceKm     Float
+  avgTravelDays  Float
+  allowedVehicle String   @default("AMBOS")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  routeLinks RouteDealership[]
+  trips      Trip[]
+  routes     Route[]           @relation("RoutePrimaryDealership")
+  planningCities PlanningCity[]
+}
+
+model Route {
+  id            String   @id @default(cuid())
+  name          String
+  date          DateTime
+  region        String?
+  notes         String?
+  status        String   @default("AGUARDANDO_PLACAS")
+  hasPriority   Boolean  @default(false)
+  priorityNotes String?
+  // Menor data de vencimento que motiva a prioridade (pode ser retroativa)
+  priorityExpiryDate DateTime?
+  // Meta de placas que o admin espera neste carregamento (cobertura operacional)
+  plannedVehicleCount Int?
+  // Handoff papel → operação (terceira)
+  readyForOperation Boolean  @default(false)
+  sentToOperationAt DateTime?
+  sentToOperationById String?
+  sentToOperationBy   User?  @relation("RouteSentBy", fields: [sentToOperationById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  dealershipId String?
+  dealership   Dealership? @relation("RoutePrimaryDealership", fields: [dealershipId], references: [id])
+  createdById  String
+  createdBy    User        @relation("RouteCreatedBy", fields: [createdById], references: [id])
+
+  dealerships RouteDealership[]
+  vehicles    RouteVehicle[]
+  trips       Trip[]
+  products    RouteProduct[]
+  unavailabilities PlateUnavailability[]
+  planningCities PlanningCity[]
+}
+
+model RouteDealership {
+  id           String @id @default(cuid())
+  order        Int    @default(0)
+  routeId      String
+  route        Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  dealershipId String
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@unique([routeId, dealershipId])
+}
+
+model RouteVehicle {
+  id         String   @id @default(cuid())
+  assignedAt DateTime @default(now())
+
+  routeId   String
+  route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@unique([routeId, vehicleId])
+}
+
+// Operador justifica por que a placa não estará disponível para carregar na data do roteiro
+model PlateUnavailability {
+  id                  String   @id @default(cuid())
+  reason              String
+  availableAtForecast DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  routeId      String
+  route        Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  vehicle      Vehicle @relation(fields: [vehicleId], references: [id])
+  reportedById String
+  reportedBy   User    @relation(fields: [reportedById], references: [id])
+
+  @@unique([routeId, vehicleId])
+}
+
+model PriorityProduct {
+  id         String   @id @default(cuid())
+  product    String
+  code       String
+  lot        String
+  quantity   Float
+  expiryDate DateTime
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  routes RouteProduct[]
+}
+
+model RouteProduct {
+  id        String          @id @default(cuid())
+  routeId   String
+  route     Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  productId String
+  product   PriorityProduct @relation(fields: [productId], references: [id])
+
+  @@unique([routeId, productId])
+}
+
+model Trip {
+  id             String    @id @default(cuid())
+  driverName     String?
+  departureAt    DateTime
+  expectedReturn DateTime
+  returnedAt     DateTime?
+  status         String    @default("EM_ANDAMENTO")
+  notes          String?
+  // Justificativa quando passa da previsão (empresa terceira / operação)
+  delayReason       String?
+  delayReportedAt   DateTime?
+  delayReportedById String?
+  delayReportedBy   User?     @relation("TripDelayReportedBy", fields: [delayReportedById], references: [id])
+  // Veículo indisponível para novo carregamento até liberar
+  unavailableReason String?
+  unavailableAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  vehicleId    String
+  vehicle      Vehicle    @relation(fields: [vehicleId], references: [id])
+  dealershipId String
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+  routeId      String?
+  route        Route?     @relation(fields: [routeId], references: [id])
+  assignedById String
+  assignedBy   User       @relation("TripAssignedBy", fields: [assignedById], references: [id])
+  returnedById String?
+  returnedBy   User?      @relation("TripReturnedBy", fields: [returnedById], references: [id])
+  evidences    TripEvidence[]
+}
+
+// Fotos / evidencias de atraso ou problema na viagem
+model TripEvidence {
+  id           String   @id @default(cuid())
+  filename     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  tripId       String
+  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+}
+
+model VehicleHistory {
+  id         String   @id @default(cuid())
+  action     String
+  fromStatus String?
+  toStatus   String?
+  details    String?
+  createdAt  DateTime @default(now())
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id])
+  tripId    String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  userId String?
+  user   User?  @relation(fields: [userId], references: [id])
+}
+
+// Cidades/notas na mesa (substitui o papel). status: PENDENTE | EM_ROTA | ENVIADA
+model PlanningCity {
+  id           String   @id @default(cuid())
+  city         String
+  state        String?
+  noteCount    Int      @default(1)
+  status       String   @default("PENDENTE")
+  source       String   @default("MANUAL") // MANUAL | EXCEL | DEMO
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dealershipId String?
+  dealership   Dealership? @relation(fields: [dealershipId], references: [id])
+  routeId      String?
+  route        Route?      @relation(fields: [routeId], references: [id])
+  importBatchId String?
+  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id])
+
+  @@index([status])
+  @@index([city])
+}
+
+// Lote de importação Excel (arquitetura preparada)
+model ImportBatch {
+  id          String   @id @default(cuid())
+  filename    String?
+  status      String   @default("PENDING") // PENDING | PREVIEW | COMMITTED | FAILED
+  rowCount    Int      @default(0)
+  previewJson String?  // JSON string com linhas normalizadas
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById String?
+  createdBy   User? @relation(fields: [createdById], references: [id])
+  cities      PlanningCity[]
+}

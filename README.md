@@ -2,6 +2,9 @@
 
 Plataforma web responsiva para **gestão inteligente de docas** — controle de filas, check-in e operação logística em tempo real.
 
+> **Novo:** Sistema de roteirização e gestão de frota em [`frota-tms/`](./frota-tms/README.md).  
+> **Deploy separado:** FilaDock continua no **Vercel**; FrotaTMS sobe em **Docker / Render / Railway** (ver [`frota-tms/DEPLOY-PRODUCAO.md`](./frota-tms/DEPLOY-PRODUCAO.md)). Não altere o Root Directory do projeto Vercel do FilaDock.
+
 ## Tecnologias
 
 - **Next.js 15** (App Router)
@@ -78,12 +81,15 @@ Assets oficiais em `public/brand/`:
 | `logo-mark.svg` | Ícone 64px — cabeçalho, login, cards |
 | `icons/icon-*.png` | PWA, favicon, iOS/Android |
 
-## Deploy na Vercel (acesso externo / HTTPS)
+## Deploy na Vercel (FilaDock — acesso externo / HTTPS)
+
+> Este bloco é **somente FilaDock**. O FrotaTMS **não** usa este projeto Vercel.
 
 Guia completo: **`TESTE-EXTERNO-AMANHA.md`**
 
 1. Repositório: `stefanybacelar18-boop/FILA-LS` branch `main`
-2. [Vercel](https://vercel.com) → projeto **FilaDock** → Settings → Git conectado
+2. [Vercel](https://vercel.com) → projeto **FilaDock** → Settings → Git conectado  
+   - Root Directory: **vazio / `.`** (raiz). **Nunca** `frota-tms`.
 3. Variáveis de ambiente (Production + Preview + Development):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -93,6 +99,8 @@ Guia completo: **`TESTE-EXTERNO-AMANHA.md`**
 5. Google OAuth: redirect continua `https://xctzcizqoussthitrihm.supabase.co/auth/v1/callback`
 
 Verificação local: `.\scripts\verificar-deploy.ps1`
+
+FrotaTMS (produção): [`frota-tms/DEPLOY-PRODUCAO.md`](./frota-tms/DEPLOY-PRODUCAO.md)
 
 ## Rotas
 

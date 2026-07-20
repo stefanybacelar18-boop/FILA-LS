@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.db
+*.db-journal
+.DS_Store
+coverage/
+.vite/
+
+# Runtime / produção local
+api/uploads/
+backups/
+*.sql.gz
