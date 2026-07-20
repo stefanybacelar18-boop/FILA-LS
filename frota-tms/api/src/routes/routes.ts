@@ -115,7 +115,12 @@ export function createRoutesRouter(io: Server) {
         vehicles: { include: { vehicle: true } },
         _count: { select: { trips: true } },
       },
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [
+        { hasPriority: 'desc' },
+        { priorityExpiryDate: 'asc' },
+        { date: 'asc' },
+        { createdAt: 'desc' },
+      ],
     });
     res.json(routes);
   });

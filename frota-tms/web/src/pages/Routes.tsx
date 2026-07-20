@@ -25,6 +25,37 @@ function citiesList(r: Route): string[] {
   return r.dealership?.city ? [r.dealership.city] : []
 }
 
+function sortRoutes(list: Route[]): Route[] {
+  return [...list].sort((a, b) => {
+    const p = Number(b.hasPriority) - Number(a.hasPriority)
+    if (p !== 0) return p
+    if (a.hasPriority && b.hasPriority) {
+      const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
+      const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
+      if (ae !== be) return ae - be
+    }
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    if (da !== db) return da - db
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+}
+
+function routeSummary(cities: string[]): { line: string; full: string; countLabel: string } {
+  const full = cities.join(' · ')
+  const countLabel =
+    cities.length === 1 ? '1 cidade' : `${cities.length} cidades`
+  if (cities.length <= 2) {
+    return { line: full, full, countLabel }
+  }
+  const shown = cities.slice(0, 2).join(' · ')
+  return {
+    line: `${shown} · +${cities.length - 2}`,
+    full,
+    countLabel,
+  }
+}
+
 function statusTone(status: Route['status']) {
   if (status === 'CANCELADO') return 'danger' as const
   if (status === 'CONCLUIDO') return 'success' as const
@@ -57,14 +88,17 @@ export function Routes() {
 
   const pending = useMemo(
     () =>
-      data.filter(
-        (r) =>
-          r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
+      sortRoutes(
+        data.filter(
+          (r) =>
+            r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
+        ),
       ),
     [data],
   )
 
-  const visible = tab === 'pendentes' ? pending : data
+  const allSorted = useMemo(() => sortRoutes(data), [data])
+  const visible = tab === 'pendentes' ? pending : allSorted
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => api.delete(`/routes/${id}`),
@@ -103,7 +137,7 @@ export function Routes() {
     <div className="page-desktop max-w-[1280px]">
       <PageHeader
         title="Roteiros"
-        description="Data de início + concessionárias. Previsão de retorno automática pelo PAD."
+        description="Prioridade no topo. Comece pelas placas dos roteiros com vencimento."
         actions={
           isAdmin ? (
             <Link to="/roteiros/novo">
@@ -209,14 +243,18 @@ export function Routes() {
                 {visible.map((r) => {
                   const plate = r.vehicles?.[0]?.vehicle?.plate
                   const cities = citiesList(r)
+                  const summary = routeSummary(cities)
                   const awaitingPlate =
                     r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
                   return (
                     <tr
                       key={r.id}
-                      className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40"
+                      className={cn(
+                        'border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40',
+                        r.hasPriority && 'bg-[var(--color-danger)]/[0.03]',
+                      )}
                     >
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3.5 align-middle">
                         <div className="space-y-1">
                           {isAdmin ? (
                             <Link
@@ -246,7 +284,7 @@ export function Routes() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 align-top whitespace-nowrap">
+                      <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                         <div className="inline-flex items-start gap-2">
                           <Calendar className="mt-0.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
                           <div>
@@ -255,27 +293,25 @@ export function Routes() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3.5 align-middle">
                         {cities.length === 0 ? (
                           <span className="text-[var(--color-text-muted)]">—</span>
                         ) : (
-                          <div className="flex max-w-md flex-wrap items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]" />
-                            {cities.map((city) => (
-                              <span
-                                key={city}
-                                className="rounded-md bg-[var(--color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--color-text)]"
-                              >
-                                {city}
-                              </span>
-                            ))}
+                          <div className="max-w-[240px]" title={summary.full}>
+                            <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]" />
+                              <span className="truncate">{summary.line}</span>
+                            </p>
+                            <p className="mt-0.5 pl-5 text-xs text-[var(--color-text-muted)]">
+                              {summary.countLabel}
+                            </p>
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3.5 align-middle">
                         <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3.5 align-middle">
                         {plate ? (
                           <span className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-xs font-semibold tracking-wider">
                             {plate}
@@ -284,7 +320,7 @@ export function Routes() {
                           <span className="text-[var(--color-text-muted)]">Sem placa</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3.5 align-middle">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {awaitingPlate && isOps && (
                             <Link to={`/definir-placas?routeId=${r.id}`}>

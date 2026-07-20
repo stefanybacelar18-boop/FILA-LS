@@ -21,6 +21,7 @@ export function RouteForm() {
   const qc = useQueryClient()
   const createdIdRef = useRef<string | null>(null)
 
+  const [name, setName] = useState('')
   const [date, setDate] = useState(toInputDate(new Date()))
   const [dealershipIds, setDealershipIds] = useState<string[]>([])
   const [dealerSearch, setDealerSearch] = useState('')
@@ -41,6 +42,7 @@ export function RouteForm() {
 
   useEffect(() => {
     if (!existing) return
+    setName(existing.name ?? '')
     setDate(toInputDate(existing.date))
     const ids =
       existing.dealerships?.map((rd) => rd.dealershipId) ??
@@ -56,7 +58,7 @@ export function RouteForm() {
     [dealerships, dealershipIds],
   )
 
-  const autoName = useMemo(() => {
+  const citiesHint = useMemo(() => {
     const cities = [...new Set(selectedDealers.map((d) => d.city))]
     if (cities.length === 0) return ''
     return cities.join(' · ')
@@ -93,15 +95,16 @@ export function RouteForm() {
 
   const saveMutation = useMutation({
     mutationFn: async (disponibilizar: boolean) => {
+      const description = name.trim()
+      if (description.length < 2) throw new Error('Informe a descrição do roteiro')
       if (dealershipIds.length < 1) throw new Error('Selecione ao menos uma concessionária')
       if (hasPriority && !priorityExpiryDate) {
         throw new Error('Informe a menor data de vencimento da prioridade')
       }
-      const name = autoName || existing?.name || `Roteiro ${date}`
       const region =
         [...new Set(selectedDealers.map((d) => d.region))].join(' / ') || null
       const payload = {
-        name,
+        name: description,
         date,
         dealershipIds,
         region,
@@ -183,11 +186,39 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Data de início, concessionárias e, se houver, prioridade por vencimento."
+        description="Defina a descrição, a data e as concessionárias. Prioridade por vencimento, se houver."
       />
 
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="space-y-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <div>
+            <Input
+              label="Descrição *"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex.: Lote Sul · vencimento curto"
+              required
+              minLength={2}
+              disabled={!canEdit}
+            />
+            {citiesHint && (
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                Cidades selecionadas: {citiesHint}
+                {!name.trim() && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      className="text-[var(--color-primary)] hover:underline"
+                      onClick={() => setName(citiesHint)}
+                    >
+                      usar como descrição
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
           <div>
             <Input
               label="Data de início da viagem"
@@ -195,16 +226,12 @@ export function RouteForm() {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
+              disabled={!canEdit}
             />
             <p className="mt-1 text-xs text-[var(--color-text-muted)]">
               Saída às 06:00 · retorno previsto pelo destino mais longe do PAD
             </p>
           </div>
-          {autoName && (
-            <p className="text-sm text-[var(--color-text-muted)]">
-              Nome automático: <strong className="text-[var(--color-text)]">{autoName}</strong>
-            </p>
-          )}
         </div>
 
         <div
@@ -343,6 +370,7 @@ export function RouteForm() {
             variant="secondary"
             loading={saveMutation.isPending}
             disabled={
+              name.trim().length < 2 ||
               dealershipIds.length < 1 ||
               !canEdit ||
               saveMutation.isPending ||
@@ -356,6 +384,7 @@ export function RouteForm() {
               type="button"
               loading={saveMutation.isPending}
               disabled={
+                name.trim().length < 2 ||
                 dealershipIds.length < 1 ||
                 saveMutation.isPending ||
                 (hasPriority && !priorityExpiryDate)

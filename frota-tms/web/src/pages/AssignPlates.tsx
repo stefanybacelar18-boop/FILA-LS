@@ -311,7 +311,7 @@ export function AssignPlates() {
       <div className="ops-readable page-desktop max-w-4xl">
         <PageHeader
           title="Pendentes de placa"
-          description="Roteiros aguardando placa · previsão de retorno pelo PAD · confirme 1 placa."
+          description="Prioridade no topo — comece adicionando placa pelos roteiros com vencimento."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
