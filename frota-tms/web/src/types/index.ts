@@ -139,6 +139,7 @@ export interface Route {
   status: RouteStatus
   hasPriority: boolean
   priorityNotes?: string | null
+  priorityExpiryDate?: string | null
   plannedVehicleCount?: number | null
   createdAt: string
   updatedAt: string

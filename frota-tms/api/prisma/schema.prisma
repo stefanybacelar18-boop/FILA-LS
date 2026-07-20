@@ -79,6 +79,8 @@ model Route {
   status        String   @default("AGUARDANDO_PLACAS")
   hasPriority   Boolean  @default(false)
   priorityNotes String?
+  // Menor data de vencimento que motiva a prioridade (pode ser retroativa)
+  priorityExpiryDate DateTime?
   // Meta de placas que o admin espera neste carregamento (cobertura operacional)
   plannedVehicleCount Int?
   // Handoff papel → operação (terceira)

@@ -77,6 +77,12 @@ export function createRoutesRouter(io: Server) {
     notes: z.string().optional().nullable(),
     hasPriority: z.boolean().optional(),
     priorityNotes: z.string().optional().nullable(),
+    /** Menor vencimento (YYYY-MM-DD) — pode ser data passada */
+    priorityExpiryDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de vencimento inválida')
+      .optional()
+      .nullable(),
     plannedVehicleCount: z.number().int().positive().optional().nullable(),
   });
 
@@ -409,6 +415,11 @@ export function createRoutesRouter(io: Server) {
 
     const ordered = parsed.data.dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
     const hasPriority = !!parsed.data.hasPriority;
+    if (hasPriority && !parsed.data.priorityExpiryDate) {
+      return res.status(400).json({
+        error: 'Informe a menor data de vencimento para roteiro prioritário',
+      });
+    }
 
     const joinedRegions = [...new Set(ordered.map((d) => d.region))].join(' / ');
     const region = parsed.data.region ?? (joinedRegions || ordered[0]?.region);
@@ -424,6 +435,10 @@ export function createRoutesRouter(io: Server) {
         notes: parsed.data.notes?.trim() || null,
         hasPriority,
         priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
+        priorityExpiryDate:
+          hasPriority && parsed.data.priorityExpiryDate
+            ? new Date(`${parsed.data.priorityExpiryDate.slice(0, 10)}T12:00:00.000Z`)
+            : null,
         plannedVehicleCount: 1,
         status: RouteStatus.RASCUNHO,
         readyForOperation: false,
@@ -503,10 +518,28 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Roteiro finalizado não pode ser editado' });
     }
 
-    const { dealershipIds, date, ...rest } = parsed.data;
+    const { dealershipIds, date, priorityExpiryDate, ...rest } = parsed.data;
     const data: Record<string, unknown> = { ...rest };
-    if (date) data.date = new Date(date);
-    if (rest.hasPriority === false) data.priorityNotes = null;
+    if (date) data.date = new Date(`${date.slice(0, 10)}T12:00:00.000Z`);
+    if (rest.hasPriority === false) {
+      data.priorityNotes = null;
+      data.priorityExpiryDate = null;
+    }
+    if (rest.hasPriority === true && priorityExpiryDate === undefined && !existing.priorityExpiryDate) {
+      return res.status(400).json({
+        error: 'Informe a menor data de vencimento para roteiro prioritário',
+      });
+    }
+    if (priorityExpiryDate !== undefined) {
+      data.priorityExpiryDate = priorityExpiryDate
+        ? new Date(`${priorityExpiryDate.slice(0, 10)}T12:00:00.000Z`)
+        : null;
+    }
+    if (rest.hasPriority === true && priorityExpiryDate === null) {
+      return res.status(400).json({
+        error: 'Informe a menor data de vencimento para roteiro prioritário',
+      });
+    }
     if (typeof rest.name === 'string') data.name = rest.name.trim();
     if (rest.notes !== undefined) data.notes = rest.notes?.trim() || null;
     if (rest.plannedVehicleCount !== undefined) {

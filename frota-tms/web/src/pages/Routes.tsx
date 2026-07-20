@@ -217,16 +217,34 @@ export function Routes() {
                       className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40"
                     >
                       <td className="px-4 py-3.5 align-top">
-                        {isAdmin ? (
-                          <Link
-                            to={`/roteiros/${r.id}`}
-                            className="font-medium text-[var(--color-text)] hover:text-[var(--color-primary)]"
-                          >
-                            {r.name}
-                          </Link>
-                        ) : (
-                          <span className="font-medium text-[var(--color-text)]">{r.name}</span>
-                        )}
+                        <div className="space-y-1">
+                          {isAdmin ? (
+                            <Link
+                              to={`/roteiros/${r.id}`}
+                              className="font-medium text-[var(--color-text)] hover:text-[var(--color-primary)]"
+                            >
+                              {r.name}
+                            </Link>
+                          ) : (
+                            <span className="font-medium text-[var(--color-text)]">{r.name}</span>
+                          )}
+                          {r.hasPriority && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Badge tone="danger">Prioridade · vencimento</Badge>
+                              {r.priorityExpiryDate && (
+                                <span
+                                  className={
+                                    new Date(r.priorityExpiryDate) < new Date()
+                                      ? 'text-xs font-semibold text-[var(--color-danger)]'
+                                      : 'text-xs text-[var(--color-text-muted)]'
+                                  }
+                                >
+                                  menor venc.: {formatDate(r.priorityExpiryDate)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 align-top whitespace-nowrap">
                         <div className="inline-flex items-start gap-2">

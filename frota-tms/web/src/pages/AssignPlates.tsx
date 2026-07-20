@@ -135,7 +135,16 @@ export function AssignPlates() {
           (r) =>
             r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
         )
-        .sort((a, b) => Number(b.hasPriority) - Number(a.hasPriority)),
+        .sort((a, b) => {
+          const p = Number(b.hasPriority) - Number(a.hasPriority)
+          if (p !== 0) return p
+          if (a.hasPriority && b.hasPriority) {
+            const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
+            const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
+            return ae - be
+          }
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        }),
     [routes],
   )
 
@@ -328,18 +337,31 @@ export function AssignPlates() {
           <div className="space-y-2">
             {pendingRoutes.map((r) => {
               const c = citiesOf(r)
+              const expiryPast =
+                r.priorityExpiryDate &&
+                toInputDate(r.priorityExpiryDate) <= toInputDate(new Date())
               return (
                 <button
                   key={r.id}
                   type="button"
                   onClick={() => pickRoute(r.id)}
-                  className="flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-left transition hover:border-[var(--color-primary)]/40"
+                  className={
+                    r.hasPriority
+                      ? 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 px-4 py-4 text-left transition hover:border-[var(--color-danger)]/60'
+                      : 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-left transition hover:border-[var(--color-primary)]/40'
+                  }
                 >
                   <div className="flex w-full items-center justify-between gap-2">
                     <span className="text-base font-semibold">{r.name}</span>
                     {r.hasPriority && (
-                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                        Prioridade
+                      <span
+                        className={
+                          expiryPast
+                            ? 'text-xs font-semibold text-[var(--color-danger)]'
+                            : 'text-xs font-medium text-amber-700 dark:text-amber-300'
+                        }
+                      >
+                        Prioridade · vencimento
                       </span>
                     )}
                   </div>
@@ -347,6 +369,18 @@ export function AssignPlates() {
                     {formatDate(r.date)} · 06:00
                     {c.length > 0 ? ` · ${c.join(', ')}` : ''}
                   </p>
+                  {r.hasPriority && r.priorityExpiryDate && (
+                    <p
+                      className={
+                        expiryPast
+                          ? 'mt-2 text-sm font-semibold text-[var(--color-danger)]'
+                          : 'mt-2 text-sm font-medium text-[var(--color-text)]'
+                      }
+                    >
+                      Menor vencimento: {formatDate(r.priorityExpiryDate)}
+                      {expiryPast ? ' · atentar (vencido ou hoje)' : ''}
+                    </p>
+                  )}
                 </button>
               )
             })}
@@ -372,6 +406,29 @@ export function AssignPlates() {
         title={selectedRoute?.name ?? 'Rota'}
         description={`${formatDate(selectedRoute?.date)} · 06:00${cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa`}
       />
+
+      {selectedRoute?.hasPriority && (
+        <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 px-4 py-3 text-sm">
+          <p className="font-semibold text-[var(--color-danger)]">
+            Prioridade por vencimento
+          </p>
+          <p className="mt-1 text-[var(--color-text)]">
+            Menor vencimento:{' '}
+            <strong>
+              {selectedRoute.priorityExpiryDate
+                ? formatDate(selectedRoute.priorityExpiryDate)
+                : '—'}
+            </strong>
+            {selectedRoute.priorityExpiryDate &&
+            toInputDate(selectedRoute.priorityExpiryDate) <= toInputDate(new Date())
+              ? ' · atentar: data vencida ou é hoje'
+              : ''}
+          </p>
+          {selectedRoute.priorityNotes && (
+            <p className="mt-1 text-[var(--color-text-muted)]">{selectedRoute.priorityNotes}</p>
+          )}
+        </div>
+      )}
 
       {board?.returnForecast && (
         <div className="mb-4 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">

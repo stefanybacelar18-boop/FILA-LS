@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Search } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Route } from '../types'
-import { PageHeader, Button, Input, Spinner } from '../components/ui'
-import { toInputDate } from '../lib/format'
+import { PageHeader, Button, Input, Spinner, Textarea } from '../components/ui'
+import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
+
+function isPastOrToday(isoDay: string): boolean {
+  if (!isoDay) return false
+  const today = toInputDate(new Date())
+  return isoDay <= today
+}
 
 export function RouteForm() {
   const { id } = useParams<{ id: string }>()
@@ -18,6 +24,9 @@ export function RouteForm() {
   const [date, setDate] = useState(toInputDate(new Date()))
   const [dealershipIds, setDealershipIds] = useState<string[]>([])
   const [dealerSearch, setDealerSearch] = useState('')
+  const [hasPriority, setHasPriority] = useState(false)
+  const [priorityExpiryDate, setPriorityExpiryDate] = useState('')
+  const [priorityNotes, setPriorityNotes] = useState('')
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -37,6 +46,9 @@ export function RouteForm() {
       existing.dealerships?.map((rd) => rd.dealershipId) ??
       (existing.dealershipId ? [existing.dealershipId] : [])
     setDealershipIds(ids)
+    setHasPriority(!!existing.hasPriority)
+    setPriorityExpiryDate(toInputDate(existing.priorityExpiryDate))
+    setPriorityNotes(existing.priorityNotes ?? '')
   }, [existing])
 
   const selectedDealers = useMemo(
@@ -82,6 +94,9 @@ export function RouteForm() {
   const saveMutation = useMutation({
     mutationFn: async (disponibilizar: boolean) => {
       if (dealershipIds.length < 1) throw new Error('Selecione ao menos uma concessionária')
+      if (hasPriority && !priorityExpiryDate) {
+        throw new Error('Informe a menor data de vencimento da prioridade')
+      }
       const name = autoName || existing?.name || `Roteiro ${date}`
       const region =
         [...new Set(selectedDealers.map((d) => d.region))].join(' / ') || null
@@ -91,8 +106,9 @@ export function RouteForm() {
         dealershipIds,
         region,
         notes: null,
-        hasPriority: false,
-        priorityNotes: null,
+        hasPriority,
+        priorityNotes: hasPriority ? priorityNotes.trim() || null : null,
+        priorityExpiryDate: hasPriority ? priorityExpiryDate : null,
         plannedVehicleCount: 1,
       }
       let route: Route
@@ -118,7 +134,6 @@ export function RouteForm() {
       navigate('/roteiros')
     },
     onError: () => {
-      // Se criou e falhou só no envio, fica na edição do roteiro criado
       if (isNew && createdIdRef.current) {
         navigate(`/roteiros/${createdIdRef.current}`, { replace: true })
       }
@@ -146,6 +161,8 @@ export function RouteForm() {
     existing?.status !== 'AGUARDANDO_PLACAS' &&
     (isNew || existing?.status === 'RASCUNHO')
 
+  const expiryPast = hasPriority && isPastOrToday(priorityExpiryDate)
+
   if (!isNew && isLoading) {
     return (
       <div className="flex justify-center py-20">
@@ -166,7 +183,7 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Informe a data de início e as concessionárias. A previsão de retorno é calculada automaticamente pelo PAD."
+        description="Data de início, concessionárias e, se houver, prioridade por vencimento."
       />
 
       <form onSubmit={onSubmit} className="space-y-5">
@@ -187,6 +204,75 @@ export function RouteForm() {
             <p className="text-sm text-[var(--color-text-muted)]">
               Nome automático: <strong className="text-[var(--color-text)]">{autoName}</strong>
             </p>
+          )}
+        </div>
+
+        <div
+          className={cn(
+            'space-y-4 rounded-[var(--radius)] border p-5',
+            hasPriority
+              ? 'border-amber-500/40 bg-amber-500/5'
+              : 'border-[var(--color-border)] bg-[var(--color-surface)]',
+          )}
+        >
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 accent-[var(--color-primary)]"
+              checked={hasPriority}
+              onChange={(e) => {
+                setHasPriority(e.target.checked)
+                if (!e.target.checked) {
+                  setPriorityExpiryDate('')
+                  setPriorityNotes('')
+                }
+              }}
+            />
+            <span>
+              <span className="text-sm font-semibold">Prioridade por vencimento</span>
+              <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                Marque quando houver carga com validade crítica. A Operação verá o alerta com a
+                menor data de vencimento.
+              </span>
+            </span>
+          </label>
+
+          {hasPriority && (
+            <div className="space-y-3 border-t border-amber-500/20 pt-4">
+              <div>
+                <Input
+                  label="Menor vencimento *"
+                  type="date"
+                  value={priorityExpiryDate}
+                  onChange={(e) => setPriorityExpiryDate(e.target.value)}
+                  required={hasPriority}
+                />
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  Pode ser data retroativa (já vencido). O operador precisa se atentar a essa data.
+                </p>
+              </div>
+
+              {expiryPast && priorityExpiryDate && (
+                <div className="flex items-start gap-2 rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-800 dark:text-red-200">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Vencimento em <strong>{formatDate(priorityExpiryDate)}</strong>
+                    {priorityExpiryDate < toInputDate(new Date())
+                      ? ' — já vencido (retroativo).'
+                      : ' — vence hoje.'}{' '}
+                    A Operação verá este alerta em destaque.
+                  </span>
+                </div>
+              )}
+
+              <Textarea
+                label="Observação da prioridade (opcional)"
+                value={priorityNotes}
+                onChange={(e) => setPriorityNotes(e.target.value)}
+                rows={2}
+                placeholder="Ex.: lote com validade curta, cliente X…"
+              />
+            </div>
           )}
         </div>
 
@@ -256,7 +342,12 @@ export function RouteForm() {
             type="submit"
             variant="secondary"
             loading={saveMutation.isPending}
-            disabled={dealershipIds.length < 1 || !canEdit || saveMutation.isPending}
+            disabled={
+              dealershipIds.length < 1 ||
+              !canEdit ||
+              saveMutation.isPending ||
+              (hasPriority && !priorityExpiryDate)
+            }
           >
             Salvar
           </Button>
@@ -264,7 +355,11 @@ export function RouteForm() {
             <Button
               type="button"
               loading={saveMutation.isPending}
-              disabled={dealershipIds.length < 1 || saveMutation.isPending}
+              disabled={
+                dealershipIds.length < 1 ||
+                saveMutation.isPending ||
+                (hasPriority && !priorityExpiryDate)
+              }
               onClick={() => saveMutation.mutate(true)}
             >
               Disponibilizar para Operação

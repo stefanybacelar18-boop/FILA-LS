@@ -192,7 +192,8 @@ Body (`POST /api/routes`):
 - `region` = regiões únicas dos destinos unidas por ` / `  
 - `RouteDealership.order` = ordem do array  
 - Status default: `AGUARDANDO_PLACAS`  
-- Prioridade é **manual** (`hasPriority` + `priorityNotes`) — não vem de produtos  
+- Prioridade é **manual** (`hasPriority` + `priorityExpiryDate` + `priorityNotes`) — não vem de produtos
+- Se prioridade por vencimento: informar **menor vencimento** (aceita data retroativa para o operador se atentar) 
 
 ### 5.2 Saída oficial = 06:00
 
@@ -395,7 +396,7 @@ Além de frota:
 | **User** | role, active, passwordHash |
 | **Vehicle** | plate, type, capacityMotos, status, defaultDriver |
 | **Dealership** | city, region, distanceKm, avgTravelDays, allowedVehicle, active |
-| **Route** | date, hasPriority, priorityNotes, plannedVehicleCount, status |
+| **Route** | date, hasPriority, priorityExpiryDate, priorityNotes, plannedVehicleCount, status |
 | **RouteDealership** | order; unique(routeId, dealershipId) |
 | **RouteVehicle** | vínculo placa↔roteiro; unique(routeId, vehicleId) |
 | **PlateUnavailability** | reason + availableAtForecast; unique(routeId, vehicleId) |
