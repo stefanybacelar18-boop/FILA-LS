@@ -69,15 +69,13 @@ Backup:
 1. Abra o link acima (conta Render gratuita com GitHub).  
 2. Confirme o Blueprint `render.yaml` da **raiz** (serviço `frota-tms` + Postgres).  
 3. Clique **Apply** / Deploy.  
-4. Aguarde o build (~5–10 min) e abra a URL `https://frota-tms-xxxx.onrender.com`.  
-5. **Bootstrap único** (Shell do serviço no Render, uma vez):
-
-```bash
-cd api && FORCE_SEED=true npx tsx prisma/seed.ts
-```
-
-6. Login: `a@a.com` / `1` → **troque a senha**.  
-7. Confirme que o FilaDock (`https://fila-lsl.vercel.app`) segue normal.
+4. Aguarde o build (~5–10 min) e abra a URL `https://frota-tms.onrender.com`.  
+5. **Bootstrap único (plano Free não tem Shell):**  
+   - Serviço `frota-tms` → **Environment** → `SEED_ON_START` = `true`  
+   - **Manual Deploy**  
+   - Login `a@a.com` / `1` → **troque a senha**  
+   - Volte `SEED_ON_START` = `false` e faça outro deploy (para não reseedar)  
+6. Confirme que o FilaDock (`https://fila-lsl.vercel.app`) segue normal.
 
 > Alternativa manual: New → Blueprint → Path `frota-tms/render.yaml`.  
 > Disco free é efêmero para anexos; na empresa prefira Docker.
