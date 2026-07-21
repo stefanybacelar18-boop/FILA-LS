@@ -48,5 +48,8 @@ services:
           property: connectionString
 
 databases:
+  # Render permite só 1 Postgres free por workspace.
+  # Se Create database falhar: Dashboard → Databases → apague o free antigo → Manual sync.
   - name: frota-tms-db
     plan: free
+    postgresMajorVersion: '16'

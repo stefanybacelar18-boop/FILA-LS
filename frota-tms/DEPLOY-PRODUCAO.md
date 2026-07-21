@@ -82,6 +82,17 @@ cd api && FORCE_SEED=true npx tsx prisma/seed.ts
 > Alternativa manual: New → Blueprint → Path `frota-tms/render.yaml`.  
 > Disco free é efêmero para anexos; na empresa prefira Docker.
 
+### Se o Sync falhar em “Create database frota-tms-db”
+
+Causa mais comum: **já existe 1 Postgres free** no workspace (limite do Render).
+
+1. Menu **Databases** no Render  
+2. Se houver um banco free antigo/não usado → **Delete**  
+3. Volte no Blueprint `frota-tms` → **Manual sync**  
+4. Espere o web service ficar **Live**
+
+Se ainda falhar: crie o Postgres free **na mão** (New → Postgres → Free → nome `frota-tms-db`) e depois **Manual sync** de novo.
+
 ---
 
 ## Opção C — Railway
