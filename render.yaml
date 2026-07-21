@@ -6,8 +6,6 @@
 #
 # One-click:
 #   https://render.com/deploy?repo=https://github.com/stefanybacelar18-boop/FILA-LS
-#
-# Ou: Render Dashboard → New → Blueprint → este repositório (render.yaml na raiz).
 # =============================================================================
 
 services:
@@ -16,16 +14,23 @@ services:
     runtime: node
     plan: free
     rootDir: frota-tms
+    # NODE_ENV=production faz npm omitir devDeps — por isso o build força include=dev
+    # e usa o Prisma LOCAL (api/node_modules), nunca o npx global (v7+).
     buildCommand: |
+      set -e
       chmod +x scripts/prepare-postgres-schema.sh
-      npm install --prefix web && npm run build --prefix web
-      npm install --prefix api
+      npm install --prefix web --include=dev
+      npm run build --prefix web
+      npm install --prefix api --include=dev
       ./scripts/prepare-postgres-schema.sh api/prisma/schema.prisma
-      npx prisma generate --schema api/prisma/schema.prisma
+      npm exec --prefix api -- prisma generate --schema api/prisma/schema.prisma
       npm run build --prefix api
-      mkdir -p api/public && cp -r web/dist/* api/public/
+      mkdir -p api/public && cp -r web/dist/. api/public/
     startCommand: |
-      cd api && npx prisma db push && node dist/index.js
+      set -e
+      cd api
+      npm exec -- prisma db push
+      node dist/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -49,7 +54,6 @@ services:
 
 databases:
   # Render permite só 1 Postgres free por workspace.
-  # Se Create database falhar: Dashboard → Databases → apague o free antigo → Manual sync.
   - name: frota-tms-db
     plan: free
     postgresMajorVersion: '16'
