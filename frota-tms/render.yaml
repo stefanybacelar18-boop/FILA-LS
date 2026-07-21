@@ -15,15 +15,20 @@ services:
     plan: free
     rootDir: .
     buildCommand: |
+      set -e
       chmod +x scripts/prepare-postgres-schema.sh
-      npm install --prefix web && npm run build --prefix web
-      npm install --prefix api
+      npm install --prefix web --include=dev
+      npm run build --prefix web
+      npm install --prefix api --include=dev
       ./scripts/prepare-postgres-schema.sh api/prisma/schema.prisma
-      npx prisma generate --schema api/prisma/schema.prisma
+      npm exec --prefix api -- prisma generate --schema api/prisma/schema.prisma
       npm run build --prefix api
-      mkdir -p api/public && cp -r web/dist/* api/public/
+      mkdir -p api/public && cp -r web/dist/. api/public/
     startCommand: |
-      cd api && npx prisma db push && node dist/index.js
+      set -e
+      cd api
+      npm exec -- prisma db push
+      node dist/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
