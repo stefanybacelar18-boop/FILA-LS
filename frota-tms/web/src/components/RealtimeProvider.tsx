@@ -21,6 +21,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       void queryClient.invalidateQueries({ queryKey: ['trips'] })
       void queryClient.invalidateQueries({ queryKey: ['returns'] })
       void queryClient.invalidateQueries({ queryKey: ['plates-board'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
     }
     const onTrips = () => {
       void queryClient.invalidateQueries({ queryKey: ['trips'] })
@@ -28,11 +29,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['history'] })
       void queryClient.invalidateQueries({ queryKey: ['plates-board'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
     }
     const onRoutes = () => {
       void queryClient.invalidateQueries({ queryKey: ['routes'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['plates-board'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
       void queryClient.invalidateQueries({ queryKey: ['planning-board'] })
       void queryClient.invalidateQueries({ queryKey: ['planning-my-day'] })
       void queryClient.invalidateQueries({ queryKey: ['planning-overview'] })

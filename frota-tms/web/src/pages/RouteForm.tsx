@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Route } from '../types'
 import { PageHeader, Button, Input, Spinner, Textarea } from '../components/ui'
+import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
@@ -188,6 +189,8 @@ export function RouteForm() {
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
         description="Defina a descrição, a data e as concessionárias. Prioridade por vencimento, se houver."
       />
+
+      <AvailablePlatesBanner />
 
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="space-y-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">

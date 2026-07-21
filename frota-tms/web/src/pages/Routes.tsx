@@ -13,6 +13,7 @@ import {
   EmptyState,
   ConfirmModal,
 } from '../components/ui'
+import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { useAuthStore } from '../stores/auth'
 import { routeStatusLabels } from '../lib/labels'
 import { formatDate } from '../lib/format'
@@ -149,6 +150,8 @@ export function Routes() {
           ) : undefined
         }
       />
+
+      {isAdmin && <AvailablePlatesBanner />}
 
       {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}
       {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
