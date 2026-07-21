@@ -55,8 +55,9 @@ export function Login() {
         <form onSubmit={onSubmit} className="space-y-4">
           <Input
             label="E-mail"
-            type="email"
+            type="text"
             autoComplete="username"
+            inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

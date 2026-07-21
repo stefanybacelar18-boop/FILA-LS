@@ -50,13 +50,17 @@ services:
       - key: FORCE_SEED
         value: 'false'
       - key: BOOTSTRAP_ADMIN_EMAIL
-        value: admin@frotatms.app
+        value: lsl@.com
       - key: BOOTSTRAP_ADMIN_PASSWORD
-        value: TrocarSenha@2026
+        value: lsl123
+      - key: BOOTSTRAP_ADMIN_NAME
+        value: LSL Admin
       - key: BOOTSTRAP_OPS_EMAIL
-        value: operacao@frotatms.app
+        value: ag@.com
       - key: BOOTSTRAP_OPS_PASSWORD
-        value: TrocarSenha@2026
+        value: ag123
+      - key: BOOTSTRAP_OPS_NAME
+        value: AG Operação
       - key: DATABASE_URL
         fromDatabase:
           name: frota-tms-db
