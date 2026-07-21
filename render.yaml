@@ -30,6 +30,10 @@ services:
       set -e
       cd api
       npm exec -- prisma db push
+      if [ "${SEED_ON_START:-false}" = "true" ]; then
+        echo "SEED_ON_START=true — bootstrap de dados (uma vez)..."
+        FORCE_SEED=true npm exec -- tsx prisma/seed.ts
+      fi
       node dist/index.js
     healthCheckPath: /api/health
     envVars:
@@ -43,6 +47,7 @@ services:
         value: 8h
       - key: CORS_ORIGIN
         value: '*'
+      # Free não tem Shell: use SEED_ON_START=true só no 1º bootstrap, depois false
       - key: SEED_ON_START
         value: 'false'
       - key: FORCE_SEED
