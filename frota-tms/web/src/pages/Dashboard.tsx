@@ -82,6 +82,14 @@ export function Dashboard() {
   ].filter((a) => a.show && a.roles)
 
   const kpis = [
+    {
+      label: 'Placas p/ roteiros',
+      value: data.fleet.availableForRoutes ?? data.fleet.trucksAvailable + data.fleet.carretasAvailable,
+      icon: Truck,
+      tone: 'text-green-600',
+      highlight: true,
+    },
+    { label: 'Capacidade (motos)', value: data.fleet.availableCapacityMotos ?? '—', icon: Truck, tone: 'text-green-600' },
     { label: 'Disponíveis (truck)', value: data.fleet.trucksAvailable, icon: Truck, tone: 'text-green-600' },
     { label: 'Disponíveis (carreta)', value: data.fleet.carretasAvailable, icon: Truck, tone: 'text-green-600' },
     { label: 'Em viagem', value: data.fleet.emViagem, icon: MapPinned, tone: 'text-blue-600' },
@@ -137,7 +145,12 @@ export function Dashboard() {
         {kpis.map((k) => (
           <div
             key={k.label}
-            className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-sm)]"
+            className={cn(
+              'rounded-[var(--radius)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-sm)]',
+              'highlight' in k && k.highlight
+                ? 'border-[var(--color-primary)]/40 ring-1 ring-[var(--color-primary)]/20'
+                : 'border-[var(--color-border)]',
+            )}
           >
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-medium text-[var(--color-text-muted)]">{k.label}</span>

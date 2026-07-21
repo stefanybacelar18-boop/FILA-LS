@@ -15,8 +15,7 @@ router.get('/', async (_req, res) => {
 
   const [
     fleet,
-    trucksAvailable,
-    carretasAvailable,
+    availableVehicles,
     emViagem,
     emManutencao,
     bloqueados,
@@ -28,8 +27,13 @@ router.get('/', async (_req, res) => {
     pendingRoutes,
   ] = await Promise.all([
     prisma.vehicle.count(),
-    prisma.vehicle.count({ where: { type: VehicleType.TRUCK, status: VehicleStatus.DISPONIVEL } }),
-    prisma.vehicle.count({ where: { type: VehicleType.CARRETA, status: VehicleStatus.DISPONIVEL } }),
+    prisma.vehicle.findMany({
+      where: {
+        status: VehicleStatus.DISPONIVEL,
+        trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
+      },
+      select: { type: true, capacityMotos: true },
+    }),
     prisma.vehicle.count({ where: { status: VehicleStatus.EM_VIAGEM } }),
     prisma.vehicle.count({ where: { status: VehicleStatus.EM_MANUTENCAO } }),
     prisma.vehicle.count({ where: { status: VehicleStatus.BLOQUEADO } }),
@@ -74,6 +78,11 @@ router.get('/', async (_req, res) => {
       orderBy: { date: 'asc' },
     }),
   ]);
+
+  const trucksAvailable = availableVehicles.filter((v) => v.type === VehicleType.TRUCK).length;
+  const carretasAvailable = availableVehicles.filter((v) => v.type === VehicleType.CARRETA).length;
+  const availableForRoutes = availableVehicles.length;
+  const availableCapacityMotos = availableVehicles.reduce((s, v) => s + v.capacityMotos, 0);
 
   const retornamHoje = openTrips.filter(
     (t) => t.expectedReturn >= today && t.expectedReturn < tomorrow,
@@ -164,6 +173,8 @@ router.get('/', async (_req, res) => {
       total: fleet,
       trucksAvailable,
       carretasAvailable,
+      availableForRoutes,
+      availableCapacityMotos,
       emViagem,
       emManutencao,
       bloqueados,

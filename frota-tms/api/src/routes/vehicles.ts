@@ -85,6 +85,27 @@ router.get('/available', async (_req, res) => {
   res.json(await Promise.all(vehicles.map(enrichVehicle)));
 });
 
+/** Resumo para o Admin montar roteiros físicos (qtde de placas livres) */
+router.get('/availability-summary', async (_req, res) => {
+  const vehicles = await prisma.vehicle.findMany({
+    where: {
+      status: VehicleStatus.DISPONIVEL,
+      trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
+    },
+    select: { id: true, plate: true, capacityMotos: true, type: true },
+    orderBy: { plate: 'asc' },
+  });
+  const trucks = vehicles.filter((v) => v.type === VehicleType.TRUCK);
+  const carretas = vehicles.filter((v) => v.type === VehicleType.CARRETA);
+  res.json({
+    count: vehicles.length,
+    capacityMotos: vehicles.reduce((sum, v) => sum + v.capacityMotos, 0),
+    trucks: trucks.length,
+    carretas: carretas.length,
+    plates: vehicles.map((v) => v.plate),
+  });
+});
+
 router.get('/:id', async (req, res) => {
   const v = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
   if (!v) return res.status(404).json({ error: 'Veículo não encontrado' });

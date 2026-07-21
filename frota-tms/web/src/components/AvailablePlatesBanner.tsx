@@ -1,0 +1,72 @@
+import { useQuery } from '@tanstack/react-query'
+import { Truck } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { api } from '../lib/api'
+import { cn } from '../lib/cn'
+
+export interface AvailabilitySummary {
+  count: number
+  capacityMotos: number
+  trucks: number
+  carretas: number
+  plates: string[]
+}
+
+/** Faixa visível: quantas placas livres para montar roteiros (Admin) */
+export function AvailablePlatesBanner({ className }: { className?: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['vehicles-availability-summary'],
+    queryFn: async () =>
+      (await api.get<AvailabilitySummary>('/vehicles/availability-summary')).data,
+    refetchInterval: 30_000,
+  })
+
+  const count = data?.count ?? 0
+  const capacity = data?.capacityMotos ?? 0
+
+  return (
+    <div
+      className={cn(
+        'mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--color-primary)]/25 bg-[var(--color-primary-muted)] px-4 py-3.5',
+        className,
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--color-primary)] text-white">
+          <Truck className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-wide text-[var(--color-primary)] uppercase">
+            Placas disponíveis para roteiros
+          </p>
+          {isLoading ? (
+            <p className="mt-1 text-sm text-[var(--color-text-muted)]">Carregando…</p>
+          ) : (
+            <>
+              <p className="mt-0.5 font-display text-3xl font-bold text-[var(--color-text)]">
+                {count}
+                <span className="ml-2 text-base font-medium text-[var(--color-text-muted)]">
+                  {count === 1 ? 'placa' : 'placas'}
+                </span>
+              </p>
+              <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+                Capacidade total ≈ {capacity} motos
+                {data && data.trucks + data.carretas > 0
+                  ? ` · ${data.trucks} truck${data.trucks === 1 ? '' : 's'}${
+                      data.carretas > 0 ? ` · ${data.carretas} carreta${data.carretas === 1 ? '' : 's'}` : ''
+                    }`
+                  : ''}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+      <Link
+        to="/frota"
+        className="shrink-0 text-sm font-medium text-[var(--color-primary)] hover:underline"
+      >
+        Ver frota
+      </Link>
+    </div>
+  )
+}

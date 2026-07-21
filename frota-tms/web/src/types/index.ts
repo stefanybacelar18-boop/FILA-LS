@@ -238,6 +238,8 @@ export interface DashboardData {
     total: number
     trucksAvailable: number
     carretasAvailable: number
+    availableForRoutes?: number
+    availableCapacityMotos?: number
     emViagem: number
     emManutencao: number
     bloqueados?: number
