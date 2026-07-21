@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil } from 'lucide-react'
+import { Plus, Pencil, Ban, Unlock } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver } from '../types'
 import {
@@ -9,6 +9,7 @@ import {
   Button,
   Modal,
   Input,
+  Textarea,
   Spinner,
   EmptyState,
   ConfirmModal,
@@ -26,6 +27,8 @@ export function Drivers() {
   const [editing, setEditing] = useState<Driver | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [deactivateId, setDeactivateId] = useState<string | null>(null)
+  const [blockTarget, setBlockTarget] = useState<Driver | null>(null)
+  const [blockReason, setBlockReason] = useState('')
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['drivers', q],
@@ -63,6 +66,25 @@ export function Drivers() {
     },
   })
 
+  const blockMutation = useMutation({
+    mutationFn: async () => {
+      if (!blockTarget) throw new Error('Sem motorista')
+      return api.post(`/drivers/${blockTarget.id}/block`, { reason: blockReason.trim() })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['drivers'] })
+      setBlockTarget(null)
+      setBlockReason('')
+    },
+  })
+
+  const unblockMutation = useMutation({
+    mutationFn: async (id: string) => api.post(`/drivers/${id}/unblock`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['drivers'] })
+    },
+  })
+
   function openCreate() {
     setEditing(null)
     setForm(emptyForm)
@@ -89,7 +111,7 @@ export function Drivers() {
     <div className="page-desktop max-w-3xl">
       <PageHeader
         title="Motoristas"
-        description="Cadastro usado na definição de placa. Só motoristas ativos podem ser selecionados."
+        description="Cadastro usado na definição de placa. Motorista bloqueado não pode ser selecionado."
         actions={
           isAdmin ? (
             <Button onClick={openCreate}>
@@ -133,16 +155,27 @@ export function Drivers() {
                   key={d.id}
                   className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40"
                 >
-                  <td className="px-4 py-3 font-medium">{d.name}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium">{d.name}</p>
+                    {d.blocked && d.blockReason && (
+                      <p className="mt-0.5 text-xs text-[var(--color-danger)]">
+                        Motivo: {d.blockReason}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">{d.phone || '—'}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={d.active ? 'success' : 'default'}>
-                      {d.active ? 'Ativo' : 'Inativo'}
-                    </Badge>
+                    {!d.active ? (
+                      <Badge tone="default">Inativo</Badge>
+                    ) : d.blocked ? (
+                      <Badge tone="danger">Bloqueado</Badge>
+                    ) : (
+                      <Badge tone="success">Ativo</Badge>
+                    )}
                   </td>
                   {isAdmin && (
                     <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
+                      <div className="inline-flex flex-wrap items-center justify-end gap-1">
                         <button
                           type="button"
                           title="Editar"
@@ -151,6 +184,30 @@ export function Drivers() {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
+                        {d.active && !d.blocked && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setBlockTarget(d)
+                              setBlockReason('')
+                            }}
+                          >
+                            <Ban className="h-3.5 w-3.5" />
+                            Bloquear
+                          </Button>
+                        )}
+                        {d.active && d.blocked && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            loading={unblockMutation.isPending}
+                            onClick={() => unblockMutation.mutate(d.id)}
+                          >
+                            <Unlock className="h-3.5 w-3.5" />
+                            Desbloquear
+                          </Button>
+                        )}
                         {d.active && (
                           <Button
                             size="sm"
@@ -216,6 +273,57 @@ export function Drivers() {
             </Button>
             <Button type="submit" loading={saveMutation.isPending}>
               Salvar
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!blockTarget}
+        onClose={() => {
+          setBlockTarget(null)
+          setBlockReason('')
+        }}
+        title={`Bloquear ${blockTarget?.name ?? 'motorista'}`}
+      >
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            blockMutation.mutate()
+          }}
+        >
+          <p className="text-sm text-[var(--color-text-muted)]">
+            O operador verá este motivo ao tentar usar o motorista na definição de placa.
+          </p>
+          <Textarea
+            label="Motivo do bloqueio *"
+            value={blockReason}
+            onChange={(e) => setBlockReason(e.target.value)}
+            required
+            minLength={3}
+            rows={3}
+            placeholder="Ex.: CNH vencida, afastamento médico, férias…"
+          />
+          {blockMutation.isError && (
+            <p className="text-sm text-[var(--color-danger)]">
+              {(blockMutation.error as { response?: { data?: { error?: string } } })?.response
+                ?.data?.error ?? 'Erro ao bloquear'}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setBlockTarget(null)
+                setBlockReason('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" loading={blockMutation.isPending} disabled={blockReason.trim().length < 3}>
+              Confirmar bloqueio
             </Button>
           </div>
         </form>
