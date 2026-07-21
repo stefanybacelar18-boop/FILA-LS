@@ -16,6 +16,10 @@ const schema = z.object({
   active: z.boolean().optional(),
 });
 
+const blockSchema = z.object({
+  reason: z.string().trim().min(3, 'Informe o motivo do bloqueio'),
+});
+
 /** Lista motoristas (operação precisa dos ativos para definir placa) */
 router.get('/', authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA), async (req, res) => {
   const { q, active } = req.query;
@@ -26,7 +30,7 @@ router.get('/', authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA), async (req,
 
   const drivers = await prisma.driver.findMany({
     where,
-    orderBy: [{ active: 'desc' }, { name: 'asc' }],
+    orderBy: [{ active: 'desc' }, { blocked: 'asc' }, { name: 'asc' }],
   });
   res.json(drivers);
 });
@@ -47,6 +51,9 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
       phone: parsed.data.phone?.trim() || null,
       notes: parsed.data.notes?.trim() || null,
       active: parsed.data.active ?? true,
+      blocked: false,
+      blockReason: null,
+      blockedAt: null,
     },
   });
   await audit('CREATE', 'Driver', { userId: req.user!.id, entityId: driver.id, details: driver.name });
@@ -79,6 +86,54 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   res.json(driver);
 });
 
+/** Bloqueia motorista com motivo (não pode ser usado na definição de placa) */
+router.post('/:id/block', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+  const parsed = blockSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Informe o motivo' });
+  }
+
+  const id = paramId(req);
+  const existing = await prisma.driver.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: 'Motorista não encontrado' });
+  if (!existing.active) {
+    return res.status(400).json({ error: 'Motorista inativo não pode ser bloqueado' });
+  }
+
+  const driver = await prisma.driver.update({
+    where: { id },
+    data: {
+      blocked: true,
+      blockReason: parsed.data.reason,
+      blockedAt: new Date(),
+    },
+  });
+  await audit('BLOCK', 'Driver', {
+    userId: req.user!.id,
+    entityId: id,
+    details: `${driver.name}: ${driver.blockReason}`,
+  });
+  res.json(driver);
+});
+
+/** Remove bloqueio */
+router.post('/:id/unblock', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+  const id = paramId(req);
+  const existing = await prisma.driver.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: 'Motorista não encontrado' });
+
+  const driver = await prisma.driver.update({
+    where: { id },
+    data: {
+      blocked: false,
+      blockReason: null,
+      blockedAt: null,
+    },
+  });
+  await audit('UNBLOCK', 'Driver', { userId: req.user!.id, entityId: id, details: driver.name });
+  res.json(driver);
+});
+
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const id = paramId(req);
   const existing = await prisma.driver.findUnique({ where: { id } });
@@ -87,7 +142,12 @@ router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   // Soft-delete: desativa (mantém histórico de nomes em viagens)
   const driver = await prisma.driver.update({
     where: { id },
-    data: { active: false },
+    data: {
+      active: false,
+      blocked: false,
+      blockReason: null,
+      blockedAt: null,
+    },
   });
   await audit('DEACTIVATE', 'Driver', { userId: req.user!.id, entityId: id, details: driver.name });
   res.json(driver);
@@ -111,7 +171,7 @@ export async function syncDriversFromVehicles() {
   for (const name of names) {
     await prisma.driver.upsert({
       where: { name },
-      create: { name, active: true },
+      create: { name, active: true, blocked: false },
       update: {},
     });
   }

@@ -672,6 +672,11 @@ export function createRoutesRouter(io: Server) {
       if (!driver || !driver.active) {
         return res.status(400).json({ error: 'Selecione um motorista cadastrado e ativo' });
       }
+      if (driver.blocked) {
+        return res.status(400).json({
+          error: `Não é possível usar este motorista: ${driver.blockReason || 'bloqueado pelo administrador'}`,
+        });
+      }
       resolvedDriverName = driver.name;
     } else {
       const freeText =
@@ -683,6 +688,11 @@ export function createRoutesRouter(io: Server) {
         if (!byName) {
           return res.status(400).json({
             error: 'Motorista deve ser cadastrado. Cadastre em Motoristas ou escolha da lista.',
+          });
+        }
+        if (byName.blocked) {
+          return res.status(400).json({
+            error: `Não é possível usar este motorista: ${byName.blockReason || 'bloqueado pelo administrador'}`,
           });
         }
         resolvedDriverName = byName.name;

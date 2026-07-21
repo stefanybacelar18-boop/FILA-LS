@@ -56,6 +56,9 @@ export interface Driver {
   name: string
   phone?: string | null
   active: boolean
+  blocked?: boolean
+  blockReason?: string | null
+  blockedAt?: string | null
   notes?: string | null
   createdAt: string
   updatedAt?: string

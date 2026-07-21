@@ -228,6 +228,10 @@ export function AssignPlates() {
 
   const selectedVehicle = available.find((v) => v.id === selectedId) ?? null
   const selectedDriver = drivers.find((d) => d.id === selectedDriverId) ?? null
+  const driverBlockedWarning =
+    selectedDriver?.blocked
+      ? `Não é possível usar este motorista: ${selectedDriver.blockReason || 'bloqueado pelo administrador'}`
+      : ''
 
   function pickPlate(v: PlatesBoardVehicle) {
     setSelectedId(v.id)
@@ -600,18 +604,33 @@ export function AssignPlates() {
                       <Select
                         label="Motorista *"
                         value={selectedDriverId}
-                        onChange={(e) => setSelectedDriverId(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedDriverId(e.target.value)
+                          setError('')
+                        }}
                         required
                         placeholder="Selecione o motorista"
-                        options={drivers.map((d) => ({
-                          value: d.id,
-                          label:
-                            v.defaultDriver &&
+                        options={drivers.map((d) => {
+                          const isDefault =
+                            !!v.defaultDriver &&
                             d.name.trim().toLowerCase() === v.defaultDriver.trim().toLowerCase()
-                              ? `${d.name} (padrão)`
-                              : d.name,
-                        }))}
+                          if (d.blocked) {
+                            return {
+                              value: d.id,
+                              label: `${d.name} — BLOQUEADO`,
+                            }
+                          }
+                          return {
+                            value: d.id,
+                            label: isDefault ? `${d.name} (padrão)` : d.name,
+                          }
+                        })}
                       />
+                      {driverBlockedWarning && (
+                        <p className="mt-1.5 text-xs font-medium text-[var(--color-danger)]">
+                          {driverBlockedWarning}
+                        </p>
+                      )}
                       {drivers.length === 0 && (
                         <p className="mt-1.5 text-xs text-[var(--color-danger)]">
                           Nenhum motorista cadastrado — cadastre em Motoristas.
@@ -629,13 +648,15 @@ export function AssignPlates() {
           <Button
             className="w-full"
             size="lg"
-            disabled={!selectedId || !selectedDriverId}
+            disabled={!selectedId || !selectedDriverId || !!driverBlockedWarning}
             onClick={() => setConfirmOpen(true)}
             loading={assignMutation.isPending}
           >
-            {selectedVehicle
-              ? `Confirmar ${selectedVehicle.plate}${selectedDriver ? ` · ${selectedDriver.name}` : ''}`
-              : 'Selecione placa e motorista'}
+            {driverBlockedWarning
+              ? 'Motorista bloqueado — escolha outro'
+              : selectedVehicle
+                ? `Confirmar ${selectedVehicle.plate}${selectedDriver ? ` · ${selectedDriver.name}` : ''}`
+                : 'Selecione placa e motorista'}
           </Button>
           {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
             <button

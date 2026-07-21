@@ -51,13 +51,16 @@ model Vehicle {
 
 // Motoristas cadastrados — usados na definição de placa
 model Driver {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  phone     String?
-  active    Boolean  @default(true)
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(cuid())
+  name        String    @unique
+  phone       String?
+  active      Boolean   @default(true)
+  blocked     Boolean   @default(false)
+  blockReason String?
+  blockedAt   DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Dealership {
