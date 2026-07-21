@@ -1,10 +1,19 @@
 # Acesso web — FrotaTMS
 
-## Acesso rápido (teste)
-Clique em **Admin** ou **Operação** na tela de login.
+## Produção (Render)
 
-| Perfil | E-mail | Senha |
-|--------|--------|-------|
-| Admin | `a@a.com` | `1` |
-| Operação | `o@o.com` | `1` |
-| Consulta | `c@c.com` | `1` |
+URL: https://frota-tms.onrender.com
+
+| Perfil | E-mail | Senha inicial |
+|--------|--------|---------------|
+| Admin | `admin@frotatms.app` | `TrocarSenha@2026` |
+| Operação | `operacao@frotatms.app` | `TrocarSenha@2026` |
+
+**Troque as senhas no primeiro acesso** (menu → Trocar senha).
+
+Usuários demo (`a@a.com` / `1`) **não** são mais usados em produção.
+A tela de login não mostra mais acesso rápido de teste.
+
+## Dev local
+
+O seed local (`npm run db:seed`) ainda pode criar usuários de desenvolvimento.
