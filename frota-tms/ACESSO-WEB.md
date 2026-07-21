@@ -4,15 +4,10 @@
 
 URL: https://frota-tms.onrender.com
 
-| Perfil | E-mail | Senha inicial |
-|--------|--------|---------------|
-| Admin | `admin@frotatms.app` | `TrocarSenha@2026` |
-| Operação | `operacao@frotatms.app` | `TrocarSenha@2026` |
-
-**Troque as senhas no primeiro acesso** (menu → Trocar senha).
-
-Usuários demo (`a@a.com` / `1`) **não** são mais usados em produção.
-A tela de login não mostra mais acesso rápido de teste.
+| Perfil | E-mail | Senha |
+|--------|--------|-------|
+| Admin (LSL) | `lsl@.com` | `lsl123` |
+| Operação (AG) | `ag@.com` | `ag123` |
 
 ## Dev local
 

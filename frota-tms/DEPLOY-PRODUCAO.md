@@ -70,10 +70,9 @@ Backup:
 2. Confirme o Blueprint `render.yaml` da **raiz** (serviço `frota-tms` + Postgres).  
 3. Clique **Apply** / Deploy.  
 4. Aguarde o build (~5–10 min) e abra a URL `https://frota-tms.onrender.com`.  
-5. **Login produção** (criado automaticamente se o banco estiver vazio):  
-   - Admin: `admin@frotatms.app` / `TrocarSenha@2026`  
-   - Operação: `operacao@frotatms.app` / `TrocarSenha@2026`  
-   - **Troque as senhas** no primeiro acesso  
+5. **Login produção:**  
+   - Admin (LSL): `lsl@.com` / `lsl123`  
+   - Operação (AG): `ag@.com` / `ag123`  
 6. Confirme que o FilaDock (`https://fila-lsl.vercel.app`) segue normal.
 
 > Alternativa manual: New → Blueprint → Path `frota-tms/render.yaml`.  

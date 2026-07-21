@@ -42,41 +42,79 @@ function loadJson<T>(filename: string): T {
 }
 
 /**
- * Cria admin/operação só se não houver nenhum usuário.
+ * Garante usuários de produção (upsert).
+ * Padrão: lsl@.com (Admin) e ag@.com (Operação).
  */
-export async function bootstrapAdminIfEmpty(prisma: PrismaClient): Promise<void> {
-  const count = await prisma.user.count();
-  if (count > 0) return;
+export async function ensureBootstrapUsers(prisma: PrismaClient): Promise<void> {
+  const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'lsl@.com').trim().toLowerCase();
+  const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'lsl123';
+  const adminName = process.env.BOOTSTRAP_ADMIN_NAME || 'LSL Admin';
 
-  const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'admin@frotatms.app').trim().toLowerCase();
-  const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'TrocarSenha@2026';
-  const adminName = process.env.BOOTSTRAP_ADMIN_NAME || 'Administrador';
+  const opsEmail = (process.env.BOOTSTRAP_OPS_EMAIL || 'ag@.com').trim().toLowerCase();
+  const opsPassword = process.env.BOOTSTRAP_OPS_PASSWORD || 'ag123';
+  const opsName = process.env.BOOTSTRAP_OPS_NAME || 'AG Operação';
 
-  const opsEmail = (process.env.BOOTSTRAP_OPS_EMAIL || 'operacao@frotatms.app').trim().toLowerCase();
-  const opsPassword = process.env.BOOTSTRAP_OPS_PASSWORD || 'TrocarSenha@2026';
-  const opsName = process.env.BOOTSTRAP_OPS_NAME || 'Operação';
+  const adminHash = await bcrypt.hash(adminPassword, 10);
+  const opsHash = await bcrypt.hash(opsPassword, 10);
 
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    create: {
       name: adminName,
       email: adminEmail,
-      passwordHash: await bcrypt.hash(adminPassword, 10),
+      passwordHash: adminHash,
       role: Role.ADMIN,
+      active: true,
+    },
+    update: {
+      name: adminName,
+      passwordHash: adminHash,
+      role: Role.ADMIN,
+      active: true,
     },
   });
 
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { email: opsEmail },
+    create: {
       name: opsName,
       email: opsEmail,
-      passwordHash: await bcrypt.hash(opsPassword, 10),
+      passwordHash: opsHash,
       role: Role.OPERACAO,
+      active: true,
+    },
+    update: {
+      name: opsName,
+      passwordHash: opsHash,
+      role: Role.OPERACAO,
+      active: true,
     },
   });
 
-  console.log(
-    `Bootstrap: usuários iniciais criados (${adminEmail} / ${opsEmail}). Troque as senhas após o primeiro login.`,
-  );
+  // Desativa logins antigos de bootstrap/demo (se existirem)
+  const legacy = [
+    'admin@frotatms.app',
+    'operacao@frotatms.app',
+    'a@a.com',
+    'o@o.com',
+    'c@c.com',
+    'admin@frotatms.com',
+    'operacao@frotatms.com',
+  ].filter((e) => e !== adminEmail && e !== opsEmail);
+
+  if (legacy.length > 0) {
+    await prisma.user.updateMany({
+      where: { email: { in: legacy } },
+      data: { active: false },
+    });
+  }
+
+  console.log(`Usuários de acesso: Admin ${adminEmail} · Operação ${opsEmail}`);
+}
+
+/** @deprecated use ensureBootstrapUsers */
+export async function bootstrapAdminIfEmpty(prisma: PrismaClient): Promise<void> {
+  await ensureBootstrapUsers(prisma);
 }
 
 /**
