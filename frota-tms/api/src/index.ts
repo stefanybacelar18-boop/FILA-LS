@@ -21,6 +21,7 @@ import reportsRoutes from './routes/reports';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
+import { bootstrapAdminIfEmpty } from './lib/bootstrap';
 
 const app = express();
 const server = http.createServer(app);
@@ -120,6 +121,9 @@ io.on('connection', (socket) => {
 const PORT = Number(process.env.PORT) || 4000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
+  void bootstrapAdminIfEmpty(prisma).catch((err) =>
+    console.warn('Bootstrap de usuários:', err?.message ?? err),
+  );
   void syncDriversFromVehicles()
     .then((n) => {
       if (n > 0) console.log(`Motoristas sincronizados a partir das placas: ${n}`);
