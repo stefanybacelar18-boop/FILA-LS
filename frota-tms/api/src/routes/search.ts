@@ -2,6 +2,11 @@ import { Router } from 'express';
 import { Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import {
+  filterPlatesForRole,
+  isDriverHiddenFromOperator,
+  isPlateHiddenFromOperator,
+} from '../data/operatorVisibility';
 
 const router = Router();
 router.use(authenticate);
@@ -10,6 +15,7 @@ router.get('/', async (req: AuthRequest, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json({ results: [] });
   const isAdmin = req.user?.role === Role.ADMIN;
+  const role = req.user?.role;
 
   const [vehicles, dealerships, trips, routes] = await Promise.all([
     prisma.vehicle.findMany({
@@ -21,7 +27,7 @@ router.get('/', async (req: AuthRequest, res) => {
           { defaultDriver: { contains: q } },
         ],
       },
-      take: 8,
+      take: 24,
     }),
     prisma.dealership.findMany({
       where: {
@@ -42,7 +48,7 @@ router.get('/', async (req: AuthRequest, res) => {
         ],
       },
       include: { vehicle: true, dealership: true },
-      take: 8,
+      take: 24,
     }),
     prisma.route.findMany({
       where: {
@@ -60,8 +66,18 @@ router.get('/', async (req: AuthRequest, res) => {
     }),
   ]);
 
+  const visibleVehicles = filterPlatesForRole(role, vehicles).slice(0, 8);
+  const visibleTrips = trips
+    .filter((t) => {
+      if (role !== Role.OPERACAO) return true;
+      if (isPlateHiddenFromOperator(t.vehicle.plate)) return false;
+      if (t.driverName && isDriverHiddenFromOperator(t.driverName)) return false;
+      return true;
+    })
+    .slice(0, 8);
+
   const results = [
-    ...vehicles.map((v) => ({
+    ...visibleVehicles.map((v) => ({
       type: 'placa' as const,
       id: v.id,
       title: v.plate,
@@ -77,7 +93,7 @@ router.get('/', async (req: AuthRequest, res) => {
         subtitle: `${d.city}/${d.state} · ${d.region}`,
         href: `/concessionarias`,
       })),
-    ...trips
+    ...visibleTrips
       .filter((t) => t.driverName)
       .map((t) => ({
         type: 'motorista' as const,

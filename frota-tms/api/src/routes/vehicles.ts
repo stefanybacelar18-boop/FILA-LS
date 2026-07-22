@@ -6,6 +6,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { vehicleColor } from '../utils/status';
 import { paramId } from '../utils/params';
+import { filterPlatesForRole, isPlateHiddenFromOperator } from '../data/operatorVisibility';
 
 const router = Router();
 router.use(authenticate);
@@ -56,7 +57,7 @@ async function enrichVehicle(v: {
   };
 }
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthRequest, res) => {
   const { status, type, q } = req.query;
   const where: Record<string, unknown> = {};
   if (status) where.status = String(status);
@@ -70,10 +71,11 @@ router.get('/', async (req, res) => {
     ];
   }
   const vehicles = await prisma.vehicle.findMany({ where, orderBy: { plate: 'asc' } });
-  res.json(await Promise.all(vehicles.map(enrichVehicle)));
+  const visible = filterPlatesForRole(req.user?.role, vehicles);
+  res.json(await Promise.all(visible.map(enrichVehicle)));
 });
 
-router.get('/available', async (_req, res) => {
+router.get('/available', async (req: AuthRequest, res) => {
   const vehicles = await prisma.vehicle.findMany({
     where: {
       status: VehicleStatus.DISPONIVEL,
@@ -82,11 +84,12 @@ router.get('/available', async (_req, res) => {
     },
     orderBy: { plate: 'asc' },
   });
-  res.json(await Promise.all(vehicles.map(enrichVehicle)));
+  const visible = filterPlatesForRole(req.user?.role, vehicles);
+  res.json(await Promise.all(visible.map(enrichVehicle)));
 });
 
 /** Resumo para o Admin montar roteiros físicos (qtde de placas livres) */
-router.get('/availability-summary', async (_req, res) => {
+router.get('/availability-summary', async (req: AuthRequest, res) => {
   const vehicles = await prisma.vehicle.findMany({
     where: {
       status: VehicleStatus.DISPONIVEL,
@@ -95,20 +98,24 @@ router.get('/availability-summary', async (_req, res) => {
     select: { id: true, plate: true, capacityMotos: true, type: true },
     orderBy: { plate: 'asc' },
   });
-  const trucks = vehicles.filter((v) => v.type === VehicleType.TRUCK);
-  const carretas = vehicles.filter((v) => v.type === VehicleType.CARRETA);
+  const visible = filterPlatesForRole(req.user?.role, vehicles);
+  const trucks = visible.filter((v) => v.type === VehicleType.TRUCK);
+  const carretas = visible.filter((v) => v.type === VehicleType.CARRETA);
   res.json({
-    count: vehicles.length,
-    capacityMotos: vehicles.reduce((sum, v) => sum + v.capacityMotos, 0),
+    count: visible.length,
+    capacityMotos: visible.reduce((sum, v) => sum + v.capacityMotos, 0),
     trucks: trucks.length,
     carretas: carretas.length,
-    plates: vehicles.map((v) => v.plate),
+    plates: visible.map((v) => v.plate),
   });
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthRequest, res) => {
   const v = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
   if (!v) return res.status(404).json({ error: 'Veículo não encontrado' });
+  if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(v.plate)) {
+    return res.status(404).json({ error: 'Veículo não encontrado' });
+  }
   res.json(await enrichVehicle(v));
 });
 

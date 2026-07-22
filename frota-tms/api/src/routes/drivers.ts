@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { paramId } from '../utils/params';
+import { filterDriversForRole } from '../data/operatorVisibility';
 
 const router = Router();
 router.use(authenticate);
@@ -21,7 +22,7 @@ const blockSchema = z.object({
 });
 
 /** Lista motoristas (operação precisa dos ativos para definir placa) */
-router.get('/', authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA), async (req, res) => {
+router.get('/', authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA), async (req: AuthRequest, res) => {
   const { q, active } = req.query;
   const where: Record<string, unknown> = {};
   if (q) where.name = { contains: String(q) };
@@ -32,7 +33,7 @@ router.get('/', authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA), async (req,
     where,
     orderBy: [{ active: 'desc' }, { blocked: 'asc' }, { name: 'asc' }],
   });
-  res.json(drivers);
+  res.json(filterDriversForRole(req.user?.role, drivers));
 });
 
 router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
