@@ -34,6 +34,11 @@ export const vehicleStatusLabels: Record<VehicleStatus, string> = {
   BLOQUEADO: 'Bloqueado',
 }
 
+export const vehicleBlockCategoryLabels: Record<string, string> = {
+  MANUTENCAO: 'Manutenção',
+  OUTRO: 'Outro motivo',
+}
+
 export const routeStatusLabels: Record<RouteStatus, string> = {
   RASCUNHO: 'Montando',
   AGUARDANDO_PLACAS: 'Com Operação',
