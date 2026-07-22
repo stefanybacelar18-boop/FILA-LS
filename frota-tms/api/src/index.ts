@@ -18,6 +18,7 @@ import dashboardRoutes from './routes/dashboard';
 import historyRoutes from './routes/history';
 import searchRoutes from './routes/search';
 import reportsRoutes from './routes/reports';
+import justificationsRoutes from './routes/justifications';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
@@ -65,6 +66,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/justifications', justificationsRoutes);
 
 /** Evidências de atraso (fotos/PDF) */
 const uploadsDir = path.resolve(process.cwd(), 'uploads');

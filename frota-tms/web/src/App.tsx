@@ -25,6 +25,7 @@ import { Audit } from './pages/Audit'
 import { Search } from './pages/Search'
 import { AlertsCenter } from './pages/AlertsCenter'
 import { Maintenance } from './pages/Maintenance'
+import { Justifications } from './pages/Justifications'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -133,6 +134,14 @@ export default function App() {
                 element={
                   <RoleGate roles={['ADMIN', 'OPERACAO']}>
                     <Maintenance />
+                  </RoleGate>
+                }
+              />
+              <Route
+                path="justificativas"
+                element={
+                  <RoleGate roles={['ADMIN', 'OPERACAO']}>
+                    <Justifications />
                   </RoleGate>
                 }
               />

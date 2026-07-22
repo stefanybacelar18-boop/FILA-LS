@@ -485,6 +485,8 @@ export function Returns() {
       void qc.invalidateQueries({ queryKey: ['returns'] })
       void qc.invalidateQueries({ queryKey: ['trips'] })
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['justifications'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
       setReportTrip(null)
       setDelayReason('')
       setPreset('')

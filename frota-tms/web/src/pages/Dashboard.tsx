@@ -64,6 +64,14 @@ export function Dashboard() {
       roles: true,
     },
     {
+      show: (data.fleet.atrasadasSemJustificativa ?? 0) === 0 && (data.fleet.atrasadas ?? 0) > 0,
+      tone: 'warning' as const,
+      title: `${data.fleet.atrasadas} viagem(ns) em atraso já com justificativa`,
+      href: '/justificativas',
+      cta: 'Ver justificativas',
+      roles: canOperate,
+    },
+    {
       show: (data.fleet.atrasadas ?? 0) > 0,
       tone: 'danger' as const,
       title: `${data.fleet.atrasadas} viagem(ns) em atraso`,

@@ -17,6 +17,7 @@ import {
   Search,
   KeyRound,
   Wrench,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -38,6 +39,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/definir-placas', label: 'Pendentes de placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
+      { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
     ],
     secondary: [
@@ -52,6 +54,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/definir-placas', label: 'Pendentes de placa', icon: Tags },
       { to: '/roteiros', label: 'Todos roteiros', icon: Route },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
+      { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
     ],
     secondary: [
