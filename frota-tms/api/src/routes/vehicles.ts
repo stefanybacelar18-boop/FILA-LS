@@ -128,12 +128,23 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
   const visible = filterPlatesForRole(req.user?.role, vehicles);
   const trucks = visible.filter((v) => v.type === VehicleType.TRUCK);
   const carretas = visible.filter((v) => v.type === VehicleType.CARRETA);
+
+  const byCapacityMap = new Map<number, number>();
+  for (const v of visible) {
+    const cap = Number(v.capacityMotos);
+    byCapacityMap.set(cap, (byCapacityMap.get(cap) ?? 0) + 1);
+  }
+  const byCapacity = [...byCapacityMap.entries()]
+    .map(([capacityMotos, count]) => ({ capacityMotos, count }))
+    .sort((a, b) => b.capacityMotos - a.capacityMotos);
+
   res.json({
     count: visible.length,
     capacityMotos: visible.reduce((sum, v) => sum + v.capacityMotos, 0),
     trucks: trucks.length,
     carretas: carretas.length,
     plates: visible.map((v) => v.plate),
+    byCapacity,
   });
 });
 

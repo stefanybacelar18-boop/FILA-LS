@@ -10,6 +10,7 @@ export interface AvailabilitySummary {
   trucks: number
   carretas: number
   plates: string[]
+  byCapacity?: { capacityMotos: number; count: number }[]
 }
 
 /** Faixa visível: quantas placas livres para montar roteiros (Admin) */
@@ -23,6 +24,7 @@ export function AvailablePlatesBanner({ className }: { className?: string }) {
 
   const count = data?.count ?? 0
   const capacity = data?.capacityMotos ?? 0
+  const byCapacity = data?.byCapacity ?? []
 
   return (
     <div
@@ -53,10 +55,27 @@ export function AvailablePlatesBanner({ className }: { className?: string }) {
                 Capacidade total ≈ {capacity} motos
                 {data && data.trucks + data.carretas > 0
                   ? ` · ${data.trucks} truck${data.trucks === 1 ? '' : 's'}${
-                      data.carretas > 0 ? ` · ${data.carretas} carreta${data.carretas === 1 ? '' : 's'}` : ''
+                      data.carretas > 0
+                        ? ` · ${data.carretas} carreta${data.carretas === 1 ? '' : 's'}`
+                        : ''
                     }`
                   : ''}
               </p>
+              {byCapacity.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {byCapacity.map((row) => (
+                    <span
+                      key={row.capacityMotos}
+                      className="inline-flex items-center gap-1 rounded-md border border-[var(--color-primary)]/20 bg-[var(--color-surface)] px-2 py-1 text-xs font-medium text-[var(--color-text)]"
+                      title={`${row.count} veículo(s) com capacidade de ${row.capacityMotos} motos`}
+                    >
+                      <span className="font-semibold text-[var(--color-primary)]">{row.count}</span>
+                      <span className="text-[var(--color-text-muted)]">×</span>
+                      <span>{row.capacityMotos} motos</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
