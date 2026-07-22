@@ -6,7 +6,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { vehicleColor } from '../utils/status';
 import { paramId } from '../utils/params';
-import { filterPlatesForRole, isPlateHiddenFromOperator } from '../data/operatorVisibility';
+import { filterPlatesForRole, isPlateHiddenFromOperator, plateOwner } from '../data/operatorVisibility';
 
 const router = Router();
 router.use(authenticate);
@@ -68,6 +68,7 @@ async function enrichVehicle(v: VehicleRow) {
   });
   return {
     ...v,
+    owner: plateOwner(v.plate),
     color: vehicleColor(v.status as VehicleStatus, activeTrip?.expectedReturn),
     expectedReturn: activeTrip?.expectedReturn ?? null,
     activeTripId: activeTrip?.id ?? null,
@@ -129,13 +130,22 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
   const trucks = visible.filter((v) => v.type === VehicleType.TRUCK);
   const carretas = visible.filter((v) => v.type === VehicleType.CARRETA);
 
-  const byCapacityMap = new Map<number, number>();
+  const byCapacityMap = new Map<number, { count: number; lsl: number; ag: number }>();
+  let lslCount = 0;
+  let agCount = 0;
   for (const v of visible) {
     const cap = Number(v.capacityMotos);
-    byCapacityMap.set(cap, (byCapacityMap.get(cap) ?? 0) + 1);
+    const owner = plateOwner(v.plate);
+    if (owner === 'LSL') lslCount += 1;
+    else agCount += 1;
+    const row = byCapacityMap.get(cap) ?? { count: 0, lsl: 0, ag: 0 };
+    row.count += 1;
+    if (owner === 'LSL') row.lsl += 1;
+    else row.ag += 1;
+    byCapacityMap.set(cap, row);
   }
   const byCapacity = [...byCapacityMap.entries()]
-    .map(([capacityMotos, count]) => ({ capacityMotos, count }))
+    .map(([capacityMotos, row]) => ({ capacityMotos, ...row }))
     .sort((a, b) => b.capacityMotos - a.capacityMotos);
 
   res.json({
@@ -145,6 +155,7 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
     carretas: carretas.length,
     plates: visible.map((v) => v.plate),
     byCapacity,
+    byOwner: { LSL: lslCount, AG: agCount },
   });
 });
 

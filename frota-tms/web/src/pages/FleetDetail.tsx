@@ -6,6 +6,7 @@ import type { Trip, Vehicle, VehicleHistory } from '../types'
 import { PageHeader, PlateBadge, Spinner, Badge, EmptyState } from '../components/ui'
 import { formatDate, formatDateTime } from '../lib/format'
 import { tripStatusLabels, vehicleStatusLabels, vehicleTypeLabels } from '../lib/labels'
+import { plateOwner } from '../lib/plateOwner'
 
 interface VehicleHistoryResponse {
   vehicle: Vehicle
@@ -68,11 +69,14 @@ export function FleetDetail() {
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Info
+          label="Frota"
+          value={vehicle.owner ?? plateOwner(vehicle.plate)}
+        />
         <Info label="Situação" value={vehicleStatusLabels[vehicle.status]} />
         <Info label="Capacidade" value={`${vehicle.capacityMotos} motos`} />
         <Info label="Motorista padrão" value={vehicle.defaultDriver ?? '—'} />
         <Info label="Viagens" value={String(trips.length)} />
-        <Info label="Eventos" value={String(history.length)} />
       </div>
 
       {(vehicle.maintenanceHold || vehicle.status === 'EM_MANUTENCAO') && (

@@ -41,6 +41,13 @@ export function isPlateHiddenFromOperator(plate: string): boolean {
   return hiddenPlates.has(normalizePlate(plate));
 }
 
+/** Placas que a Operação (AG) não vê = frota LSL; demais = AG */
+export type PlateOwner = 'LSL' | 'AG';
+
+export function plateOwner(plate: string): PlateOwner {
+  return isPlateHiddenFromOperator(plate) ? 'LSL' : 'AG';
+}
+
 export function isDriverHiddenFromOperator(name: string): boolean {
   return hiddenDrivers.has(normalizeDriverName(name));
 }
