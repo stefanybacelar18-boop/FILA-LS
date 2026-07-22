@@ -1,6 +1,7 @@
 export { Button } from './Button'
 export { Input } from './Input'
 export { Select } from './Select'
+export { Combobox } from './Combobox'
 export { Textarea } from './Textarea'
 export { Modal, ConfirmModal } from './Modal'
 export { Badge, Card } from './Badge'

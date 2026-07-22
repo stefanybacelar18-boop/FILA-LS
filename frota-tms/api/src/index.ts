@@ -21,7 +21,7 @@ import reportsRoutes from './routes/reports';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
-import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers } from './lib/bootstrap';
+import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 
 const app = express();
 const server = http.createServer(app);
@@ -126,8 +126,9 @@ server.listen(PORT, '0.0.0.0', () => {
   );
   void bootstrapReferenceDataIfEmpty(prisma)
     .then(() => syncDriversFromVehicles())
+    .then(() => ensureOpsDrivers(prisma))
     .then((n) => {
-      if (typeof n === 'number' && n > 0) console.log(`Motoristas sincronizados a partir das placas: ${n}`);
+      if (typeof n === 'number' && n > 0) console.log(`Motoristas oficiais ativos: ${n}`);
     })
     .catch((err) => console.warn('Bootstrap/sync operacional:', err?.message ?? err));
 

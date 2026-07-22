@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, Check } from 'lucide-react'
+import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
@@ -15,6 +15,7 @@ import {
   Textarea,
   Input,
   Select,
+  Combobox,
 } from '../components/ui'
 import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
@@ -238,10 +239,20 @@ export function AssignPlates() {
     setError('')
     const match = drivers.find(
       (d) =>
+        !d.blocked &&
         v.defaultDriver &&
         d.name.trim().toLowerCase() === v.defaultDriver.trim().toLowerCase(),
     )
     setSelectedDriverId(match?.id ?? '')
+  }
+
+  function onPlateComboboxChange(id: string) {
+    const v = available.find((x) => x.id === id)
+    if (v) pickPlate(v)
+    else {
+      setSelectedId(null)
+      setSelectedDriverId('')
+    }
   }
 
   const assignMutation = useMutation({
@@ -436,10 +447,9 @@ export function AssignPlates() {
     board?.priorityExpiryDate ??
     selectedRoute?.priorityExpiryDate ??
     null
-  const expiryPast = !!expiry && toInputDate(expiry) <= toInputDate(new Date())
 
   return (
-    <div className="page-desktop max-w-3xl">
+    <div className="page-desktop flex max-w-xl flex-col pb-28">
       <button
         type="button"
         onClick={backToList}
@@ -450,57 +460,18 @@ export function AssignPlates() {
       </button>
 
       <div className="mb-3">
-        <h1 className="text-xl font-semibold tracking-tight text-[var(--color-text)]">
+        <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
           {selectedRoute?.name ?? 'Rota'}
         </h1>
         <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
           {formatDate(selectedRoute?.date)} · 06:00
-          {cities.length ? ` · ${cities.join(', ')}` : ''} · 1 placa
+          {cities.length ? ` · ${cities.join(', ')}` : ''}
+          {board?.returnForecast
+            ? ` · fim ${formatDate(board.returnForecast.expectedReturn)}`
+            : ''}
+          {priority && expiry ? ` · prioridade até ${formatDate(expiry)}` : ''}
         </p>
       </div>
-
-      {(priority || board?.returnForecast) && (
-        <div className="mb-3 flex flex-wrap items-stretch gap-2">
-          {priority && (
-            <div className="min-w-[11rem] flex-1 rounded-[var(--radius)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 px-3 py-2">
-              <p className="text-[0.65rem] font-semibold tracking-wide text-[var(--color-danger)] uppercase">
-                Prioridade · vencimento
-              </p>
-              {expiry ? (
-                <p
-                  className={cn(
-                    'text-lg font-bold leading-tight',
-                    expiryPast ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
-                  )}
-                >
-                  {formatDate(expiry)}
-                </p>
-              ) : (
-                <p className="text-xs font-semibold text-[var(--color-danger)]">
-                  Sem data — Admin deve informar
-                </p>
-              )}
-            </div>
-          )}
-          {board?.returnForecast && (
-            <div className="min-w-[14rem] flex-[1.4] rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <p className="text-[0.65rem] font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
-                Fim previsto (PAD)
-              </p>
-              <p className="text-lg font-bold leading-tight text-[var(--color-text)]">
-                {formatDate(board.returnForecast.expectedReturn)}
-              </p>
-              <p className="truncate text-xs text-[var(--color-text-muted)]">
-                {board.returnForecast.farthestDealership.city} ·{' '}
-                {board.returnForecast.farthestDealership.distanceKm.toFixed(0)} km ·{' '}
-                {board.returnForecast.farthestDealership.avgTravelDays === 0
-                  ? 'mesmo dia'
-                  : `${board.returnForecast.farthestDealership.avgTravelDays} dias`}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
       {error && <p className="mb-2 text-sm text-[var(--color-danger)]">{error}</p>}
       {okMsg && <p className="mb-2 text-sm text-[var(--color-success)]">{okMsg}</p>}
@@ -517,17 +488,17 @@ export function AssignPlates() {
         </div>
       )}
 
-      <section>
-        <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold">Placa e motorista</h2>
+      <section className="space-y-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">Definir placa</h2>
           <p className="text-xs text-[var(--color-text-muted)]">
             {available.length} disponível{available.length === 1 ? '' : 'eis'}
-            {returningLaterCount > 0 ? ` · ${returningLaterCount} ainda em viagem` : ''}
+            {returningLaterCount > 0 ? ` · ${returningLaterCount} em viagem` : ''}
           </p>
         </div>
 
         {loadingBoard ? (
-          <div className="flex justify-center py-10">
+          <div className="flex justify-center py-8">
             <Spinner size="lg" />
           </div>
         ) : boardError ? (
@@ -560,91 +531,75 @@ export function AssignPlates() {
             }
           />
         ) : (
-          <div className="max-h-[min(52vh,28rem)] space-y-1.5 overflow-y-auto rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5">
-            {available.map((v) => {
-              const active = selectedId === v.id
-              return (
-                <div
-                  key={v.id}
-                  className={cn(
-                    'rounded-md border transition',
-                    active
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-                      : 'border-transparent hover:bg-[var(--color-surface-2)]/70',
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => pickPlate(v)}
-                    className="flex w-full items-center gap-3 px-3 py-2 text-left"
-                  >
-                    <div
-                      className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
-                        active
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                          : 'border-[var(--color-border-strong)]',
-                      )}
-                    >
-                      {active && <Check className="h-3 w-3" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <PlateBadge plate={v.plate} color={v.color as PlateColor} />
-                        <span className="text-xs text-[var(--color-text-muted)]">
-                          {v.capacityMotos ? `${v.capacityMotos} motos` : 'Disponível'}
-                          {v.defaultDriver ? ` · padrão ${v.defaultDriver}` : ''}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
+          <div className="space-y-3">
+            <Combobox
+              label="Placa *"
+              value={selectedId ?? ''}
+              onChange={onPlateComboboxChange}
+              placeholder="Digite a placa…"
+              emptyMessage="Nenhuma placa encontrada"
+              options={available.map((v) => ({
+                value: v.id,
+                label: v.plate,
+                description: [
+                  v.capacityMotos ? `${v.capacityMotos} motos` : null,
+                  v.defaultDriver ? `padrão ${v.defaultDriver}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              }))}
+            />
 
-                  {active && (
-                    <div className="border-t border-[var(--color-primary)]/20 px-3 py-2.5">
-                      <Select
-                        label="Motorista *"
-                        value={selectedDriverId}
-                        onChange={(e) => {
-                          setSelectedDriverId(e.target.value)
-                          setError('')
-                        }}
-                        required
-                        placeholder="Selecione o motorista"
-                        options={drivers.map((d) => {
-                          const isDefault =
-                            !!v.defaultDriver &&
-                            d.name.trim().toLowerCase() === v.defaultDriver.trim().toLowerCase()
-                          if (d.blocked) {
-                            return {
-                              value: d.id,
-                              label: `${d.name} — BLOQUEADO`,
-                            }
-                          }
-                          return {
-                            value: d.id,
-                            label: isDefault ? `${d.name} (padrão)` : d.name,
-                          }
-                        })}
-                      />
-                      {driverBlockedWarning && (
-                        <p className="mt-1.5 text-xs font-medium text-[var(--color-danger)]">
-                          {driverBlockedWarning}
-                        </p>
-                      )}
-                      {drivers.length === 0 && (
-                        <p className="mt-1.5 text-xs text-[var(--color-danger)]">
-                          Nenhum motorista cadastrado — cadastre em Motoristas.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            <Combobox
+              label="Motorista *"
+              value={selectedDriverId}
+              onChange={(id) => {
+                setSelectedDriverId(id)
+                setError('')
+              }}
+              placeholder="Digite o nome do motorista…"
+              emptyMessage="Nenhum motorista encontrado"
+              disabled={!selectedId}
+              options={drivers.map((d) => {
+                const isDefault =
+                  !!selectedVehicle?.defaultDriver &&
+                  d.name.trim().toLowerCase() ===
+                    selectedVehicle.defaultDriver.trim().toLowerCase()
+                return {
+                  value: d.id,
+                  label: d.blocked ? `${d.name} — BLOQUEADO` : d.name,
+                  description: d.blocked
+                    ? d.blockReason || 'Bloqueado pelo admin'
+                    : isDefault
+                      ? 'Motorista padrão da placa'
+                      : undefined,
+                  disabled: !!d.blocked,
+                }
+              })}
+            />
+
+            {selectedVehicle && (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                Selecionada:{' '}
+                <PlateBadge plate={selectedVehicle.plate} color={selectedVehicle.color as PlateColor} />
+                {selectedDriver ? ` · ${selectedDriver.name}` : ''}
+              </p>
+            )}
+
+            {driverBlockedWarning && (
+              <p className="text-xs font-medium text-[var(--color-danger)]">{driverBlockedWarning}</p>
+            )}
+            {drivers.length === 0 && (
+              <p className="text-xs text-[var(--color-danger)]">
+                Nenhum motorista cadastrado — cadastre em Motoristas.
+              </p>
+            )}
           </div>
         )}
+      </section>
 
-        <div className="sticky bottom-0 z-10 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 pt-3 pb-1 backdrop-blur-sm">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 px-4 py-3 backdrop-blur-sm md:static md:mt-4 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+        <div className="mx-auto max-w-xl">
           <Button
             className="w-full"
             size="lg"
@@ -658,17 +613,18 @@ export function AssignPlates() {
                 ? `Confirmar ${selectedVehicle.plate}${selectedDriver ? ` · ${selectedDriver.name}` : ''}`
                 : 'Selecione placa e motorista'}
           </Button>
-          {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
-            <button
-              type="button"
-              className="mt-2 w-full text-center text-xs text-[var(--color-text-muted)] underline-offset-2 hover:underline"
-              onClick={() => setShowProblems(true)}
-            >
-              Ver placas com atraso/quebra já registrados
-            </button>
-          )}
         </div>
-      </section>
+      </div>
+
+      {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
+        <button
+          type="button"
+          className="mt-2 w-full text-center text-xs text-[var(--color-text-muted)] underline-offset-2 hover:underline"
+          onClick={() => setShowProblems(true)}
+        >
+          Ver placas com atraso/quebra já registrados
+        </button>
+      )}
 
       {showProblems && (
         <section className="mt-4 mb-6 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">

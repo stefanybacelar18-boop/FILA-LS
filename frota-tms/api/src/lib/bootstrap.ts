@@ -26,6 +26,8 @@ interface DealershipSeed {
   regionCode?: string;
 }
 
+import { OPS_DRIVER_NAMES } from '../data/opsDrivers';
+
 function dataPath(filename: string): string {
   const candidates = [
     join(process.cwd(), 'prisma', 'data', filename),
@@ -118,7 +120,26 @@ export async function bootstrapAdminIfEmpty(prisma: PrismaClient): Promise<void>
 }
 
 /**
- * Restaura frota + concessionárias (+ mesa) se estiverem vazios.
+ * Garante a lista oficial de motoristas (upsert por nome — se repetir, mantém um).
+ */
+export async function ensureOpsDrivers(prisma: PrismaClient): Promise<number> {
+  let n = 0;
+  for (const raw of OPS_DRIVER_NAMES) {
+    const name = raw.trim().replace(/\s+/g, ' ');
+    if (name.length < 2) continue;
+    await prisma.driver.upsert({
+      where: { name },
+      create: { name, active: true, blocked: false },
+      update: { active: true },
+    });
+    n += 1;
+  }
+  console.log(`Motoristas oficiais garantidos: ${n}`);
+  return n;
+}
+
+/**
+ * Restaura frota + concessionárias se estiverem vazios.
  * NÃO apaga usuários. Pode limpar roteiros/viagens ao restaurar.
  */
 export async function bootstrapReferenceDataIfEmpty(prisma: PrismaClient): Promise<void> {
@@ -203,27 +224,7 @@ export async function bootstrapReferenceDataIfEmpty(prisma: PrismaClient): Promi
     });
   }
 
-  const sampleCities = await prisma.dealership.findMany({
-    where: { active: true },
-    orderBy: { city: 'asc' },
-    take: 12,
-  });
-  const seen = new Set<string>();
-  for (const d of sampleCities) {
-    const key = d.city.trim().toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    await prisma.planningCity.create({
-      data: {
-        city: d.city.trim(),
-        state: d.state,
-        noteCount: 4 + Math.floor(Math.random() * 15),
-        dealershipId: d.id,
-        source: 'OPS',
-        status: 'PENDENTE',
-      },
-    });
-  }
+  // Não cria “mesa” de demo — Admin monta roteiros direto.
 
   const vehicles = await prisma.vehicle.count();
   const dealerships = await prisma.dealership.count();
