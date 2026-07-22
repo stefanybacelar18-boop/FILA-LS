@@ -8,6 +8,11 @@ import { expectedReturnDate, routeDepartureAt, vehicleColor } from '../utils/sta
 import { resolveTravelFromPad, PAD_LAT, PAD_LNG } from '../utils/geo';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
+import {
+  filterPlatesForRole,
+  isDriverHiddenFromOperator,
+  isPlateHiddenFromOperator,
+} from '../data/operatorVisibility';
 
 const routeDealershipInclude = {
   dealerships: {
@@ -165,7 +170,7 @@ export function createRoutesRouter(io: Server) {
    * - unavailable: não podem carregar na data do roteiro (em viagem, bloqueado, manutenção…)
    *   + justificativa/previsão se o operador já informou
    */
-  router.get('/:id/plates-board', authorize(Role.ADMIN, Role.OPERACAO), async (req, res) => {
+  router.get('/:id/plates-board', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, res) => {
     const route = await prisma.route.findUnique({
       where: { id: paramId(req) },
       include: {
@@ -205,13 +210,14 @@ export function createRoutesRouter(io: Server) {
       };
     }
 
-    const [vehicles, reports] = await Promise.all([
+    const [allVehicles, reports] = await Promise.all([
       prisma.vehicle.findMany({ orderBy: { plate: 'asc' } }),
       prisma.plateUnavailability.findMany({
         where: { routeId: route.id },
         include: { reportedBy: { select: { id: true, name: true } } },
       }),
     ]);
+    const vehicles = filterPlatesForRole(req.user?.role, allVehicles);
 
     const reportByVehicle = new Map(reports.map((r) => [r.vehicleId, r]));
 
@@ -332,6 +338,9 @@ export function createRoutesRouter(io: Server) {
 
       const vehicle = await prisma.vehicle.findUnique({ where: { id: parsed.data.vehicleId } });
       if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
+      if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(vehicle.plate)) {
+        return res.status(403).json({ error: 'Placa não disponível para o perfil Operação' });
+      }
 
       const open = await prisma.trip.findFirst({
         where: {
@@ -666,6 +675,8 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Esta rota aceita apenas 1 placa' });
     }
 
+    const isOps = req.user?.role === Role.OPERACAO;
+
     let resolvedDriverName: string | null = null;
     if (driverId) {
       const driver = await prisma.driver.findUnique({ where: { id: driverId } });
@@ -676,6 +687,9 @@ export function createRoutesRouter(io: Server) {
         return res.status(400).json({
           error: `Não é possível usar este motorista: ${driver.blockReason || 'bloqueado pelo administrador'}`,
         });
+      }
+      if (isOps && isDriverHiddenFromOperator(driver.name)) {
+        return res.status(403).json({ error: 'Motorista não disponível para o perfil Operação' });
       }
       resolvedDriverName = driver.name;
     } else {
@@ -694,6 +708,9 @@ export function createRoutesRouter(io: Server) {
           return res.status(400).json({
             error: `Não é possível usar este motorista: ${byName.blockReason || 'bloqueado pelo administrador'}`,
           });
+        }
+        if (isOps && isDriverHiddenFromOperator(byName.name)) {
+          return res.status(403).json({ error: 'Motorista não disponível para o perfil Operação' });
         }
         resolvedDriverName = byName.name;
       }
@@ -746,6 +763,11 @@ export function createRoutesRouter(io: Server) {
           const vehicle = await tx.vehicle.findUnique({ where: { id: vid } });
           if (!vehicle) {
             throw Object.assign(new Error(`Veículo ${vid} não encontrado`), { status: 404 });
+          }
+          if (isOps && isPlateHiddenFromOperator(vehicle.plate)) {
+            throw Object.assign(new Error('Placa não disponível para o perfil Operação'), {
+              status: 403,
+            });
           }
 
           // Atomic claim: only succeed if still DISPONIVEL

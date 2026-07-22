@@ -11,6 +11,11 @@ import { isOverdue, vehicleColor } from '../utils/status';
 import { addDays, startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
+import {
+  filterTripsForRole,
+  isDriverHiddenFromOperator,
+  isPlateHiddenFromOperator,
+} from '../data/operatorVisibility';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads/trip-evidence');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -76,6 +81,16 @@ export function createTripsRouter(io: Server) {
   const router = Router();
   router.use(authenticate);
 
+  function denyHiddenTripForOps(
+    role: string | undefined,
+    trip: { driverName?: string | null; vehicle: { plate: string } },
+  ): boolean {
+    if (role !== Role.OPERACAO) return false;
+    if (isPlateHiddenFromOperator(trip.vehicle.plate)) return true;
+    if (trip.driverName && isDriverHiddenFromOperator(trip.driverName)) return true;
+    return false;
+  }
+
   async function syncOverdue() {
     const open = await prisma.trip.findMany({
       where: { status: TripStatus.EM_ANDAMENTO, expectedReturn: { lt: new Date() } },
@@ -85,7 +100,7 @@ export function createTripsRouter(io: Server) {
     }
   }
 
-  router.get('/', async (req, res) => {
+  router.get('/', async (req: AuthRequest, res) => {
     await syncOverdue();
     const { status, vehicleId, dealershipId, from, to } = req.query;
     const where: Record<string, unknown> = {};
@@ -103,9 +118,10 @@ export function createTripsRouter(io: Server) {
       include: tripInclude,
       orderBy: { departureAt: 'desc' },
     });
+    const visible = filterTripsForRole(req.user?.role, trips);
 
     res.json(
-      trips.map((t) => ({
+      visible.map((t) => ({
         ...t,
         overdue: isOverdue(t.expectedReturn, t.returnedAt),
         color: vehicleColor(t.vehicle.status, t.expectedReturn),
@@ -114,17 +130,18 @@ export function createTripsRouter(io: Server) {
     );
   });
 
-  router.get('/returns', async (_req, res) => {
+  router.get('/returns', async (req: AuthRequest, res) => {
     await syncOverdue();
     const today = startOfDay(new Date());
     const tomorrow = addDays(today, 1);
     const dayAfter = addDays(today, 2);
 
-    const open = await prisma.trip.findMany({
+    const openAll = await prisma.trip.findMany({
       where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
       include: tripInclude,
       orderBy: { expectedReturn: 'asc' },
     });
+    const open = filterTripsForRole(req.user?.role, openAll);
 
     const mapTrip = (t: (typeof open)[0]) => ({
       ...t,
@@ -198,6 +215,9 @@ export function createTripsRouter(io: Server) {
         include: { vehicle: true },
       });
       if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+      if (denyHiddenTripForOps(req.user?.role, trip)) {
+        return res.status(404).json({ error: 'Viagem não encontrada' });
+      }
       if (trip.status === TripStatus.RETORNOU || trip.status === TripStatus.CANCELADO) {
         return res.status(400).json({ error: 'Viagem já finalizada' });
       }
@@ -305,6 +325,9 @@ export function createTripsRouter(io: Server) {
       include: { vehicle: true, route: true, dealership: true, evidences: true },
     });
     if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (denyHiddenTripForOps(req.user?.role, trip)) {
+      return res.status(404).json({ error: 'Viagem não encontrada' });
+    }
     if (trip.status === TripStatus.RETORNOU) {
       return res.status(400).json({ error: 'Viagem já finalizada' });
     }
