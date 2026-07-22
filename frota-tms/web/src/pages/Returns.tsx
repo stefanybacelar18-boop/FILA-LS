@@ -9,7 +9,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { api, getToken } from '../lib/api'
+import { api, getToken, evidenceUrl } from '../lib/api'
 import type { ReturnsPanel, Trip } from '../types'
 import {
   PageHeader,
@@ -331,7 +331,7 @@ function TripCard({
           {evidences.map((e) => (
             <a
               key={e.id}
-              href={`/uploads/trip-evidence/${e.filename}`}
+              href={evidenceUrl(e.id)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs font-medium hover:border-[var(--color-primary)]/40"

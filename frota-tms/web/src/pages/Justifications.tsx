@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ClipboardList, Paperclip, Route, MapPinned } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, evidenceUrl } from '../lib/api'
 import {
   PageHeader,
   SearchInput,
@@ -240,7 +240,7 @@ export function Justifications() {
                             {t.evidences.map((e) => (
                               <a
                                 key={e.id}
-                                href={`/uploads/trip-evidence/${e.filename}`}
+                                href={evidenceUrl(e.id)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs font-medium hover:border-[var(--color-primary)]/40"

@@ -53,3 +53,10 @@ export async function downloadReport(path: string, filename: string) {
   a.remove()
   URL.revokeObjectURL(url)
 }
+
+/** Link para abrir evidência em nova aba (envia JWT na query) */
+export function evidenceUrl(evidenceId: string): string {
+  const token = getToken()
+  const q = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `/api/evidences/${evidenceId}${q}`
+}

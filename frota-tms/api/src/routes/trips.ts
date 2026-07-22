@@ -20,16 +20,8 @@ import {
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads/trip-evidence');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024, files: 6 },
   fileFilter: (_req, file, cb) => {
     if (/^image\/(jpeg|png|webp|gif)$/i.test(file.mimetype) || file.mimetype === 'application/pdf') {
@@ -39,6 +31,11 @@ const upload = multer({
     }
   },
 });
+
+function evidenceFilename(originalName: string): string {
+  const safe = originalName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+}
 
 const delayReportSchema = z.object({
   reason: z.string().min(5, 'Informe o motivo com ao menos 5 caracteres'),
@@ -255,13 +252,21 @@ export function createTripsRouter(io: Server) {
         });
 
         for (const f of files) {
+          const filename = evidenceFilename(f.originalname);
+          const buffer = f.buffer;
+          try {
+            fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+          } catch (err) {
+            console.warn('Falha ao gravar evidência em disco (seguindo com banco):', err);
+          }
           await tx.tripEvidence.create({
             data: {
               tripId: trip.id,
-              filename: f.filename,
+              filename,
               originalName: f.originalname,
               mimeType: f.mimetype,
               sizeBytes: f.size,
+              content: buffer,
               uploadedById: req.user!.id,
             },
           });

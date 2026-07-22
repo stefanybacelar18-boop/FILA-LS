@@ -231,6 +231,8 @@ model TripEvidence {
   originalName String
   mimeType     String
   sizeBytes    Int
+  // Conteúdo persistido (Render free não mantém disco entre deploys)
+  content      Bytes?
   createdAt    DateTime @default(now())
 
   tripId       String
