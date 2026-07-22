@@ -10,7 +10,8 @@ export interface AvailabilitySummary {
   trucks: number
   carretas: number
   plates: string[]
-  byCapacity?: { capacityMotos: number; count: number }[]
+  byCapacity?: { capacityMotos: number; count: number; lsl?: number; ag?: number }[]
+  byOwner?: { LSL: number; AG: number }
 }
 
 /** Faixa visível: quantas placas livres para montar roteiros (Admin) */
@@ -25,6 +26,7 @@ export function AvailablePlatesBanner({ className }: { className?: string }) {
   const count = data?.count ?? 0
   const capacity = data?.capacityMotos ?? 0
   const byCapacity = data?.byCapacity ?? []
+  const byOwner = data?.byOwner
 
   return (
     <div
@@ -61,17 +63,38 @@ export function AvailablePlatesBanner({ className }: { className?: string }) {
                     }`
                   : ''}
               </p>
+
+              {byOwner && (byOwner.LSL > 0 || byOwner.AG > 0) && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-800/20 bg-slate-800 px-2 py-1 text-xs font-medium text-white">
+                    LSL <strong>{byOwner.LSL}</strong>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-teal-700/25 bg-teal-700/10 px-2 py-1 text-xs font-medium text-teal-900 dark:text-teal-200">
+                    AG <strong>{byOwner.AG}</strong>
+                  </span>
+                </div>
+              )}
+
               {byCapacity.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {byCapacity.map((row) => (
                     <span
                       key={row.capacityMotos}
-                      className="inline-flex items-center gap-1 rounded-md border border-[var(--color-primary)]/20 bg-[var(--color-surface)] px-2 py-1 text-xs font-medium text-[var(--color-text)]"
-                      title={`${row.count} veículo(s) com capacidade de ${row.capacityMotos} motos`}
+                      className="inline-flex flex-col gap-0.5 rounded-md border border-[var(--color-primary)]/20 bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
+                      title={`${row.count} veículo(s) com ${row.capacityMotos} motos`}
                     >
-                      <span className="font-semibold text-[var(--color-primary)]">{row.count}</span>
-                      <span className="text-[var(--color-text-muted)]">×</span>
-                      <span>{row.capacityMotos} motos</span>
+                      <span>
+                        <span className="font-semibold text-[var(--color-primary)]">{row.count}</span>
+                        <span className="text-[var(--color-text-muted)]"> × </span>
+                        <span className="font-medium">{row.capacityMotos} motos</span>
+                      </span>
+                      {(row.lsl || row.ag) && (
+                        <span className="text-[10px] text-[var(--color-text-muted)]">
+                          {row.lsl ? `LSL ${row.lsl}` : ''}
+                          {row.lsl && row.ag ? ' · ' : ''}
+                          {row.ag ? `AG ${row.ag}` : ''}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </div>

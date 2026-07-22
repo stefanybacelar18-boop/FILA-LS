@@ -39,6 +39,7 @@ export function Fleet() {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
   const [type, setType] = useState('')
+  const [owner, setOwner] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Vehicle | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -54,6 +55,11 @@ export function Fleet() {
       return (await api.get<Vehicle[]>('/vehicles', { params })).data
     },
   })
+
+  const filtered = useMemo(() => {
+    if (!owner) return data
+    return data.filter((v) => (v.owner ?? 'AG') === owner)
+  }, [data, owner])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -131,7 +137,7 @@ export function Fleet() {
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SearchInput value={q} onChange={setQ} placeholder="Buscar placa, marca ou modelo…" />
         <Select
           value={status}
@@ -148,13 +154,22 @@ export function Fleet() {
           ]}
           placeholder="Todos os tipos"
         />
+        <Select
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          options={[
+            { value: 'LSL', label: 'Frota LSL' },
+            { value: 'AG', label: 'Frota AG' },
+          ]}
+          placeholder="LSL e AG"
+        />
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Spinner size="lg" />
         </div>
-      ) : data.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="Nenhum veículo encontrado" />
       ) : (
         <div className="table-wrap">
@@ -172,7 +187,7 @@ export function Fleet() {
               </tr>
             </thead>
             <tbody>
-              {data.map((v) => (
+              {filtered.map((v) => (
                 <tr key={v.id}>
                   <td>
                     <Link to={`/frota/${v.id}`} className="inline-flex">

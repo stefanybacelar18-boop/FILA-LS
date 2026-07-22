@@ -44,6 +44,7 @@ export interface Vehicle {
   defaultDriver: string | null
   status: VehicleStatus
   notes: string | null
+  owner?: 'LSL' | 'AG'
   maintenanceHold?: boolean
   blockCategory?: 'MANUTENCAO' | 'OUTRO' | string | null
   blockReason?: string | null
