@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
@@ -222,6 +222,7 @@ export function AssignPlates() {
     [board?.unavailable],
   )
   const pendingReport = overdueOrBlocked.filter((v) => !v.report)
+  const justifiedReports = overdueOrBlocked.filter((v) => !!v.report)
   const returningLaterCount = useMemo(
     () => (board?.unavailable ?? []).filter((v) => !v.shouldBeAvailable).length,
     [board?.unavailable],
@@ -316,6 +317,8 @@ export function AssignPlates() {
       setError('')
       setOkMsg('Indisponibilidade registrada (atraso/quebra).')
       await qc.invalidateQueries({ queryKey: ['plates-board', routeId] })
+      await qc.invalidateQueries({ queryKey: ['justifications'] })
+      await qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
     onError: (err: unknown) => {
       setError(
@@ -616,7 +619,51 @@ export function AssignPlates() {
         </div>
       </div>
 
-      {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && (
+      {justifiedReports.length > 0 && (
+        <section className="mt-4 mb-4 rounded-[var(--radius)] border border-amber-500/25 bg-amber-500/5 p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">
+              Justificativas deste roteiro ({justifiedReports.length})
+            </h2>
+            <Link
+              to="/justificativas"
+              className="text-xs font-medium text-[var(--color-primary)] hover:underline"
+            >
+              Ver todas
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {justifiedReports.map((v) => (
+              <div
+                key={v.id}
+                className="flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <PlateBadge plate={v.plate} color={v.color as PlateColor} />
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Registrada
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm">{v.report?.reason}</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    Disp. prevista:{' '}
+                    {v.report?.availableAtForecast
+                      ? formatDate(v.report.availableAtForecast)
+                      : '—'}
+                    {v.report?.reportedBy?.name ? ` · por ${v.report.reportedBy.name}` : ''}
+                  </p>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => openJustify(v)}>
+                  Atualizar
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {overdueOrBlocked.length > 0 && !showProblems && pendingReport.length === 0 && justifiedReports.length === 0 && (
         <button
           type="button"
           className="mt-2 w-full text-center text-xs text-[var(--color-text-muted)] underline-offset-2 hover:underline"
