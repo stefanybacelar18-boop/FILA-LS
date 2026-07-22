@@ -19,6 +19,7 @@ import historyRoutes from './routes/history';
 import searchRoutes from './routes/search';
 import reportsRoutes from './routes/reports';
 import justificationsRoutes from './routes/justifications';
+import evidencesRoutes from './routes/evidences';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
@@ -67,6 +68,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/justifications', justificationsRoutes);
+app.use('/api/evidences', evidencesRoutes);
 
 /** Evidências de atraso (fotos/PDF) */
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
@@ -94,6 +96,18 @@ if (webDist) {
   });
   console.log(`Serving frontend from ${webDist}`);
 }
+
+/** Fallback legado: se o arquivo sumiu do disco, aponta a mensagem clara */
+app.use('/uploads', (req, res, next) => {
+  if (res.headersSent) return next();
+  const rel = req.path.replace(/^\/+/, '');
+  res
+    .status(404)
+    .type('html')
+    .send(
+      `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>Erro</title></head><body><p>Não foi possível obter o arquivo /uploads/${rel}</p><p>Anexos antigos podem ter sido perdidos no deploy. Novas justificativas passam a guardar o arquivo no banco — peça o reenvio se necessário.</p></body></html>`,
+    );
+});
 
 io.use(async (socket, next) => {
   try {
