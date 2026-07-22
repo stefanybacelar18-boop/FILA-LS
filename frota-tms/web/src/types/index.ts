@@ -44,6 +44,12 @@ export interface Vehicle {
   defaultDriver: string | null
   status: VehicleStatus
   notes: string | null
+  maintenanceHold?: boolean
+  blockCategory?: 'MANUTENCAO' | 'OUTRO' | string | null
+  blockReason?: string | null
+  blockedAt?: string | null
+  blockedById?: string | null
+  blockedBy?: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
   color: PlateColor

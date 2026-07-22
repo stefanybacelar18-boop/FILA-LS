@@ -9,7 +9,10 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/vehicle/:id', async (req, res) => {
-  const vehicle = await prisma.vehicle.findUnique({ where: { id: paramId(req) } });
+  const vehicle = await prisma.vehicle.findUnique({
+    where: { id: paramId(req) },
+    include: { blockedBy: { select: { id: true, name: true } } },
+  });
   if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
 
   const [history, trips, activeTrip] = await Promise.all([

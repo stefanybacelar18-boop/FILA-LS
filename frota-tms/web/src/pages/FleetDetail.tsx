@@ -75,6 +75,23 @@ export function FleetDetail() {
         <Info label="Eventos" value={String(history.length)} />
       </div>
 
+      {(vehicle.maintenanceHold || vehicle.status === 'EM_MANUTENCAO') && (
+        <div className="mb-5 rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+          <p className="font-medium text-amber-800 dark:text-amber-200">
+            Bloqueio longo — só volta a carregar após liberação em Manutenção
+          </p>
+          {vehicle.blockReason && (
+            <p className="mt-1 text-[var(--color-text-muted)]">Motivo: {vehicle.blockReason}</p>
+          )}
+          {vehicle.blockedAt && (
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Desde {formatDateTime(vehicle.blockedAt)}
+              {vehicle.blockedBy?.name ? ` · por ${vehicle.blockedBy.name}` : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)]">
           <h2 className="border-b border-[var(--color-border)] px-4 py-3 font-display text-sm font-semibold">

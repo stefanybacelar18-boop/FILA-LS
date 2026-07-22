@@ -349,6 +349,11 @@ export function createTripsRouter(io: Server) {
     }
 
     const returnedAt = new Date();
+    const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+    const nextVehicleStatus = holdMaintenance
+      ? VehicleStatus.EM_MANUTENCAO
+      : VehicleStatus.DISPONIVEL;
+
     const updated = await prisma.$transaction(async (tx) => {
       const t = await tx.trip.update({
         where: { id: trip.id },
@@ -371,7 +376,7 @@ export function createTripsRouter(io: Server) {
       });
       await tx.vehicle.update({
         where: { id: trip.vehicleId },
-        data: { status: VehicleStatus.DISPONIVEL },
+        data: { status: nextVehicleStatus },
       });
       await tx.vehicleHistory.create({
         data: {
@@ -380,10 +385,14 @@ export function createTripsRouter(io: Server) {
           tripId: trip.id,
           action: 'RETORNO',
           fromStatus: trip.vehicle.status,
-          toStatus: VehicleStatus.DISPONIVEL,
-          details: overdue
-            ? `Retornou de ${trip.dealership.name} (atraso: ${delayReason})`
-            : `Retornou de ${trip.dealership.name}`,
+          toStatus: nextVehicleStatus,
+          details: holdMaintenance
+            ? overdue
+              ? `Retornou de ${trip.dealership.name} (atraso: ${delayReason}) — permanece em manutenção até liberação`
+              : `Retornou de ${trip.dealership.name} — permanece em manutenção até liberação`
+            : overdue
+              ? `Retornou de ${trip.dealership.name} (atraso: ${delayReason})`
+              : `Retornou de ${trip.dealership.name}`,
         },
       });
 

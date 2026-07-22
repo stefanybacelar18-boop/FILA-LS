@@ -17,6 +17,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
     const onFleet = () => {
       void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles-maintenance'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles-available-for-block'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['trips'] })
       void queryClient.invalidateQueries({ queryKey: ['returns'] })

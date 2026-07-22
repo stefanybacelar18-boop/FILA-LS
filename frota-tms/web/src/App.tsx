@@ -24,6 +24,7 @@ import { Users } from './pages/Users'
 import { Audit } from './pages/Audit'
 import { Search } from './pages/Search'
 import { AlertsCenter } from './pages/AlertsCenter'
+import { Maintenance } from './pages/Maintenance'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -124,6 +125,14 @@ export default function App() {
                 element={
                   <RoleGate roles={['ADMIN', 'OPERACAO']}>
                     <Returns />
+                  </RoleGate>
+                }
+              />
+              <Route
+                path="manutencao"
+                element={
+                  <RoleGate roles={['ADMIN', 'OPERACAO']}>
+                    <Maintenance />
                   </RoleGate>
                 }
               />

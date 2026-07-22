@@ -27,25 +27,33 @@ model User {
   vehicleHistory VehicleHistory[]
   importBatches  ImportBatch[]
   tripEvidences  TripEvidence[]
+  vehiclesBlocked Vehicle[]       @relation("VehicleBlockedBy")
 }
 
 model Vehicle {
-  id            String   @id @default(cuid())
-  plate         String   @unique
-  type          String
-  model         String
-  brand         String
-  year          Int
-  capacityMotos Float
-  defaultDriver String?
-  status        String   @default("DISPONIVEL")
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String    @id @default(cuid())
+  plate            String    @unique
+  type             String
+  model            String
+  brand            String
+  year             Int
+  capacityMotos    Float
+  defaultDriver    String?
+  status           String    @default("DISPONIVEL")
+  notes            String?
+  // Bloqueio longo (manutenção/outro): só volta a carregar após liberação explícita
+  maintenanceHold  Boolean   @default(false)
+  blockCategory    String?   // MANUTENCAO | OUTRO
+  blockReason      String?
+  blockedAt        DateTime?
+  blockedById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  routeVehicles RouteVehicle[]
-  trips         Trip[]
-  history       VehicleHistory[]
+  blockedBy        User?     @relation("VehicleBlockedBy", fields: [blockedById], references: [id])
+  routeVehicles    RouteVehicle[]
+  trips            Trip[]
+  history          VehicleHistory[]
   unavailabilities PlateUnavailability[]
 }
 
