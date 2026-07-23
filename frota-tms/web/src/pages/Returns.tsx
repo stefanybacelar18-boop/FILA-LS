@@ -120,11 +120,9 @@ function EvidenceUploader({
     <div className="space-y-3">
       <div className="flex items-end justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-[var(--color-text)]">
-            Evidências <span className="text-[var(--color-danger)]">*</span>
-          </p>
+          <p className="text-sm font-semibold text-[var(--color-text)]">Evidências</p>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Fotos do problema ou PDF · obrigatório para registrar
+            Fotos do problema ou PDF · opcional
           </p>
         </div>
         {files.length > 0 && (
@@ -154,15 +152,13 @@ function EvidenceUploader({
           'flex w-full flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-4 py-6 text-center transition',
           dragging
             ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
-            : files.length === 0
-              ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/40 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-muted)]'
-              : 'border-[var(--color-border)] bg-[var(--color-surface-2)]/50 hover:border-[var(--color-primary)]/50',
+            : 'border-[var(--color-border)] bg-[var(--color-surface-2)]/50 hover:border-[var(--color-primary)]/50',
         )}
       >
         <span
           className={cn(
             'flex h-12 w-12 items-center justify-center rounded-full',
-            dragging || files.length === 0
+            dragging
               ? 'bg-[var(--color-primary)] text-white'
               : 'bg-[var(--color-surface)] text-[var(--color-primary)]',
           )}
@@ -231,11 +227,6 @@ function EvidenceUploader({
       )}
 
       {showError && <p className="text-sm text-[var(--color-danger)]">{showError}</p>}
-      {files.length === 0 && !showError && (
-        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-          Anexe ao menos uma evidência para salvar o problema.
-        </p>
-      )}
     </div>
   )
 }
@@ -428,7 +419,7 @@ export function Returns() {
           response: {
             data: {
               error:
-                'Esta viagem está em atraso. Use “Problemas na viagem” (justificativa + evidências) antes de confirmar o retorno.',
+                'Esta viagem está em atraso. Use “Problemas na viagem” (justificativa) antes de confirmar o retorno.',
             },
           },
         })
@@ -459,7 +450,6 @@ export function Returns() {
       const text = composedReason()
       if (text.length < 5) throw new Error('Informe a justificativa')
       if (!newExpectedReturn) throw new Error('Informe a nova previsão de retorno')
-      if (files.length < 1) throw new Error('Anexe ao menos uma evidência')
 
       const form = new FormData()
       form.append('reason', text)
@@ -542,7 +532,7 @@ export function Returns() {
     <div className="page-desktop max-w-4xl space-y-4">
       <PageHeader
         title="Retornos"
-        description="Confirme o retorno ou registre problema (justificativa + evidências). Admin e Operação veem os anexos neste card."
+        description="Confirme o retorno ou registre problema (justificativa; fotos opcionais). Admin e Operação veem os anexos neste card."
       />
 
       {error && !reportTrip && (
@@ -658,7 +648,7 @@ export function Returns() {
           {confirmTrip?.overdue && !confirmTrip?.delayReason && (
               <p className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                 Esta viagem está em atraso. Use <strong>Problema</strong> para registrar
-                justificativa + evidências antes de confirmar.
+                a justificativa antes de confirmar.
               </p>
             )}
           {confirmTrip?.delayReason && (
@@ -692,9 +682,7 @@ export function Returns() {
             </Button>
             <Button
               loading={reportMutation.isPending}
-              disabled={
-                composedReason().length < 5 || !newExpectedReturn || files.length < 1
-              }
+              disabled={composedReason().length < 5 || !newExpectedReturn}
               onClick={() => reportMutation.mutate()}
             >
               Salvar problema
@@ -704,8 +692,7 @@ export function Returns() {
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Motivo, nova previsão e evidência (foto/PDF). Admin e Operação veem os anexos em
-            Retornos.
+            Motivo e nova previsão. Fotos/PDF são opcionais.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
