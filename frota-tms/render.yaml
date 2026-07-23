@@ -61,11 +61,13 @@ services:
         value: ag123
       - key: BOOTSTRAP_OPS_NAME
         value: AG Operação
-      # E-mail do 1º roteiro do dia (configure no Dashboard do Render):
-      # Opção A — Resend: RESEND_API_KEY + MAIL_FROM (ex.: FrotaTMS <onboarding@resend.dev>)
-      # Opção B — SMTP: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM
-      # Opcional: NOTIFY_EXTRA_EMAILS=ops@empresa.com,admin@empresa.com
-      # Opcional: APP_PUBLIC_URL=https://frota-tms.onrender.com
+      # Destinatários do 1º roteiro do dia (também fixos no código).
+      # Ainda é necessário RESEND_API_KEY + MAIL_FROM (ou SMTP_*) para enviar.
+      - key: NOTIFY_EXTRA_EMAILS
+        value: lucas_souza@lslgr.com.br,rodrigo_almeida@lslgr.com.br,agtransportes2020@outlook.com
+      - key: APP_PUBLIC_URL
+        value: https://frota-tms.onrender.com
+      # Configure no Dashboard: RESEND_API_KEY e MAIL_FROM (ou SMTP_HOST/USER/PASS)
       - key: DATABASE_URL
         fromDatabase:
           name: frota-tms-db
