@@ -5,13 +5,14 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { expectedReturnDate, routeDepartureAt, vehicleColor } from '../utils/status';
-import { resolveTravelFromPad, PAD_LAT, PAD_LNG } from '../utils/geo';
+import { resolveTravelFromPad, PAD_LAT, PAD_LNG, type FleetOwner } from '../utils/geo';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 import {
   filterPlatesForRole,
   isDriverHiddenFromOperator,
   isPlateHiddenFromOperator,
+  plateOwner,
 } from '../data/operatorVisibility';
 
 const routeDealershipInclude = {
@@ -37,11 +38,12 @@ type DealershipWithPadTravel = DealershipRow & {
 };
 
 /** Enriquece com distância/dias calculados do PAD (coordenadas) → cidade. */
-function withPadTravel(d: DealershipRow): DealershipWithPadTravel {
+function withPadTravel(d: DealershipRow, owner?: FleetOwner | null): DealershipWithPadTravel {
   const travel = resolveTravelFromPad({
     city: d.city,
     distanceKm: d.distanceKm,
     avgTravelDays: d.avgTravelDays,
+    owner,
   });
   return {
     ...d,
@@ -52,8 +54,11 @@ function withPadTravel(d: DealershipRow): DealershipWithPadTravel {
 }
 
 /** Destino mais longe do PAD (maior distância km; desempate por dias). */
-function farthestDealershipFromPad(dealerships: DealershipRow[]): DealershipWithPadTravel {
-  const enriched = dealerships.map(withPadTravel);
+function farthestDealershipFromPad(
+  dealerships: DealershipRow[],
+  owner?: FleetOwner | null,
+): DealershipWithPadTravel {
+  const enriched = dealerships.map((d) => withPadTravel(d, owner));
   return [...enriched].sort((a, b) => {
     if (b.padDistanceKm !== a.padDistanceKm) return b.padDistanceKm - a.padDistanceKm;
     return b.padAvgTravelDays - a.padAvgTravelDays;
@@ -152,7 +157,13 @@ export function createRoutesRouter(io: Server) {
       if (linked.length === 0) {
         return { ...route, returnForecast: null };
       }
-      const farthest = farthestDealershipFromPad(linked);
+      const assignedPlate = route.vehicles?.[0]?.vehicle?.plate;
+      const owner: FleetOwner | null = assignedPlate
+        ? plateOwner(assignedPlate)
+        : /\bLSL\b/i.test(route.name)
+          ? 'LSL'
+          : null;
+      const farthest = farthestDealershipFromPad(linked, owner);
       const departureAt = routeDepartureAt(route.date);
       const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
       return {
@@ -762,16 +773,18 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Roteiro sem concessionárias' });
     }
 
-    // Previsão SEMPRE pelo PAD (coordenadas) × concessionária mais distante
-    const farthest = farthestDealershipFromPad(linked);
+    // Previsão pelo PAD × destino mais longe; dias dependem da frota (LSL Aracaju = dia seguinte)
     const destNames = linked.map((d) => d.name).join(', ');
     // Saída = data do roteiro às 06:00 (regra operacional)
     const departureAt = routeDepartureAt(route.date);
-    const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
 
     try {
       const results = await prisma.$transaction(async (tx) => {
-        const trips = [];
+        const trips: Array<{
+          trip: Awaited<ReturnType<typeof tx.trip.create>>;
+          farthest: DealershipWithPadTravel;
+          owner: FleetOwner;
+        }> = [];
 
         for (const vid of uniqueVehicleIds) {
           const vehicle = await tx.vehicle.findUnique({ where: { id: vid } });
@@ -783,6 +796,10 @@ export function createRoutesRouter(io: Server) {
               status: 403,
             });
           }
+
+          const owner = plateOwner(vehicle.plate);
+          const farthest = farthestDealershipFromPad(linked, owner);
+          const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
 
           // Atomic claim: only succeed if still DISPONIVEL
           const claimed = await tx.vehicle.updateMany({
@@ -847,11 +864,11 @@ export function createRoutesRouter(io: Server) {
               action: 'SAIDA',
               fromStatus: VehicleStatus.DISPONIVEL,
               toStatus: VehicleStatus.EM_VIAGEM,
-              details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name}, ${farthest.padDistanceKm} km do PAD, ${farthest.padAvgTravelDays} dias)`,
+              details: `Roteiro ${route.name} → ${destNames} (retorno: ${farthest.name}, ${farthest.padDistanceKm} km do PAD, ${farthest.padAvgTravelDays} dias · ${owner})`,
             },
           });
 
-          trips.push(t);
+          trips.push({ trip: t, farthest, owner });
         }
 
         await tx.route.update({
@@ -865,16 +882,22 @@ export function createRoutesRouter(io: Server) {
         return trips;
       });
 
+      const sample = results[0];
+      const farthest = sample?.farthest ?? farthestDealershipFromPad(linked);
+      const expectedReturn =
+        sample?.trip.expectedReturn ??
+        expectedReturnDate(departureAt, farthest.padAvgTravelDays);
+
       await audit('ASSIGN_PLATES', 'Route', {
         userId: req.user!.id,
         entityId: route.id,
-        details: `1 placa · retorno PAD→${farthest.name} (${farthest.padDistanceKm} km / ${farthest.padAvgTravelDays} dias)`,
+        details: `1 placa · retorno PAD→${farthest.name} (${farthest.padDistanceKm} km / ${farthest.padAvgTravelDays} dias${sample?.owner === 'LSL' ? ' · LSL' : ''})`,
       });
       io.emit('fleet:changed', { action: 'assign', routeId: route.id });
       io.emit('trips:changed', { action: 'create' });
       io.emit('routes:changed', { action: 'assign', id: route.id });
       res.status(201).json({
-        trips: results,
+        trips: results.map((r) => r.trip),
         returnForecast: {
           basis: 'PAD_DISTANCE',
           pad: { lat: PAD_LAT, lng: PAD_LNG },
@@ -1049,12 +1072,21 @@ export function createRoutesRouter(io: Server) {
             data: { routeId: route.id, vehicleId },
           });
 
+          const owner = plateOwner(newVehicle.plate);
+          const farthestForPlate = farthestDealershipFromPad(linked, owner);
+          const nextExpected = expectedReturnDate(
+            openTrip.departureAt,
+            farthestForPlate.padAvgTravelDays,
+          );
+
           await tx.trip.update({
             where: { id: openTrip.id },
             data: {
               vehicleId,
               driverName: resolvedDriverName,
               assignedById: req.user!.id,
+              expectedReturn: nextExpected,
+              dealershipId: farthestForPlate.id,
             },
           });
 
