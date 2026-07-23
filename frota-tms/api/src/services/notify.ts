@@ -1,7 +1,6 @@
 import nodemailer from 'nodemailer';
-import { prisma } from '../lib/prisma';
-import { Role } from '../types/enums';
 import { startOfDay } from 'date-fns';
+import { prisma } from '../lib/prisma';
 
 export type FirstRouteNotifyPayload = {
   routeId: string;
@@ -9,6 +8,13 @@ export type FirstRouteNotifyPayload = {
   routeDate: string;
   createdByName: string;
 };
+
+/** Destinatários fixos do aviso do 1º roteiro do dia (LSL + AG). */
+export const DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS = [
+  'lucas_souza@lslgr.com.br',
+  'rodrigo_almeida@lslgr.com.br',
+  'agtransportes2020@outlook.com',
+] as const;
 
 function mailConfigured(): boolean {
   if (process.env.RESEND_API_KEY?.trim()) return true;
@@ -78,34 +84,20 @@ async function sendViaSmtp(to: string[], subject: string, text: string, html: st
   });
 }
 
-async function recipients(): Promise<{ email: string; name: string; role: string }[]> {
-  const extra = (process.env.NOTIFY_EXTRA_EMAILS || '')
-    .split(',')
+function parseEmailList(raw: string | undefined): string[] {
+  return (raw || '')
+    .split(/[,;\s]+/)
     .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
+    .filter((e) => e.includes('@') && !e.endsWith('@.com'));
+}
 
-  const users = await prisma.user.findMany({
-    where: {
-      active: true,
-      role: { in: [Role.ADMIN, Role.OPERACAO] },
-    },
-    select: { email: true, name: true, role: true },
-  });
-
-  const list = [...users];
-  for (const email of extra) {
-    if (!list.some((u) => u.email.toLowerCase() === email)) {
-      list.push({ email, name: email, role: 'EXTRA' });
-    }
-  }
-
-  // Ignora e-mails de demo claramente inválidos
-  return list.filter((u) => {
-    const e = u.email.toLowerCase();
-    if (!e.includes('@')) return false;
-    if (e.endsWith('@.com') || e.startsWith('a@a.') || e.includes('example.com')) return false;
-    return true;
-  });
+/** Lista final: e-mails fixos LSL/AG + NOTIFY_EXTRA_EMAILS (se houver). */
+export function firstRouteNotifyRecipients(): string[] {
+  const set = new Set<string>([
+    ...DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS.map((e) => e.toLowerCase()),
+    ...parseEmailList(process.env.NOTIFY_EXTRA_EMAILS),
+  ]);
+  return [...set];
 }
 
 function buildMessage(payload: FirstRouteNotifyPayload) {
@@ -155,7 +147,7 @@ export async function isFirstRouteSentToday(excludeRouteId?: string): Promise<bo
 }
 
 /**
- * Envia e-mail para Admin + Operação quando o 1º roteiro do dia é disponibilizado.
+ * Envia e-mail aos destinatários fixos (LSL/AG) quando o 1º roteiro do dia é disponibilizado.
  * Sem SMTP/Resend configurado: só registra no log (não quebra o fluxo).
  */
 export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): Promise<{
@@ -170,13 +162,12 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
     return { sent: false, reason: 'mail_not_configured' };
   }
 
-  const toUsers = await recipients();
-  if (toUsers.length === 0) {
-    console.warn('[notify] Nenhum e-mail válido de Admin/Operação para notificar.');
+  const to = firstRouteNotifyRecipients();
+  if (to.length === 0) {
+    console.warn('[notify] Nenhum e-mail de destino configurado.');
     return { sent: false, reason: 'no_recipients' };
   }
 
-  const to = toUsers.map((u) => u.email);
   const { subject, text, html } = buildMessage(payload);
 
   try {
