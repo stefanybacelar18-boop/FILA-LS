@@ -9,12 +9,28 @@ export type FirstRouteNotifyPayload = {
   createdByName: string;
 };
 
+export type NotifyResult = {
+  sent: boolean;
+  reason?: string;
+  to?: string[];
+  sentTo?: string[];
+  failed?: { email: string; error: string }[];
+  hint?: string;
+};
+
 /** Destinatários fixos do aviso do 1º roteiro do dia (LSL + AG). */
 export const DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS = [
   'lucas_souza@lslgr.com.br',
   'rodrigo_almeida@lslgr.com.br',
   'agtransportes2020@outlook.com',
 ] as const;
+
+/** Último resultado (para diagnóstico em /api/notify/status). */
+let lastNotifyResult: (NotifyResult & { at?: string; subject?: string }) | null = null;
+
+export function getLastNotifyResult() {
+  return lastNotifyResult;
+}
 
 function mailConfigured(): boolean {
   if (process.env.RESEND_API_KEY?.trim()) return true;
@@ -23,6 +39,28 @@ function mailConfigured(): boolean {
     process.env.SMTP_USER?.trim() &&
     process.env.SMTP_PASS?.trim()
   );
+}
+
+export function mailStatus() {
+  const from = fromAddress();
+  const usingResend = !!process.env.RESEND_API_KEY?.trim();
+  const usingSmtp = !!(
+    process.env.SMTP_HOST?.trim() &&
+    process.env.SMTP_USER?.trim() &&
+    process.env.SMTP_PASS?.trim()
+  );
+  const fromIsTestDomain = /@resend\.dev>?$/i.test(from) || /resend\.dev/i.test(from);
+  return {
+    configured: mailConfigured(),
+    provider: usingResend ? 'resend' : usingSmtp ? 'smtp' : 'none',
+    from,
+    fromIsTestDomain,
+    recipients: firstRouteNotifyRecipients(),
+    lastNotify: lastNotifyResult,
+    hint: fromIsTestDomain
+      ? 'MAIL_FROM usa resend.dev: o Resend só envia para o e-mail da conta Resend. Verifique um domínio (ex.: lslgr.com.br) em resend.com/domains e use MAIL_FROM como FrotaTMS <noreply@lslgr.com.br>.'
+      : undefined,
+  };
 }
 
 function fromAddress(): string {
@@ -41,7 +79,12 @@ function appBaseUrl(): string {
   );
 }
 
-async function sendViaResend(to: string[], subject: string, text: string, html: string) {
+async function sendViaResendOne(
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+): Promise<void> {
   const key = process.env.RESEND_API_KEY!.trim();
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -51,7 +94,7 @@ async function sendViaResend(to: string[], subject: string, text: string, html: 
     },
     body: JSON.stringify({
       from: fromAddress(),
-      to,
+      to: [to],
       subject,
       text,
       html,
@@ -59,7 +102,7 @@ async function sendViaResend(to: string[], subject: string, text: string, html: 
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Resend ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Resend ${res.status}: ${body.slice(0, 400)}`);
   }
 }
 
@@ -134,6 +177,21 @@ function escapeHtml(s: string) {
     .replace(/"/g, '&quot;');
 }
 
+function resendHintFromError(message: string): string | undefined {
+  const from = fromAddress();
+  if (/resend\.dev/i.test(from) || /only send testing emails/i.test(message)) {
+    return (
+      'Resend bloqueou o envio: onboarding@resend.dev só manda para o e-mail da conta Resend. ' +
+      'Em resend.com/domains verifique o domínio lslgr.com.br e no Render use ' +
+      'MAIL_FROM=FrotaTMS <noreply@lslgr.com.br> (depois Save, rebuild, and deploy).'
+    );
+  }
+  if (/domain .* is not verified/i.test(message) || /not verified/i.test(message)) {
+    return 'O domínio do MAIL_FROM ainda não está verificado no Resend ( Domains ).';
+  }
+  return undefined;
+}
+
 /** True se ainda não houve roteiro disponibilizado hoje (calendário do servidor). */
 export async function isFirstRouteSentToday(excludeRouteId?: string): Promise<boolean> {
   const today = startOfDay(new Date());
@@ -150,36 +208,79 @@ export async function isFirstRouteSentToday(excludeRouteId?: string): Promise<bo
  * Envia e-mail aos destinatários fixos (LSL/AG) quando o 1º roteiro do dia é disponibilizado.
  * Sem SMTP/Resend configurado: só registra no log (não quebra o fluxo).
  */
-export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): Promise<{
-  sent: boolean;
-  reason?: string;
-  to?: string[];
-}> {
+export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): Promise<NotifyResult> {
   if (!mailConfigured()) {
-    console.warn(
-      '[notify] E-mail não configurado (RESEND_API_KEY ou SMTP_*). Pulei aviso do 1º roteiro.',
-    );
-    return { sent: false, reason: 'mail_not_configured' };
+    const result: NotifyResult = {
+      sent: false,
+      reason: 'mail_not_configured',
+      hint: 'Configure RESEND_API_KEY + MAIL_FROM (domínio verificado) ou SMTP_* no Render.',
+    };
+    lastNotifyResult = { ...result, at: new Date().toISOString() };
+    console.warn('[notify] E-mail não configurado (RESEND_API_KEY ou SMTP_*).');
+    return result;
   }
 
   const to = firstRouteNotifyRecipients();
   if (to.length === 0) {
-    console.warn('[notify] Nenhum e-mail de destino configurado.');
-    return { sent: false, reason: 'no_recipients' };
+    const result: NotifyResult = { sent: false, reason: 'no_recipients' };
+    lastNotifyResult = { ...result, at: new Date().toISOString() };
+    return result;
   }
 
   const { subject, text, html } = buildMessage(payload);
+  const sentTo: string[] = [];
+  const failed: { email: string; error: string }[] = [];
 
   try {
     if (process.env.RESEND_API_KEY?.trim()) {
-      await sendViaResend(to, subject, text, html);
+      // Um destinatário por vez — falha de um não impede o log dos outros
+      for (const email of to) {
+        try {
+          await sendViaResendOne(email, subject, text, html);
+          sentTo.push(email);
+        } catch (err) {
+          const msg = (err as Error)?.message ?? String(err);
+          failed.push({ email, error: msg });
+          console.error(`[notify] Falha Resend → ${email}:`, msg);
+        }
+      }
     } else {
       await sendViaSmtp(to, subject, text, html);
+      sentTo.push(...to);
     }
-    console.log(`[notify] 1º roteiro do dia — e-mail enviado para ${to.join(', ')}`);
-    return { sent: true, to };
   } catch (err) {
-    console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', (err as Error)?.message ?? err);
-    return { sent: false, reason: 'send_failed', to };
+    const msg = (err as Error)?.message ?? String(err);
+    const result: NotifyResult = {
+      sent: false,
+      reason: 'send_failed',
+      to,
+      failed: to.map((email) => ({ email, error: msg })),
+      hint: resendHintFromError(msg),
+    };
+    lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
+    console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', msg);
+    return result;
   }
+
+  const result: NotifyResult = {
+    sent: sentTo.length > 0,
+    reason: sentTo.length === 0 ? 'send_failed' : failed.length ? 'partial' : undefined,
+    to,
+    sentTo,
+    failed: failed.length ? failed : undefined,
+    hint:
+      failed.length > 0
+        ? resendHintFromError(failed[0].error) || mailStatus().hint
+        : undefined,
+  };
+  lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
+  if (sentTo.length) {
+    console.log(`[notify] 1º roteiro — enviado para: ${sentTo.join(', ')}`);
+  }
+  if (failed.length) {
+    console.error(
+      `[notify] 1º roteiro — falhou para: ${failed.map((f) => f.email).join(', ')}`,
+    );
+  }
+  return result;
 }

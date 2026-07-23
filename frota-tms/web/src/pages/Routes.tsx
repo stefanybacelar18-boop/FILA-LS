@@ -200,12 +200,38 @@ export function Routes() {
   })
 
   const sendMutation = useMutation({
-    mutationFn: async (id: string) => api.post(`/routes/${id}/send-to-operation`),
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      (
+        await api.post<{
+          firstRouteOfDay?: boolean
+          emailNotify?: {
+            sent?: boolean
+            reason?: string
+            hint?: string
+            sentTo?: string[]
+            failed?: { email: string; error: string }[]
+          } | null
+        }>(`/routes/${id}/send-to-operation`)
+      ).data,
+    onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['routes'] })
       setSendId(null)
-      setOkMsg('Roteiro disponibilizado para a Operação.')
       setError('')
+      if (data?.firstRouteOfDay && data.emailNotify) {
+        if (data.emailNotify.sent) {
+          setOkMsg(
+            `Roteiro disponibilizado. E-mail enviado para ${(data.emailNotify.sentTo ?? []).join(', ') || 'destinatários'}.`,
+          )
+        } else {
+          setOkMsg('Roteiro disponibilizado para a Operação.')
+          setError(
+            data.emailNotify.hint ||
+              'Aviso no app ok, mas o e-mail falhou. Verifique MAIL_FROM com domínio verificado no Resend.',
+          )
+        }
+      } else {
+        setOkMsg('Roteiro disponibilizado para a Operação.')
+      }
     },
     onError: (err: unknown) => {
       setError(
@@ -248,6 +274,42 @@ export function Routes() {
     },
   })
 
+  const testEmailMutation = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post<{
+          ok: boolean
+          sent?: boolean
+          hint?: string
+          sentTo?: string[]
+          failed?: { email: string; error: string }[]
+        }>('/notify/test')
+      ).data,
+    onSuccess: (data) => {
+      if (data.ok || data.sent) {
+        setOkMsg(`E-mail de teste enviado: ${(data.sentTo ?? []).join(', ')}`)
+        setError('')
+      } else {
+        setOkMsg('')
+        setError(
+          data.hint ||
+            data.failed?.[0]?.error ||
+            'Falha no e-mail de teste. Verifique domínio no Resend e MAIL_FROM.',
+        )
+      }
+    },
+    onError: (err: unknown) => {
+      const body = (err as { response?: { data?: { hint?: string; error?: string; failed?: { error: string }[] } } })
+        ?.response?.data
+      setError(
+        body?.hint ||
+          body?.failed?.[0]?.error ||
+          body?.error ||
+          'Falha no e-mail de teste.',
+      )
+    },
+  })
+
   const detailStops = detailRoute ? dealershipStops(detailRoute) : []
   const detailPlate = detailRoute?.vehicles?.[0]?.vehicle?.plate
   const detailAwaiting =
@@ -261,12 +323,23 @@ export function Routes() {
         description="Prioridade no topo. Clique no roteiro para ver detalhes."
         actions={
           isAdmin ? (
-            <Link to="/roteiros/novo">
-              <Button>
-                <Plus className="h-4 w-4" />
-                Novo roteiro
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                loading={testEmailMutation.isPending}
+                onClick={() => testEmailMutation.mutate()}
+                title="Envia e-mail de teste aos 3 destinatários"
+              >
+                Testar e-mail
               </Button>
-            </Link>
+              <Link to="/roteiros/novo">
+                <Button>
+                  <Plus className="h-4 w-4" />
+                  Novo roteiro
+                </Button>
+              </Link>
+            </div>
           ) : undefined
         }
       />
