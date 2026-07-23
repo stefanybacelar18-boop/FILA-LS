@@ -599,6 +599,7 @@ export function createRoutesRouter(io: Server) {
     });
 
     // 1º roteiro disponibilizado no dia → e-mail + aviso in-app (Admin e Operação)
+    let emailNotify = null;
     if (firstOfDay) {
       const payload = {
         routeId,
@@ -606,13 +607,13 @@ export function createRoutesRouter(io: Server) {
         routeDate: format(updated.date, 'dd/MM/yyyy'),
         createdByName: updated.createdBy?.name || req.user!.name || 'Admin',
       };
-      void notifyFirstRouteOfDay(payload);
+      emailNotify = await notifyFirstRouteOfDay(payload);
       io.emit('notify:first-route', payload);
     }
 
     io.emit('routes:changed', { action: 'send', id: routeId });
     io.emit('planning:changed', { action: 'send', id: routeId });
-    res.json(updated);
+    res.json({ ...updated, firstRouteOfDay: firstOfDay, emailNotify });
   });
 
   router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {

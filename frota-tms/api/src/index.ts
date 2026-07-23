@@ -20,6 +20,7 @@ import searchRoutes from './routes/search';
 import reportsRoutes from './routes/reports';
 import justificationsRoutes from './routes/justifications';
 import evidencesRoutes from './routes/evidences';
+import { createNotifyRouter } from './routes/notify';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
@@ -69,6 +70,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/justifications', justificationsRoutes);
 app.use('/api/evidences', evidencesRoutes);
+app.use('/api/notify', createNotifyRouter());
 
 /** Evidências de atraso (fotos/PDF) */
 const uploadsDir = path.resolve(process.cwd(), 'uploads');

@@ -598,13 +598,16 @@ export function createPlanningRouter(io: Server) {
         routeDate: format(updated.date, 'dd/MM/yyyy'),
         createdByName: req.user!.name || 'Admin',
       };
-      void notifyFirstRouteOfDay(payload);
+      const emailNotify = await notifyFirstRouteOfDay(payload);
       io.emit('notify:first-route', payload);
+      io.emit('planning:changed', { action: 'send', id: routeId });
+      io.emit('routes:changed', { action: 'send', id: routeId });
+      return res.json({ ...updated, firstRouteOfDay: true, emailNotify });
     }
 
     io.emit('planning:changed', { action: 'send', id: routeId });
     io.emit('routes:changed', { action: 'send', id: routeId });
-    res.json(updated);
+    res.json({ ...updated, firstRouteOfDay: false, emailNotify: null });
   });
 
   /** Meu Dia — planejador */
