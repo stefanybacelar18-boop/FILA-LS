@@ -23,11 +23,14 @@ import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { plateOwner } from '../lib/plateOwner'
 
-function citiesList(r: Route): string[] {
+function dealershipStops(r: Route): { name: string; city: string }[] {
   if (r.dealerships && r.dealerships.length > 0) {
-    return [...new Set(r.dealerships.map((rd) => rd.dealership.city))]
+    return [...r.dealerships]
+      .sort((a, b) => a.order - b.order)
+      .map((rd) => ({ name: rd.dealership.name, city: rd.dealership.city }))
   }
-  return r.dealership?.city ? [r.dealership.city] : []
+  if (r.dealership) return [{ name: r.dealership.name, city: r.dealership.city }]
+  return []
 }
 
 function sortRoutes(list: Route[]): Route[] {
@@ -44,21 +47,6 @@ function sortRoutes(list: Route[]): Route[] {
     if (da !== db) return da - db
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
-}
-
-function routeSummary(cities: string[]): { line: string; full: string; countLabel: string } {
-  const full = cities.join(' · ')
-  const countLabel =
-    cities.length === 1 ? '1 cidade' : `${cities.length} cidades`
-  if (cities.length <= 2) {
-    return { line: full, full, countLabel }
-  }
-  const shown = cities.slice(0, 2).join(' · ')
-  return {
-    line: `${shown} · +${cities.length - 2}`,
-    full,
-    countLabel,
-  }
 }
 
 function statusTone(status: Route['status']) {
@@ -242,7 +230,7 @@ export function Routes() {
   })
 
   return (
-    <div className="page-desktop max-w-[1280px]">
+    <div className="page-desktop max-w-[1400px]">
       <PageHeader
         title="Roteiros"
         description="Prioridade no topo. Fim de viagem: mesmo dia / 1 dia / 3 dias conforme a cidade (regra operacional)."
@@ -306,8 +294,12 @@ export function Routes() {
             </span>
           </button>
         </div>
-        <div className="w-full sm:max-w-xs">
-          <SearchInput value={q} onChange={setQ} placeholder="Buscar descrição ou cidade…" />
+        <div className="w-full sm:max-w-sm">
+          <SearchInput
+            value={q}
+            onChange={setQ}
+            placeholder="Buscar descrição, cidade ou concessionária…"
+          />
         </div>
       </div>
 
@@ -338,34 +330,35 @@ export function Routes() {
       ) : (
         <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)]">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
                   <th className="px-4 py-3 font-semibold">Descrição</th>
-                  <th className="px-4 py-3 font-semibold">Início</th>
-                  <th className="px-4 py-3 font-semibold">Fim (previsão)</th>
-                  <th className="px-4 py-3 font-semibold">Resumo da rota</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Início</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Fim</th>
+                  <th className="min-w-[280px] px-4 py-3 font-semibold">Concessionárias</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Placa</th>
-                  <th className="px-4 py-3 text-right font-semibold">Ações</th>
+                  <th className="sticky right-0 z-10 bg-[var(--color-surface-2)] px-4 py-3 text-right font-semibold shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)]">
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {visible.map((r) => {
                   const plate = r.vehicles?.[0]?.vehicle?.plate
-                  const cities = citiesList(r)
-                  const summary = routeSummary(cities)
+                  const stops = dealershipStops(r)
                   const awaitingPlate =
                     r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
                   return (
                     <tr
                       key={r.id}
                       className={cn(
-                        'border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40',
+                        'group border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40',
                         r.hasPriority && 'bg-[var(--color-danger)]/[0.03]',
                       )}
                     >
-                      <td className="px-4 py-3.5 align-middle">
+                      <td className="px-4 py-3.5 align-top">
                         <div className="space-y-1">
                           {isAdmin ? (
                             <Link
@@ -399,7 +392,7 @@ export function Routes() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3.5 align-top whitespace-nowrap">
                         <div className="inline-flex items-start gap-2">
                           <Calendar className="mt-0.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
                           <div>
@@ -408,7 +401,7 @@ export function Routes() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3.5 align-top whitespace-nowrap">
                         {r.returnForecast?.expectedReturn ? (
                           <div className="inline-flex items-center gap-2">
                             <Flag className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
@@ -420,30 +413,39 @@ export function Routes() {
                           <span className="text-[var(--color-text-muted)]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 align-middle">
-                        {cities.length === 0 ? (
+                      <td className="px-4 py-3.5 align-top">
+                        {stops.length === 0 ? (
                           <span className="text-[var(--color-text-muted)]">—</span>
                         ) : (
-                          <div className="max-w-[240px]" title={summary.full}>
-                            <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text)]">
-                              <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]" />
-                              <span className="truncate">{summary.line}</span>
-                            </p>
-                            <p className="mt-0.5 pl-5 text-xs text-[var(--color-text-muted)]">
-                              {summary.countLabel}
-                            </p>
-                          </div>
+                          <ol className="space-y-2">
+                            {stops.map((s, idx) => (
+                              <li key={`${r.id}-${idx}-${s.name}`} className="flex gap-2">
+                                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-muted)] text-[10px] font-bold text-[var(--color-primary)]">
+                                  {idx + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium leading-snug text-[var(--color-text)]">
+                                    {s.name}
+                                  </p>
+                                  <p className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
+                                    <MapPin className="h-3 w-3 shrink-0" />
+                                    {s.city}
+                                  </p>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 align-middle">
+                      <td className="px-4 py-3.5 align-top">
                         <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
                       </td>
-                      <td className="px-4 py-3.5 align-middle">
+                      <td className="px-4 py-3.5 align-top">
                         {plate ? (
                           <div className="space-y-1">
                             <PlateBadge plate={plate} color="blue" />
                             {r.trips?.[0]?.driverName && (
-                              <p className="text-xs text-[var(--color-text-muted)]">
+                              <p className="max-w-[11rem] text-xs leading-snug text-[var(--color-text-muted)]">
                                 {r.trips[0].driverName}
                               </p>
                             )}
@@ -452,30 +454,43 @@ export function Routes() {
                           <span className="text-[var(--color-text-muted)]">Sem placa</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 align-middle">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      <td className="sticky right-0 z-10 bg-[var(--color-surface)] px-3 py-3.5 align-top shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.1)] group-hover:bg-[var(--color-surface-2)]">
+                        <div className="flex flex-col items-stretch gap-1.5 min-w-[7.5rem]">
                           {awaitingPlate && (isOps || isAdmin) && (
-                            <Link to={`/definir-placas?routeId=${r.id}`}>
-                              <Button size="sm">Definir placa</Button>
+                            <Link to={`/definir-placas?routeId=${r.id}`} className="w-full">
+                              <Button size="sm" className="w-full">
+                                Definir placa
+                              </Button>
                             </Link>
                           )}
                           {isAdmin && r.status === 'RASCUNHO' && (
-                            <Button size="sm" variant="outline" onClick={() => setSendId(r.id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full justify-center"
+                              onClick={() => setSendId(r.id)}
+                            >
                               <Send className="h-3.5 w-3.5" />
                               Disponibilizar
                             </Button>
                           )}
                           {isAdmin && r.status === 'EM_ANDAMENTO' && (r.trips?.length ?? 0) > 0 && (
-                            <Button size="sm" variant="outline" onClick={() => openReassign(r)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full justify-center"
+                              onClick={() => openReassign(r)}
+                              title="Trocar placa e motorista"
+                            >
                               <RefreshCw className="h-3.5 w-3.5" />
-                              Trocar placa
+                              Trocar
                             </Button>
                           )}
                           {isAdmin && (
-                            <>
+                            <div className="flex justify-end gap-0.5">
                               <Link
                                 to={`/roteiros/${r.id}`}
-                                title="Editar"
+                                title="Editar roteiro"
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                               >
                                 <Pencil className="h-4 w-4" />
@@ -483,14 +498,14 @@ export function Routes() {
                               {r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO' && (
                                 <button
                                   type="button"
-                                  title="Cancelar"
+                                  title="Cancelar roteiro"
                                   onClick={() => setCancelId(r.id)}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-[var(--color-danger)]"
                                 >
                                   <Ban className="h-4 w-4" />
                                 </button>
                               )}
-                            </>
+                            </div>
                           )}
                         </div>
                       </td>
