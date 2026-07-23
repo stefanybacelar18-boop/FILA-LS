@@ -129,7 +129,7 @@ export function Trips() {
             </thead>
             <tbody>
               {filtered.map((t) => {
-                const overdue = t.overdue || t.status === 'ATRASADO'
+                const overdue = !!t.overdue
                 const open = t.status === 'EM_ANDAMENTO' || t.status === 'ATRASADO'
                 return (
                   <tr key={t.id} className={cn(overdue && 'bg-red-500/5')}>

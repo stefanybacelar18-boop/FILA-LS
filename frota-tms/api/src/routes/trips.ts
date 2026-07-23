@@ -9,6 +9,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { isOverdue, vehicleColor } from '../utils/status';
 import { addDays, startOfDay } from 'date-fns';
+
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 import {
@@ -88,12 +89,26 @@ export function createTripsRouter(io: Server) {
     return false;
   }
 
+  /**
+   * Atraso só quando o dia civil da previsão já passou.
+   * Também corrige viagens marcadas ATRASADO cedo demais (ex.: previsão hoje às 06:00).
+   */
   async function syncOverdue() {
-    const open = await prisma.trip.findMany({
-      where: { status: TripStatus.EM_ANDAMENTO, expectedReturn: { lt: new Date() } },
+    const today = startOfDay(new Date());
+    const pastDue = await prisma.trip.findMany({
+      where: { status: TripStatus.EM_ANDAMENTO, expectedReturn: { lt: today } },
     });
-    for (const t of open) {
+    for (const t of pastDue) {
       await prisma.trip.update({ where: { id: t.id }, data: { status: TripStatus.ATRASADO } });
+    }
+    const wronglyLate = await prisma.trip.findMany({
+      where: { status: TripStatus.ATRASADO, expectedReturn: { gte: today }, returnedAt: null },
+    });
+    for (const t of wronglyLate) {
+      await prisma.trip.update({
+        where: { id: t.id },
+        data: { status: TripStatus.EM_ANDAMENTO },
+      });
     }
   }
 
@@ -148,10 +163,9 @@ export function createTripsRouter(io: Server) {
     });
 
     const day3 = addDays(today, 3);
+    // Atraso = dia da previsão < hoje (não usa só status ATRASADO: previsão "hoje" fica em Hoje)
     const overdueIds = new Set(
-      open
-        .filter((t) => t.expectedReturn < today || t.status === TripStatus.ATRASADO)
-        .map((t) => t.id),
+      open.filter((t) => isOverdue(t.expectedReturn, t.returnedAt)).map((t) => t.id),
     );
 
     res.json({
@@ -337,7 +351,8 @@ export function createTripsRouter(io: Server) {
       return res.status(400).json({ error: 'Viagem já finalizada' });
     }
 
-    const overdue = isOverdue(trip.expectedReturn, null) || trip.status === TripStatus.ATRASADO;
+    // Exige justificativa só se o dia da previsão já passou (não no mesmo dia)
+    const overdue = isOverdue(trip.expectedReturn, null);
     const delayReason = (parsed.data.delayReason || trip.delayReason || '').trim();
     if (overdue && delayReason.length < 5) {
       return res.status(400).json({

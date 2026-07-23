@@ -1,5 +1,5 @@
 import { VehicleStatus } from '../types/enums';
-import { differenceInCalendarDays, startOfDay, addDays, isBefore } from 'date-fns';
+import { differenceInCalendarDays, startOfDay, addDays } from 'date-fns';
 
 /** Color indicator for vehicle plate based on status and return forecast */
 export function vehicleColor(
@@ -50,7 +50,12 @@ export function expectedReturnDate(departure: Date, avgTravelDays: number): Date
   return addDays(departure, days);
 }
 
+/**
+ * Atraso = dia da previsão já passou (calendário).
+ * Previsão "hoje" permanece em Hoje o dia inteiro — não marca atraso só porque
+ * o horário da previsão (ex.: 06:00) já passou.
+ */
 export function isOverdue(expectedReturn: Date, returnedAt?: Date | null): boolean {
   if (returnedAt) return false;
-  return isBefore(expectedReturn, new Date());
+  return differenceInCalendarDays(startOfDay(expectedReturn), startOfDay(new Date())) < 0;
 }
