@@ -118,6 +118,17 @@ export function createRoutesRouter(io: Server) {
         dealership: true,
         createdBy: { select: { id: true, name: true } },
         vehicles: { include: { vehicle: true } },
+        trips: {
+          where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          select: {
+            id: true,
+            driverName: true,
+            vehicleId: true,
+            status: true,
+            vehicle: { select: { id: true, plate: true } },
+          },
+          take: 3,
+        },
         _count: { select: { trips: true } },
       },
       orderBy: [
@@ -884,6 +895,252 @@ export function createRoutesRouter(io: Server) {
       }
       console.error('assign-plates failed', err);
       return res.status(500).json({ error: 'Falha ao atribuir placas' });
+    }
+  });
+
+  /**
+   * Admin: troca placa e/ou motorista de roteiro já em andamento
+   * (ajuste operacional do dia seguinte após troca no sistema interno).
+   */
+  router.post('/:id/reassign-plate', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const { vehicleId, driverId, driverName } = req.body as {
+      vehicleId?: string;
+      driverId?: string;
+      driverName?: string;
+    };
+
+    if (!vehicleId) {
+      return res.status(400).json({ error: 'Selecione a placa do veículo' });
+    }
+
+    let resolvedDriverName: string | null = null;
+    if (driverId) {
+      const driver = await prisma.driver.findUnique({ where: { id: driverId } });
+      if (!driver || !driver.active) {
+        return res.status(400).json({ error: 'Selecione um motorista cadastrado e ativo' });
+      }
+      if (driver.blocked) {
+        return res.status(400).json({
+          error: `Não é possível usar este motorista: ${driver.blockReason || 'bloqueado pelo administrador'}`,
+        });
+      }
+      resolvedDriverName = driver.name;
+    } else if (driverName?.trim()) {
+      const byName = await prisma.driver.findFirst({
+        where: { name: { equals: driverName.trim() }, active: true },
+      });
+      if (!byName) {
+        return res.status(400).json({
+          error: 'Motorista deve ser cadastrado. Cadastre em Motoristas ou escolha da lista.',
+        });
+      }
+      if (byName.blocked) {
+        return res.status(400).json({
+          error: `Não é possível usar este motorista: ${byName.blockReason || 'bloqueado pelo administrador'}`,
+        });
+      }
+      resolvedDriverName = byName.name;
+    }
+    if (!resolvedDriverName) {
+      return res.status(400).json({ error: 'Selecione o motorista da viagem' });
+    }
+
+    const route = await prisma.route.findUnique({
+      where: { id: paramId(req) },
+      include: {
+        ...routeDealershipInclude,
+        dealership: true,
+        vehicles: { include: { vehicle: true } },
+        trips: {
+          where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          include: { vehicle: true },
+        },
+      },
+    });
+    if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+    if (route.status !== RouteStatus.EM_ANDAMENTO) {
+      return res.status(400).json({
+        error: 'Só é possível trocar placa/motorista em roteiros em andamento',
+      });
+    }
+    if (route.trips.length === 0) {
+      return res.status(400).json({ error: 'Roteiro sem viagem aberta para trocar' });
+    }
+    if (route.trips.length > 1) {
+      return res.status(400).json({ error: 'Roteiro com mais de uma viagem aberta — ajuste manual necessário' });
+    }
+
+    const openTrip = route.trips[0];
+    const oldVehicle = openTrip.vehicle;
+
+    const linked: DealershipRow[] =
+      route.dealerships.length > 0
+        ? route.dealerships.map((rd) => rd.dealership)
+        : route.dealership
+          ? [route.dealership]
+          : [];
+    if (linked.length === 0) {
+      return res.status(400).json({ error: 'Roteiro sem concessionárias' });
+    }
+
+    const sameVehicle = vehicleId === openTrip.vehicleId;
+    const sameDriver = resolvedDriverName === openTrip.driverName;
+    if (sameVehicle && sameDriver) {
+      return res.status(400).json({ error: 'Nada a alterar — placa e motorista já são estes' });
+    }
+
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        if (!sameVehicle) {
+          const newVehicle = await tx.vehicle.findUnique({ where: { id: vehicleId } });
+          if (!newVehicle) {
+            throw Object.assign(new Error('Veículo não encontrado'), { status: 404 });
+          }
+
+          const blockedBy = vehicleAllowedAtAllStops(newVehicle.type, linked);
+          if (blockedBy) {
+            throw Object.assign(
+              new Error(
+                `Placa ${newVehicle.plate} (${newVehicle.type}) não permitida em ${blockedBy.name} (${blockedBy.allowedVehicle})`,
+              ),
+              { status: 400 },
+            );
+          }
+
+          const claimed = await tx.vehicle.updateMany({
+            where: { id: vehicleId, status: VehicleStatus.DISPONIVEL },
+            data: { status: VehicleStatus.EM_VIAGEM },
+          });
+          if (claimed.count !== 1) {
+            throw Object.assign(new Error(`Placa ${newVehicle.plate} não está disponível`), {
+              status: 400,
+            });
+          }
+
+          const otherOpen = await tx.trip.findFirst({
+            where: {
+              vehicleId,
+              status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+              NOT: { id: openTrip.id },
+            },
+          });
+          if (otherOpen) {
+            throw Object.assign(
+              new Error(`Placa ${newVehicle.plate} já está em outro roteiro/viagem`),
+              { status: 409 },
+            );
+          }
+
+          const oldNextStatus =
+            (oldVehicle as { maintenanceHold?: boolean }).maintenanceHold
+              ? VehicleStatus.EM_MANUTENCAO
+              : VehicleStatus.DISPONIVEL;
+
+          await tx.vehicle.update({
+            where: { id: oldVehicle.id },
+            data: { status: oldNextStatus },
+          });
+
+          await tx.routeVehicle.deleteMany({ where: { routeId: route.id } });
+          await tx.routeVehicle.create({
+            data: { routeId: route.id, vehicleId },
+          });
+
+          await tx.trip.update({
+            where: { id: openTrip.id },
+            data: {
+              vehicleId,
+              driverName: resolvedDriverName,
+              assignedById: req.user!.id,
+            },
+          });
+
+          await tx.vehicleHistory.create({
+            data: {
+              vehicleId: oldVehicle.id,
+              userId: req.user!.id,
+              tripId: openTrip.id,
+              action: 'TROCA_LIBERACAO',
+              fromStatus: oldVehicle.status,
+              toStatus: oldNextStatus,
+              details: `Troca Admin: saiu do roteiro ${route.name} → ${newVehicle.plate} · motorista ${resolvedDriverName}`,
+            },
+          });
+          await tx.vehicleHistory.create({
+            data: {
+              vehicleId,
+              userId: req.user!.id,
+              tripId: openTrip.id,
+              action: 'TROCA_ENTRADA',
+              fromStatus: VehicleStatus.DISPONIVEL,
+              toStatus: VehicleStatus.EM_VIAGEM,
+              details: `Troca Admin: entrou no roteiro ${route.name} (antes ${oldVehicle.plate}) · motorista ${resolvedDriverName}`,
+            },
+          });
+
+          return {
+            oldPlate: oldVehicle.plate,
+            newPlate: newVehicle.plate,
+            driverName: resolvedDriverName,
+          };
+        }
+
+        // Só motorista
+        await tx.trip.update({
+          where: { id: openTrip.id },
+          data: {
+            driverName: resolvedDriverName,
+            assignedById: req.user!.id,
+          },
+        });
+        await tx.vehicleHistory.create({
+          data: {
+            vehicleId: oldVehicle.id,
+            userId: req.user!.id,
+            tripId: openTrip.id,
+            action: 'TROCA_MOTORISTA',
+            fromStatus: oldVehicle.status,
+            toStatus: oldVehicle.status,
+            details: `Troca Admin: motorista ${openTrip.driverName ?? '—'} → ${resolvedDriverName} (roteiro ${route.name})`,
+          },
+        });
+        return {
+          oldPlate: oldVehicle.plate,
+          newPlate: oldVehicle.plate,
+          driverName: resolvedDriverName,
+        };
+      });
+
+      await audit('REASSIGN_PLATE', 'Route', {
+        userId: req.user!.id,
+        entityId: route.id,
+        details: `${updated.oldPlate} → ${updated.newPlate} · ${updated.driverName}`,
+      });
+      io.emit('fleet:changed', { action: 'reassign', routeId: route.id });
+      io.emit('trips:changed', { action: 'reassign' });
+      io.emit('routes:changed', { action: 'reassign', id: route.id });
+
+      const refreshed = await prisma.route.findUnique({
+        where: { id: route.id },
+        include: {
+          ...routeDealershipInclude,
+          dealership: true,
+          vehicles: { include: { vehicle: true } },
+          trips: {
+            where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+            include: { vehicle: true },
+          },
+        },
+      });
+      res.json(refreshed);
+    } catch (err) {
+      const e = err as Error & { status?: number };
+      const status = e.status ?? 500;
+      if (status >= 400 && status < 500) {
+        return res.status(status).json({ error: e.message });
+      }
+      console.error('reassign-plate failed', err);
+      return res.status(500).json({ error: 'Falha ao trocar placa/motorista' });
     }
   });
 
