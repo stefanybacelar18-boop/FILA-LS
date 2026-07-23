@@ -240,6 +240,8 @@ export function Routes() {
       )
     },
   })
+
+  return (
     <div className="page-desktop max-w-[1280px]">
       <PageHeader
         title="Roteiros"
