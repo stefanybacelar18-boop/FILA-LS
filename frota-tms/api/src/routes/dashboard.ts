@@ -95,8 +95,10 @@ router.get('/', async (_req, res) => {
     (t) => isOverdue(t.expectedReturn, t.returnedAt) && !t.delayReason,
   ).length;
 
-  // Placas que já deveriam ter voltado (previsão <= agora) e ainda estão fora
-  const deveriamEstarDisponiveis = openTrips.filter((t) => t.expectedReturn <= new Date()).length;
+  // Placas cujo dia de previsão já passou e ainda estão fora
+  const deveriamEstarDisponiveis = openTrips.filter((t) =>
+    isOverdue(t.expectedReturn, t.returnedAt),
+  ).length;
 
   // Justificativas pendentes em roteiros aguardando placas (placa fora que já deveria ter retornado até o load)
   const pendingPlateRoutes = await prisma.route.findMany({

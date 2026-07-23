@@ -422,8 +422,7 @@ export function Returns() {
     mutationFn: async () => {
       if (!confirmTrip) return
       if (
-        (confirmTrip.overdue || confirmTrip.status === 'ATRASADO') &&
-        !confirmTrip.delayReason
+        confirmTrip.overdue && !confirmTrip.delayReason
       ) {
         throw Object.assign(new Error('DELAY_REQUIRED'), {
           response: {
@@ -643,10 +642,7 @@ export function Returns() {
             </Button>
             <Button
               loading={returnMutation.isPending}
-              disabled={
-                !!(confirmTrip?.overdue || confirmTrip?.status === 'ATRASADO') &&
-                !confirmTrip?.delayReason
-              }
+              disabled={!!confirmTrip?.overdue && !confirmTrip?.delayReason}
               onClick={() => returnMutation.mutate()}
             >
               Confirmar retorno
@@ -659,8 +655,7 @@ export function Returns() {
             Confirma o retorno da placa <strong>{confirmTrip?.vehicle.plate}</strong>? O veículo
             volta a ficar disponível.
           </p>
-          {(confirmTrip?.overdue || confirmTrip?.status === 'ATRASADO') &&
-            !confirmTrip?.delayReason && (
+          {confirmTrip?.overdue && !confirmTrip?.delayReason && (
               <p className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                 Esta viagem está em atraso. Use <strong>Problema</strong> para registrar
                 justificativa + evidências antes de confirmar.
