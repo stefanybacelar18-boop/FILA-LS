@@ -6,9 +6,10 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { isOverdue } from '../utils/status';
-import { addDays, startOfDay } from 'date-fns';
+import { addDays, format, startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
+import { isFirstRouteSentToday, notifyFirstRouteOfDay } from '../services/notify';
 
 function normalizeCity(city: string): string {
   return city.trim().replace(/\s+/g, ' ');
@@ -564,6 +565,8 @@ export function createPlanningRouter(io: Server) {
       });
     }
 
+    const firstOfDay = await isFirstRouteSentToday();
+
     const updated = await prisma.$transaction(async (tx) => {
       await tx.planningCity.updateMany({
         where: { routeId },
@@ -587,6 +590,18 @@ export function createPlanningRouter(io: Server) {
       entityId: routeId,
       details: `${route.name} · 1 placa`,
     });
+
+    if (firstOfDay) {
+      const payload = {
+        routeId,
+        routeName: updated.name,
+        routeDate: format(updated.date, 'dd/MM/yyyy'),
+        createdByName: req.user!.name || 'Admin',
+      };
+      void notifyFirstRouteOfDay(payload);
+      io.emit('notify:first-route', payload);
+    }
+
     io.emit('planning:changed', { action: 'send', id: routeId });
     io.emit('routes:changed', { action: 'send', id: routeId });
     res.json(updated);

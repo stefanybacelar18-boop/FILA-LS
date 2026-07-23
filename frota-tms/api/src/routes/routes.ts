@@ -14,6 +14,8 @@ import {
   isPlateHiddenFromOperator,
   plateOwner,
 } from '../data/operatorVisibility';
+import { isFirstRouteSentToday, notifyFirstRouteOfDay } from '../services/notify';
+import { format } from 'date-fns';
 
 const routeDealershipInclude = {
   dealerships: {
@@ -571,6 +573,8 @@ export function createRoutesRouter(io: Server) {
       // 1 placa por rota
     }
 
+    const firstOfDay = await isFirstRouteSentToday();
+
     const updated = await prisma.route.update({
       where: { id: routeId },
       data: {
@@ -584,6 +588,7 @@ export function createRoutesRouter(io: Server) {
         ...routeDealershipInclude,
         dealership: true,
         vehicles: { include: { vehicle: true } },
+        createdBy: { select: { id: true, name: true } },
       },
     });
 
@@ -592,6 +597,19 @@ export function createRoutesRouter(io: Server) {
       entityId: routeId,
       details: `${route.name} · 1 placa`,
     });
+
+    // 1º roteiro disponibilizado no dia → e-mail + aviso in-app (Admin e Operação)
+    if (firstOfDay) {
+      const payload = {
+        routeId,
+        routeName: updated.name,
+        routeDate: format(updated.date, 'dd/MM/yyyy'),
+        createdByName: updated.createdBy?.name || req.user!.name || 'Admin',
+      };
+      void notifyFirstRouteOfDay(payload);
+      io.emit('notify:first-route', payload);
+    }
+
     io.emit('routes:changed', { action: 'send', id: routeId });
     io.emit('planning:changed', { action: 'send', id: routeId });
     res.json(updated);

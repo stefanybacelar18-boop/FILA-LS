@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from './stores/auth'
 import { AppLayout } from './components/layout/AppLayout'
 import { RealtimeProvider } from './components/RealtimeProvider'
+import { FirstRouteNotifier } from './components/FirstRouteNotifier'
 import { Spinner } from './components/ui'
 import type { Role } from './types'
 
@@ -82,6 +83,7 @@ export default function App() {
               element={
                 <AuthGate>
                   <AppLayout />
+                  <FirstRouteNotifier />
                 </AuthGate>
               }
             >
