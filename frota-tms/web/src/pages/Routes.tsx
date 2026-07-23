@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, Calendar, Flag } from 'lucide-react'
+import { Plus, Pencil, Ban, Send, MapPin, Calendar, Flag, RefreshCw } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Route } from '../types'
+import type { Driver, Route, Vehicle } from '../types'
 import {
   PageHeader,
   SearchInput,
@@ -12,12 +12,16 @@ import {
   Spinner,
   EmptyState,
   ConfirmModal,
+  Modal,
+  Combobox,
+  PlateBadge,
 } from '../components/ui'
 import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { useAuthStore } from '../stores/auth'
 import { routeStatusLabels } from '../lib/labels'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
+import { plateOwner } from '../lib/plateOwner'
 
 function citiesList(r: Route): string[] {
   if (r.dealerships && r.dealerships.length > 0) {
@@ -75,6 +79,9 @@ export function Routes() {
   const [q, setQ] = useState('')
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [sendId, setSendId] = useState<string | null>(null)
+  const [reassignRoute, setReassignRoute] = useState<Route | null>(null)
+  const [reassignVehicleId, setReassignVehicleId] = useState('')
+  const [reassignDriverId, setReassignDriverId] = useState('')
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
 
@@ -86,6 +93,74 @@ export function Routes() {
       return (await api.get<Route[]>('/routes', { params })).data
     },
   })
+
+  const { data: availableVehicles = [] } = useQuery({
+    queryKey: ['vehicles-available'],
+    queryFn: async () => (await api.get<Vehicle[]>('/vehicles/available')).data,
+    enabled: !!reassignRoute && isAdmin,
+  })
+
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers', 'active'],
+    queryFn: async () =>
+      (await api.get<Driver[]>('/drivers', { params: { active: 'true' } })).data,
+    enabled: !!reassignRoute && isAdmin,
+  })
+
+  const openTrip = reassignRoute?.trips?.[0]
+  const currentVehicle =
+    openTrip?.vehicle ??
+    reassignRoute?.vehicles?.[0]?.vehicle ??
+    null
+
+  const plateOptions = useMemo(() => {
+    const list = [...availableVehicles]
+    if (currentVehicle && !list.some((v) => v.id === currentVehicle.id)) {
+      list.unshift({
+        id: currentVehicle.id,
+        plate: currentVehicle.plate,
+        capacityMotos: (currentVehicle as Vehicle).capacityMotos ?? 0,
+        defaultDriver: (currentVehicle as Vehicle).defaultDriver ?? null,
+      } as Vehicle)
+    }
+    return list.map((v) => ({
+      value: v.id,
+      label: `${v.plate} · ${plateOwner(v.plate)}${
+        currentVehicle?.id === v.id ? ' (atual)' : ''
+      }`,
+      description: v.capacityMotos
+        ? `${v.capacityMotos} motos${v.defaultDriver ? ` · ${v.defaultDriver}` : ''}`
+        : 'Placa atual do roteiro',
+    }))
+  }, [availableVehicles, currentVehicle])
+
+  const driverOptions = useMemo(
+    () =>
+      drivers
+        .filter((d) => !d.blocked)
+        .map((d) => ({
+          value: d.id,
+          label: d.name,
+        })),
+    [drivers],
+  )
+
+  function openReassign(r: Route) {
+    const trip = r.trips?.[0]
+    const vehicle = trip?.vehicle ?? r.vehicles?.[0]?.vehicle
+    setReassignRoute(r)
+    setReassignVehicleId(vehicle?.id ?? trip?.vehicleId ?? '')
+    setReassignDriverId('')
+    setError('')
+  }
+
+  useEffect(() => {
+    if (!reassignRoute || drivers.length === 0 || reassignDriverId) return
+    const name = reassignRoute.trips?.[0]?.driverName?.trim()
+    if (!name) return
+    const match = drivers.find((d) => d.name.trim().toLowerCase() === name.toLowerCase())
+    if (match) setReassignDriverId(match.id)
+  }, [reassignRoute, drivers, reassignDriverId])
 
   const pending = useMemo(
     () =>
@@ -134,7 +209,37 @@ export function Routes() {
     },
   })
 
-  return (
+  const reassignMutation = useMutation({
+    mutationFn: async () => {
+      if (!reassignRoute) throw new Error('Sem roteiro')
+      if (!reassignVehicleId) throw new Error('Selecione a placa')
+      if (!reassignDriverId) throw new Error('Selecione o motorista')
+      return api.post(`/routes/${reassignRoute.id}/reassign-plate`, {
+        vehicleId: reassignVehicleId,
+        driverId: reassignDriverId,
+      })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['routes'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-available'] })
+      void qc.invalidateQueries({ queryKey: ['trips'] })
+      void qc.invalidateQueries({ queryKey: ['returns'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
+      setReassignRoute(null)
+      setReassignVehicleId('')
+      setReassignDriverId('')
+      setOkMsg('Placa/motorista atualizados.')
+      setError('')
+    },
+    onError: (err: unknown) => {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          (err as Error)?.message ??
+          'Não foi possível trocar placa/motorista.',
+      )
+    },
+  })
     <div className="page-desktop max-w-[1280px]">
       <PageHeader
         title="Roteiros"
@@ -333,9 +438,14 @@ export function Routes() {
                       </td>
                       <td className="px-4 py-3.5 align-middle">
                         {plate ? (
-                          <span className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-xs font-semibold tracking-wider">
-                            {plate}
-                          </span>
+                          <div className="space-y-1">
+                            <PlateBadge plate={plate} color="blue" />
+                            {r.trips?.[0]?.driverName && (
+                              <p className="text-xs text-[var(--color-text-muted)]">
+                                {r.trips[0].driverName}
+                              </p>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-[var(--color-text-muted)]">Sem placa</span>
                         )}
@@ -351,6 +461,12 @@ export function Routes() {
                             <Button size="sm" variant="outline" onClick={() => setSendId(r.id)}>
                               <Send className="h-3.5 w-3.5" />
                               Disponibilizar
+                            </Button>
+                          )}
+                          {isAdmin && r.status === 'EM_ANDAMENTO' && (r.trips?.length ?? 0) > 0 && (
+                            <Button size="sm" variant="outline" onClick={() => openReassign(r)}>
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              Trocar placa
                             </Button>
                           )}
                           {isAdmin && (
@@ -405,6 +521,74 @@ export function Routes() {
         confirmLabel="Disponibilizar"
         loading={sendMutation.isPending}
       />
+
+      <Modal
+        open={!!reassignRoute}
+        onClose={() => {
+          setReassignRoute(null)
+          setReassignVehicleId('')
+          setReassignDriverId('')
+        }}
+        title={reassignRoute ? `Trocar placa — ${reassignRoute.name}` : 'Trocar placa'}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReassignRoute(null)
+                setReassignVehicleId('')
+                setReassignDriverId('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => reassignMutation.mutate()}
+              loading={reassignMutation.isPending}
+              disabled={!reassignVehicleId || !reassignDriverId}
+            >
+              Confirmar troca
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Ajuste placa e motorista de roteiro em andamento (ex.: troca feita no sistema interno).
+            A placa anterior volta a ficar disponível.
+          </p>
+          {currentVehicle && (
+            <p className="rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm">
+              Atual:{' '}
+              <strong>{currentVehicle.plate}</strong>
+              {openTrip?.driverName ? ` · ${openTrip.driverName}` : ''}
+            </p>
+          )}
+          <Combobox
+            label="Nova placa"
+            value={reassignVehicleId}
+            onChange={setReassignVehicleId}
+            options={plateOptions}
+            placeholder="Buscar placa…"
+          />
+          <Combobox
+            label="Motorista"
+            value={reassignDriverId}
+            onChange={setReassignDriverId}
+            options={driverOptions}
+            placeholder="Buscar motorista…"
+          />
+          {reassignMutation.isError && (
+            <p className="text-sm text-[var(--color-danger)]">
+              {(reassignMutation.error as { response?: { data?: { error?: string } } })?.response
+                ?.data?.error ??
+                (reassignMutation.error as Error)?.message ??
+                'Falha na troca'}
+            </p>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }
