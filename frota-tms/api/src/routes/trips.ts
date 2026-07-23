@@ -7,8 +7,8 @@ import { Role, TripStatus, VehicleStatus, RouteStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
-import { isOverdue, vehicleColor } from '../utils/status';
-import { addDays, startOfDay } from 'date-fns';
+import { isOverdue, vehicleColor, expectedReturnDate } from '../utils/status';
+import { addDays, differenceInCalendarDays, startOfDay } from 'date-fns';
 
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
@@ -16,7 +16,9 @@ import {
   filterTripsForRole,
   isDriverHiddenFromOperator,
   isPlateHiddenFromOperator,
+  plateOwner,
 } from '../data/operatorVisibility';
+import { isLslNextDayOverrideCity } from '../utils/geo';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads/trip-evidence');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -112,7 +114,59 @@ export function createTripsRouter(io: Server) {
     }
   }
 
+  /**
+   * LSL em Aracaju: se a previsão ficou no mesmo dia da saída, sobe para o dia seguinte.
+   * Não altera viagens que já tiveram nova previsão (ex.: justificativa de atraso).
+   */
+  async function syncLslAracajuReturns() {
+    const open = await prisma.trip.findMany({
+      where: {
+        status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+        returnedAt: null,
+      },
+      include: {
+        vehicle: true,
+        dealership: true,
+        route: {
+          include: {
+            dealerships: { include: { dealership: true } },
+            dealership: true,
+          },
+        },
+      },
+    });
+
+    for (const t of open) {
+      if (plateOwner(t.vehicle.plate) !== 'LSL') continue;
+
+      const cities: string[] = [];
+      if (t.dealership?.city) cities.push(t.dealership.city);
+      if (t.route?.dealership?.city) cities.push(t.route.dealership.city);
+      for (const rd of t.route?.dealerships ?? []) {
+        if (rd.dealership?.city) cities.push(rd.dealership.city);
+      }
+      if (!cities.some((c) => isLslNextDayOverrideCity(c))) continue;
+
+      const depDay = startOfDay(t.departureAt);
+      const retDay = startOfDay(t.expectedReturn);
+      // Só corrige o caso “errado clássico”: retorno no mesmo dia da saída
+      if (differenceInCalendarDays(retDay, depDay) !== 0) continue;
+      // Se já houve justificativa com nova data, não mexe (retDay já teria mudado)
+      if (t.delayReason) continue;
+
+      const corrected = expectedReturnDate(t.departureAt, 1);
+      await prisma.trip.update({
+        where: { id: t.id },
+        data: {
+          expectedReturn: corrected,
+          status: TripStatus.EM_ANDAMENTO,
+        },
+      });
+    }
+  }
+
   router.get('/', async (req: AuthRequest, res) => {
+    await syncLslAracajuReturns();
     await syncOverdue();
     const { status, vehicleId, dealershipId, from, to } = req.query;
     const where: Record<string, unknown> = {};
@@ -143,6 +197,7 @@ export function createTripsRouter(io: Server) {
   });
 
   router.get('/returns', async (req: AuthRequest, res) => {
+    await syncLslAracajuReturns();
     await syncOverdue();
     const today = startOfDay(new Date());
     const tomorrow = addDays(today, 1);

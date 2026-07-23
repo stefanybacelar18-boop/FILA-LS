@@ -82,6 +82,17 @@ export const SAME_DAY_RETURN_CITIES = new Set([
   'JEQUIE',
 ]);
 
+/**
+ * Exceção: frota LSL em Aracaju (e região) só retorna no dia seguinte,
+ * mesmo estando na faixa de “mesmo dia” para AG.
+ */
+export const LSL_NEXT_DAY_OVERRIDE_CITIES = new Set([
+  'ARACAJU',
+  'NOSSA SENHORA DO SOCORRO',
+]);
+
+export type FleetOwner = 'LSL' | 'AG';
+
 export const NEXT_DAY_RETURN_CITIES = new Set([
   'ILHEUS',
   'ITABUNA',
@@ -143,38 +154,73 @@ export function resolveCityAlias(cityKey: string): string {
 /**
  * Dias de retorno pela regra operacional (0 / 1 / 3).
  * `null` = usar fórmula por distância.
+ * Com `owner: 'LSL'`, Aracaju (e Socorro) sobe para dia seguinte.
  */
-export function operationalReturnDays(city: string): number | null {
+export function operationalReturnDays(
+  city: string,
+  owner?: FleetOwner | null,
+): number | null {
   const raw = normalizeCityKey(city);
   const key = resolveCityAlias(raw);
   const candidates = [raw, key, raw.replace(/\./g, ' ').replace(/\s+/g, ' ').trim()];
 
+  let days: number | null = null;
   for (const c of candidates) {
-    if (SAME_DAY_RETURN_CITIES.has(c)) return 0;
-    if (NEXT_DAY_RETURN_CITIES.has(c)) return 1;
-    if (THREE_DAY_RETURN_CITIES.has(c)) return 3;
+    if (SAME_DAY_RETURN_CITIES.has(c)) {
+      days = 0;
+      break;
+    }
+    if (NEXT_DAY_RETURN_CITIES.has(c)) {
+      days = 1;
+      break;
+    }
+    if (THREE_DAY_RETURN_CITIES.has(c)) {
+      days = 3;
+      break;
+    }
   }
-  if (key.startsWith('LAURO ')) return 0;
-  if (key.startsWith('SANTO ANTONIO')) return 0;
-  if (key.startsWith('CRUZ DAS')) return 0;
-  if (key.startsWith('EUCLIDES')) return 0;
-  if (key.startsWith('ENTRE RIOS')) return 0;
-  if (key.startsWith('CAMPO FORMOSO')) return 1;
-  if (key.startsWith('VITORIA DA CONQUISTA')) return 1;
-  if (key.startsWith('NOSSA SENHORA DA GLORIA')) return 1;
-  if (key.startsWith('TOBIAS')) return 1;
-  if (key.startsWith('PORTO SEGURO')) return 3;
-  if (key.startsWith('TEIXEIRA')) return 3;
-  if (key.startsWith('BOM JESUS DA LAPA')) return 3;
-  return null;
+  if (days === null) {
+    if (key.startsWith('LAURO ')) days = 0;
+    else if (key.startsWith('SANTO ANTONIO')) days = 0;
+    else if (key.startsWith('CRUZ DAS')) days = 0;
+    else if (key.startsWith('EUCLIDES')) days = 0;
+    else if (key.startsWith('ENTRE RIOS')) days = 0;
+    else if (key.startsWith('CAMPO FORMOSO')) days = 1;
+    else if (key.startsWith('VITORIA DA CONQUISTA')) days = 1;
+    else if (key.startsWith('NOSSA SENHORA DA GLORIA')) days = 1;
+    else if (key.startsWith('TOBIAS')) days = 1;
+    else if (key.startsWith('PORTO SEGURO')) days = 3;
+    else if (key.startsWith('TEIXEIRA')) days = 3;
+    else if (key.startsWith('BOM JESUS DA LAPA')) days = 3;
+  }
+
+  if (owner === 'LSL' && isLslNextDayOverrideCity(city)) {
+    return Math.max(days ?? 0, 1);
+  }
+  return days;
+}
+
+export function isLslNextDayOverrideCity(city: string): boolean {
+  const raw = normalizeCityKey(city);
+  const key = resolveCityAlias(raw);
+  return (
+    LSL_NEXT_DAY_OVERRIDE_CITIES.has(raw) ||
+    LSL_NEXT_DAY_OVERRIDE_CITIES.has(key) ||
+    key.startsWith('ARACAJU') ||
+    key.startsWith('NOSSA SENHORA DO SOCORRO')
+  );
 }
 
 export function isSameDayReturnCity(city: string): boolean {
   return operationalReturnDays(city) === 0;
 }
 
-function applyOperationalTravelDays(city: string, travel: PadTravel): PadTravel {
-  const days = operationalReturnDays(city);
+function applyOperationalTravelDays(
+  city: string,
+  travel: PadTravel,
+  owner?: FleetOwner | null,
+): PadTravel {
+  const days = operationalReturnDays(city, owner);
   if (days !== null) {
     return { ...travel, avgTravelDays: days };
   }
@@ -195,44 +241,57 @@ export type PadTravel = {
 };
 
 /** Resolve coordenadas da cidade (mapa local) e calcula distância/dias a partir do PAD. */
-export function travelFromPadByCity(city: string): PadTravel | null {
+export function travelFromPadByCity(
+  city: string,
+  owner?: FleetOwner | null,
+): PadTravel | null {
   const key = resolveCityAlias(normalizeCityKey(city));
   const coords = CITY_COORDS[key] ?? CITY_COORDS[normalizeCityKey(city)];
   if (!coords) return null;
   const distanceKm = distanceFromPad(coords.lat, coords.lng);
-  return applyOperationalTravelDays(city, {
-    distanceKm,
-    avgTravelDays: avgTravelDaysFromDistance(distanceKm),
-    lat: coords.lat,
-    lng: coords.lng,
-    source: 'city',
-  });
+  return applyOperationalTravelDays(
+    city,
+    {
+      distanceKm,
+      avgTravelDays: avgTravelDaysFromDistance(distanceKm),
+      lat: coords.lat,
+      lng: coords.lng,
+      source: 'city',
+    },
+    owner,
+  );
 }
 
 /**
  * Calcula (ou reaproveita) distância/dias PAD→concessionária.
  * Prioridade: coordenadas da cidade mapeada; senão valores já persistidos.
  * Aplica regra operacional de retorno no mesmo dia quando couber.
+ * `owner: 'LSL'` aplica exceção Aracaju = dia seguinte.
  */
 export function resolveTravelFromPad(input: {
   city: string;
   distanceKm?: number | null;
   avgTravelDays?: number | null;
+  owner?: FleetOwner | null;
 }): PadTravel {
-  const fromCity = travelFromPadByCity(input.city);
+  const fromCity = travelFromPadByCity(input.city, input.owner);
   if (fromCity) return fromCity;
   const distanceKm = Math.max(0, Number(input.distanceKm ?? 0));
   const avgTravelDays =
     input.avgTravelDays != null && Number(input.avgTravelDays) >= 0
       ? Number(input.avgTravelDays)
       : avgTravelDaysFromDistance(distanceKm || 1);
-  return applyOperationalTravelDays(input.city, {
-    distanceKm,
-    avgTravelDays,
-    lat: PAD_LAT,
-    lng: PAD_LNG,
-    source: 'stored',
-  });
+  return applyOperationalTravelDays(
+    input.city,
+    {
+      distanceKm,
+      avgTravelDays,
+      lat: PAD_LAT,
+      lng: PAD_LNG,
+      source: 'stored',
+    },
+    input.owner,
+  );
 }
 
 /** Approximate city centers (BA / SE) */
