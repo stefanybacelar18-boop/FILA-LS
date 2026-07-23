@@ -186,7 +186,7 @@ export function createTripsRouter(io: Server) {
   });
 
   /**
-   * Problema / atraso: justificativa + nova previsão + evidências (fotos/PDF).
+   * Problema / atraso: justificativa + nova previsão + evidências opcionais (fotos/PDF).
    * Aceita JSON ou multipart (campo "evidence").
    */
   router.post(
@@ -214,12 +214,6 @@ export function createTripsRouter(io: Server) {
       }
 
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-      if (files.length < 1) {
-        return res.status(400).json({
-          error: 'Anexe ao menos uma foto ou evidência do atraso/problema',
-          code: 'EVIDENCE_REQUIRED',
-        });
-      }
 
       const trip = await prisma.trip.findUnique({
         where: { id: paramId(req) },
@@ -357,14 +351,8 @@ export function createTripsRouter(io: Server) {
     if (overdue && delayReason.length < 5) {
       return res.status(400).json({
         error:
-          'Viagem fora da previsão: informe o problema (justificativa + evidências) antes de confirmar o retorno.',
+          'Viagem fora da previsão: informe o problema (justificativa) antes de confirmar o retorno.',
         code: 'DELAY_REASON_REQUIRED',
-      });
-    }
-    if (overdue && !trip.delayReason && (trip.evidences?.length ?? 0) < 1) {
-      return res.status(400).json({
-        error: 'Registre o problema com justificativa e evidência antes de confirmar o retorno em atraso.',
-        code: 'EVIDENCE_REQUIRED',
       });
     }
 
