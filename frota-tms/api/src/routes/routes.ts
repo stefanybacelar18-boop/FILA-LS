@@ -109,6 +109,9 @@ export function createRoutesRouter(io: Server) {
         { name: { contains: String(q) } },
         { region: { contains: String(q) } },
         { dealerships: { some: { dealership: { name: { contains: String(q) } } } } },
+        { dealerships: { some: { dealership: { city: { contains: String(q) } } } } },
+        { dealership: { name: { contains: String(q) } } },
+        { dealership: { city: { contains: String(q) } } },
       ];
     }
     const routes = await prisma.route.findMany({
