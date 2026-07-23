@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, Calendar, Flag, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, Route, Vehicle } from '../types'
 import {
@@ -31,6 +31,15 @@ function dealershipStops(r: Route): { name: string; city: string }[] {
   }
   if (r.dealership) return [{ name: r.dealership.name, city: r.dealership.city }]
   return []
+}
+
+function destinationsSummary(stops: { name: string; city: string }[]): string {
+  if (stops.length === 0) return '—'
+  const cities = [...new Set(stops.map((s) => s.city))]
+  if (cities.length === 1) {
+    return stops.length === 1 ? cities[0] : `${stops.length} · ${cities[0]}`
+  }
+  return `${stops.length} destinos`
 }
 
 function sortRoutes(list: Route[]): Route[] {
@@ -65,6 +74,7 @@ export function Routes() {
   const isOps = useAuthStore((s) => s.hasRole('OPERACAO'))
   const [tab, setTab] = useState<Tab>('pendentes')
   const [q, setQ] = useState('')
+  const [detailRoute, setDetailRoute] = useState<Route | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [sendId, setSendId] = useState<string | null>(null)
   const [reassignRoute, setReassignRoute] = useState<Route | null>(null)
@@ -136,6 +146,7 @@ export function Routes() {
   function openReassign(r: Route) {
     const trip = r.trips?.[0]
     const vehicle = trip?.vehicle ?? r.vehicles?.[0]?.vehicle
+    setDetailRoute(null)
     setReassignRoute(r)
     setReassignVehicleId(vehicle?.id ?? trip?.vehicleId ?? '')
     setReassignDriverId('')
@@ -149,6 +160,13 @@ export function Routes() {
     const match = drivers.find((d) => d.name.trim().toLowerCase() === name.toLowerCase())
     if (match) setReassignDriverId(match.id)
   }, [reassignRoute, drivers, reassignDriverId])
+
+  // Keep detail modal in sync when list refreshes
+  useEffect(() => {
+    if (!detailRoute) return
+    const fresh = data.find((r) => r.id === detailRoute.id)
+    if (fresh) setDetailRoute(fresh)
+  }, [data, detailRoute?.id])
 
   const pending = useMemo(
     () =>
@@ -169,6 +187,7 @@ export function Routes() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['routes'] })
       setCancelId(null)
+      setDetailRoute(null)
       setError('')
     },
     onError: (err: unknown) => {
@@ -229,11 +248,17 @@ export function Routes() {
     },
   })
 
+  const detailStops = detailRoute ? dealershipStops(detailRoute) : []
+  const detailPlate = detailRoute?.vehicles?.[0]?.vehicle?.plate
+  const detailAwaiting =
+    detailRoute?.status === 'AGUARDANDO_PLACAS' &&
+    (!detailRoute.vehicles || detailRoute.vehicles.length === 0)
+
   return (
-    <div className="page-desktop max-w-[1400px]">
+    <div className="page-desktop max-w-[1200px]">
       <PageHeader
         title="Roteiros"
-        description="Prioridade no topo. Fim de viagem: mesmo dia / 1 dia / 3 dias conforme a cidade (regra operacional)."
+        description="Prioridade no topo. Clique no roteiro para ver detalhes."
         actions={
           isAdmin ? (
             <Link to="/roteiros/novo">
@@ -330,18 +355,16 @@ export function Routes() {
       ) : (
         <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)]">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
-                  <th className="px-4 py-3 font-semibold">Descrição</th>
+                  <th className="px-4 py-3 font-semibold">Roteiro</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Início</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Fim</th>
-                  <th className="min-w-[280px] px-4 py-3 font-semibold">Concessionárias</th>
+                  <th className="px-4 py-3 font-semibold">Destinos</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Placa</th>
-                  <th className="sticky right-0 z-10 bg-[var(--color-surface-2)] px-4 py-3 text-right font-semibold shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)]">
-                    Ações
-                  </th>
+                  <th className="px-4 py-3 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -354,143 +377,80 @@ export function Routes() {
                     <tr
                       key={r.id}
                       className={cn(
-                        'group border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40',
+                        'border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40',
                         r.hasPriority && 'bg-[var(--color-danger)]/[0.03]',
                       )}
                     >
-                      <td className="px-4 py-3.5 align-top">
-                        <div className="space-y-1">
-                          {isAdmin ? (
-                            <Link
-                              to={`/roteiros/${r.id}`}
-                              className="font-medium text-[var(--color-text)] hover:text-[var(--color-primary)]"
-                            >
-                              {r.name}
-                            </Link>
-                          ) : (
-                            <span className="font-medium text-[var(--color-text)]">{r.name}</span>
-                          )}
-                          {r.hasPriority && (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <Badge tone="danger">Prioridade · vencimento</Badge>
-                              {r.priorityExpiryDate ? (
-                                <span
-                                  className={
-                                    new Date(r.priorityExpiryDate) < new Date()
-                                      ? 'text-xs font-semibold text-[var(--color-danger)]'
-                                      : 'text-xs text-[var(--color-text-muted)]'
-                                  }
-                                >
-                                  menor venc.: {formatDate(r.priorityExpiryDate)}
-                                </span>
-                              ) : (
-                                <span className="text-xs font-semibold text-[var(--color-danger)]">
-                                  falta informar o vencimento
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 align-top whitespace-nowrap">
-                        <div className="inline-flex items-start gap-2">
-                          <Calendar className="mt-0.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                          <div>
-                            <p className="font-medium">{formatDate(r.date)}</p>
-                            <p className="text-xs text-[var(--color-text-muted)]">06:00</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 align-top whitespace-nowrap">
-                        {r.returnForecast?.expectedReturn ? (
-                          <div className="inline-flex items-center gap-2">
-                            <Flag className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                            <p className="font-medium">
-                              {formatDate(r.returnForecast.expectedReturn)}
-                            </p>
-                          </div>
-                        ) : (
-                          <span className="text-[var(--color-text-muted)]">—</span>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setDetailRoute(r)}
+                          className="group inline-flex max-w-full items-center gap-1.5 text-left"
+                        >
+                          <span className="truncate font-medium text-[var(--color-primary)] underline-offset-2 group-hover:underline">
+                            {r.name}
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] opacity-0 transition group-hover:opacity-100" />
+                        </button>
+                        {r.hasPriority && (
+                          <p className="mt-0.5 text-xs text-[var(--color-danger)]">Prioridade</p>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 align-top">
-                        {stops.length === 0 ? (
-                          <span className="text-[var(--color-text-muted)]">—</span>
-                        ) : (
-                          <ol className="space-y-2">
-                            {stops.map((s, idx) => (
-                              <li key={`${r.id}-${idx}-${s.name}`} className="flex gap-2">
-                                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-muted)] text-[10px] font-bold text-[var(--color-primary)]">
-                                  {idx + 1}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium leading-snug text-[var(--color-text)]">
-                                    {s.name}
-                                  </p>
-                                  <p className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
-                                    <MapPin className="h-3 w-3 shrink-0" />
-                                    {s.city}
-                                  </p>
-                                </div>
-                              </li>
-                            ))}
-                          </ol>
-                        )}
+                      <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text)]">
+                        {formatDate(r.date)}
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text)]">
+                        {r.returnForecast?.expectedReturn
+                          ? formatDate(r.returnForecast.expectedReturn)
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--color-text-muted)]">
+                        {destinationsSummary(stops)}
+                      </td>
+                      <td className="px-4 py-3">
                         <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-3">
                         {plate ? (
-                          <div className="space-y-1">
-                            <PlateBadge plate={plate} color="blue" />
-                            {r.trips?.[0]?.driverName && (
-                              <p className="max-w-[11rem] text-xs leading-snug text-[var(--color-text-muted)]">
-                                {r.trips[0].driverName}
-                              </p>
-                            )}
-                          </div>
+                          <PlateBadge plate={plate} color="blue" />
                         ) : (
-                          <span className="text-[var(--color-text-muted)]">Sem placa</span>
+                          <span className="text-[var(--color-text-muted)]">—</span>
                         )}
                       </td>
-                      <td className="sticky right-0 z-10 bg-[var(--color-surface)] px-3 py-3.5 align-top shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.1)] group-hover:bg-[var(--color-surface-2)]">
-                        <div className="flex flex-col items-stretch gap-1.5 min-w-[7.5rem]">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-0.5">
                           {awaitingPlate && (isOps || isAdmin) && (
-                            <Link to={`/definir-placas?routeId=${r.id}`} className="w-full">
-                              <Button size="sm" className="w-full">
-                                Definir placa
+                            <Link to={`/definir-placas?routeId=${r.id}`}>
+                              <Button size="sm" variant="outline">
+                                Placa
                               </Button>
                             </Link>
                           )}
                           {isAdmin && r.status === 'RASCUNHO' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-center"
+                            <button
+                              type="button"
+                              title="Disponibilizar"
                               onClick={() => setSendId(r.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-primary)]"
                             >
-                              <Send className="h-3.5 w-3.5" />
-                              Disponibilizar
-                            </Button>
+                              <Send className="h-4 w-4" />
+                            </button>
                           )}
                           {isAdmin && r.status === 'EM_ANDAMENTO' && (r.trips?.length ?? 0) > 0 && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-center"
+                            <button
+                              type="button"
+                              title="Trocar placa/motorista"
                               onClick={() => openReassign(r)}
-                              title="Trocar placa e motorista"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-primary)]"
                             >
-                              <RefreshCw className="h-3.5 w-3.5" />
-                              Trocar
-                            </Button>
+                              <RefreshCw className="h-4 w-4" />
+                            </button>
                           )}
                           {isAdmin && (
-                            <div className="flex justify-end gap-0.5">
+                            <>
                               <Link
                                 to={`/roteiros/${r.id}`}
-                                title="Editar roteiro"
+                                title="Editar"
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                               >
                                 <Pencil className="h-4 w-4" />
@@ -498,14 +458,14 @@ export function Routes() {
                               {r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO' && (
                                 <button
                                   type="button"
-                                  title="Cancelar roteiro"
+                                  title="Cancelar"
                                   onClick={() => setCancelId(r.id)}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-[var(--color-danger)]"
                                 >
                                   <Ban className="h-4 w-4" />
                                 </button>
                               )}
-                            </div>
+                            </>
                           )}
                         </div>
                       </td>
@@ -517,6 +477,183 @@ export function Routes() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={!!detailRoute}
+        onClose={() => setDetailRoute(null)}
+        title={detailRoute?.name ?? 'Roteiro'}
+        size="lg"
+        footer={
+          detailRoute ? (
+            <>
+              <Button variant="secondary" onClick={() => setDetailRoute(null)}>
+                Fechar
+              </Button>
+              {detailAwaiting && (isOps || isAdmin) && (
+                <Link to={`/definir-placas?routeId=${detailRoute.id}`}>
+                  <Button>Definir placa</Button>
+                </Link>
+              )}
+              {isAdmin && detailRoute.status === 'RASCUNHO' && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSendId(detailRoute.id)
+                  }}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Disponibilizar
+                </Button>
+              )}
+              {isAdmin &&
+                detailRoute.status === 'EM_ANDAMENTO' &&
+                (detailRoute.trips?.length ?? 0) > 0 && (
+                  <Button variant="outline" onClick={() => openReassign(detailRoute)}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Trocar placa
+                  </Button>
+                )}
+              {isAdmin && (
+                <Link to={`/roteiros/${detailRoute.id}`}>
+                  <Button variant="outline">
+                    <Pencil className="h-3.5 w-3.5" />
+                    Editar
+                  </Button>
+                </Link>
+              )}
+            </>
+          ) : undefined
+        }
+      >
+        {detailRoute && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={statusTone(detailRoute.status)}>
+                {routeStatusLabels[detailRoute.status]}
+              </Badge>
+              {detailRoute.hasPriority && <Badge tone="danger">Prioridade</Badge>}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Início
+                </p>
+                <p className="mt-1 font-medium">{formatDate(detailRoute.date)} · 06:00</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Previsão de retorno
+                </p>
+                <p className="mt-1 font-medium">
+                  {detailRoute.returnForecast?.expectedReturn
+                    ? formatDate(detailRoute.returnForecast.expectedReturn)
+                    : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Placa
+                </p>
+                <div className="mt-1">
+                  {detailPlate ? (
+                    <PlateBadge plate={detailPlate} color="blue" />
+                  ) : (
+                    <span className="text-[var(--color-text-muted)]">Sem placa</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Motorista
+                </p>
+                <p className="mt-1 font-medium">
+                  {detailRoute.trips?.[0]?.driverName ?? '—'}
+                </p>
+              </div>
+            </div>
+
+            {detailRoute.hasPriority && (
+              <div className="rounded-[var(--radius)] border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/[0.04] px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-danger)]">
+                  Prioridade · vencimento
+                </p>
+                <p
+                  className={cn(
+                    'mt-1 text-sm font-medium',
+                    detailRoute.priorityExpiryDate &&
+                      new Date(detailRoute.priorityExpiryDate) < new Date()
+                      ? 'text-[var(--color-danger)]'
+                      : 'text-[var(--color-text)]',
+                  )}
+                >
+                  {detailRoute.priorityExpiryDate
+                    ? formatDate(detailRoute.priorityExpiryDate)
+                    : 'Falta informar o vencimento'}
+                </p>
+                {detailRoute.priorityNotes && (
+                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                    {detailRoute.priorityNotes}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                Concessionárias ({detailStops.length})
+              </p>
+              {detailStops.length === 0 ? (
+                <p className="text-[var(--color-text-muted)]">Nenhuma concessionária</p>
+              ) : (
+                <ol className="space-y-2.5">
+                  {detailStops.map((s, idx) => (
+                    <li key={`${detailRoute.id}-d-${idx}`} className="flex gap-3">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-muted)] text-xs font-bold text-[var(--color-primary)]">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <p className="font-medium text-[var(--color-text)]">{s.name}</p>
+                        <p className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
+                          <MapPin className="h-3 w-3" />
+                          {s.city}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+
+            {detailRoute.notes && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Observações
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-[var(--color-text)]">
+                  {detailRoute.notes}
+                </p>
+              </div>
+            )}
+
+            {isAdmin &&
+              detailRoute.status !== 'CANCELADO' &&
+              detailRoute.status !== 'CONCLUIDO' && (
+                <div className="border-t border-[var(--color-border)] pt-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[var(--color-danger)] hover:bg-red-500/10"
+                    onClick={() => setCancelId(detailRoute.id)}
+                  >
+                    <Ban className="h-3.5 w-3.5" />
+                    Cancelar roteiro
+                  </Button>
+                </div>
+              )}
+          </div>
+        )}
+      </Modal>
 
       <ConfirmModal
         open={!!cancelId}
@@ -572,13 +709,12 @@ export function Routes() {
       >
         <div className="space-y-3">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Ajuste placa e motorista de roteiro em andamento (ex.: troca feita no sistema interno).
-            A placa anterior volta a ficar disponível.
+            Ajuste placa e motorista de roteiro em andamento. A placa anterior volta a ficar
+            disponível.
           </p>
           {currentVehicle && (
             <p className="rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm">
-              Atual:{' '}
-              <strong>{currentVehicle.plate}</strong>
+              Atual: <strong>{currentVehicle.plate}</strong>
               {openTrip?.driverName ? ` · ${openTrip.driverName}` : ''}
             </p>
           )}
