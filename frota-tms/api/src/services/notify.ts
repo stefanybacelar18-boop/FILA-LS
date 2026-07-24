@@ -44,32 +44,31 @@ function mailConfigured(): boolean {
 
 /**
  * Remetente ≠ destinatário.
- * Destinatário fixo: AG. Remetente: Resend (onboarding@resend.dev) ou SMTP dedicado.
- * Preferir Resend quando houver chave — não usar a caixa da AG para enviar.
+ * Destinatário: só AG (agtransportes2020@outlook.com).
+ * Remetente: SMTP (ex. Gmail que a equipe controla) — preferido quando configurado.
+ * Resend só funciona em teste se a conta Resend for o mesmo e-mail do destinatário.
  */
-function preferResend(): boolean {
-  return !!process.env.RESEND_API_KEY?.trim();
+function preferSmtp(): boolean {
+  return smtpConfigured();
 }
 
 export function mailStatus() {
   const from = fromAddress();
-  const usingResend = preferResend();
-  const usingSmtp = !usingResend && smtpConfigured();
+  const usingSmtp = preferSmtp();
+  const usingResend = !usingSmtp && !!process.env.RESEND_API_KEY?.trim();
   const fromIsTestDomain = /resend\.dev/i.test(from);
   return {
     configured: mailConfigured(),
-    provider: usingResend ? 'resend' : usingSmtp ? 'smtp' : 'none',
+    provider: usingSmtp ? 'smtp' : usingResend ? 'resend' : 'none',
     from,
     fromIsTestDomain: usingResend && fromIsTestDomain,
     recipients: firstRouteNotifyRecipients(),
     lastNotify: lastNotifyResult,
-    hint: usingResend && fromIsTestDomain
-      ? 'Remetente = Resend (onboarding@resend.dev). Destinatário = só AG. A conta Resend precisa estar cadastrada com agtransportes2020@outlook.com, senão o Resend bloqueia o envio.'
-      : usingResend
-        ? undefined
-        : usingSmtp
-          ? 'SMTP ativo como remetente. Destinatário continua só AG.'
-          : 'Configure RESEND_API_KEY + MAIL_FROM=FrotaTMS <onboarding@resend.dev> (conta Resend = e-mail AG).',
+    hint: usingSmtp
+      ? 'SMTP ativo: envia do Gmail/caixa configurada; só a AG recebe.'
+      : usingResend && fromIsTestDomain
+        ? 'Resend teste só entrega no e-mail da conta Resend. Sem acesso ao e-mail AG: use SMTP do Gmail (lsltransportessimoesfilho@gmail.com) no Render.'
+        : 'Configure SMTP_HOST/USER/PASS (Gmail) para notificar a AG sem acesso à caixa AG.',
   };
 }
 
@@ -243,7 +242,10 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
   const failed: { email: string; error: string }[] = [];
 
   try {
-    if (preferResend()) {
+    if (preferSmtp()) {
+      await sendViaSmtp(to, subject, text, html);
+      sentTo.push(...to);
+    } else if (process.env.RESEND_API_KEY?.trim()) {
       // Um destinatário por vez — falha de um não impede o log dos outros
       for (const email of to) {
         try {
@@ -255,9 +257,6 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
           console.error(`[notify] Falha Resend → ${email}:`, msg);
         }
       }
-    } else if (smtpConfigured()) {
-      await sendViaSmtp(to, subject, text, html);
-      sentTo.push(...to);
     }
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err);
@@ -268,7 +267,7 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
       failed: to.map((email) => ({ email, error: msg })),
       hint:
         resendHintFromError(msg) ||
-        'Remetente Resend / destinatário AG: a conta Resend precisa ser agtransportes2020@outlook.com (teste) ou domínio verificado.',
+        'Sem acesso ao e-mail AG: use SMTP do Gmail no Render (SMTP_HOST=smtp.gmail.com, SMTP_USER=seu@gmail.com, SMTP_PASS=senha de app). Destinatário continua só a AG.',
     };
     lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
     console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', msg);

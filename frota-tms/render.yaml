@@ -61,13 +61,15 @@ services:
         value: ag123
       - key: BOOTSTRAP_OPS_NAME
         value: AG Operação
-      # Remetente ≠ destinatário
-      # - RECEBE (só AG): NOTIFY_EXTRA_EMAILS / lista fixa no código
-      # - ENVIA: Resend onboarding@resend.dev (não é Lucas/Rodrigo/AG)
-      # Conta Resend deve ser criada com agtransportes2020@outlook.com
-      # MAIL_FROM=FrotaTMS <onboarding@resend.dev>
-      # RESEND_API_KEY=re_...
-      # Não use SMTP_USER da AG como remetente.
+      # Sem acesso ao e-mail AG / sem DNS LSL:
+      # Envia pelo Gmail da equipe; só a AG recebe.
+      #   SMTP_HOST=smtp.gmail.com
+      #   SMTP_PORT=587
+      #   SMTP_USER=lsltransportessimoesfilho@gmail.com
+      #   SMTP_PASS=<senha de app do Google>
+      #   MAIL_FROM=FrotaTMS <lsltransportessimoesfilho@gmail.com>
+      #   NOTIFY_EXTRA_EMAILS=agtransportes2020@outlook.com
+      # (Com SMTP, o app ignora o Resend.)
       - key: NOTIFY_EXTRA_EMAILS
         value: agtransportes2020@outlook.com
       - key: APP_PUBLIC_URL
