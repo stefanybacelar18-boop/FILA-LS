@@ -187,12 +187,11 @@ function escapeHtml(s: string) {
 }
 
 function resendHintFromError(message: string): string | undefined {
-  const from = fromAddress();
-  if (/resend\.dev/i.test(from) || /only send testing emails/i.test(message)) {
+  if (/only send testing emails/i.test(message) || /resend\.dev/i.test(fromAddress())) {
     return (
-      'Resend (teste): o remetente é onboarding@resend.dev (não é Lucas/Rodrigo/AG). ' +
-      'Só entrega no e-mail da conta Resend. Cadastre/use a conta Resend com ' +
-      'agtransportes2020@outlook.com para a AG receber. Lucas/Rodrigo não são notificados.'
+      'Resend teste não envia para a AG com a conta Gmail atual. ' +
+      'Sem acesso ao Outlook AG: configure SMTP do Gmail no Render ' +
+      '(smtp.gmail.com + senha de app). Quem recebe continua só agtransportes2020@outlook.com.'
     );
   }
   if (/domain .* is not verified/i.test(message) || /not verified/i.test(message)) {
