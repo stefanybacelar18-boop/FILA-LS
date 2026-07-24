@@ -32,8 +32,7 @@ export function getLastNotifyResult() {
   return lastNotifyResult;
 }
 
-function mailConfigured(): boolean {
-  if (process.env.RESEND_API_KEY?.trim()) return true;
+function smtpConfigured(): boolean {
   return !!(
     process.env.SMTP_HOST?.trim() &&
     process.env.SMTP_USER?.trim() &&
@@ -41,25 +40,33 @@ function mailConfigured(): boolean {
   );
 }
 
+function mailConfigured(): boolean {
+  if (smtpConfigured()) return true;
+  return !!process.env.RESEND_API_KEY?.trim();
+}
+
+/** Preferir SMTP (Outlook/Gmail) quando configurado — não exige domínio LSL. */
+function preferSmtp(): boolean {
+  return smtpConfigured();
+}
+
 export function mailStatus() {
   const from = fromAddress();
-  const usingResend = !!process.env.RESEND_API_KEY?.trim();
-  const usingSmtp = !!(
-    process.env.SMTP_HOST?.trim() &&
-    process.env.SMTP_USER?.trim() &&
-    process.env.SMTP_PASS?.trim()
-  );
+  const usingSmtp = smtpConfigured();
+  const usingResend = !!process.env.RESEND_API_KEY?.trim() && !usingSmtp;
   const fromIsTestDomain = /@resend\.dev>?$/i.test(from) || /resend\.dev/i.test(from);
   return {
     configured: mailConfigured(),
-    provider: usingResend ? 'resend' : usingSmtp ? 'smtp' : 'none',
+    provider: usingSmtp ? 'smtp' : usingResend ? 'resend' : 'none',
     from,
-    fromIsTestDomain,
+    fromIsTestDomain: usingResend && fromIsTestDomain,
     recipients: firstRouteNotifyRecipients(),
     lastNotify: lastNotifyResult,
-    hint: fromIsTestDomain
-      ? 'MAIL_FROM usa resend.dev: o Resend só envia para o e-mail da conta Resend. Verifique um domínio (ex.: lslgr.com.br) em resend.com/domains e use MAIL_FROM como FrotaTMS <noreply@lslgr.com.br>.'
-      : undefined,
+    hint: usingSmtp
+      ? undefined
+      : fromIsTestDomain
+        ? 'Sem domínio LSL: use SMTP do Outlook (agtransportes2020@outlook.com). No Render: SMTP_HOST=smtp.office365.com, SMTP_PORT=587, SMTP_USER, SMTP_PASS, MAIL_FROM=FrotaTMS <agtransportes2020@outlook.com>. Remova ou ignore RESEND_API_KEY.'
+        : 'Configure SMTP_* (Outlook) ou Resend com domínio verificado.',
   };
 }
 
@@ -213,10 +220,10 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
     const result: NotifyResult = {
       sent: false,
       reason: 'mail_not_configured',
-      hint: 'Configure RESEND_API_KEY + MAIL_FROM (domínio verificado) ou SMTP_* no Render.',
+      hint: 'Sem TI/DNS: configure SMTP do Outlook no Render (SMTP_HOST/USER/PASS + MAIL_FROM).',
     };
     lastNotifyResult = { ...result, at: new Date().toISOString() };
-    console.warn('[notify] E-mail não configurado (RESEND_API_KEY ou SMTP_*).');
+    console.warn('[notify] E-mail não configurado (SMTP_* ou RESEND_API_KEY).');
     return result;
   }
 
@@ -232,7 +239,10 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
   const failed: { email: string; error: string }[] = [];
 
   try {
-    if (process.env.RESEND_API_KEY?.trim()) {
+    if (preferSmtp()) {
+      await sendViaSmtp(to, subject, text, html);
+      sentTo.push(...to);
+    } else if (process.env.RESEND_API_KEY?.trim()) {
       // Um destinatário por vez — falha de um não impede o log dos outros
       for (const email of to) {
         try {
@@ -244,9 +254,6 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
           console.error(`[notify] Falha Resend → ${email}:`, msg);
         }
       }
-    } else {
-      await sendViaSmtp(to, subject, text, html);
-      sentTo.push(...to);
     }
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err);
@@ -255,7 +262,9 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
       reason: 'send_failed',
       to,
       failed: to.map((email) => ({ email, error: msg })),
-      hint: resendHintFromError(msg),
+      hint:
+        resendHintFromError(msg) ||
+        'Se for Outlook: confira SMTP_USER/SMTP_PASS (senha do app) e MAIL_FROM=FrotaTMS <agtransportes2020@outlook.com>.',
     };
     lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
     console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', msg);
