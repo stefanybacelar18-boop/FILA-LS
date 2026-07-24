@@ -14,7 +14,7 @@ import {
   isPlateHiddenFromOperator,
   plateOwner,
 } from '../data/operatorVisibility';
-import { isFirstRouteSentToday, notifyFirstRouteOfDay } from '../services/notify';
+import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 
 const routeDealershipInclude = {
@@ -141,12 +141,7 @@ export function createRoutesRouter(io: Server) {
         },
         _count: { select: { trips: true } },
       },
-      orderBy: [
-        { hasPriority: 'desc' },
-        { priorityExpiryDate: 'asc' },
-        { date: 'asc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
 
     const withForecast = routes.map((route) => {
@@ -598,22 +593,19 @@ export function createRoutesRouter(io: Server) {
       details: `${route.name} · 1 placa`,
     });
 
-    // 1º roteiro disponibilizado no dia → e-mail + aviso in-app (Admin e Operação)
-    let emailNotify = null;
+    // 1º roteiro disponibilizado no dia → aviso no navegador/app (Admin e Operação)
     if (firstOfDay) {
-      const payload = {
+      io.emit('notify:first-route', {
         routeId,
         routeName: updated.name,
         routeDate: format(updated.date, 'dd/MM/yyyy'),
         createdByName: updated.createdBy?.name || req.user!.name || 'Admin',
-      };
-      emailNotify = await notifyFirstRouteOfDay(payload);
-      io.emit('notify:first-route', payload);
+      });
     }
 
     io.emit('routes:changed', { action: 'send', id: routeId });
     io.emit('planning:changed', { action: 'send', id: routeId });
-    res.json({ ...updated, firstRouteOfDay: firstOfDay, emailNotify });
+    res.json({ ...updated, firstRouteOfDay: firstOfDay });
   });
 
   router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {

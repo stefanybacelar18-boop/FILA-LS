@@ -42,7 +42,7 @@ function destinationsSummary(stops: { name: string; city: string }[]): string {
   return `${stops.length} destinos`
 }
 
-function sortRoutes(list: Route[]): Route[] {
+function sortRoutesByPriority(list: Route[]): Route[] {
   return [...list].sort((a, b) => {
     const p = Number(b.hasPriority) - Number(a.hasPriority)
     if (p !== 0) return p
@@ -54,6 +54,16 @@ function sortRoutes(list: Route[]): Route[] {
     const da = new Date(a.date).getTime()
     const db = new Date(b.date).getTime()
     if (da !== db) return da - db
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+}
+
+/** Aba Todos: data do roteiro mais nova no topo; empate → criado mais recente. */
+function sortRoutesByNewest(list: Route[]): Route[] {
+  return [...list].sort((a, b) => {
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    if (db !== da) return db - da
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 }
@@ -170,7 +180,7 @@ export function Routes() {
 
   const pending = useMemo(
     () =>
-      sortRoutes(
+      sortRoutesByPriority(
         data.filter(
           (r) =>
             r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
@@ -179,7 +189,7 @@ export function Routes() {
     [data],
   )
 
-  const allSorted = useMemo(() => sortRoutes(data), [data])
+  const allSorted = useMemo(() => sortRoutesByNewest(data), [data])
   const visible = tab === 'pendentes' ? pending : allSorted
 
   const cancelMutation = useMutation({
@@ -201,37 +211,12 @@ export function Routes() {
 
   const sendMutation = useMutation({
     mutationFn: async (id: string) =>
-      (
-        await api.post<{
-          firstRouteOfDay?: boolean
-          emailNotify?: {
-            sent?: boolean
-            reason?: string
-            hint?: string
-            sentTo?: string[]
-            failed?: { email: string; error: string }[]
-          } | null
-        }>(`/routes/${id}/send-to-operation`)
-      ).data,
-    onSuccess: (data) => {
+      (await api.post<{ firstRouteOfDay?: boolean }>(`/routes/${id}/send-to-operation`)).data,
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['routes'] })
       setSendId(null)
       setError('')
-      if (data?.firstRouteOfDay && data.emailNotify) {
-        if (data.emailNotify.sent) {
-          setOkMsg(
-            `Roteiro disponibilizado. E-mail enviado para ${(data.emailNotify.sentTo ?? []).join(', ') || 'destinatários'}.`,
-          )
-        } else {
-          setOkMsg('Roteiro disponibilizado para a Operação.')
-          setError(
-            data.emailNotify.hint ||
-              'Aviso no app ok, mas o e-mail falhou. Verifique MAIL_FROM com domínio verificado no Resend.',
-          )
-        }
-      } else {
-        setOkMsg('Roteiro disponibilizado para a Operação.')
-      }
+      setOkMsg('Roteiro disponibilizado para a Operação.')
     },
     onError: (err: unknown) => {
       setError(
@@ -274,57 +259,6 @@ export function Routes() {
     },
   })
 
-  const testEmailMutation = useMutation({
-    mutationFn: async () => {
-      try {
-        return (
-          await api.post<{
-            ok: boolean
-            sent?: boolean
-            hint?: string
-            sentTo?: string[]
-            failed?: { email: string; error: string }[]
-          }>('/notify/test')
-        ).data
-      } catch (err: unknown) {
-        const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data
-        if (data && typeof data === 'object') {
-          return data as {
-            ok: boolean
-            sent?: boolean
-            hint?: string
-            sentTo?: string[]
-            failed?: { email: string; error: string }[]
-          }
-        }
-        throw err
-      }
-    },
-    onSuccess: (data) => {
-      if (data.ok || data.sent) {
-        setOkMsg(`E-mail de teste enviado: ${(data.sentTo ?? []).join(', ')}`)
-        setError('')
-      } else {
-        setOkMsg('')
-        setError(
-          data.hint ||
-            data.failed?.[0]?.error ||
-            'Falha no e-mail de teste.',
-        )
-      }
-    },
-    onError: (err: unknown) => {
-      const body = (err as { response?: { data?: { hint?: string; error?: string; failed?: { error: string }[] } } })
-        ?.response?.data
-      setError(
-        body?.hint ||
-          body?.failed?.[0]?.error ||
-          body?.error ||
-          'Falha no e-mail de teste.',
-      )
-    },
-  })
-
   const detailStops = detailRoute ? dealershipStops(detailRoute) : []
   const detailPlate = detailRoute?.vehicles?.[0]?.vehicle?.plate
   const detailAwaiting =
@@ -338,23 +272,12 @@ export function Routes() {
         description="Prioridade no topo. Clique no roteiro para ver detalhes."
         actions={
           isAdmin ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                loading={testEmailMutation.isPending}
-                onClick={() => testEmailMutation.mutate()}
-                title="Envia e-mail de teste aos 3 destinatários"
-              >
-                Testar e-mail
+            <Link to="/roteiros/novo">
+              <Button>
+                <Plus className="h-4 w-4" />
+                Novo roteiro
               </Button>
-              <Link to="/roteiros/novo">
-                <Button>
-                  <Plus className="h-4 w-4" />
-                  Novo roteiro
-                </Button>
-              </Link>
-            </div>
+            </Link>
           ) : undefined
         }
       />
