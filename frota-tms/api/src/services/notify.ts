@@ -18,9 +18,18 @@ export type NotifyResult = {
   hint?: string;
 };
 
-/** Destinatário do aviso do 1º roteiro do dia (somente AG). */
+/**
+ * Destinatário do 1º roteiro do dia.
+ *
+ * No Render Free, SMTP (Gmail porta 587) é BLOQUEADO.
+ * Resend (HTTPS) funciona, mas em modo teste só entrega no e-mail da conta Resend.
+ * Conta atual: lsltransportessimoesfilho@gmail.com
+ *
+ * Quando houver domínio verificado ou plano pago + SMTP, use NOTIFY_EXTRA_EMAILS
+ * para apontar para agtransportes2020@outlook.com.
+ */
 export const DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS = [
-  'agtransportes2020@outlook.com',
+  'lsltransportessimoesfilho@gmail.com',
 ] as const;
 
 /** Último resultado (para diagnóstico em /api/notify/status). */
@@ -43,32 +52,30 @@ function mailConfigured(): boolean {
 }
 
 /**
- * Remetente ≠ destinatário.
- * Destinatário: só AG (agtransportes2020@outlook.com).
- * Remetente: SMTP (ex. Gmail que a equipe controla) — preferido quando configurado.
- * Resend só funciona em teste se a conta Resend for o mesmo e-mail do destinatário.
+ * Preferir Resend (HTTPS) — funciona no Render Free.
+ * SMTP no Free é bloqueado (portas 25/465/587).
  */
-function preferSmtp(): boolean {
-  return smtpConfigured();
+function preferResend(): boolean {
+  return !!process.env.RESEND_API_KEY?.trim();
 }
 
 export function mailStatus() {
   const from = fromAddress();
-  const usingSmtp = preferSmtp();
-  const usingResend = !usingSmtp && !!process.env.RESEND_API_KEY?.trim();
+  const usingResend = preferResend();
+  const usingSmtp = !usingResend && smtpConfigured();
   const fromIsTestDomain = /resend\.dev/i.test(from);
   return {
     configured: mailConfigured(),
-    provider: usingSmtp ? 'smtp' : usingResend ? 'resend' : 'none',
+    provider: usingResend ? 'resend' : usingSmtp ? 'smtp' : 'none',
     from,
     fromIsTestDomain: usingResend && fromIsTestDomain,
     recipients: firstRouteNotifyRecipients(),
     lastNotify: lastNotifyResult,
-    hint: usingSmtp
-      ? 'SMTP ativo: envia do Gmail/caixa configurada; só a AG recebe.'
-      : usingResend && fromIsTestDomain
-        ? 'Resend teste só entrega no e-mail da conta Resend. Sem acesso ao e-mail AG: use SMTP do Gmail (lsltransportessimoesfilho@gmail.com) no Render.'
-        : 'Configure SMTP_HOST/USER/PASS (Gmail) para notificar a AG sem acesso à caixa AG.',
+    hint: usingResend
+      ? 'Resend ativo (HTTPS). Destino = e-mail da conta Resend (Gmail). Render Free bloqueia SMTP.'
+      : usingSmtp
+        ? 'SMTP configurado: no Render Free as portas 587/465 são bloqueadas — use RESEND_API_KEY.'
+        : 'Configure RESEND_API_KEY + MAIL_FROM=FrotaTMS <onboarding@resend.dev>.',
   };
 }
 
@@ -76,7 +83,7 @@ function fromAddress(): string {
   return (
     process.env.MAIL_FROM?.trim() ||
     process.env.SMTP_USER?.trim() ||
-    'FrotaTMS <noreply@frotatms.local>'
+    'FrotaTMS <onboarding@resend.dev>'
   );
 }
 
@@ -118,7 +125,6 @@ async function sendViaResendOne(
 async function sendViaSmtp(to: string[], subject: string, text: string, html: string) {
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-  // Senha de app do Google às vezes vem com espaços na cópia
   const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
   const user = (process.env.SMTP_USER || '').trim();
   const host = (process.env.SMTP_HOST || '').trim();
@@ -129,7 +135,6 @@ async function sendViaSmtp(to: string[], subject: string, text: string, html: st
     secure,
     requireTLS: !secure && port === 587,
     auth: { user, pass },
-    // Render (free): conexão IPv6 ao Gmail costuma dar ENETUNREACH
     family: 4,
     connectionTimeout: 25_000,
     greetingTimeout: 25_000,
@@ -154,7 +159,7 @@ function parseEmailList(raw: string | undefined): string[] {
     .filter((e) => e.includes('@') && !e.endsWith('@.com'));
 }
 
-/** Lista final: e-mail AG fixo + NOTIFY_EXTRA_EMAILS (se houver). */
+/** Lista final: padrão (Gmail da conta Resend) + NOTIFY_EXTRA_EMAILS. */
 export function firstRouteNotifyRecipients(): string[] {
   const set = new Set<string>([
     ...DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS.map((e) => e.toLowerCase()),
@@ -198,15 +203,18 @@ function escapeHtml(s: string) {
 }
 
 function resendHintFromError(message: string): string | undefined {
-  if (/only send testing emails/i.test(message) || /resend\.dev/i.test(fromAddress())) {
+  if (/only send testing emails/i.test(message)) {
     return (
-      'Resend teste não envia para a AG com a conta Gmail atual. ' +
-      'Sem acesso ao Outlook AG: configure SMTP do Gmail no Render ' +
-      '(smtp.gmail.com + senha de app). Quem recebe continua só agtransportes2020@outlook.com.'
+      'Resend teste só entrega no e-mail da conta Resend (Gmail). ' +
+      'Ajuste NOTIFY_EXTRA_EMAILS para lsltransportessimoesfilho@gmail.com. ' +
+      'Para a AG receber direto: domínio verificado ou plano pago no Render + SMTP.'
     );
   }
-  if (/domain .* is not verified/i.test(message) || /not verified/i.test(message)) {
-    return 'O domínio do MAIL_FROM ainda não está verificado no Resend (Domains).';
+  if (/ENETUNREACH|ECONNREFUSED|ETIMEDOUT/i.test(message)) {
+    return (
+      'Render Free bloqueia SMTP (portas 587/465). Remova SMTP_* e use só RESEND_API_KEY ' +
+      '(destino = Gmail da conta Resend).'
+    );
   }
   return undefined;
 }
@@ -224,19 +232,18 @@ export async function isFirstRouteSentToday(excludeRouteId?: string): Promise<bo
 }
 
 /**
- * Envia e-mail aos destinatários fixos (LSL/AG) quando o 1º roteiro do dia é disponibilizado.
- * Sem SMTP/Resend configurado: só registra no log (não quebra o fluxo).
+ * Envia e-mail do 1º roteiro do dia.
+ * Preferência: Resend HTTPS (funciona no Free). SMTP só em plano pago.
  */
 export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): Promise<NotifyResult> {
   if (!mailConfigured()) {
     const result: NotifyResult = {
       sent: false,
       reason: 'mail_not_configured',
-      hint:
-        'Remetente: Resend (onboarding@resend.dev). Destinatário: só AG. Conta Resend deve ser agtransportes2020@outlook.com.',
+      hint: 'Configure RESEND_API_KEY + MAIL_FROM=FrotaTMS <onboarding@resend.dev>.',
     };
     lastNotifyResult = { ...result, at: new Date().toISOString() };
-    console.warn('[notify] E-mail não configurado (RESEND_API_KEY ou SMTP_*).');
+    console.warn('[notify] E-mail não configurado.');
     return result;
   }
 
@@ -252,11 +259,7 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
   const failed: { email: string; error: string }[] = [];
 
   try {
-    if (preferSmtp()) {
-      await sendViaSmtp(to, subject, text, html);
-      sentTo.push(...to);
-    } else if (process.env.RESEND_API_KEY?.trim()) {
-      // Um destinatário por vez — falha de um não impede o log dos outros
+    if (preferResend()) {
       for (const email of to) {
         try {
           await sendViaResendOne(email, subject, text, html);
@@ -267,6 +270,15 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
           console.error(`[notify] Falha Resend → ${email}:`, msg);
         }
       }
+    } else if (smtpConfigured()) {
+      try {
+        await sendViaSmtp(to, subject, text, html);
+        sentTo.push(...to);
+      } catch (err) {
+        const msg = (err as Error)?.message ?? String(err);
+        for (const email of to) failed.push({ email, error: msg });
+        throw err;
+      }
     }
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err);
@@ -274,14 +286,8 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
       sent: false,
       reason: 'send_failed',
       to,
-      failed: to.map((email) => ({ email, error: msg })),
-      hint:
-        resendHintFromError(msg) ||
-        (/ENETUNREACH|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(msg)
-          ? 'Falha de rede SMTP no servidor. Confira SMTP_HOST=smtp.gmail.com, porta 587 e senha de app (sem espaços).'
-          : /Invalid login|Authentication|EAUTH/i.test(msg)
-            ? 'Gmail recusou login. Use senha de app (não a senha normal) em SMTP_PASS, sem espaços.'
-            : 'Sem acesso ao e-mail AG: use SMTP do Gmail no Render. Destinatário continua só a AG.'),
+      failed: failed.length ? failed : to.map((email) => ({ email, error: msg })),
+      hint: resendHintFromError(msg),
     };
     lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
     console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', msg);

@@ -61,17 +61,14 @@ services:
         value: ag123
       - key: BOOTSTRAP_OPS_NAME
         value: AG Operação
-      # Sem acesso ao e-mail AG / sem DNS LSL:
-      # Envia pelo Gmail da equipe; só a AG recebe.
-      #   SMTP_HOST=smtp.gmail.com
-      #   SMTP_PORT=587
-      #   SMTP_USER=lsltransportessimoesfilho@gmail.com
-      #   SMTP_PASS=<senha de app do Google>
-      #   MAIL_FROM=FrotaTMS <lsltransportessimoesfilho@gmail.com>
-      #   NOTIFY_EXTRA_EMAILS=agtransportes2020@outlook.com
-      # (Com SMTP, o app ignora o Resend.)
+      # Render Free BLOQUEIA SMTP (587/465). Use Resend (HTTPS).
+      # Destino = e-mail da conta Resend (Gmail), não a AG (limitação do Resend teste).
+      # MAIL_FROM=FrotaTMS <onboarding@resend.dev>
+      # RESEND_API_KEY=re_...
+      # NOTIFY_EXTRA_EMAILS=lsltransportessimoesfilho@gmail.com
+      # Remova SMTP_HOST/USER/PASS no Free (não funciona).
       - key: NOTIFY_EXTRA_EMAILS
-        value: agtransportes2020@outlook.com
+        value: lsltransportessimoesfilho@gmail.com
       - key: APP_PUBLIC_URL
         value: https://frota-tms.onrender.com
       - key: DATABASE_URL
