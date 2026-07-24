@@ -61,11 +61,14 @@ services:
         value: ag123
       - key: BOOTSTRAP_OPS_NAME
         value: AG Operação
-      # Destinatários do 1º roteiro (também fixos no código).
-      # IMPORTANTE: onboarding@resend.dev NÃO envia para terceiros.
-      # 1) resend.com/domains → Add Domain → lslgr.com.br → DNS
-      # 2) MAIL_FROM=FrotaTMS <noreply@lslgr.com.br>
-      # 3) RESEND_API_KEY=re_...
+      # E-mail SEM domínio LSL: use Outlook SMTP (conta AG).
+      # No Dashboard do Render, adicione:
+      #   SMTP_HOST=smtp.office365.com
+      #   SMTP_PORT=587
+      #   SMTP_USER=agtransportes2020@outlook.com
+      #   SMTP_PASS=<senha ou senha de app do Outlook>
+      #   MAIL_FROM=FrotaTMS <agtransportes2020@outlook.com>
+      # (Com SMTP configurado, o app ignora o Resend.)
       - key: NOTIFY_EXTRA_EMAILS
         value: lucas_souza@lslgr.com.br,rodrigo_almeida@lslgr.com.br,agtransportes2020@outlook.com
       - key: APP_PUBLIC_URL
