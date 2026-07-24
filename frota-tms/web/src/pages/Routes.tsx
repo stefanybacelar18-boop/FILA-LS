@@ -58,11 +58,14 @@ function sortRoutesByPriority(list: Route[]): Route[] {
   })
 }
 
-/** Aba Todos: mais recentes primeiro. */
+/** Aba Todos: data do roteiro mais nova no topo; empate → criado mais recente. */
 function sortRoutesByNewest(list: Route[]): Route[] {
-  return [...list].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )
+  return [...list].sort((a, b) => {
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    if (db !== da) return db - da
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
 }
 
 function statusTone(status: Route['status']) {
