@@ -18,10 +18,8 @@ export type NotifyResult = {
   hint?: string;
 };
 
-/** Destinatários fixos do aviso do 1º roteiro do dia (LSL + AG). */
+/** Destinatário do aviso do 1º roteiro do dia (somente AG). */
 export const DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS = [
-  'lucas_souza@lslgr.com.br',
-  'rodrigo_almeida@lslgr.com.br',
   'agtransportes2020@outlook.com',
 ] as const;
 
@@ -141,7 +139,7 @@ function parseEmailList(raw: string | undefined): string[] {
     .filter((e) => e.includes('@') && !e.endsWith('@.com'));
 }
 
-/** Lista final: e-mails fixos LSL/AG + NOTIFY_EXTRA_EMAILS (se houver). */
+/** Lista final: e-mail AG fixo + NOTIFY_EXTRA_EMAILS (se houver). */
 export function firstRouteNotifyRecipients(): string[] {
   const set = new Set<string>([
     ...DEFAULT_FIRST_ROUTE_NOTIFY_EMAILS.map((e) => e.toLowerCase()),

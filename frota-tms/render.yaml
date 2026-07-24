@@ -70,7 +70,7 @@ services:
       #   MAIL_FROM=FrotaTMS <agtransportes2020@outlook.com>
       # (Com SMTP configurado, o app ignora o Resend.)
       - key: NOTIFY_EXTRA_EMAILS
-        value: lucas_souza@lslgr.com.br,rodrigo_almeida@lslgr.com.br,agtransportes2020@outlook.com
+        value: agtransportes2020@outlook.com
       - key: APP_PUBLIC_URL
         value: https://frota-tms.onrender.com
       - key: DATABASE_URL
