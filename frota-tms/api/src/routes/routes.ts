@@ -141,12 +141,7 @@ export function createRoutesRouter(io: Server) {
         },
         _count: { select: { trips: true } },
       },
-      orderBy: [
-        { hasPriority: 'desc' },
-        { priorityExpiryDate: 'asc' },
-        { date: 'asc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ createdAt: 'desc' }],
     });
 
     const withForecast = routes.map((route) => {
