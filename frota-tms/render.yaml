@@ -61,17 +61,6 @@ services:
         value: ag123
       - key: BOOTSTRAP_OPS_NAME
         value: AG Operação
-      # Sem acesso ao e-mail AG / sem DNS LSL:
-      # Envia pelo Gmail da equipe; só a AG recebe.
-      #   SMTP_HOST=smtp.gmail.com
-      #   SMTP_PORT=587
-      #   SMTP_USER=lsltransportessimoesfilho@gmail.com
-      #   SMTP_PASS=<senha de app do Google>
-      #   MAIL_FROM=FrotaTMS <lsltransportessimoesfilho@gmail.com>
-      #   NOTIFY_EXTRA_EMAILS=agtransportes2020@outlook.com
-      # (Com SMTP, o app ignora o Resend.)
-      - key: NOTIFY_EXTRA_EMAILS
-        value: agtransportes2020@outlook.com
       - key: APP_PUBLIC_URL
         value: https://frota-tms.onrender.com
       - key: DATABASE_URL
