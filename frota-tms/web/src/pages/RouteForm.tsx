@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { addDays } from 'date-fns'
 import { AlertTriangle, ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Route } from '../types'
@@ -15,6 +16,11 @@ function isPastOrToday(isoDay: string): boolean {
   return isoDay <= today
 }
 
+/** Novos roteiros: padrão = amanhã (admin pode alterar). */
+function defaultNewRouteDate(): string {
+  return toInputDate(addDays(new Date(), 1))
+}
+
 export function RouteForm() {
   const { id } = useParams<{ id: string }>()
   const isNew = !id || id === 'novo'
@@ -23,7 +29,7 @@ export function RouteForm() {
   const createdIdRef = useRef<string | null>(null)
 
   const [name, setName] = useState('')
-  const [date, setDate] = useState(toInputDate(new Date()))
+  const [date, setDate] = useState(defaultNewRouteDate)
   const [dealershipIds, setDealershipIds] = useState<string[]>([])
   const [dealerSearch, setDealerSearch] = useState('')
   const [hasPriority, setHasPriority] = useState(false)
@@ -232,7 +238,7 @@ export function RouteForm() {
               disabled={!canEdit}
             />
             <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              Saída às 06:00 · retorno previsto pelo destino mais longe do PAD
+              Padrão: amanhã · saída às 06:00 · retorno pelo destino mais longe do PAD
             </p>
           </div>
         </div>
