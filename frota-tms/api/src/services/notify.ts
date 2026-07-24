@@ -39,32 +39,37 @@ function smtpConfigured(): boolean {
 }
 
 function mailConfigured(): boolean {
-  if (smtpConfigured()) return true;
-  return !!process.env.RESEND_API_KEY?.trim();
+  return !!process.env.RESEND_API_KEY?.trim() || smtpConfigured();
 }
 
-/** Preferir SMTP (Outlook/Gmail) quando configurado — não exige domínio LSL. */
-function preferSmtp(): boolean {
-  return smtpConfigured();
+/**
+ * Remetente ≠ destinatário.
+ * Destinatário fixo: AG. Remetente: Resend (onboarding@resend.dev) ou SMTP dedicado.
+ * Preferir Resend quando houver chave — não usar a caixa da AG para enviar.
+ */
+function preferResend(): boolean {
+  return !!process.env.RESEND_API_KEY?.trim();
 }
 
 export function mailStatus() {
   const from = fromAddress();
-  const usingSmtp = smtpConfigured();
-  const usingResend = !!process.env.RESEND_API_KEY?.trim() && !usingSmtp;
-  const fromIsTestDomain = /@resend\.dev>?$/i.test(from) || /resend\.dev/i.test(from);
+  const usingResend = preferResend();
+  const usingSmtp = !usingResend && smtpConfigured();
+  const fromIsTestDomain = /resend\.dev/i.test(from);
   return {
     configured: mailConfigured(),
-    provider: usingSmtp ? 'smtp' : usingResend ? 'resend' : 'none',
+    provider: usingResend ? 'resend' : usingSmtp ? 'smtp' : 'none',
     from,
     fromIsTestDomain: usingResend && fromIsTestDomain,
     recipients: firstRouteNotifyRecipients(),
     lastNotify: lastNotifyResult,
-    hint: usingSmtp
-      ? undefined
-      : fromIsTestDomain
-        ? 'Sem domínio LSL: use SMTP do Outlook (agtransportes2020@outlook.com). No Render: SMTP_HOST=smtp.office365.com, SMTP_PORT=587, SMTP_USER, SMTP_PASS, MAIL_FROM=FrotaTMS <agtransportes2020@outlook.com>. Remova ou ignore RESEND_API_KEY.'
-        : 'Configure SMTP_* (Outlook) ou Resend com domínio verificado.',
+    hint: usingResend && fromIsTestDomain
+      ? 'Remetente = Resend (onboarding@resend.dev). Destinatário = só AG. A conta Resend precisa estar cadastrada com agtransportes2020@outlook.com, senão o Resend bloqueia o envio.'
+      : usingResend
+        ? undefined
+        : usingSmtp
+          ? 'SMTP ativo como remetente. Destinatário continua só AG.'
+          : 'Configure RESEND_API_KEY + MAIL_FROM=FrotaTMS <onboarding@resend.dev> (conta Resend = e-mail AG).',
   };
 }
 
@@ -186,13 +191,13 @@ function resendHintFromError(message: string): string | undefined {
   const from = fromAddress();
   if (/resend\.dev/i.test(from) || /only send testing emails/i.test(message)) {
     return (
-      'Resend bloqueou o envio: onboarding@resend.dev só manda para o e-mail da conta Resend. ' +
-      'Em resend.com/domains verifique o domínio lslgr.com.br e no Render use ' +
-      'MAIL_FROM=FrotaTMS <noreply@lslgr.com.br> (depois Save, rebuild, and deploy).'
+      'Resend (teste): o remetente é onboarding@resend.dev (não é Lucas/Rodrigo/AG). ' +
+      'Só entrega no e-mail da conta Resend. Cadastre/use a conta Resend com ' +
+      'agtransportes2020@outlook.com para a AG receber. Lucas/Rodrigo não são notificados.'
     );
   }
   if (/domain .* is not verified/i.test(message) || /not verified/i.test(message)) {
-    return 'O domínio do MAIL_FROM ainda não está verificado no Resend ( Domains ).';
+    return 'O domínio do MAIL_FROM ainda não está verificado no Resend (Domains).';
   }
   return undefined;
 }
@@ -218,10 +223,11 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
     const result: NotifyResult = {
       sent: false,
       reason: 'mail_not_configured',
-      hint: 'Sem TI/DNS: configure SMTP do Outlook no Render (SMTP_HOST/USER/PASS + MAIL_FROM).',
+      hint:
+        'Remetente: Resend (onboarding@resend.dev). Destinatário: só AG. Conta Resend deve ser agtransportes2020@outlook.com.',
     };
     lastNotifyResult = { ...result, at: new Date().toISOString() };
-    console.warn('[notify] E-mail não configurado (SMTP_* ou RESEND_API_KEY).');
+    console.warn('[notify] E-mail não configurado (RESEND_API_KEY ou SMTP_*).');
     return result;
   }
 
@@ -237,10 +243,7 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
   const failed: { email: string; error: string }[] = [];
 
   try {
-    if (preferSmtp()) {
-      await sendViaSmtp(to, subject, text, html);
-      sentTo.push(...to);
-    } else if (process.env.RESEND_API_KEY?.trim()) {
+    if (preferResend()) {
       // Um destinatário por vez — falha de um não impede o log dos outros
       for (const email of to) {
         try {
@@ -252,6 +255,9 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
           console.error(`[notify] Falha Resend → ${email}:`, msg);
         }
       }
+    } else if (smtpConfigured()) {
+      await sendViaSmtp(to, subject, text, html);
+      sentTo.push(...to);
     }
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err);
@@ -262,7 +268,7 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
       failed: to.map((email) => ({ email, error: msg })),
       hint:
         resendHintFromError(msg) ||
-        'Se for Outlook: confira SMTP_USER/SMTP_PASS (senha do app) e MAIL_FROM=FrotaTMS <agtransportes2020@outlook.com>.',
+        'Remetente Resend / destinatário AG: a conta Resend precisa ser agtransportes2020@outlook.com (teste) ou domínio verificado.',
     };
     lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
     console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', msg);
