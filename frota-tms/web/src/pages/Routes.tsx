@@ -42,7 +42,7 @@ function destinationsSummary(stops: { name: string; city: string }[]): string {
   return `${stops.length} destinos`
 }
 
-function sortRoutes(list: Route[]): Route[] {
+function sortRoutesByPriority(list: Route[]): Route[] {
   return [...list].sort((a, b) => {
     const p = Number(b.hasPriority) - Number(a.hasPriority)
     if (p !== 0) return p
@@ -54,6 +54,16 @@ function sortRoutes(list: Route[]): Route[] {
     const da = new Date(a.date).getTime()
     const db = new Date(b.date).getTime()
     if (da !== db) return da - db
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+}
+
+/** Aba Todos: data do roteiro mais nova no topo; empate → criado mais recente. */
+function sortRoutesByNewest(list: Route[]): Route[] {
+  return [...list].sort((a, b) => {
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    if (db !== da) return db - da
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 }
@@ -170,7 +180,7 @@ export function Routes() {
 
   const pending = useMemo(
     () =>
-      sortRoutes(
+      sortRoutesByPriority(
         data.filter(
           (r) =>
             r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
@@ -179,7 +189,7 @@ export function Routes() {
     [data],
   )
 
-  const allSorted = useMemo(() => sortRoutes(data), [data])
+  const allSorted = useMemo(() => sortRoutesByNewest(data), [data])
   const visible = tab === 'pendentes' ? pending : allSorted
 
   const cancelMutation = useMutation({
