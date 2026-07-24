@@ -9,7 +9,7 @@ import { isOverdue } from '../utils/status';
 import { addDays, format, startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
-import { isFirstRouteSentToday, notifyFirstRouteOfDay } from '../services/notify';
+import { isFirstRouteSentToday } from '../services/notify';
 
 function normalizeCity(city: string): string {
   return city.trim().replace(/\s+/g, ' ');
@@ -592,22 +592,17 @@ export function createPlanningRouter(io: Server) {
     });
 
     if (firstOfDay) {
-      const payload = {
+      io.emit('notify:first-route', {
         routeId,
         routeName: updated.name,
         routeDate: format(updated.date, 'dd/MM/yyyy'),
         createdByName: req.user!.name || 'Admin',
-      };
-      const emailNotify = await notifyFirstRouteOfDay(payload);
-      io.emit('notify:first-route', payload);
-      io.emit('planning:changed', { action: 'send', id: routeId });
-      io.emit('routes:changed', { action: 'send', id: routeId });
-      return res.json({ ...updated, firstRouteOfDay: true, emailNotify });
+      });
     }
 
     io.emit('planning:changed', { action: 'send', id: routeId });
     io.emit('routes:changed', { action: 'send', id: routeId });
-    res.json({ ...updated, firstRouteOfDay: false, emailNotify: null });
+    res.json({ ...updated, firstRouteOfDay: firstOfDay });
   });
 
   /** Meu Dia — planejador */
