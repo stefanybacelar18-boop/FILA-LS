@@ -118,15 +118,26 @@ async function sendViaResendOne(
 async function sendViaSmtp(to: string[], subject: string, text: string, html: string) {
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  // Senha de app do Google às vezes vem com espaços na cópia
+  const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+  const user = (process.env.SMTP_USER || '').trim();
+  const host = (process.env.SMTP_HOST || '').trim();
+
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+    host,
     port,
     secure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+    requireTLS: !secure && port === 587,
+    auth: { user, pass },
+    // Render (free): conexão IPv6 ao Gmail costuma dar ENETUNREACH
+    family: 4,
+    connectionTimeout: 25_000,
+    greetingTimeout: 25_000,
+    socketTimeout: 40_000,
+    tls: { minVersion: 'TLSv1.2' },
+  } as nodemailer.TransportOptions);
+
+  await transporter.verify();
   await transporter.sendMail({
     from: fromAddress(),
     to: to.join(', '),
@@ -266,7 +277,11 @@ export async function notifyFirstRouteOfDay(payload: FirstRouteNotifyPayload): P
       failed: to.map((email) => ({ email, error: msg })),
       hint:
         resendHintFromError(msg) ||
-        'Sem acesso ao e-mail AG: use SMTP do Gmail no Render (SMTP_HOST=smtp.gmail.com, SMTP_USER=seu@gmail.com, SMTP_PASS=senha de app). Destinatário continua só a AG.',
+        (/ENETUNREACH|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(msg)
+          ? 'Falha de rede SMTP no servidor. Confira SMTP_HOST=smtp.gmail.com, porta 587 e senha de app (sem espaços).'
+          : /Invalid login|Authentication|EAUTH/i.test(msg)
+            ? 'Gmail recusou login. Use senha de app (não a senha normal) em SMTP_PASS, sem espaços.'
+            : 'Sem acesso ao e-mail AG: use SMTP do Gmail no Render. Destinatário continua só a AG.'),
     };
     lastNotifyResult = { ...result, at: new Date().toISOString(), subject };
     console.error('[notify] Falha ao enviar e-mail do 1º roteiro:', msg);

@@ -275,16 +275,31 @@ export function Routes() {
   })
 
   const testEmailMutation = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post<{
-          ok: boolean
-          sent?: boolean
-          hint?: string
-          sentTo?: string[]
-          failed?: { email: string; error: string }[]
-        }>('/notify/test')
-      ).data,
+    mutationFn: async () => {
+      try {
+        return (
+          await api.post<{
+            ok: boolean
+            sent?: boolean
+            hint?: string
+            sentTo?: string[]
+            failed?: { email: string; error: string }[]
+          }>('/notify/test')
+        ).data
+      } catch (err: unknown) {
+        const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data
+        if (data && typeof data === 'object') {
+          return data as {
+            ok: boolean
+            sent?: boolean
+            hint?: string
+            sentTo?: string[]
+            failed?: { email: string; error: string }[]
+          }
+        }
+        throw err
+      }
+    },
     onSuccess: (data) => {
       if (data.ok || data.sent) {
         setOkMsg(`E-mail de teste enviado: ${(data.sentTo ?? []).join(', ')}`)
@@ -294,7 +309,7 @@ export function Routes() {
         setError(
           data.hint ||
             data.failed?.[0]?.error ||
-            'Falha no e-mail de teste. Verifique domínio no Resend e MAIL_FROM.',
+            'Falha no e-mail de teste.',
         )
       }
     },
