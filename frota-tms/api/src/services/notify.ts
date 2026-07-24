@@ -135,7 +135,7 @@ async function sendViaSmtp(to: string[], subject: string, text: string, html: st
     greetingTimeout: 25_000,
     socketTimeout: 40_000,
     tls: { minVersion: 'TLSv1.2' },
-  });
+  } as nodemailer.TransportOptions);
 
   await transporter.verify();
   await transporter.sendMail({
