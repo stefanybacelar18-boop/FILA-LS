@@ -135,7 +135,16 @@ export function createRoutesRouter(io: Server) {
             driverName: true,
             vehicleId: true,
             status: true,
-            vehicle: { select: { id: true, plate: true } },
+            vehicle: {
+              select: {
+                id: true,
+                plate: true,
+                capacityMotos: true,
+                defaultDriver: true,
+                type: true,
+                status: true,
+              },
+            },
           },
           take: 3,
         },
