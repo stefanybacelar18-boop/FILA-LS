@@ -138,24 +138,45 @@ export function Routes() {
       }`,
       description: v.capacityMotos
         ? `${v.capacityMotos} motos${v.defaultDriver ? ` · ${v.defaultDriver}` : ''}`
-        : 'Placa atual do roteiro',
+        : v.defaultDriver
+          ? `Motorista padrão: ${v.defaultDriver}`
+          : 'Placa atual do roteiro',
     }))
   }, [availableVehicles, currentVehicle])
 
-  const driverOptions = useMemo(
-    () =>
-      drivers
-        .filter((d) => !d.blocked)
-        .map((d) => ({
-          value: d.id,
-          label: d.name,
-        })),
-    [drivers],
-  )
+  const driverOptions = useMemo(() => {
+    const selectedPlate =
+      availableVehicles.find((v) => v.id === reassignVehicleId) ??
+      (currentVehicle?.id === reassignVehicleId ? (currentVehicle as Vehicle) : null)
+    const defaultName = selectedPlate?.defaultDriver?.trim().toLowerCase()
+    return drivers
+      .filter((d) => !d.blocked)
+      .map((d) => ({
+        value: d.id,
+        label: d.name,
+        description:
+          defaultName && d.name.trim().toLowerCase() === defaultName
+            ? 'Motorista padrão da placa'
+            : undefined,
+      }))
+  }, [drivers, availableVehicles, currentVehicle, reassignVehicleId])
+
+  function matchDriverIdForPlate(vehicle: Vehicle | null | undefined, fallbackName?: string | null) {
+    const candidates = [vehicle?.defaultDriver, fallbackName]
+      .map((n) => n?.trim().toLowerCase())
+      .filter(Boolean) as string[]
+    for (const name of candidates) {
+      const match = drivers.find(
+        (d) => !d.blocked && d.name.trim().toLowerCase() === name,
+      )
+      if (match) return match.id
+    }
+    return ''
+  }
 
   function openReassign(r: Route) {
     const trip = r.trips?.[0]
-    const vehicle = trip?.vehicle ?? r.vehicles?.[0]?.vehicle
+    const vehicle = (trip?.vehicle ?? r.vehicles?.[0]?.vehicle) as Vehicle | undefined
     setDetailRoute(null)
     setReassignRoute(r)
     setReassignVehicleId(vehicle?.id ?? trip?.vehicleId ?? '')
@@ -163,13 +184,34 @@ export function Routes() {
     setError('')
   }
 
+  function onReassignPlateChange(vehicleId: string) {
+    setReassignVehicleId(vehicleId)
+    const vehicle =
+      availableVehicles.find((v) => v.id === vehicleId) ??
+      (currentVehicle?.id === vehicleId ? (currentVehicle as Vehicle) : null)
+    // Nova placa → motorista padrão da placa; se não houver, limpa para o Admin escolher
+    const nextDriver = matchDriverIdForPlate(
+      vehicle,
+      vehicleId === currentVehicle?.id ? openTrip?.driverName : null,
+    )
+    setReassignDriverId(nextDriver)
+  }
+
   useEffect(() => {
     if (!reassignRoute || drivers.length === 0 || reassignDriverId) return
-    const name = reassignRoute.trips?.[0]?.driverName?.trim()
-    if (!name) return
-    const match = drivers.find((d) => d.name.trim().toLowerCase() === name.toLowerCase())
-    if (match) setReassignDriverId(match.id)
-  }, [reassignRoute, drivers, reassignDriverId])
+    const vehicle =
+      availableVehicles.find((v) => v.id === reassignVehicleId) ??
+      (currentVehicle?.id === reassignVehicleId ? (currentVehicle as Vehicle) : null)
+    const matched = matchDriverIdForPlate(vehicle, reassignRoute.trips?.[0]?.driverName)
+    if (matched) setReassignDriverId(matched)
+  }, [
+    reassignRoute,
+    drivers,
+    reassignDriverId,
+    reassignVehicleId,
+    availableVehicles,
+    currentVehicle,
+  ])
 
   // Keep detail modal in sync when list refreshes
   useEffect(() => {
@@ -521,7 +563,7 @@ export function Routes() {
                 (detailRoute.trips?.length ?? 0) > 0 && (
                   <Button variant="outline" onClick={() => openReassign(detailRoute)}>
                     <RefreshCw className="h-3.5 w-3.5" />
-                    Trocar placa
+                    Trocar placa / motorista
                   </Button>
                 )}
               {isAdmin && (
@@ -694,7 +736,9 @@ export function Routes() {
           setReassignVehicleId('')
           setReassignDriverId('')
         }}
-        title={reassignRoute ? `Trocar placa — ${reassignRoute.name}` : 'Trocar placa'}
+        title={
+          reassignRoute ? `Trocar placa / motorista — ${reassignRoute.name}` : 'Trocar placa / motorista'
+        }
         size="md"
         footer={
           <>
@@ -720,7 +764,8 @@ export function Routes() {
       >
         <div className="space-y-3">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Ajuste placa e motorista de roteiro em andamento. A placa anterior volta a ficar
+            Altere a placa e/ou o motorista do roteiro em andamento. Ao escolher outra placa, o
+            motorista padrão dela é sugerido (você pode trocar). A placa anterior volta a ficar
             disponível.
           </p>
           {currentVehicle && (
@@ -730,9 +775,9 @@ export function Routes() {
             </p>
           )}
           <Combobox
-            label="Nova placa"
+            label="Placa"
             value={reassignVehicleId}
-            onChange={setReassignVehicleId}
+            onChange={onReassignPlateChange}
             options={plateOptions}
             placeholder="Buscar placa…"
           />
@@ -742,7 +787,17 @@ export function Routes() {
             onChange={setReassignDriverId}
             options={driverOptions}
             placeholder="Buscar motorista…"
+            emptyMessage={
+              drivers.length === 0
+                ? 'Nenhum motorista cadastrado — cadastre em Motoristas.'
+                : 'Nenhum motorista encontrado'
+            }
           />
+          {reassignVehicleId && !reassignDriverId && (
+            <p className="text-xs text-[var(--color-danger)]">
+              Selecione o motorista desta viagem.
+            </p>
+          )}
           {reassignMutation.isError && (
             <p className="text-sm text-[var(--color-danger)]">
               {(reassignMutation.error as { response?: { data?: { error?: string } } })?.response
