@@ -51,14 +51,13 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   },
   OPERACAO: {
     primary: [
-      { to: '/definir-placas', label: 'Pendentes de placa', icon: Tags },
-      { to: '/roteiros', label: 'Roteiros', icon: Route },
+      { to: '/definir-placas', label: 'Definir placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
-      { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
-      { to: '/manutencao', label: 'Manutenção', icon: Wrench },
+      { to: '/roteiros', label: 'Roteiros', icon: Route },
     ],
     secondary: [
       { to: '/frota', label: 'Frota', icon: Truck },
+      { to: '/manutencao', label: 'Manutenção', icon: Wrench },
       { to: '/motoristas', label: 'Motoristas', icon: UserRound },
     ],
   },
