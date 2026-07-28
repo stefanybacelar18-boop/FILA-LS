@@ -75,6 +75,13 @@ export function Login() {
             Entrar
           </Button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
+          Motorista LSL?{' '}
+          <a href="/meu-roteiro" className="font-medium text-[var(--color-primary)] hover:underline">
+            Ver meu roteiro de amanhã
+          </a>
+        </p>
       </div>
     </div>
   )

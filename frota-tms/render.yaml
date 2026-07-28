@@ -63,6 +63,9 @@ services:
         value: AG Operação
       - key: APP_PUBLIC_URL
         value: https://frota-tms.onrender.com
+      # Senha compartilhada dos motoristas LSL em /meu-roteiro
+      - key: LSL_DRIVER_PIN
+        value: lsl2026
       - key: DATABASE_URL
         fromDatabase:
           name: frota-tms-db
