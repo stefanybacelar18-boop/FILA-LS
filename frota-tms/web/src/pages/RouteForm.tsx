@@ -196,7 +196,7 @@ export function RouteForm() {
         description="Defina a descrição, a data e as concessionárias. Prioridade por vencimento, se houver."
       />
 
-      <AvailablePlatesBanner />
+      <AvailablePlatesBanner defaultOpen />
 
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="space-y-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
