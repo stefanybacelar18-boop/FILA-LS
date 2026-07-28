@@ -1,5 +1,5 @@
-/** Veículos quase nunca saem 100% cheios — usa 80% da capacidade nominal. */
-export const USEFUL_CAPACITY_FACTOR = 0.8;
+/** Veículos quase nunca saem 100% cheios — usa 90% da capacidade nominal. */
+export const USEFUL_CAPACITY_FACTOR = 0.9;
 
 export function usefulCapacityMotos(nominalCapacity: number): number {
   return Number(nominalCapacity) * USEFUL_CAPACITY_FACTOR;
