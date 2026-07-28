@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { isOverdue, routeDepartureAt } from '../utils/status';
 import { addDays, startOfDay, subDays, format } from 'date-fns';
+import { sumUsefulCapacityMotos } from '../lib/capacity';
 
 const router = Router();
 router.use(authenticate);
@@ -82,7 +83,9 @@ router.get('/', async (_req, res) => {
   const trucksAvailable = availableVehicles.filter((v) => v.type === VehicleType.TRUCK).length;
   const carretasAvailable = availableVehicles.filter((v) => v.type === VehicleType.CARRETA).length;
   const availableForRoutes = availableVehicles.length;
-  const availableCapacityMotos = availableVehicles.reduce((s, v) => s + v.capacityMotos, 0);
+  const availableCapacityMotos = sumUsefulCapacityMotos(
+    availableVehicles.map((v) => v.capacityMotos),
+  );
 
   const retornamHoje = openTrips.filter(
     (t) => t.expectedReturn >= today && t.expectedReturn < tomorrow,
