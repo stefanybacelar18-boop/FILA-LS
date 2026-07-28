@@ -532,7 +532,7 @@ export function Returns() {
     <div className="page-desktop max-w-4xl space-y-4">
       <PageHeader
         title="Retornos"
-        description="Confirme o retorno ou registre problema (justificativa; fotos opcionais). Admin e Operação veem os anexos neste card."
+        description="Confirme o retorno ou registre problema (fotos opcionais)."
       />
 
       {error && !reportTrip && (
@@ -540,32 +540,6 @@ export function Returns() {
           {error}
         </p>
       )}
-
-      <div className="flex flex-wrap gap-2 text-xs">
-        {[
-          { label: 'Em atraso', count: data.overdue.length, tone: 'text-[var(--color-danger)]' },
-          { label: 'Hoje', count: data.today.length, tone: 'text-blue-600' },
-          { label: 'Amanhã', count: data.tomorrow.length, tone: 'text-orange-600' },
-          {
-            label: 'Em 2 dias',
-            count: data.in2Days.length,
-            tone: 'text-[var(--color-text-muted)]',
-          },
-          {
-            label: 'Depois',
-            count: (data.later ?? []).length,
-            tone: 'text-[var(--color-text-muted)]',
-          },
-        ].map((s) => (
-          <span
-            key={s.label}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1"
-          >
-            <span className={cn('font-semibold', s.tone)}>{s.count}</span>
-            <span className="text-[var(--color-text-muted)]">{s.label}</span>
-          </span>
-        ))}
-      </div>
 
       {data.overdue.length +
         data.today.length +
