@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, Route, Vehicle } from '../types'
@@ -97,9 +97,17 @@ type Tab = 'pendentes' | 'prioridades' | 'todos'
 
 export function Routes() {
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const isOps = useAuthStore((s) => s.hasRole('OPERACAO'))
-  const [tab, setTab] = useState<Tab>(isOps ? 'prioridades' : 'pendentes')
+  const tabFromUrl = searchParams.get('tab')
+  const initialTab: Tab =
+    tabFromUrl === 'prioridades' || tabFromUrl === 'todos' || tabFromUrl === 'pendentes'
+      ? tabFromUrl
+      : isOps
+        ? 'prioridades'
+        : 'pendentes'
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [q, setQ] = useState('')
   const [detailRoute, setDetailRoute] = useState<Route | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
@@ -109,6 +117,20 @@ export function Routes() {
   const [reassignDriverId, setReassignDriverId] = useState('')
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
+
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    if (t === 'prioridades' || t === 'todos' || t === 'pendentes') setTab(t)
+  }, [searchParams])
+
+  function selectTab(next: Tab) {
+    setTab(next)
+    if (next === 'pendentes') {
+      setSearchParams({}, { replace: true })
+    } else {
+      setSearchParams({ tab: next }, { replace: true })
+    }
+  }
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['routes', q],
@@ -364,7 +386,7 @@ export function Routes() {
         <div className="inline-flex flex-wrap rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
           <button
             type="button"
-            onClick={() => setTab('pendentes')}
+            onClick={() => selectTab('pendentes')}
             className={cn(
               'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
               tab === 'pendentes'
@@ -384,7 +406,7 @@ export function Routes() {
           </button>
           <button
             type="button"
-            onClick={() => setTab('prioridades')}
+            onClick={() => selectTab('prioridades')}
             className={cn(
               'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
               tab === 'prioridades'
@@ -404,7 +426,7 @@ export function Routes() {
           </button>
           <button
             type="button"
-            onClick={() => setTab('todos')}
+            onClick={() => selectTab('todos')}
             className={cn(
               'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
               tab === 'todos'

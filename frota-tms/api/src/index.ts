@@ -50,7 +50,12 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, service: 'frota-tms-api', db: 'up' });
+    res.json({
+      ok: true,
+      service: 'frota-tms-api',
+      db: 'up',
+      commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) || process.env.GIT_COMMIT?.slice(0, 7) || null,
+    });
   } catch {
     res.status(503).json({ ok: false, service: 'frota-tms-api', db: 'down' });
   }
@@ -81,12 +86,12 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
 
-/** Serve built frontend (same origin) when available — ideal for demo/túnel público */
+/** Serve built frontend (same origin). Prefer api/public (copiado no build do Render). */
 const webDistCandidates = [
-  path.resolve(__dirname, '../../web/dist'),
-  path.resolve(process.cwd(), '../web/dist'),
   path.resolve(process.cwd(), 'public'),
   path.resolve(__dirname, '../public'),
+  path.resolve(__dirname, '../../web/dist'),
+  path.resolve(process.cwd(), '../web/dist'),
 ];
 const webDist = webDistCandidates.find((p) => fs.existsSync(path.join(p, 'index.html')));
 if (webDist) {
