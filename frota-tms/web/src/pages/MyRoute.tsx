@@ -10,7 +10,7 @@ const PLATE_KEY = 'frotatms-meu-roteiro-placa'
 type LookupResult = {
   found: boolean
   plate: string
-  routeDate: string
+  routeDate: string | null
   message?: string
   fleet?: string
   routeName?: string
@@ -106,7 +106,7 @@ export function MyRoute() {
               Frota<span className="text-[var(--color-primary)]">TMS</span>
             </h1>
             <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-              Meu roteiro — frota LSL · consulta do dia seguinte
+              Meu roteiro — frota LSL
             </p>
           </div>
 
@@ -139,7 +139,7 @@ export function MyRoute() {
             />
             {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
             <Button type="submit" className="h-11 w-full" loading={loading}>
-              Ver roteiro de amanhã
+              Ver roteiro
             </Button>
           </form>
 
@@ -148,9 +148,9 @@ export function MyRoute() {
               ref={resultRef}
               className="mt-6 min-w-0 scroll-mt-4 overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
             >
-              {!result.found ? (
+                  {!result.found ? (
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  {result.message || 'Nenhum roteiro para amanhã nesta placa.'}
+                  {result.message || 'Nenhum roteiro ativo nesta placa.'}
                 </p>
               ) : (
                 <div className="min-w-0 space-y-4">
@@ -175,7 +175,8 @@ export function MyRoute() {
                     <div className="min-w-0">
                       <p className="text-xs text-[var(--color-text-muted)]">Data</p>
                       <p className="break-words font-medium">
-                        {formatDate(result.routeDate)} · {result.departureAt}
+                        {result.routeDate ? formatDate(result.routeDate) : '—'}
+                        {result.departureAt ? ` · ${result.departureAt}` : ''}
                       </p>
                     </div>
                     <div className="min-w-0">
