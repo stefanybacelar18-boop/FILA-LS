@@ -7,8 +7,6 @@ import { cn } from '../lib/cn'
 export interface AvailabilitySummary {
   count: number
   capacityMotos: number
-  /** Fator aplicado na capacidade total (ex.: 0.8). */
-  capacityFactor?: number
   trucks: number
   carretas: number
   plates: string[]
@@ -95,10 +93,7 @@ export function AvailablePlatesBanner({ className }: { className?: string }) {
             </h2>
             {!isLoading && (
               <p className="text-xs text-[var(--color-text-muted)]">
-                Capacidade útil ≈ {capacity} motos
-                {data?.capacityFactor != null
-                  ? ` (${Math.round(data.capacityFactor * 100)}% por veículo)`
-                  : ' (80% por veículo)'}
+                Capacidade total ≈ {capacity} motos
                 {typeLine ? ` · ${typeLine}` : ''}
               </p>
             )}
