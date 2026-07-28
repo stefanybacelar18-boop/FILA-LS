@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '../stores/auth'
@@ -17,6 +17,12 @@ export function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.add('public-mobile')
+    return () => root.classList.remove('public-mobile')
+  }, [])
+
   if (token && user) return <Navigate to="/" replace />
 
   async function onSubmit(e: FormEvent) {
@@ -34,17 +40,17 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="fixed inset-0 flex flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[var(--color-bg)]">
       <button
         type="button"
         onClick={toggleTheme}
-        className="absolute top-4 right-4 rounded-md p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface)]"
+        className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-10 rounded-md p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface)]"
         aria-label="Tema"
       >
         {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
 
-      <div className="w-full max-w-sm">
+      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-10">
         <div className="mb-8">
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Frota<span className="text-[var(--color-primary)]">TMS</span>
@@ -61,6 +67,7 @@ export function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            className="h-11 max-w-full text-base"
           />
           <Input
             label="Senha"
@@ -69,9 +76,10 @@ export function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            className="h-11 max-w-full text-base"
           />
           {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
-          <Button type="submit" className="w-full" loading={loading}>
+          <Button type="submit" className="h-11 w-full" loading={loading}>
             Entrar
           </Button>
         </form>
