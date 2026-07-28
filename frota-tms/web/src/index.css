@@ -101,8 +101,24 @@ html,
 body,
 #root {
   min-height: 100%;
-  /* Produto voltado a PC / notebook */
+  /* Produto interno (Admin/AG) voltado a PC / notebook */
   min-width: 1100px;
+}
+
+/* Páginas públicas no celular (Meu roteiro / Login): comportamento de app, sem pan lateral */
+html.public-mobile,
+html.public-mobile body,
+html.public-mobile #root {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+html.public-mobile body {
+  position: relative;
 }
 
 body {
