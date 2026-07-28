@@ -49,7 +49,7 @@ export const routeStatusLabels: Record<RouteStatus, string> = {
 
 export const tripStatusLabels: Record<TripStatus, string> = {
   EM_ANDAMENTO: 'Em andamento',
-  RETORNOU: 'Retornou',
+  RETORNOU: 'Retorna',
   ATRASADO: 'Atrasado',
   CANCELADO: 'Cancelado',
 }

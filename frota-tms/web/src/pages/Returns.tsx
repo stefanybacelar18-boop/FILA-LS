@@ -305,7 +305,7 @@ function TripCard({
         <div className="flex shrink-0 flex-wrap gap-1.5 sm:flex-col sm:items-stretch">
           <Button size="sm" onClick={onReturn}>
             <Check className="h-3.5 w-3.5" />
-            Retornou
+            Retorna
           </Button>
           <Button size="sm" variant="secondary" onClick={onProblem}>
             <AlertTriangle className="h-3.5 w-3.5" />

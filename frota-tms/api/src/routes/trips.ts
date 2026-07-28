@@ -451,11 +451,11 @@ export function createTripsRouter(io: Server) {
           toStatus: nextVehicleStatus,
           details: holdMaintenance
             ? overdue
-              ? `Retornou de ${trip.dealership.name} (atraso: ${delayReason}) — permanece em manutenção até liberação`
-              : `Retornou de ${trip.dealership.name} — permanece em manutenção até liberação`
+              ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason}) — permanece em manutenção até liberação`
+              : `Retorna de ${trip.dealership.name} — permanece em manutenção até liberação`
             : overdue
-              ? `Retornou de ${trip.dealership.name} (atraso: ${delayReason})`
-              : `Retornou de ${trip.dealership.name}`,
+              ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason})`
+              : `Retorna de ${trip.dealership.name}`,
         },
       });
 
