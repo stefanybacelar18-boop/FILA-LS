@@ -368,15 +368,15 @@ export function Routes() {
     (!detailRoute.vehicles || detailRoute.vehicles.length === 0)
 
   return (
-    <div className="page-desktop max-w-[1200px]">
+    <div className="page-desktop max-w-[1100px]">
       <PageHeader
         title="Roteiros"
         description={
           tab === 'prioridades'
-            ? 'Cargas prioritárias abertas — com ou sem placa. Ordenadas pelo vencimento.'
+            ? 'Prioridades abertas, ordenadas pelo vencimento.'
             : tab === 'pendentes'
-              ? 'Aguardando placa. Prioridade no topo.'
-              : 'Mais novos no topo. Clique no roteiro para ver detalhes.'
+              ? 'Fila aguardando definição de placa.'
+              : 'Clique no nome para ver detalhes.'
         }
         actions={
           isAdmin ? (
@@ -395,75 +395,40 @@ export function Routes() {
       {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}
       {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
 
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="inline-flex flex-wrap rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          <button
-            type="button"
-            onClick={() => selectTab('pendentes')}
-            className={cn(
-              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
-              tab === 'pendentes'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-            )}
-          >
-            Pendentes de placa
-            <span
+          {(
+            [
+              { id: 'pendentes' as const, label: 'Aguardando', count: pending.length },
+              { id: 'prioridades' as const, label: 'Prioridades', count: priorities.length },
+              { id: 'todos' as const, label: 'Todos', count: data.length },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => selectTab(t.id)}
               className={cn(
-                'ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs',
-                tab === 'pendentes' ? 'bg-white/20' : 'bg-[var(--color-surface-2)]',
+                'rounded-md px-3 py-1.5 text-sm font-medium transition',
+                tab === t.id
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
               )}
             >
-              {pending.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => selectTab('prioridades')}
-            className={cn(
-              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
-              tab === 'prioridades'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-            )}
-          >
-            Prioridades
-            <span
-              className={cn(
-                'ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs',
-                tab === 'prioridades' ? 'bg-white/20' : 'bg-[var(--color-surface-2)]',
-              )}
-            >
-              {priorities.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => selectTab('todos')}
-            className={cn(
-              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
-              tab === 'todos'
-                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-            )}
-          >
-            Todos
-            <span
-              className={cn(
-                'ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs',
-                tab === 'todos' ? 'bg-white/20' : 'bg-[var(--color-surface-2)]',
-              )}
-            >
-              {data.length}
-            </span>
-          </button>
+              {t.label}
+              <span
+                className={cn(
+                  'ml-1.5 inline-flex min-w-[1.1rem] justify-center text-xs tabular-nums',
+                  tab === t.id ? 'text-white/80' : 'text-[var(--color-text-muted)]',
+                )}
+              >
+                {t.count}
+              </span>
+            </button>
+          ))}
         </div>
-        <div className="w-full sm:max-w-sm">
-          <SearchInput
-            value={q}
-            onChange={setQ}
-            placeholder="Buscar descrição, cidade ou concessionária…"
-          />
+        <div className="w-full sm:max-w-xs">
+          <SearchInput value={q} onChange={setQ} placeholder="Buscar roteiro…" />
         </div>
       </div>
 
@@ -486,7 +451,7 @@ export function Routes() {
                 ? 'Crie um roteiro e disponibilize para a Operação.'
                 : 'Quando o Admin disponibilizar, aparece aqui.'
               : tab === 'prioridades'
-                ? 'Roteiros marcados como prioridade (ainda não concluídos/cancelados) aparecem aqui — mesmo depois de definir a placa.'
+                ? 'Prioridades abertas (com ou sem placa) aparecem aqui.'
                 : isAdmin
                   ? 'Crie o primeiro roteiro.'
                   : undefined
@@ -502,20 +467,17 @@ export function Routes() {
       ) : (
         <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)]">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
-                  <th className="px-4 py-3 font-semibold">Roteiro</th>
-                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Início</th>
-                  {showPriorityColumns ? (
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Vencimento</th>
-                  ) : (
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Fim</th>
-                  )}
-                  <th className="px-4 py-3 font-semibold">Destinos</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Placa / motorista</th>
-                  <th className="px-4 py-3 text-right font-semibold">Ações</th>
+                <tr className="border-b border-[var(--color-border)] text-xs font-medium text-[var(--color-text-muted)]">
+                  <th className="px-4 py-2.5 font-medium">Roteiro</th>
+                  <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                    {showPriorityColumns ? 'Vencimento' : 'Datas'}
+                  </th>
+                  <th className="px-4 py-2.5 font-medium">Destinos</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">Placa</th>
+                  <th className="px-4 py-2.5 text-right font-medium"> </th>
                 </tr>
               </thead>
               <tbody>
@@ -528,123 +490,96 @@ export function Routes() {
                   const expiryPast =
                     !!r.priorityExpiryDate &&
                     new Date(r.priorityExpiryDate) < new Date(new Date().toDateString())
+                  const returnDate = r.returnForecast?.expectedReturn
+                    ? formatDate(r.returnForecast.expectedReturn)
+                    : null
                   return (
                     <tr
                       key={r.id}
-                      className={cn(
-                        'border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-2)]/40',
-                        r.hasPriority && 'bg-[var(--color-danger)]/[0.03]',
-                      )}
+                      className="border-b border-[var(--color-border)]/80 last:border-0 hover:bg-[var(--color-surface-2)]/50"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <button
                           type="button"
                           onClick={() => setDetailRoute(r)}
-                          className="group inline-flex max-w-full items-center gap-1.5 text-left"
+                          className="group max-w-[16rem] text-left"
                         >
-                          <span className="truncate font-medium text-[var(--color-primary)] underline-offset-2 group-hover:underline">
+                          <span className="block truncate font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)]">
                             {r.name}
                           </span>
-                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] opacity-0 transition group-hover:opacity-100" />
+                          {r.hasPriority && (
+                            <span className="mt-0.5 inline-block text-[11px] font-medium text-[var(--color-danger)]">
+                              Prioridade
+                            </span>
+                          )}
                         </button>
-                        {r.hasPriority && (
-                          <p className="mt-0.5 text-xs text-[var(--color-danger)]">Prioridade</p>
-                        )}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text)]">
-                        {formatDate(r.date)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text)]">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap text-[var(--color-text)]">
                         {showPriorityColumns ? (
                           r.priorityExpiryDate ? (
-                            <span
-                              className={cn(
-                                'font-medium',
-                                expiryPast && 'text-[var(--color-danger)]',
-                              )}
-                            >
+                            <span className={cn(expiryPast && 'font-medium text-[var(--color-danger)]')}>
                               {formatDate(r.priorityExpiryDate)}
                               {expiryPast ? ' · vencido' : ''}
                             </span>
                           ) : (
-                            '—'
+                            <span className="text-[var(--color-text-muted)]">—</span>
                           )
-                        ) : r.returnForecast?.expectedReturn ? (
-                          formatDate(r.returnForecast.expectedReturn)
                         ) : (
-                          '—'
+                          <div className="leading-snug">
+                            <p>{formatDate(r.date)}</p>
+                            {returnDate && (
+                              <p className="text-xs text-[var(--color-text-muted)]">até {returnDate}</p>
+                            )}
+                          </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[var(--color-text-muted)]">
+                      <td className="px-4 py-3 align-middle text-[var(--color-text-muted)]">
                         {destinationsSummary(stops)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         {plate ? (
-                          <div>
+                          <div className="min-w-0">
                             <PlateBadge plate={plate} color="blue" />
                             {driverName && (
-                              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                              <p className="mt-1 max-w-[9rem] truncate text-xs text-[var(--color-text-muted)]">
                                 {driverName}
                               </p>
                             )}
                           </div>
                         ) : (
-                          <span className="text-[var(--color-text-muted)]">Sem placa</span>
+                          <span className="text-[var(--color-text-muted)]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-0.5">
+                      <td className="px-4 py-3 align-middle text-right">
+                        <div className="inline-flex items-center justify-end gap-1">
                           {awaitingPlate && (isOps || isAdmin) && (
                             <Link to={`/definir-placas?routeId=${r.id}`}>
                               <Button size="sm" variant="outline">
-                                Placa
+                                Definir placa
                               </Button>
                             </Link>
                           )}
                           {isAdmin && r.status === 'RASCUNHO' && (
-                            <button
-                              type="button"
-                              title="Disponibilizar"
-                              onClick={() => setSendId(r.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-primary)]"
-                            >
-                              <Send className="h-4 w-4" />
-                            </button>
+                            <Button size="sm" variant="outline" onClick={() => setSendId(r.id)}>
+                              Disponibilizar
+                            </Button>
                           )}
                           {isAdmin && r.status === 'EM_ANDAMENTO' && (r.trips?.length ?? 0) > 0 && (
-                            <button
-                              type="button"
-                              title="Trocar placa/motorista"
-                              onClick={() => openReassign(r)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-primary)]"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </button>
+                            <Button size="sm" variant="ghost" onClick={() => openReassign(r)}>
+                              Trocar placa
+                            </Button>
                           )}
-                          {isAdmin && (
-                            <>
-                              <Link
-                                to={`/roteiros/${r.id}`}
-                                title="Editar"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Link>
-                              {r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO' && (
-                                <button
-                                  type="button"
-                                  title="Cancelar"
-                                  onClick={() => setCancelId(r.id)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-[var(--color-danger)]"
-                                >
-                                  <Ban className="h-4 w-4" />
-                                </button>
-                              )}
-                            </>
-                          )}
+                          <button
+                            type="button"
+                            title="Detalhes"
+                            onClick={() => setDetailRoute(r)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
