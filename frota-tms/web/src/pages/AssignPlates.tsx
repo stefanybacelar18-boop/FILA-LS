@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
@@ -159,29 +159,6 @@ export function AssignPlates() {
           return new Date(a.date).getTime() - new Date(b.date).getTime()
         }),
     [routes],
-  )
-
-  /** Prioridades abertas (com ou sem placa) — consulta após distribuir. */
-  const openPriorities = useMemo(
-    () =>
-      [...routes]
-        .filter(
-          (r) =>
-            r.hasPriority &&
-            r.status !== 'CANCELADO' &&
-            r.status !== 'CONCLUIDO',
-        )
-        .sort((a, b) => {
-          const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
-          const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
-          if (ae !== be) return ae - be
-          return new Date(a.date).getTime() - new Date(b.date).getTime()
-        }),
-    [routes],
-  )
-
-  const prioritiesWithPlate = openPriorities.filter(
-    (r) => r.vehicles && r.vehicles.length > 0,
   )
 
   useEffect(() => {
@@ -391,71 +368,6 @@ export function AssignPlates() {
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
-
-        {openPriorities.length > 0 && (
-          <div className="mb-5 rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/[0.04] px-4 py-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-[var(--color-text)]">
-                  Prioridades abertas · {openPriorities.length}
-                </p>
-                <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-                  {prioritiesWithPlate.length > 0
-                    ? `${prioritiesWithPlate.length} já com placa — consulte mesmo depois de distribuir.`
-                    : 'Acompanhe vencimento e status das cargas prioritárias.'}
-                </p>
-              </div>
-              <Link
-                to="/roteiros?tab=prioridades"
-                className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary)] hover:underline"
-              >
-                Ver todas
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-            <ul className="mt-3 space-y-2">
-              {openPriorities.slice(0, 4).map((r) => {
-                const plate = r.vehicles?.[0]?.vehicle?.plate
-                const driver = r.trips?.[0]?.driverName
-                const expiryPast =
-                  !!r.priorityExpiryDate &&
-                  toInputDate(r.priorityExpiryDate) <= toInputDate(new Date())
-                return (
-                  <li
-                    key={r.id}
-                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                  >
-                    <span className="font-medium">{r.name}</span>
-                    <span className="text-[var(--color-text-muted)]">
-                      {r.priorityExpiryDate ? (
-                        <span className={expiryPast ? 'font-semibold text-[var(--color-danger)]' : ''}>
-                          venc. {formatDate(r.priorityExpiryDate)}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                      {' · '}
-                      {plate ? (
-                        <>
-                          {plate}
-                          {driver ? ` · ${driver}` : ''}
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-[var(--color-primary)] hover:underline"
-                          onClick={() => pickRoute(r.id)}
-                        >
-                          definir placa
-                        </button>
-                      )}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
 
         {loadingRoutes ? (
           <div className="flex justify-center py-16">
