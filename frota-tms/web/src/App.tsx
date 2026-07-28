@@ -27,6 +27,7 @@ import { Search } from './pages/Search'
 import { AlertsCenter } from './pages/AlertsCenter'
 import { Maintenance } from './pages/Maintenance'
 import { Justifications } from './pages/Justifications'
+import { MyRoute } from './pages/MyRoute'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +80,7 @@ export default function App() {
         <RealtimeProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/meu-roteiro" element={<MyRoute />} />
             <Route
               element={
                 <AuthGate>

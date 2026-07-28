@@ -20,6 +20,7 @@ import searchRoutes from './routes/search';
 import reportsRoutes from './routes/reports';
 import justificationsRoutes from './routes/justifications';
 import evidencesRoutes from './routes/evidences';
+import publicDriverRoutes from './routes/publicDriver';
 import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
@@ -62,6 +63,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/public', publicDriverRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/dealerships', dealershipRoutes);
 app.use('/api/drivers', driverRoutes);
