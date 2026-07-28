@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight } from 'lucide-react'
@@ -120,6 +120,8 @@ export function Routes() {
     openTrip?.vehicle ??
     reassignRoute?.vehicles?.[0]?.vehicle ??
     null
+  /** Preenche motorista só na abertura do modal (não reverte quando o Admin limpa o campo). */
+  const reassignNeedsDriverInit = useRef(false)
 
   const plateOptions = useMemo(() => {
     const list = [...availableVehicles]
@@ -181,6 +183,7 @@ export function Routes() {
     setReassignRoute(r)
     setReassignVehicleId(vehicle?.id ?? trip?.vehicleId ?? '')
     setReassignDriverId('')
+    reassignNeedsDriverInit.current = true
     setError('')
   }
 
@@ -189,29 +192,24 @@ export function Routes() {
     const vehicle =
       availableVehicles.find((v) => v.id === vehicleId) ??
       (currentVehicle?.id === vehicleId ? (currentVehicle as Vehicle) : null)
-    // Nova placa → motorista padrão da placa; se não houver, limpa para o Admin escolher
+    // Nova placa → sugere motorista padrão; Admin pode trocar em seguida sem ser revertido
     const nextDriver = matchDriverIdForPlate(
       vehicle,
       vehicleId === currentVehicle?.id ? openTrip?.driverName : null,
     )
     setReassignDriverId(nextDriver)
+    reassignNeedsDriverInit.current = false
   }
 
   useEffect(() => {
-    if (!reassignRoute || drivers.length === 0 || reassignDriverId) return
+    if (!reassignRoute || drivers.length === 0 || !reassignNeedsDriverInit.current) return
     const vehicle =
       availableVehicles.find((v) => v.id === reassignVehicleId) ??
       (currentVehicle?.id === reassignVehicleId ? (currentVehicle as Vehicle) : null)
     const matched = matchDriverIdForPlate(vehicle, reassignRoute.trips?.[0]?.driverName)
-    if (matched) setReassignDriverId(matched)
-  }, [
-    reassignRoute,
-    drivers,
-    reassignDriverId,
-    reassignVehicleId,
-    availableVehicles,
-    currentVehicle,
-  ])
+    setReassignDriverId(matched)
+    reassignNeedsDriverInit.current = false
+  }, [reassignRoute, drivers, reassignVehicleId, availableVehicles, currentVehicle])
 
   // Keep detail modal in sync when list refreshes
   useEffect(() => {
@@ -764,9 +762,9 @@ export function Routes() {
       >
         <div className="space-y-3">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Altere a placa e/ou o motorista do roteiro em andamento. Ao escolher outra placa, o
-            motorista padrão dela é sugerido (você pode trocar). A placa anterior volta a ficar
-            disponível.
+            Altere a placa e/ou o motorista do roteiro em andamento. Digite o nome e{' '}
+            <strong>escolha na lista</strong> (não basta digitar). Ao mudar a placa, o motorista
+            padrão é sugerido — você pode trocar. A placa anterior volta a ficar disponível.
           </p>
           {currentVehicle && (
             <p className="rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm">
