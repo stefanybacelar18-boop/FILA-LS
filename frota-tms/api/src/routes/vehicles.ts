@@ -7,7 +7,7 @@ import { audit } from '../services/audit';
 import { vehicleColor } from '../utils/status';
 import { paramId } from '../utils/params';
 import { filterPlatesForRole, isPlateHiddenFromOperator, plateOwner } from '../data/operatorVisibility';
-import { sumUsefulCapacityMotos, USEFUL_CAPACITY_FACTOR } from '../lib/capacity';
+import { sumUsefulCapacityMotos } from '../lib/capacity';
 
 const router = Router();
 router.use(authenticate);
@@ -151,9 +151,7 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
 
   res.json({
     count: visible.length,
-    /** Soma de 80% da capacidade de cada veículo (carga realista). */
     capacityMotos: sumUsefulCapacityMotos(visible.map((v) => v.capacityMotos)),
-    capacityFactor: USEFUL_CAPACITY_FACTOR,
     trucks: trucks.length,
     carretas: carretas.length,
     plates: visible.map((v) => v.plate),
