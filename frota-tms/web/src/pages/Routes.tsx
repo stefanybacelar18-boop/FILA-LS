@@ -68,6 +68,23 @@ function sortRoutesByNewest(list: Route[]): Route[] {
   })
 }
 
+/** Prioridades abertas: vencimento mais próximo no topo. */
+function sortOpenPriorities(list: Route[]): Route[] {
+  return [...list].sort((a, b) => {
+    const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
+    const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
+    if (ae !== be) return ae - be
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    if (da !== db) return da - db
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+}
+
+function isOpenRoute(r: Route): boolean {
+  return r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO'
+}
+
 function statusTone(status: Route['status']) {
   if (status === 'CANCELADO') return 'danger' as const
   if (status === 'CONCLUIDO') return 'success' as const
@@ -76,13 +93,13 @@ function statusTone(status: Route['status']) {
   return 'default' as const
 }
 
-type Tab = 'pendentes' | 'todos'
+type Tab = 'pendentes' | 'prioridades' | 'todos'
 
 export function Routes() {
   const qc = useQueryClient()
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const isOps = useAuthStore((s) => s.hasRole('OPERACAO'))
-  const [tab, setTab] = useState<Tab>('pendentes')
+  const [tab, setTab] = useState<Tab>(isOps ? 'prioridades' : 'pendentes')
   const [q, setQ] = useState('')
   const [detailRoute, setDetailRoute] = useState<Route | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
@@ -229,8 +246,18 @@ export function Routes() {
     [data],
   )
 
+  const priorities = useMemo(
+    () =>
+      sortOpenPriorities(
+        data.filter((r) => r.hasPriority && isOpenRoute(r)),
+      ),
+    [data],
+  )
+
   const allSorted = useMemo(() => sortRoutesByNewest(data), [data])
-  const visible = tab === 'pendentes' ? pending : allSorted
+  const visible =
+    tab === 'pendentes' ? pending : tab === 'prioridades' ? priorities : allSorted
+  const showPriorityColumns = tab === 'prioridades'
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => api.delete(`/routes/${id}`),
@@ -309,7 +336,13 @@ export function Routes() {
     <div className="page-desktop max-w-[1200px]">
       <PageHeader
         title="Roteiros"
-        description="Prioridade no topo. Clique no roteiro para ver detalhes."
+        description={
+          tab === 'prioridades'
+            ? 'Cargas prioritárias abertas — com ou sem placa. Ordenadas pelo vencimento.'
+            : tab === 'pendentes'
+              ? 'Aguardando placa. Prioridade no topo.'
+              : 'Mais novos no topo. Clique no roteiro para ver detalhes.'
+        }
         actions={
           isAdmin ? (
             <Link to="/roteiros/novo">
@@ -328,7 +361,7 @@ export function Routes() {
       {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+        <div className="inline-flex flex-wrap rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
           <button
             type="button"
             onClick={() => setTab('pendentes')}
@@ -347,6 +380,26 @@ export function Routes() {
               )}
             >
               {pending.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('prioridades')}
+            className={cn(
+              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+              tab === 'prioridades'
+                ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+            )}
+          >
+            Prioridades
+            <span
+              className={cn(
+                'ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-xs',
+                tab === 'prioridades' ? 'bg-white/20' : 'bg-[var(--color-surface-2)]',
+              )}
+            >
+              {priorities.length}
             </span>
           </button>
           <button
@@ -385,15 +438,23 @@ export function Routes() {
         </div>
       ) : visible.length === 0 ? (
         <EmptyState
-          title={tab === 'pendentes' ? 'Nenhum roteiro aguardando placa' : 'Nenhum roteiro'}
+          title={
+            tab === 'pendentes'
+              ? 'Nenhum roteiro aguardando placa'
+              : tab === 'prioridades'
+                ? 'Nenhuma prioridade aberta'
+                : 'Nenhum roteiro'
+          }
           description={
             tab === 'pendentes'
               ? isAdmin
                 ? 'Crie um roteiro e disponibilize para a Operação.'
                 : 'Quando o Admin disponibilizar, aparece aqui.'
-              : isAdmin
-                ? 'Crie o primeiro roteiro.'
-                : undefined
+              : tab === 'prioridades'
+                ? 'Roteiros marcados como prioridade (ainda não concluídos/cancelados) aparecem aqui — mesmo depois de definir a placa.'
+                : isAdmin
+                  ? 'Crie o primeiro roteiro.'
+                  : undefined
           }
           action={
             isAdmin && tab === 'todos' ? (
@@ -411,19 +472,27 @@ export function Routes() {
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
                   <th className="px-4 py-3 font-semibold">Roteiro</th>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">Início</th>
-                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Fim</th>
+                  {showPriorityColumns ? (
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Vencimento</th>
+                  ) : (
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Fim</th>
+                  )}
                   <th className="px-4 py-3 font-semibold">Destinos</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Placa</th>
+                  <th className="px-4 py-3 font-semibold">Placa / motorista</th>
                   <th className="px-4 py-3 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {visible.map((r) => {
                   const plate = r.vehicles?.[0]?.vehicle?.plate
+                  const driverName = r.trips?.[0]?.driverName
                   const stops = dealershipStops(r)
                   const awaitingPlate =
                     r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
+                  const expiryPast =
+                    !!r.priorityExpiryDate &&
+                    new Date(r.priorityExpiryDate) < new Date(new Date().toDateString())
                   return (
                     <tr
                       key={r.id}
@@ -451,9 +520,25 @@ export function Routes() {
                         {formatDate(r.date)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text)]">
-                        {r.returnForecast?.expectedReturn
-                          ? formatDate(r.returnForecast.expectedReturn)
-                          : '—'}
+                        {showPriorityColumns ? (
+                          r.priorityExpiryDate ? (
+                            <span
+                              className={cn(
+                                'font-medium',
+                                expiryPast && 'text-[var(--color-danger)]',
+                              )}
+                            >
+                              {formatDate(r.priorityExpiryDate)}
+                              {expiryPast ? ' · vencido' : ''}
+                            </span>
+                          ) : (
+                            '—'
+                          )
+                        ) : r.returnForecast?.expectedReturn ? (
+                          formatDate(r.returnForecast.expectedReturn)
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">
                         {destinationsSummary(stops)}
@@ -463,9 +548,16 @@ export function Routes() {
                       </td>
                       <td className="px-4 py-3">
                         {plate ? (
-                          <PlateBadge plate={plate} color="blue" />
+                          <div>
+                            <PlateBadge plate={plate} color="blue" />
+                            {driverName && (
+                              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                                {driverName}
+                              </p>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-[var(--color-text-muted)]">—</span>
+                          <span className="text-[var(--color-text-muted)]">Sem placa</span>
                         )}
                       </td>
                       <td className="px-4 py-3">

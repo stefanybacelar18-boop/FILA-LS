@@ -52,7 +52,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   OPERACAO: {
     primary: [
       { to: '/definir-placas', label: 'Pendentes de placa', icon: Tags },
-      { to: '/roteiros', label: 'Todos roteiros', icon: Route },
+      { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
       { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
