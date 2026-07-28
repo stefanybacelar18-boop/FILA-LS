@@ -1200,18 +1200,100 @@ export function createRoutesRouter(io: Server) {
   });
 
   router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
-    const openTrips = await prisma.trip.count({
-      where: { routeId: paramId(req), status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+    const routeId = paramId(req);
+    const route = await prisma.route.findUnique({
+      where: { id: routeId },
+      include: {
+        trips: {
+          where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          include: { vehicle: true },
+        },
+        vehicles: { include: { vehicle: true } },
+      },
     });
-    if (openTrips > 0) return res.status(400).json({ error: 'Roteiro possui viagens abertas' });
+    if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+    if (route.status === RouteStatus.CANCELADO) {
+      return res.status(400).json({ error: 'Roteiro já está cancelado' });
+    }
+    if (route.status === RouteStatus.CONCLUIDO) {
+      return res.status(400).json({ error: 'Roteiro concluído não pode ser cancelado' });
+    }
 
-    await prisma.route.update({
-      where: { id: paramId(req) },
-      data: { status: RouteStatus.CANCELADO },
-    });
-    await audit('CANCEL', 'Route', { userId: req.user!.id, entityId: paramId(req) });
-    io.emit('routes:changed', { action: 'cancel', id: paramId(req) });
-    res.status(204).send();
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const trip of route.trips) {
+          const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+          const nextVehicleStatus = holdMaintenance
+            ? VehicleStatus.EM_MANUTENCAO
+            : VehicleStatus.DISPONIVEL;
+
+          await tx.trip.update({
+            where: { id: trip.id },
+            data: {
+              status: TripStatus.CANCELADO,
+              notes: trip.notes
+                ? `${trip.notes}\n[Cancelado pelo Admin ao cancelar o roteiro]`
+                : 'Cancelado pelo Admin ao cancelar o roteiro',
+            },
+          });
+
+          await tx.vehicle.update({
+            where: { id: trip.vehicleId },
+            data: { status: nextVehicleStatus },
+          });
+
+          await tx.vehicleHistory.create({
+            data: {
+              vehicleId: trip.vehicleId,
+              userId: req.user!.id,
+              tripId: trip.id,
+              action: 'CANCEL_ROTEIRO',
+              fromStatus: trip.vehicle.status,
+              toStatus: nextVehicleStatus,
+              details: `Roteiro ${route.name} cancelado pelo Admin — placa liberada`,
+            },
+          });
+        }
+
+        // Placas vinculadas sem viagem aberta (ex.: aguardando) também saem do roteiro
+        if (route.trips.length === 0 && route.vehicles.length > 0) {
+          for (const rv of route.vehicles) {
+            if (rv.vehicle.status === VehicleStatus.EM_VIAGEM || rv.vehicle.status === VehicleStatus.EM_CARREGAMENTO) {
+              const holdMaintenance = !!(rv.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+              await tx.vehicle.update({
+                where: { id: rv.vehicleId },
+                data: {
+                  status: holdMaintenance ? VehicleStatus.EM_MANUTENCAO : VehicleStatus.DISPONIVEL,
+                },
+              });
+            }
+          }
+        }
+
+        await tx.routeVehicle.deleteMany({ where: { routeId } });
+
+        await tx.route.update({
+          where: { id: routeId },
+          data: { status: RouteStatus.CANCELADO, readyForOperation: false },
+        });
+      });
+
+      await audit('CANCEL', 'Route', {
+        userId: req.user!.id,
+        entityId: routeId,
+        details:
+          route.trips.length > 0
+            ? `${route.name} · ${route.trips.length} viagem(ns) cancelada(s) · placas liberadas`
+            : route.name,
+      });
+      io.emit('fleet:changed', { action: 'cancel-route', routeId });
+      io.emit('trips:changed', { action: 'cancel-route', routeId });
+      io.emit('routes:changed', { action: 'cancel', id: routeId });
+      res.status(204).send();
+    } catch (err) {
+      console.error('cancel route failed', err);
+      return res.status(500).json({ error: 'Falha ao cancelar roteiro' });
+    }
   });
 
   return router;

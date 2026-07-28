@@ -285,9 +285,15 @@ export function Routes() {
     mutationFn: async (id: string) => api.delete(`/routes/${id}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['routes'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-available'] })
+      void qc.invalidateQueries({ queryKey: ['trips'] })
+      void qc.invalidateQueries({ queryKey: ['returns'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
       setCancelId(null)
       setDetailRoute(null)
       setError('')
+      setOkMsg('Roteiro cancelado.')
     },
     onError: (err: unknown) => {
       setError(
@@ -297,6 +303,13 @@ export function Routes() {
       setCancelId(null)
     },
   })
+
+  const cancelTarget = cancelId ? data.find((r) => r.id === cancelId) : null
+  const cancelHasOpenTrip =
+    !!cancelTarget &&
+    (cancelTarget.status === 'EM_ANDAMENTO' ||
+      (cancelTarget.trips?.some((t) => t.status === 'EM_ANDAMENTO' || t.status === 'ATRASADO') ??
+        false))
 
   const sendMutation = useMutation({
     mutationFn: async (id: string) =>
@@ -825,7 +838,11 @@ export function Routes() {
         onClose={() => setCancelId(null)}
         onConfirm={() => cancelId && cancelMutation.mutate(cancelId)}
         title="Cancelar roteiro"
-        message="Confirma o cancelamento deste roteiro?"
+        message={
+          cancelHasOpenTrip
+            ? 'Este roteiro está em andamento. Ao cancelar, a viagem será encerrada e a placa voltará a ficar disponível. Confirma?'
+            : 'Confirma o cancelamento deste roteiro?'
+        }
         confirmLabel="Cancelar roteiro"
         danger
         loading={cancelMutation.isPending}
