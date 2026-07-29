@@ -87,7 +87,7 @@ export function Login() {
         <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
           Motorista LSL?{' '}
           <a href="/meu-roteiro" className="font-medium text-[var(--color-primary)] hover:underline">
-            Ver meu roteiro de amanhã
+            Ver meu roteiro
           </a>
         </p>
       </div>

@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { normalizePlate, plateOwner } from '../data/operatorVisibility';
-import { TripStatus, RouteStatus } from '../types/enums';
+import { TripStatus } from '../types/enums';
 
 const router = Router();
 
@@ -11,23 +11,6 @@ const bodySchema = z.object({
   plate: z.string().min(5).max(12),
   pin: z.string().min(4).max(32),
 });
-
-/** Dia de calendário em Bahia/Brasil (YYYY-MM-DD). */
-function brazilYmd(d = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Bahia',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
-
-function addDaysYmd(ymd: string, days: number): string {
-  const [y, m, d] = ymd.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10);
-}
 
 function pinOk(provided: string, expected: string): boolean {
   const a = Buffer.from(provided.normalize('NFKC'));
@@ -54,7 +37,8 @@ function rateLimited(ip: string): boolean {
 }
 
 /**
- * Consulta pública — motorista LSL vê o roteiro de amanhã.
+ * Consulta pública — motorista LSL vê o roteiro ativo da placa
+ * (permanece até “Retorna” no FrotaTMS ou nova atribuição).
  * POST { plate, pin }
  */
 router.post('/meu-roteiro', async (req, res) => {
@@ -89,53 +73,35 @@ router.post('/meu-roteiro', async (req, res) => {
     return res.status(403).json({ error: 'Esta consulta é só para placas da frota LSL.' });
   }
 
-  const tomorrow = addDaysYmd(brazilYmd(), 1);
-  const dayAfter = addDaysYmd(tomorrow, 1);
-  const from = new Date(`${tomorrow}T00:00:00.000Z`);
-  const to = new Date(`${dayAfter}T00:00:00.000Z`);
-
-  const route = await prisma.route.findFirst({
+  const openTrip = await prisma.trip.findFirst({
     where: {
-      date: { gte: from, lt: to },
-      status: { not: RouteStatus.CANCELADO },
-      vehicles: { some: { vehicleId: vehicle.id } },
+      vehicleId: vehicle.id,
+      status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
     },
+    orderBy: { departureAt: 'desc' },
     include: {
-      dealerships: {
-        orderBy: { order: 'asc' },
-        include: { dealership: { select: { name: true, city: true, state: true } } },
-      },
-      dealership: { select: { name: true, city: true, state: true } },
-      vehicles: { include: { vehicle: { select: { plate: true } } } },
-      trips: {
-        where: {
-          vehicleId: vehicle.id,
-          status: {
-            in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO, TripStatus.RETORNOU],
+      route: {
+        include: {
+          dealerships: {
+            orderBy: { order: 'asc' },
+            include: { dealership: { select: { name: true, city: true, state: true } } },
           },
-        },
-        orderBy: { departureAt: 'desc' },
-        take: 1,
-        select: {
-          driverName: true,
-          departureAt: true,
-          expectedReturn: true,
-          status: true,
+          dealership: { select: { name: true, city: true, state: true } },
         },
       },
     },
-    orderBy: { createdAt: 'desc' },
   });
 
-  if (!route) {
+  if (!openTrip?.route) {
     return res.json({
       found: false,
       plate: vehicle.plate,
-      routeDate: tomorrow,
-      message: 'Nenhum roteiro encontrado para amanhã nesta placa.',
+      routeDate: null,
+      message: 'Nenhum roteiro ativo nesta placa.',
     });
   }
 
+  const route = openTrip.route;
   const stops =
     route.dealerships.length > 0
       ? route.dealerships.map((rd) => ({
@@ -153,24 +119,26 @@ router.post('/meu-roteiro', async (req, res) => {
           ]
         : [];
 
-  const trip = route.trips[0] ?? null;
-  const expectedReturnAt = trip?.expectedReturn ?? null;
+  const routeDate =
+    route.date instanceof Date
+      ? route.date.toISOString().slice(0, 10)
+      : String(route.date).slice(0, 10);
 
   return res.json({
     found: true,
     plate: vehicle.plate,
     fleet: 'LSL',
     routeName: route.name,
-    routeDate: tomorrow,
+    routeDate,
     departureAt: '06:00',
-    expectedReturnAt,
-    driverName: trip?.driverName ?? null,
+    expectedReturnAt: openTrip.expectedReturn,
+    driverName: openTrip.driverName ?? null,
     hasPriority: route.hasPriority,
     priorityExpiryDate: route.priorityExpiryDate
       ? String(route.priorityExpiryDate).slice(0, 10)
       : null,
     status: route.status,
-    tripStatus: trip?.status ?? null,
+    tripStatus: openTrip.status,
     destinations: stops,
   });
 });
