@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, Truck } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronUp, Truck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { cn } from '../lib/cn'
@@ -14,46 +15,15 @@ export interface AvailabilitySummary {
   byOwner?: { LSL: number; AG: number }
 }
 
-function Metric({
-  label,
-  value,
-  tone = 'default',
+/** Faixa: placas livres para montar roteiros (Admin). Compacta por padrão. */
+export function AvailablePlatesBanner({
+  className,
+  defaultOpen = false,
 }: {
-  label: string
-  value: number
-  tone?: 'default' | 'lsl' | 'ag'
+  className?: string
+  defaultOpen?: boolean
 }) {
-  return (
-    <div
-      className={cn(
-        'min-w-[6.5rem] flex-1 rounded-lg border px-3 py-2.5',
-        tone === 'lsl' && 'border-slate-800/30 bg-slate-900 text-white',
-        tone === 'ag' && 'border-teal-700/25 bg-teal-700/10',
-        tone === 'default' && 'border-[var(--color-border)] bg-[var(--color-surface)]',
-      )}
-    >
-      <p
-        className={cn(
-          'text-[11px] font-semibold tracking-wide uppercase',
-          tone === 'lsl' ? 'text-white/70' : 'text-[var(--color-text-muted)]',
-        )}
-      >
-        {label}
-      </p>
-      <p
-        className={cn(
-          'mt-0.5 font-display text-2xl font-bold tabular-nums',
-          tone === 'lsl' ? 'text-white' : 'text-[var(--color-text)]',
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  )
-}
-
-/** Faixa visível: quantas placas livres para montar roteiros (Admin) */
-export function AvailablePlatesBanner({ className }: { className?: string }) {
+  const [open, setOpen] = useState(defaultOpen)
   const { data, isLoading } = useQuery({
     queryKey: ['vehicles-availability-summary'],
     queryFn: async () =>
@@ -65,116 +35,112 @@ export function AvailablePlatesBanner({ className }: { className?: string }) {
   const capacity = data?.capacityMotos ?? 0
   const byCapacity = data?.byCapacity ?? []
   const byOwner = data?.byOwner
-  const typeLine =
-    data && data.trucks + data.carretas > 0
-      ? [
-          data.trucks > 0 ? `${data.trucks} truck${data.trucks === 1 ? '' : 's'}` : null,
-          data.carretas > 0 ? `${data.carretas} carreta${data.carretas === 1 ? '' : 's'}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : null
+  const summaryLine = isLoading
+    ? 'Carregando…'
+    : [
+        `${count} livre${count === 1 ? '' : 's'}`,
+        `≈ ${capacity} motos`,
+        byOwner ? `LSL ${byOwner.LSL}` : null,
+        byOwner ? `AG ${byOwner.AG}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
 
   return (
     <section
       className={cn(
-        'mb-5 overflow-hidden rounded-[var(--radius)] border border-[var(--color-primary)]/20 bg-[var(--color-surface)] shadow-[var(--shadow-sm)]',
+        'mb-4 overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)]',
         className,
       )}
     >
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-primary-muted)] px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--color-primary)] text-white">
-            <Truck className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">
-              Placas disponíveis para roteiros
-            </h2>
-            {!isLoading && (
-              <p className="text-xs text-[var(--color-text-muted)]">
-                Capacidade total ≈ {capacity} motos
-                {typeLine ? ` · ${typeLine}` : ''}
-              </p>
-            )}
-          </div>
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-primary)] text-white">
+          <Truck className="h-3.5 w-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-[var(--color-text)]">Placas disponíveis</p>
+          <p className="truncate text-xs text-[var(--color-text-muted)]">{summaryLine}</p>
         </div>
-        <Link
-          to="/frota"
-          className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary)] hover:underline"
-        >
-          Ver frota
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </header>
-
-      <div className="space-y-4 px-4 py-4">
-        {isLoading ? (
-          <p className="text-sm text-[var(--color-text-muted)]">Carregando…</p>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <Metric label="Total livres" value={count} />
-              <Metric label="LSL" value={byOwner?.LSL ?? 0} tone="lsl" />
-              <Metric label="AG" value={byOwner?.AG ?? 0} tone="ag" />
-            </div>
-
-            {byCapacity.length > 0 && (
-              <div>
-                <p className="mb-2 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
-                  Por capacidade de motos
-                </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[28rem] border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--color-border)] text-left text-xs text-[var(--color-text-muted)]">
-                        <th className="pb-2 pr-3 font-medium">Capacidade</th>
-                        <th className="pb-2 pr-3 font-medium">Placas</th>
-                        <th className="pb-2 pr-3 font-medium">LSL</th>
-                        <th className="pb-2 font-medium">AG</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {byCapacity.map((row) => (
-                        <tr
-                          key={row.capacityMotos}
-                          className="border-b border-[var(--color-border)]/70 last:border-0"
-                        >
-                          <td className="py-2.5 pr-3 font-medium tabular-nums">
-                            {row.capacityMotos}{' '}
-                            <span className="font-normal text-[var(--color-text-muted)]">motos</span>
-                          </td>
-                          <td className="py-2.5 pr-3 font-semibold tabular-nums text-[var(--color-primary)]">
-                            {row.count}
-                          </td>
-                          <td className="py-2.5 pr-3 tabular-nums">
-                            {row.lsl ? (
-                              <span className="inline-flex min-w-[1.75rem] justify-center rounded bg-slate-900 px-1.5 py-0.5 text-xs font-semibold text-white">
-                                {row.lsl}
-                              </span>
-                            ) : (
-                              <span className="text-[var(--color-text-muted)]">—</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 tabular-nums">
-                            {row.ag ? (
-                              <span className="inline-flex min-w-[1.75rem] justify-center rounded bg-teal-700/15 px-1.5 py-0.5 text-xs font-semibold text-teal-900 dark:text-teal-200">
-                                {row.ag}
-                              </span>
-                            ) : (
-                              <span className="text-[var(--color-text-muted)]">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/frota"
+            className="hidden text-xs font-medium text-[var(--color-primary)] hover:underline sm:inline"
+          >
+            Frota
+            <ArrowRight className="ml-0.5 inline h-3 w-3" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            aria-expanded={open}
+          >
+            {open ? 'Ocultar' : 'Detalhes'}
+            {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
+
+      {open && !isLoading && (
+        <div className="space-y-3 border-t border-[var(--color-border)] px-3 py-3">
+          <div className="flex flex-wrap gap-3 text-sm">
+            <span>
+              <span className="text-[var(--color-text-muted)]">Total </span>
+              <strong className="tabular-nums">{count}</strong>
+            </span>
+            <span>
+              <span className="text-[var(--color-text-muted)]">LSL </span>
+              <strong className="tabular-nums">{byOwner?.LSL ?? 0}</strong>
+            </span>
+            <span>
+              <span className="text-[var(--color-text-muted)]">AG </span>
+              <strong className="tabular-nums">{byOwner?.AG ?? 0}</strong>
+            </span>
+            <span>
+              <span className="text-[var(--color-text-muted)]">Capacidade ≈ </span>
+              <strong className="tabular-nums">{capacity}</strong>
+              <span className="text-[var(--color-text-muted)]"> motos</span>
+            </span>
+          </div>
+
+          {byCapacity.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[24rem] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)] text-left text-xs text-[var(--color-text-muted)]">
+                    <th className="pb-1.5 pr-3 font-medium">Capacidade</th>
+                    <th className="pb-1.5 pr-3 font-medium">Placas</th>
+                    <th className="pb-1.5 pr-3 font-medium">LSL</th>
+                    <th className="pb-1.5 font-medium">AG</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byCapacity.map((row) => (
+                    <tr
+                      key={row.capacityMotos}
+                      className="border-b border-[var(--color-border)]/70 last:border-0"
+                    >
+                      <td className="py-1.5 pr-3 tabular-nums">
+                        {row.capacityMotos}{' '}
+                        <span className="text-[var(--color-text-muted)]">motos</span>
+                      </td>
+                      <td className="py-1.5 pr-3 font-medium tabular-nums text-[var(--color-primary)]">
+                        {row.count}
+                      </td>
+                      <td className="py-1.5 pr-3 tabular-nums text-[var(--color-text-muted)]">
+                        {row.lsl || '—'}
+                      </td>
+                      <td className="py-1.5 tabular-nums text-[var(--color-text-muted)]">
+                        {row.ag || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }

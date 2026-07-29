@@ -363,8 +363,8 @@ export function AssignPlates() {
     return (
       <div className="page-desktop max-w-3xl">
         <PageHeader
-          title="Pendentes de placa"
-          description="Prioridade no topo — Admin e Operação podem definir placa."
+          title="Definir placa"
+          description="Prioridade no topo — Admin e Operação podem definir."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
