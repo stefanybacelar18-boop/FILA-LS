@@ -182,8 +182,16 @@ export default function CheckInPage() {
       setErrors({ form: "Conta sem permissão de motorista." });
       return;
     }
+    if (data.error === "migration_required") {
+      setErrors({
+        form:
+          data.message ??
+          "Banco não atualizado. Execute supabase/migracao-em-viagem.sql no Supabase e tente novamente.",
+      });
+      return;
+    }
     if (!res.ok) {
-      const msg = data.detail || data.error || "Erro ao realizar check-in.";
+      const msg = data.message || data.detail || data.error || "Erro ao realizar check-in.";
       setErrors({
         form: msg.includes("Placa") ? `${msg}. ${PLACA_MERCOSUL_HINT}` : msg,
       });

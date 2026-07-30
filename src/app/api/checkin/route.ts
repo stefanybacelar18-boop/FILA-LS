@@ -4,10 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { canCheckInAgain, hasActiveCheckIn } from "@/lib/checkin-rules";
 import { validateCheckInBody } from "@/lib/checkin-validation";
 import {
+  ACTIVE_QUEUE_DB_STATUSES,
   COOLDOWN_MESSAGE,
   DEFAULT_GEOFENCE,
   isActiveQueueStatus,
-  OPEN_REGISTRATION_DB_STATUSES,
   skipCheckinLimits,
 } from "@/lib/constants";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
@@ -106,15 +106,26 @@ export async function POST(request: NextRequest) {
   void geofence;
 
   if (!skipCheckinLimits()) {
-    const { data: placaRows } = await admin
-      .from("queue_entries")
-      .select("id, driver_user_id, status")
-      .eq("placa_cavalo", form.placa_cavalo)
-      .is("deleted_at", null)
-      .in("status", [...OPEN_REGISTRATION_DB_STATUSES])
-      .limit(5);
+    const [{ data: activePlacaRows }, { data: viagemPlacaRows }] = await Promise.all([
+      admin
+        .from("queue_entries")
+        .select("id, driver_user_id, status")
+        .eq("placa_cavalo", form.placa_cavalo)
+        .is("deleted_at", null)
+        .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
+        .limit(5),
+      admin
+        .from("queue_entries")
+        .select("id, driver_user_id, status")
+        .eq("placa_cavalo", form.placa_cavalo)
+        .is("deleted_at", null)
+        .eq("status", "em_viagem")
+        .limit(5),
+    ]);
 
-    const placaBlocked = (placaRows ?? []).find(
+    const placaRows = [...(activePlacaRows ?? []), ...(viagemPlacaRows ?? [])];
+
+    const placaBlocked = placaRows.find(
       (row) =>
         row.driver_user_id !== user.id &&
         (isActiveQueueStatus(String(row.status)) || String(row.status) === "em_viagem")
@@ -155,7 +166,7 @@ export async function POST(request: NextRequest) {
   const placaDisplay = form.placa_cavalo;
   const previsaoDescarregamento = forecastDescarregamentoFromCheckIn();
 
-  const { data: entry, error: insertError } = await insertQueueEntry(admin, {
+  const { data: entry, error: insertError, migrationRequired } = await insertQueueEntry(admin, {
     driver_user_id: user.id,
     minuta: form.minuta,
     nome: form.nome,
@@ -181,9 +192,20 @@ export async function POST(request: NextRequest) {
   });
 
   if (insertError || !entry) {
+    if (migrationRequired) {
+      return NextResponse.json(
+        {
+          error: "migration_required",
+          message:
+            "O banco de dados ainda não foi atualizado para o check-in de viagem. No Supabase → SQL Editor, execute o arquivo supabase/migracao-em-viagem.sql e tente novamente.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       {
         error: "insert_failed",
+        message: "Não foi possível registrar o check-in. Tente novamente ou avise a operação.",
         ...(isProd() ? {} : { detail: insertError }),
       },
       { status: 500 }
