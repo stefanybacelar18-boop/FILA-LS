@@ -109,6 +109,7 @@ export default function AdminPage() {
       email?: string;
       nome?: string;
       finalizados?: number;
+      cooldownAplica?: boolean;
     };
 
     setLiberando(false);
@@ -119,13 +120,15 @@ export default function AdminPage() {
     }
 
     const finalizados = json.finalizados ?? 0;
-    setLiberarMsg(
-      `Check-in liberado para ${json.email ?? email}${
-        finalizados > 0
-          ? ` · ${finalizados} registro(s) ativo(s) encerrado(s) para novo teste`
-          : ""
-      }`
-    );
+    const encerrados =
+      finalizados > 0
+        ? ` · ${finalizados} registro(s) de viagem/fila encerrado(s)`
+        : " · nenhum registro aberto encontrado";
+    const cooldown =
+      json.cooldownAplica !== false
+        ? " A regra de 6 dias entre check-ins continua valendo."
+        : "";
+    setLiberarMsg(`Operação concluída para ${json.email ?? email}${encerrados}.${cooldown}`);
     setLiberarEmail("");
   }
 
@@ -301,10 +304,11 @@ export default function AdminPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Liberar check-in</CardTitle>
+            <CardTitle className="text-base">Encerrar viagem/fila ativa</CardTitle>
           </CardHeader>
           <p className="mb-4 text-sm text-slate-500">
-            Antecipa novo check-in e encerra fila ativa do motorista (testes).
+            Finaliza registros abertos (em viagem ou na fila) do motorista. Não ignora a
+            regra de 6 dias para um novo check-in.
           </p>
           <div className="flex flex-wrap gap-3">
             <Input
@@ -316,7 +320,7 @@ export default function AdminPage() {
             />
             <div className="flex items-end">
               <Button onClick={liberarCheckin} disabled={liberando}>
-                {liberando ? <Spinner size="sm" /> : "Liberar"}
+                {liberando ? <Spinner size="sm" /> : "Encerrar"}
               </Button>
             </div>
           </div>

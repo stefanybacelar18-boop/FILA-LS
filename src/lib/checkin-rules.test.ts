@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isOpenRegistrationStatus } from "./constants";
 import { canCheckInAgain, hasActiveCheckIn } from "./checkin-rules";
 import type { QueueEntry } from "./types";
 
@@ -41,6 +42,15 @@ function entry(partial: Partial<QueueEntry> & Pick<QueueEntry, "status">): Queue
     ...partial,
   };
 }
+
+describe("isOpenRegistrationStatus", () => {
+  it("inclui em_viagem e fila ativa", () => {
+    expect(isOpenRegistrationStatus("em_viagem")).toBe(true);
+    expect(isOpenRegistrationStatus("aguardando_descarregamento")).toBe(true);
+    expect(isOpenRegistrationStatus("finalizado")).toBe(false);
+    expect(isOpenRegistrationStatus("ausente")).toBe(false);
+  });
+});
 
 describe("hasActiveCheckIn", () => {
   it("retorna entrada aguardando descarregamento", () => {

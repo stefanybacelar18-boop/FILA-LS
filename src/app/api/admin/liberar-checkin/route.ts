@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAccessAdmin } from "@/lib/role-permissions";
-import { isActiveQueueStatus, statusForDatabase } from "@/lib/constants";
+import { isOpenRegistrationStatus, statusForDatabase } from "@/lib/constants";
 import { getStatusTimestampUpdates } from "@/lib/queue";
 
 export async function POST(request: NextRequest) {
@@ -83,11 +83,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: entriesError.message }, { status: 500 });
     }
 
-    const activeIds = (entries ?? [])
-      .filter((e) => isActiveQueueStatus(e.status))
+    const openIds = (entries ?? [])
+      .filter((e) => isOpenRegistrationStatus(e.status))
       .map((e) => e.id);
 
-    if (activeIds.length > 0) {
+    if (openIds.length > 0) {
       const finishedPatch = {
         status: statusForDatabase("finalizado"),
         ...getStatusTimestampUpdates("finalizado"),
@@ -96,27 +96,30 @@ export async function POST(request: NextRequest) {
       const { error: finalizeError } = await admin
         .from("queue_entries")
         .update(finishedPatch)
-        .in("id", activeIds);
+        .in("id", openIds);
 
       if (finalizeError) {
         return NextResponse.json({ error: finalizeError.message }, { status: 500 });
       }
     }
 
-    const { error: liberarError } = await admin
-      .from("profiles")
-      .update({ checkin_liberado: true })
-      .eq("id", driver.id);
+    if (driver.checkin_liberado) {
+      const { error: resetError } = await admin
+        .from("profiles")
+        .update({ checkin_liberado: false })
+        .eq("id", driver.id);
 
-    if (liberarError) {
-      return NextResponse.json({ error: liberarError.message }, { status: 500 });
+      if (resetError) {
+        return NextResponse.json({ error: resetError.message }, { status: 500 });
+      }
     }
 
     return NextResponse.json({
       ok: true,
       email: driver.email,
       nome: driver.full_name,
-      finalizados: activeIds.length,
+      finalizados: openIds.length,
+      cooldownAplica: true,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro interno";
