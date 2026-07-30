@@ -43,6 +43,7 @@ export default function CheckInPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [eligibilityLoading, setEligibilityLoading] = useState(true);
   const [cooldownBlock, setCooldownBlock] = useState<CheckinCooldownBlock | null>(null);
+  const [checkinLiberado, setCheckinLiberado] = useState(false);
 
   const [form, setForm] = useState({
     minuta: "",
@@ -68,28 +69,46 @@ export default function CheckInPage() {
     }));
 
     async function checkExisting() {
-      const { data } = await supabase
-        .from("queue_entries")
-        .select("id, status, token, created_at, driver_user_id")
-        .eq("driver_user_id", profile!.id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(10);
+      const [{ data: entriesData }, { data: profileRow }] = await Promise.all([
+        supabase
+          .from("queue_entries")
+          .select("id, status, token, created_at, driver_user_id")
+          .eq("driver_user_id", profile!.id)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(10),
+        supabase
+          .from("profiles")
+          .select("checkin_liberado")
+          .eq("id", profile!.id)
+          .single(),
+      ]);
       if (cancelled) return;
-      const entries = (data as QueueEntry[]) ?? [];
+      const entries = (entriesData as QueueEntry[]) ?? [];
+      const liberado = profileRow?.checkin_liberado === true;
+      setCheckinLiberado(liberado);
+      const eligibilityProfile = { checkin_liberado: liberado };
       const active = hasActiveCheckIn(entries);
-      if (active && !profile!.checkin_liberado) {
+      if (active && !liberado) {
         router.replace(MOTORISTA_HOME);
         return;
       }
-      setCooldownBlock(getCheckinCooldownBlock(entries[0] ?? null, profile!));
+      setCooldownBlock(getCheckinCooldownBlock(entries[0] ?? null, eligibilityProfile));
       setEligibilityLoading(false);
     }
     setEligibilityLoading(true);
     void checkExisting();
 
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        void checkExisting();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [profile, supabase, router]);
 
@@ -228,6 +247,12 @@ export default function CheckInPage() {
               : "Registre após o carregamento em Belém."
           }
         />
+
+        {checkinLiberado && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+            Check-in liberado pela administração. Você pode registrar uma nova viagem agora.
+          </div>
+        )}
 
         {cooldownBlock && <CheckinCooldownAlert block={cooldownBlock} />}
 

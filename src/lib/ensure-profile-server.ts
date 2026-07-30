@@ -1,9 +1,17 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { FIXED_ACCOUNT_ROLES } from "@/lib/constants";
-import type { UserRole } from "@/lib/types";
+import type { Profile, UserRole } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 
 const STAFF_ROLES = ["administrador", "empilhador", "operador", "supervisor"];
+
+export const MOTORISTA_PROFILE_SELECT =
+  "id, email, full_name, role, telefone, checkin_liberado" as const;
+
+export type MotoristaProfileRow = Pick<
+  Profile,
+  "id" | "email" | "full_name" | "role" | "telefone" | "checkin_liberado"
+>;
 
 function expectedRoleForEmail(email: string | undefined): UserRole | undefined {
   if (!email) return undefined;
@@ -23,7 +31,7 @@ async function repairFixedAccountRole(
     .from("profiles")
     .update({ role: expected })
     .eq("id", userId)
-    .select("id, email, full_name, role")
+    .select(MOTORISTA_PROFILE_SELECT)
     .single();
 
   if (error) throw new Error(error.message);
@@ -38,7 +46,7 @@ export async function ensureProfileForUser(
 
   const { data: existing, error: readError } = await admin
     .from("profiles")
-    .select("id, email, full_name, role")
+    .select(MOTORISTA_PROFILE_SELECT)
     .eq("id", user.id)
     .maybeSingle();
 
@@ -91,7 +99,7 @@ export async function ensureProfileForUser(
       full_name: fullName,
       role: fixedRole ?? "motorista",
     })
-    .select("id, email, full_name, role")
+    .select(MOTORISTA_PROFILE_SELECT)
     .single();
 
   if (insertError) {

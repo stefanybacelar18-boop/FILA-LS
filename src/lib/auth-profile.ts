@@ -1,5 +1,10 @@
 import type { Profile } from "./types";
 
+export type MotoristaProfileRow = Pick<
+  Profile,
+  "id" | "email" | "full_name" | "role" | "telefone" | "checkin_liberado"
+>;
+
 export async function ensureUserProfile(
   context: "staff" | "motorista"
 ): Promise<{
@@ -30,14 +35,12 @@ export function isStaffRole(role: string): boolean {
   return role === "empilhador" || role === "administrador" || role === "operador" || role === "supervisor";
 }
 
-export async function completeMotoristaLogin(): Promise<
-  Pick<Profile, "id" | "email" | "full_name" | "role">
-> {
+export async function completeMotoristaLogin(): Promise<MotoristaProfileRow> {
   const result = await ensureUserProfile("motorista");
   if (!result?.profile || result.profile.role !== "motorista") {
     throw new Error("perfil");
   }
-  return result.profile;
+  return result.profile as MotoristaProfileRow;
 }
 
 export function staffRoleLabel(role: string): string {
