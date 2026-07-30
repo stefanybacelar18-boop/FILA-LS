@@ -132,6 +132,11 @@ export function isActiveQueueStatus(status: string): boolean {
   return (LEGACY_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
+/** Viagem ou fila aberta — bloqueia novo check-in até encerrar. */
+export function isOpenRegistrationStatus(status: string): boolean {
+  return (OPEN_REGISTRATION_DB_STATUSES as readonly string[]).includes(status);
+}
+
 /** Painéis operacionais (motorista, empilhador, TV): fila ativa + ausentes aguardando retorno. */
 export function isOperationalPanelEntry(entry: { status: string }): boolean {
   return isActiveQueueStatus(entry.status) || isAusenteQueueStatus(entry.status);
@@ -226,7 +231,7 @@ export const REMOTE_CHECKIN_INFO =
   "Registre a viagem após o carregamento em Belém. Você entrará na fila de descarregamento ao chegar no pátio do PAD.";
 
 export const COOLDOWN_MESSAGE =
-  "Novo check-in indisponível: aguarde 6 dias após o último check-in ou solicite liberação à administração do pátio.";
+  "Novo check-in indisponível: aguarde 6 dias após o último check-in.";
 
 export const WHATSAPP_CALL_TEMPLATE =
   "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início do descarregamento.\n\nObrigado.";
