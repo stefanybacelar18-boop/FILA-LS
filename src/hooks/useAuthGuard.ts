@@ -4,6 +4,10 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { completeMotoristaLogin, isStaffRole } from "@/lib/auth-profile";
+import {
+  readCachedMotoristaProfile,
+  writeCachedMotoristaProfile,
+} from "@/lib/motorista-profile-cache";
 import type { Profile } from "@/lib/types";
 import { toAppRole } from "@/lib/types";
 
@@ -68,8 +72,14 @@ export function useAuthGuard(allowedRoles: string[], loginPath = "/login") {
 
       if (isMotoristaOnly) {
         try {
-          const synced = await completeMotoristaLogin();
-          profileData = synced as Profile;
+          const cached = readCachedMotoristaProfile(user.id);
+          if (cached) {
+            profileData = cached as Profile;
+          } else {
+            const synced = await completeMotoristaLogin();
+            writeCachedMotoristaProfile(user.id, synced);
+            profileData = synced as Profile;
+          }
         } catch (err) {
           const code = err instanceof Error ? err.message : "perfil";
           await supabase.auth.signOut();

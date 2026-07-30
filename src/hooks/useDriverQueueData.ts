@@ -76,10 +76,10 @@ export function useDriverQueueData(profile: Profile | null) {
     if (!profileId) return;
 
     setLoading(true);
-    void fetchFreshRef.current();
+    void fetchRoutineRef.current();
 
     const debounced = createDebouncedFn(
-      () => fetchFreshRef.current(),
+      () => fetchRoutineRef.current(),
       QUEUE_REALTIME_DEBOUNCE_MS
     );
 
@@ -113,7 +113,7 @@ export function useDriverQueueData(profile: Profile | null) {
 
     function onVisible() {
       if (document.visibilityState === "visible") {
-        void fetchFreshRef.current();
+        void fetchRoutineRef.current();
       }
     }
     document.addEventListener("visibilitychange", onVisible);
