@@ -87,7 +87,11 @@ export async function writeQueueStatus(
 export async function insertQueueEntry(
   supabase: SupabaseClient,
   payload: Record<string, unknown>
-): Promise<{ data: { token: string; id: string } | null; error: string | null }> {
+): Promise<{
+  data: { token: string; id: string } | null;
+  error: string | null;
+  migrationRequired?: boolean;
+}> {
   const status = (payload.status as string) ?? statusForDatabase("aguardando_descarregamento");
   let row = { ...payload, status: statusForDatabase(status) };
 
@@ -96,6 +100,14 @@ export async function insertQueueEntry(
     .insert(row)
     .select("token, id")
     .single();
+
+  if (error && isEnumStatusError(error.message) && status === "em_viagem") {
+    return {
+      data: null,
+      error: error.message,
+      migrationRequired: true,
+    };
+  }
 
   if (error && isEnumStatusError(error.message)) {
     row = { ...payload, status: statusForDatabaseLegacy(status) };
