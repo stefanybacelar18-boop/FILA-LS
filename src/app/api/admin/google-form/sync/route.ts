@@ -6,12 +6,27 @@ import { fetchGoogleFormSheetRows } from "@/lib/google-form-sheet-pull";
 import { upsertGoogleFormRows } from "@/lib/google-form-upsert";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
+import {
+  GOOGLE_FORM_SYNC_DISABLED_MESSAGE,
+  isGoogleFormSyncEnabled,
+} from "@/lib/google-form-feature";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
+function disabledResponse() {
+  return NextResponse.json(
+    { error: "disabled", message: GOOGLE_FORM_SYNC_DISABLED_MESSAGE },
+    { status: 410 }
+  );
+}
+
 /** Importa / atualiza todas as linhas da planilha Google Form (admin). */
 export async function POST() {
+  if (!isGoogleFormSyncEnabled()) {
+    return disabledResponse();
+  }
+
   try {
     const supabase = await createClient();
     const {
@@ -83,6 +98,18 @@ export async function POST() {
 }
 
 export async function GET() {
+  if (!isGoogleFormSyncEnabled()) {
+    return NextResponse.json({
+      ok: true,
+      enabled: false,
+      message: GOOGLE_FORM_SYNC_DISABLED_MESSAGE,
+      webhookConfigured: false,
+      rowsInSheet: null,
+      lastSync: null,
+      sheetError: null,
+    });
+  }
+
   try {
     const supabase = await createClient();
     const {
@@ -115,6 +142,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
+      enabled: true,
       webhookConfigured: Boolean(process.env.GOOGLE_FORM_WEBHOOK_SECRET?.trim()),
       rowsInSheet: rowCount,
       lastSync: data?.value ?? null,

@@ -3,9 +3,20 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchGoogleFormSheetRows } from "@/lib/google-form-sheet-pull";
 import { upsertGoogleFormRows } from "@/lib/google-form-upsert";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
+import {
+  GOOGLE_FORM_SYNC_DISABLED_MESSAGE,
+  isGoogleFormSyncEnabled,
+} from "@/lib/google-form-feature";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
+
+function disabledResponse() {
+  return NextResponse.json(
+    { error: "disabled", message: GOOGLE_FORM_SYNC_DISABLED_MESSAGE },
+    { status: 410 }
+  );
+}
 
 function verifyCronSecret(request: NextRequest): boolean {
   const expected =
@@ -18,8 +29,12 @@ function verifyCronSecret(request: NextRequest): boolean {
   return request.headers.get("x-cron-secret")?.trim() === expected;
 }
 
-/** Backup: sincroniza planilha → fila a cada poucos minutos (Vercel Cron). */
+/** Backup: sincroniza planilha → fila (só se GOOGLE_FORM_SYNC_ENABLED=true). */
 export async function GET(request: NextRequest) {
+  if (!isGoogleFormSyncEnabled()) {
+    return disabledResponse();
+  }
+
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
