@@ -85,6 +85,13 @@ function isOpenRoute(r: Route): boolean {
   return r.status !== 'CANCELADO' && r.status !== 'CONCLUIDO'
 }
 
+/** Viagem ativa (operação) ou última concluída para exibir motorista/placa. */
+function routeDisplayTrip(r: Route) {
+  return (
+    r.trips?.find((t) => t.status === 'EM_ANDAMENTO' || t.status === 'ATRASADO') ?? r.trips?.[0]
+  )
+}
+
 function statusTone(status: Route['status']) {
   if (status === 'CANCELADO') return 'danger' as const
   if (status === 'CONCLUIDO') return 'success' as const
@@ -154,7 +161,7 @@ export function Routes() {
     enabled: !!reassignRoute && isAdmin,
   })
 
-  const openTrip = reassignRoute?.trips?.[0]
+  const openTrip = reassignRoute ? routeDisplayTrip(reassignRoute) : undefined
   const currentVehicle =
     openTrip?.vehicle ??
     reassignRoute?.vehicles?.[0]?.vehicle ??
@@ -216,7 +223,7 @@ export function Routes() {
   }
 
   function openReassign(r: Route) {
-    const trip = r.trips?.[0]
+    const trip = routeDisplayTrip(r)
     const vehicle = (trip?.vehicle ?? r.vehicles?.[0]?.vehicle) as Vehicle | undefined
     setDetailRoute(null)
     setReassignRoute(r)
@@ -245,7 +252,7 @@ export function Routes() {
     const vehicle =
       availableVehicles.find((v) => v.id === reassignVehicleId) ??
       (currentVehicle?.id === reassignVehicleId ? (currentVehicle as Vehicle) : null)
-    const matched = matchDriverIdForPlate(vehicle, reassignRoute.trips?.[0]?.driverName)
+    const matched = matchDriverIdForPlate(vehicle, routeDisplayTrip(reassignRoute)?.driverName)
     setReassignDriverId(matched)
     reassignNeedsDriverInit.current = false
   }, [reassignRoute, drivers, reassignVehicleId, availableVehicles, currentVehicle])
@@ -483,7 +490,7 @@ export function Routes() {
               <tbody>
                 {visible.map((r) => {
                   const plate = r.vehicles?.[0]?.vehicle?.plate
-                  const driverName = r.trips?.[0]?.driverName
+                  const driverName = routeDisplayTrip(r)?.driverName
                   const stops = dealershipStops(r)
                   const awaitingPlate =
                     r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
@@ -567,7 +574,9 @@ export function Routes() {
                               Disponibilizar
                             </Button>
                           )}
-                          {isAdmin && r.status === 'EM_ANDAMENTO' && (r.trips?.length ?? 0) > 0 && (
+                          {isAdmin &&
+                            r.status === 'EM_ANDAMENTO' &&
+                            routeDisplayTrip(r)?.status !== 'RETORNOU' && (
                             <Button size="sm" variant="ghost" onClick={() => openReassign(r)}>
                               Trocar placa
                             </Button>
@@ -620,7 +629,7 @@ export function Routes() {
               )}
               {isAdmin &&
                 detailRoute.status === 'EM_ANDAMENTO' &&
-                (detailRoute.trips?.length ?? 0) > 0 && (
+                routeDisplayTrip(detailRoute)?.status !== 'RETORNOU' && (
                   <Button variant="outline" onClick={() => openReassign(detailRoute)}>
                     <RefreshCw className="h-3.5 w-3.5" />
                     Trocar placa / motorista
@@ -681,7 +690,7 @@ export function Routes() {
                   Motorista
                 </p>
                 <p className="mt-1 font-medium">
-                  {detailRoute.trips?.[0]?.driverName ?? '—'}
+                  {routeDisplayTrip(detailRoute)?.driverName ?? '—'}
                 </p>
               </div>
             </div>
