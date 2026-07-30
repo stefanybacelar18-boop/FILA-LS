@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { QueueEntry } from "@/lib/types";
 import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { fetchEnrichedOperationalQueue } from "@/lib/queue-fetch";
-import { getStatusLabel } from "@/lib/constants";
+import { getStatusLabel, isEmViagemStatus } from "@/lib/constants";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { formatPrevisaoDate, getDriverFirstName } from "@/lib/utils";
 import { sanitizeQueueEntry } from "@/lib/sanitize-queue-entry";
@@ -84,8 +84,11 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
     );
   }
 
-  const veiculosAFrente = Math.max(0, countVehiclesAhead(entry, allEntries));
-  const posicao = resolveQueuePosition(entry, allEntries) ?? veiculosAFrente + 1;
+  const emViagem = isEmViagemStatus(entry.status);
+  const veiculosAFrente = emViagem ? null : Math.max(0, countVehiclesAhead(entry, allEntries));
+  const posicao = emViagem
+    ? null
+    : (resolveQueuePosition(entry, allEntries) ?? (veiculosAFrente != null ? veiculosAFrente + 1 : null));
 
   return (
     <div className="min-h-screen app-canvas-mobile">
@@ -112,26 +115,44 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
           )}
         </div>
 
-        <Card className="card-brand text-center py-8">
-          <p className="text-sm font-medium text-slate-500 uppercase">Posição na fila</p>
-          <p className="mt-2 text-7xl font-black text-brand animate-pulse-ring">{posicao}º</p>
-          <div className="mt-4 flex justify-center">
-            <StatusBadge status={entry.status} className="text-sm px-4 py-1" />
-          </div>
-        </Card>
+        {emViagem ? (
+          <Card className="card-brand py-8 text-center">
+            <p className="text-sm font-medium uppercase text-slate-500">Status atual</p>
+            <p className="mt-3 text-2xl font-bold text-brand">Em viagem para o PAD</p>
+            <p className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-slate-600">
+              Você ainda <strong>não entrou na fila</strong>. Abra o app FilaDock e toque em{" "}
+              <strong>Cheguei no pátio do PAD</strong> ao chegar.
+            </p>
+            <div className="mt-5 flex justify-center">
+              <StatusBadge status={entry.status} className="px-4 py-1 text-sm" />
+            </div>
+          </Card>
+        ) : (
+          <>
+            <Card className="card-brand text-center py-8">
+              <p className="text-sm font-medium text-slate-500 uppercase">Posição na fila</p>
+              <p className="mt-2 text-7xl font-black text-brand animate-pulse-ring">{posicao}º</p>
+              <div className="mt-4 flex justify-center">
+                <StatusBadge status={entry.status} className="text-sm px-4 py-1" />
+              </div>
+            </Card>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="card-brand text-center py-4">
-            <Users className="mx-auto h-6 w-6 text-brand-light" />
-            <p className="mt-2 text-2xl font-bold">{veiculosAFrente}</p>
-            <p className="text-xs text-slate-500">À frente</p>
-          </Card>
-          <Card className="card-brand text-center py-4">
-            <Clock className="mx-auto h-6 w-6 text-brand-light" />
-            <p className="mt-2 text-lg font-bold">{formatPrevisaoDate(entry.previsao_descarregamento)}</p>
-            <p className="text-xs text-slate-500">Previsão</p>
-          </Card>
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="card-brand text-center py-4">
+                <Users className="mx-auto h-6 w-6 text-brand-light" />
+                <p className="mt-2 text-2xl font-bold">{veiculosAFrente}</p>
+                <p className="text-xs text-slate-500">À frente</p>
+              </Card>
+              <Card className="card-brand text-center py-4">
+                <Clock className="mx-auto h-6 w-6 text-brand-light" />
+                <p className="mt-2 text-lg font-bold">
+                  {formatPrevisaoDate(entry.previsao_descarregamento)}
+                </p>
+                <p className="text-xs text-slate-500">Previsão</p>
+              </Card>
+            </div>
+          </>
+        )}
 
         <Card className="card-brand">
           <CardHeader><CardTitle className="text-base">Informações</CardTitle></CardHeader>
