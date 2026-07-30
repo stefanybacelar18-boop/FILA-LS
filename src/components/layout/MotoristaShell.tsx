@@ -7,8 +7,9 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PanelShellHeader } from "@/components/brand/PanelShellHeader";
 import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
 import { Button } from "@/components/ui/Button";
-import { ClipboardList, ListOrdered, LogOut } from "lucide-react";
+import { ClipboardList, ListOrdered, LogOut, Truck } from "lucide-react";
 import { useEffect } from "react";
+import { isEmViagemStatus } from "@/lib/constants";
 import { unlockDriverCallSound } from "@/lib/driver-call-sound";
 import { clearDriverCallNotifications } from "@/lib/clear-driver-notifications";
 import { DriverQueueProvider, useDriverQueueContext } from "@/contexts/DriverQueueContext";
@@ -41,7 +42,10 @@ function MotoristaShellInner({
   const { entry } = useDriverQueueContext();
   const hasEntry = !!entry;
 
-  const checkinNavEnabled = checkinNavOverride ?? (hasEntry || geo.canCheckIn || geo.step === "loading");
+  const emViagem = Boolean(entry && isEmViagemStatus(entry.status));
+
+  const checkinNavEnabled =
+    checkinNavOverride ?? (!emViagem && (hasEntry || geo.canCheckIn || geo.step === "loading"));
 
   const checkinBlockHint =
     checkinBlockHintOverride ??
@@ -87,7 +91,12 @@ function MotoristaShellInner({
             <Link href="/motorista" className="inline-flex">
               <BrandLogo size="sm" />
             </Link>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-800">Olá, {firstName}</p>
+            <p className="mt-1 truncate text-sm font-semibold text-slate-800">
+              Olá, {firstName}
+              {emViagem && (
+                <span className="block text-xs font-bold text-brand">Viagem em andamento</span>
+              )}
+            </p>
             {!checkinNavEnabled && checkinBlockHint && (
               <p
                 id="checkin-block-hint"
@@ -115,25 +124,37 @@ function MotoristaShellInner({
       <main className="page-container shell-main flex-1">{children}</main>
 
       <MobileBottomNav
-        items={[
-          {
-            key: "checkin",
-            label: "Check-in",
-            icon: ClipboardList,
-            active: pathname.startsWith("/checkin"),
-            href: "/checkin",
-            disabled: !checkinNavEnabled,
-            disabledTitle: "Check-in disponível apenas dentro do pátio",
-            describedBy: checkinBlockHint ? "checkin-block-hint" : undefined,
-          },
-          {
-            key: "fila",
-            label: "Minha fila",
-            icon: ListOrdered,
-            active: pathname === "/motorista",
-            href: "/motorista",
-          },
-        ]}
+        items={
+          emViagem
+            ? [
+                {
+                  key: "viagem",
+                  label: "Minha viagem",
+                  icon: Truck,
+                  active: pathname === "/motorista",
+                  href: "/motorista",
+                },
+              ]
+            : [
+                {
+                  key: "checkin",
+                  label: "Check-in",
+                  icon: ClipboardList,
+                  active: pathname.startsWith("/checkin"),
+                  href: "/checkin",
+                  disabled: !checkinNavEnabled,
+                  disabledTitle: "Check-in disponível apenas dentro do pátio",
+                  describedBy: checkinBlockHint ? "checkin-block-hint" : undefined,
+                },
+                {
+                  key: "fila",
+                  label: hasEntry ? "Minha fila" : "Início",
+                  icon: ListOrdered,
+                  active: pathname === "/motorista",
+                  href: "/motorista",
+                },
+              ]
+        }
       />
     </div>
   );

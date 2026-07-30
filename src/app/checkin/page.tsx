@@ -15,7 +15,6 @@ import type { CheckinCooldownBlock } from "@/lib/checkin-rules";
 import type { QueueEntry } from "@/lib/types";
 import {
   COOLDOWN_MESSAGE,
-  CHECKIN_SUCCESS,
   MOTORISTA_HOME,
   REMOTE_CHECKIN_INFO,
   VEHICLE_TYPES,
@@ -217,10 +216,9 @@ export default function CheckInPage() {
       return;
     }
 
-    const successParams = new URLSearchParams();
-    if (data.token) successParams.set("token", data.token);
+    const successParams = new URLSearchParams({ registrado: "1" });
     if (data.warning) successParams.set("warning", data.warning);
-    router.push(`${CHECKIN_SUCCESS}?${successParams.toString()}`);
+    router.push(`/motorista?${successParams.toString()}`);
   }
 
   async function handleSubmit(e: React.FormEvent) {
