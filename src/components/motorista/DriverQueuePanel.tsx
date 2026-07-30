@@ -1,13 +1,15 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueContext } from "@/contexts/DriverQueueContext";
 import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
 import { MotoristaEmViagemPanel } from "@/components/motorista/MotoristaEmViagemPanel";
+import { ViagemProgressTracker } from "@/components/motorista/ViagemProgressTracker";
 import { isEmViagemStatus } from "@/lib/constants";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
@@ -26,7 +28,7 @@ export function DriverQueuePanel() {
         <Suspense
           fallback={
             <div className="flex min-h-[50vh] justify-center py-16">
-              <Spinner label="Carregando fila…" />
+              <Spinner label="Carregando…" />
             </div>
           }
         >
@@ -67,7 +69,7 @@ function buildHeroDetail(aFrente: number, previsaoLabel: string | null): string 
   const fila =
     aFrente > 0
       ? `${aFrente} veículo${aFrente !== 1 ? "s" : ""} à frente`
-      : "Próximo da fila";
+      : "Você é o próximo";
   if (previsaoLabel) return `${fila} · Previsão ${previsaoLabel}`;
   return fila;
 }
@@ -81,8 +83,22 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
 }
 
 function DriverQueueInner() {
+  const searchParams = useSearchParams();
   const { entry, allEntries, loading, refresh } = useDriverQueueContext();
   const [minutaSearch, setMinutaSearch] = useState("");
+  const [registradoAgora, setRegistradoAgora] = useState(false);
+  const [importWarning, setImportWarning] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("registrado") !== "1") return;
+    setRegistradoAgora(true);
+    if (searchParams.get("warning") === "minuta_nao_importada") {
+      setImportWarning(true);
+    }
+    window.history.replaceState({}, "", "/motorista");
+    const timer = window.setTimeout(() => setRegistradoAgora(false), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
 
   const hasEntry = !!entry;
   const inQueue = hasEntry && entry && !isEmViagemStatus(entry.status);
@@ -102,12 +118,29 @@ function DriverQueueInner() {
     <>
       {showLoading ? (
         <div className="flex justify-center py-16" role="status" aria-live="polite">
-          <Spinner label="Carregando fila…" />
+          <Spinner label="Carregando…" />
         </div>
       ) : emViagem && entry ? (
-        <MotoristaEmViagemPanel entry={entry} onArrived={() => void refresh()} />
+        <>
+          {importWarning && (
+            <div
+              className="mx-auto mb-4 max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base text-amber-950"
+              role="status"
+            >
+              Minuta não encontrada na base do admin. Confirme o número com a operação — sua viagem
+              foi registrada.
+            </div>
+          )}
+          <MotoristaEmViagemPanel
+            entry={entry}
+            onArrived={() => void refresh()}
+            registradoAgora={registradoAgora}
+          />
+        </>
       ) : inQueue && entry ? (
-        <div className="space-y-4">
+        <div className="mx-auto max-w-md space-y-4">
+          <ViagemProgressTracker etapaAtual="fila" />
+
           <QueuePositionHero
             label={`Minuta ${entry.minuta || "—"}`}
             value={posicao != null ? `${posicao}º` : "—"}
@@ -130,18 +163,18 @@ function DriverQueueInner() {
           />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="mx-auto max-w-md space-y-4">
           <div className="panel-card">
             <div className="panel-card__icon">
               <ClipboardList className="h-7 w-7 text-brand" />
             </div>
             <h2 className="panel-card__title">Registrar viagem</h2>
-            <p className="panel-card__desc">
-              Faça o check-in após o carregamento em Belém.
+            <p className="panel-card__desc text-base">
+              Toque abaixo após o carregamento em Belém.
             </p>
-            <LinkButton href="/checkin" className="touch-target mt-5 w-full py-3.5 text-base">
-              Iniciar check-in
-              <ArrowRight className="h-4 w-4" />
+            <LinkButton href="/checkin" className="touch-target mt-5 w-full py-4 text-lg font-bold">
+              Fazer check-in
+              <ArrowRight className="h-5 w-5" />
             </LinkButton>
           </div>
 
@@ -158,7 +191,7 @@ function DriverQueueInner() {
       {!hasEntry && (
         <p className="mt-8 text-center text-xs text-slate-400">
           <Link href={FILA_DESCARGA_PUBLIC} className="text-brand hover:underline">
-            Fila pública
+            Ver fila pública
           </Link>
         </p>
       )}
