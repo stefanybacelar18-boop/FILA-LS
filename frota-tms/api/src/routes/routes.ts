@@ -67,6 +67,29 @@ function farthestDealershipFromPad(
   })[0];
 }
 
+type RouteListTrip = {
+  status: string;
+  returnedAt: Date | null;
+  createdAt: Date;
+};
+
+/** Viagem aberta para operação; senão a última concluída (histórico na listagem). */
+function pickRouteListTrips<T extends RouteListTrip>(trips: T[]): T[] {
+  const active = trips.find(
+    (t) => t.status === TripStatus.EM_ANDAMENTO || t.status === TripStatus.ATRASADO,
+  );
+  if (active) return [active];
+
+  const completed = trips
+    .filter((t) => t.status === TripStatus.RETORNOU)
+    .sort((a, b) => {
+      const ta = a.returnedAt?.getTime() ?? a.createdAt.getTime();
+      const tb = b.returnedAt?.getTime() ?? b.createdAt.getTime();
+      return tb - ta;
+    });
+  return completed[0] ? [completed[0]] : [];
+}
+
 /** Vehicle type must be allowed by EVERY stop (AMBOS = any). */
 function vehicleAllowedAtAllStops(vehicleType: string, dealerships: DealershipRow[]): DealershipRow | null {
   for (const d of dealerships) {
@@ -129,12 +152,18 @@ export function createRoutesRouter(io: Server) {
         createdBy: { select: { id: true, name: true } },
         vehicles: { include: { vehicle: true } },
         trips: {
-          where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          where: {
+            status: {
+              in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO, TripStatus.RETORNOU],
+            },
+          },
           select: {
             id: true,
             driverName: true,
             vehicleId: true,
             status: true,
+            returnedAt: true,
+            createdAt: true,
             vehicle: {
               select: {
                 id: true,
@@ -146,7 +175,7 @@ export function createRoutesRouter(io: Server) {
               },
             },
           },
-          take: 3,
+          take: 5,
         },
         _count: { select: { trips: true } },
       },
@@ -154,26 +183,27 @@ export function createRoutesRouter(io: Server) {
     });
 
     const withForecast = routes.map((route) => {
+      const routeForList = { ...route, trips: pickRouteListTrips(route.trips) };
       const linked: DealershipRow[] =
-        route.dealerships.length > 0
-          ? route.dealerships.map((rd) => rd.dealership)
-          : route.dealership
-            ? [route.dealership]
+        routeForList.dealerships.length > 0
+          ? routeForList.dealerships.map((rd) => rd.dealership)
+          : routeForList.dealership
+            ? [routeForList.dealership]
             : [];
       if (linked.length === 0) {
-        return { ...route, returnForecast: null };
+        return { ...routeForList, returnForecast: null };
       }
-      const assignedPlate = route.vehicles?.[0]?.vehicle?.plate;
+      const assignedPlate = routeForList.vehicles?.[0]?.vehicle?.plate;
       const owner: FleetOwner | null = assignedPlate
         ? plateOwner(assignedPlate)
-        : /\bLSL\b/i.test(route.name)
+        : /\bLSL\b/i.test(routeForList.name)
           ? 'LSL'
           : null;
       const farthest = farthestDealershipFromPad(linked, owner);
-      const departureAt = routeDepartureAt(route.date);
+      const departureAt = routeDepartureAt(routeForList.date);
       const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
       return {
-        ...route,
+        ...routeForList,
         returnForecast: {
           basis: 'PAD_DISTANCE' as const,
           pad: { lat: PAD_LAT, lng: PAD_LNG },
