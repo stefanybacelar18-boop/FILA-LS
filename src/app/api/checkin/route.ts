@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isWithinGeofence, normalizeGeofenceConfig } from "@/lib/geofence";
 import { canCheckInAgain, hasActiveCheckIn } from "@/lib/checkin-rules";
 import { validateCheckInBody } from "@/lib/checkin-validation";
 import {
-  ACTIVE_QUEUE_DB_STATUSES,
   COOLDOWN_MESSAGE,
   DEFAULT_GEOFENCE,
   isActiveQueueStatus,
+  OPEN_REGISTRATION_DB_STATUSES,
   skipCheckinLimits,
 } from "@/lib/constants";
-import { skipGeofence } from "@/lib/dev-flags";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 import { insertQueueEntry } from "@/lib/queue-db";
-import { applyAutoPriorityForMinuta, recalculateQueuePrevisoes } from "@/lib/minuta-metadata-db";
+import { applyAutoPriorityForMinuta } from "@/lib/minuta-metadata-db";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
+import { forecastDescarregamentoFromCheckIn } from "@/lib/trip-forecast";
+import { normalizeGeofenceConfig } from "@/lib/geofence";
 import type { Profile, QueueEntry } from "@/lib/types";
 
 function getClientIp(request: NextRequest): string {
@@ -102,17 +102,8 @@ export async function POST(request: NextRequest) {
     geofenceSetting?.value ?? DEFAULT_GEOFENCE
   );
 
-  if (
-    !skipGeofence() &&
-    (!form.checkin_lat ||
-      !form.checkin_lng ||
-      !isWithinGeofence(form.checkin_lat, form.checkin_lng, geofence))
-  ) {
-    return NextResponse.json(
-      { error: "outside_geofence", message: geofence.name },
-      { status: 403 }
-    );
-  }
+  // Check-in remoto (Belém): GPS do pátio não é obrigatório; grava posição se enviada.
+  void geofence;
 
   if (!skipCheckinLimits()) {
     const { data: placaRows } = await admin
@@ -120,12 +111,13 @@ export async function POST(request: NextRequest) {
       .select("id, driver_user_id, status")
       .eq("placa_cavalo", form.placa_cavalo)
       .is("deleted_at", null)
-      .in("status", [...ACTIVE_QUEUE_DB_STATUSES])
+      .in("status", [...OPEN_REGISTRATION_DB_STATUSES])
       .limit(5);
 
     const placaBlocked = (placaRows ?? []).find(
       (row) =>
-        row.driver_user_id !== user.id && isActiveQueueStatus(String(row.status))
+        row.driver_user_id !== user.id &&
+        (isActiveQueueStatus(String(row.status)) || String(row.status) === "em_viagem")
     );
 
     if (placaBlocked) {
@@ -161,6 +153,7 @@ export async function POST(request: NextRequest) {
   }
 
   const placaDisplay = form.placa_cavalo;
+  const previsaoDescarregamento = forecastDescarregamentoFromCheckIn();
 
   const { data: entry, error: insertError } = await insertQueueEntry(admin, {
     driver_user_id: user.id,
@@ -178,12 +171,13 @@ export async function POST(request: NextRequest) {
     tipo_carga: form.tipo_carga,
     retorno_racks_vazios: form.retorno_racks_vazios,
     observacoes: form.observacoes || null,
-    checkin_lat: form.checkin_lat,
-    checkin_lng: form.checkin_lng,
+    checkin_lat: form.checkin_lat && form.checkin_lat !== 0 ? form.checkin_lat : null,
+    checkin_lng: form.checkin_lng && form.checkin_lng !== 0 ? form.checkin_lng : null,
     device_id: form.device_id,
     user_agent: form.user_agent,
     ip_address: ip,
-    status: "aguardando_descarregamento",
+    status: "em_viagem",
+    previsao_descarregamento: previsaoDescarregamento,
   });
 
   if (insertError || !entry) {
@@ -217,7 +211,6 @@ export async function POST(request: NextRequest) {
 
   await applyAutoPriorityForMinuta(admin, entry.id, form.minuta).catch(() => {});
   invalidateEnrichedQueueCache();
-  void recalculateQueuePrevisoes(admin).catch(() => {});
 
   let warning: string | undefined;
   const { count: metadataCount } = await admin

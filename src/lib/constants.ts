@@ -40,12 +40,14 @@ export const FIXED_ACCOUNT_ROLES: Record<string, UserRole> = {
 
 /** Únicos status operacionais do sistema */
 export const QUEUE_STATUSES: QueueStatus[] = [
+  "em_viagem",
   "aguardando_descarregamento",
   "ausente",
   "finalizado",
 ];
 
 export const STATUS_LABELS: Record<QueueStatus, string> = {
+  em_viagem: "Em viagem para o PAD",
   aguardando_descarregamento: "Aguardando descarregamento",
   ausente: "Ausente",
   finalizado: "Finalizado",
@@ -67,6 +69,7 @@ export function getStatusLabel(status: string): string {
 }
 
 const STATUS_SHORT_LABELS: Record<QueueStatus, string> = {
+  em_viagem: "Em viagem",
   aguardando_descarregamento: "Aguardando",
   ausente: "Ausente",
   finalizado: "Finalizado",
@@ -82,9 +85,14 @@ export function getStatusShortLabel(status: string): string {
 }
 
 export function normalizeQueueStatus(status: string): QueueStatus {
+  if (status === "em_viagem") return "em_viagem";
   if (status === "ausente" || status === "finalizado") return status;
   if (status === "aguardando_descarregamento") return status;
   return "aguardando_descarregamento";
+}
+
+export function isEmViagemStatus(status: string): boolean {
+  return status === "em_viagem";
 }
 
 export const LEGACY_ACTIVE_STATUSES = [
@@ -101,6 +109,12 @@ export const ACTIVE_QUEUE_DB_STATUSES = [
   ...LEGACY_ACTIVE_STATUSES,
 ] as const;
 
+/** Registros abertos do motorista (viagem ou fila) — bloqueiam novo check-in e placa duplicada. */
+export const OPEN_REGISTRATION_DB_STATUSES = [
+  "em_viagem",
+  ...ACTIVE_QUEUE_DB_STATUSES,
+] as const;
+
 /** Fila operacional visível nos painéis (ativos + ausentes aguardando retorno). */
 export const OPERATIONAL_PANEL_DB_STATUSES = [
   ...ACTIVE_QUEUE_DB_STATUSES,
@@ -112,6 +126,7 @@ export function isAusenteQueueStatus(status: string): boolean {
 }
 
 export function isActiveQueueStatus(status: string): boolean {
+  if (isEmViagemStatus(status)) return false;
   if (status === "ausente" || status === "finalizado" || status === "cancelado") return false;
   if (status === "aguardando_descarregamento") return true;
   return (LEGACY_ACTIVE_STATUSES as readonly string[]).includes(status);
@@ -128,6 +143,7 @@ export function filterOperationalPanelEntries<T extends { status: string }>(entr
 
 /** Status preferido para gravação (requer migracao-status-simplificado.sql) */
 export function statusForDatabase(status: string): string {
+  if (status === "em_viagem") return "em_viagem";
   if (status === "aguardando_descarregamento") return "aguardando_descarregamento";
   return status;
 }
@@ -143,6 +159,7 @@ export function isEnumStatusError(message: string): boolean {
 }
 
 export const STATUS_COLORS: Record<QueueStatus, string> = {
+  em_viagem: "bg-sky-50 text-sky-900 border-sky-100",
   aguardando_descarregamento: "bg-brand-muted/90 text-brand border-brand/25",
   ausente: "bg-orange-50 text-orange-900 border-orange-100",
   finalizado: "bg-emerald-50 text-emerald-800 border-emerald-100",
@@ -203,7 +220,10 @@ export const CHECKIN_COOLDOWN_DAYS = 6;
 export { skipCheckinLimits } from "@/lib/dev-flags";
 
 export const OUTSIDE_GEOFENCE_MESSAGE =
-  "Você ainda não está no pátio da empresa. Aproxime-se da empresa para realizar o check-in.";
+  "Você ainda não está no pátio da empresa. Aproxime-se do pátio e toque em \"Cheguei no pátio\" com o GPS ligado.";
+
+export const REMOTE_CHECKIN_INFO =
+  "Registre a viagem após o carregamento em Belém. Você entrará na fila de descarregamento ao chegar no pátio do PAD.";
 
 export const COOLDOWN_MESSAGE =
   "Novo check-in indisponível: aguarde 6 dias após o último check-in ou solicite liberação à administração do pátio.";

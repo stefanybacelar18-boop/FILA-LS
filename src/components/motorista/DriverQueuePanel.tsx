@@ -1,22 +1,21 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useDriverQueueContext } from "@/contexts/DriverQueueContext";
-import { useMotoristaGeofenceContext } from "@/contexts/MotoristaGeofenceContext";
 import { countVehiclesAhead, resolveQueuePosition } from "@/lib/queue";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MotoristaQueueList } from "@/components/motorista/MotoristaQueueList";
-import { CheckinBlockedAlert } from "@/components/motorista/CheckinBlockedAlert";
+import { MotoristaEmViagemPanel } from "@/components/motorista/MotoristaEmViagemPanel";
+import { isEmViagemStatus } from "@/lib/constants";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { Spinner } from "@/components/ui/Spinner";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { QueuePositionHero } from "@/components/ui/PageHeader";
 import type { Profile, QueueEntry } from "@/lib/types";
-import { MOTORISTA_CHECKIN, FILA_DESCARGA_PUBLIC } from "@/lib/constants";
+import { FILA_DESCARGA_PUBLIC } from "@/lib/constants";
 import { formatPrevisaoDate } from "@/lib/utils";
 import { ClipboardList, ArrowRight } from "lucide-react";
 
@@ -82,29 +81,17 @@ function DriverQueueContent({ profile }: { profile: Profile }) {
 }
 
 function DriverQueueInner() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { entry, allEntries, loading, refresh } = useDriverQueueContext();
   const [minutaSearch, setMinutaSearch] = useState("");
 
   const hasEntry = !!entry;
-  const geo = useMotoristaGeofenceContext();
-  const geoLoading = geo.step === "loading" && !geo.skipGeofence;
-  const checkinBlocked = !hasEntry && !geo.canCheckIn && !geoLoading;
-  const redirectedFromCheckin =
-    searchParams.get("fila") === "1" || searchParams.get("motivo") === "fora";
+  const inQueue = hasEntry && entry && !isEmViagemStatus(entry.status);
+  const emViagem = hasEntry && entry && isEmViagemStatus(entry.status);
 
-  useEffect(() => {
-    if (loading || geoLoading || hasEntry) return;
-    if (geo.canCheckIn && !redirectedFromCheckin) {
-      router.replace(MOTORISTA_CHECKIN);
-    }
-  }, [loading, geoLoading, hasEntry, geo.canCheckIn, router, redirectedFromCheckin]);
-
-  const showLoading = loading || (!hasEntry && geoLoading);
+  const showLoading = loading;
   const entries = allEntries as QueueEntry[];
-  const posicao = entry ? resolveQueuePosition(entry, entries) : null;
-  const aFrente = entry ? countVehiclesAhead(entry, entries) : 0;
+  const posicao = inQueue && entry ? resolveQueuePosition(entry, entries) : null;
+  const aFrente = inQueue && entry ? countVehiclesAhead(entry, entries) : 0;
   const previsaoLabel = entry?.previsao_descarregamento
     ? formatPrevisaoDate(entry.previsao_descarregamento)
     : null;
@@ -117,7 +104,9 @@ function DriverQueueInner() {
         <div className="flex justify-center py-16" role="status" aria-live="polite">
           <Spinner label="Carregando fila…" />
         </div>
-      ) : hasEntry ? (
+      ) : emViagem && entry ? (
+        <MotoristaEmViagemPanel entry={entry} onArrived={() => void refresh()} />
+      ) : inQueue && entry ? (
         <div className="space-y-4">
           <QueuePositionHero
             label={`Minuta ${entry.minuta || "—"}`}
@@ -140,34 +129,16 @@ function DriverQueueInner() {
             showStatus
           />
         </div>
-      ) : checkinBlocked ? (
-        <div className="space-y-4">
-          <CheckinBlockedAlert
-            step={geo.step}
-            distanceLabel={geo.distanceLabel}
-            geofenceName={geo.geofence.name}
-            onRetry={geo.retry}
-            redirectedFromCheckin={redirectedFromCheckin}
-          />
-
-          {entries.length > 0 ? (
-            <DriverQueueFilaSection
-              entries={entries}
-              searchQuery={minutaSearch}
-              onSearchChange={setMinutaSearch}
-            />
-          ) : (
-            <p className="py-8 text-center text-sm text-slate-500">Fila vazia no momento.</p>
-          )}
-        </div>
       ) : (
         <div className="space-y-4">
           <div className="panel-card">
             <div className="panel-card__icon">
               <ClipboardList className="h-7 w-7 text-brand" />
             </div>
-            <h2 className="panel-card__title">Check-in no pátio</h2>
-            <p className="panel-card__desc">Entre na fila de descarregamento.</p>
+            <h2 className="panel-card__title">Registrar viagem</h2>
+            <p className="panel-card__desc">
+              Faça o check-in após o carregamento em Belém.
+            </p>
             <LinkButton href="/checkin" className="touch-target mt-5 w-full py-3.5 text-base">
               Iniciar check-in
               <ArrowRight className="h-4 w-4" />

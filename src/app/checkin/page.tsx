@@ -4,14 +4,20 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useMotoristaGuard } from "@/hooks/useAuthGuard";
-import { useMotoristaGeofence } from "@/hooks/useMotoristaGeofence";
-import { hasActiveCheckIn, getDeviceId, getUserAgent, getCheckinCooldownBlock, formatCheckinCooldownMessage } from "@/lib/checkin-rules";
+import {
+  hasActiveCheckIn,
+  getDeviceId,
+  getUserAgent,
+  getCheckinCooldownBlock,
+  formatCheckinCooldownMessage,
+} from "@/lib/checkin-rules";
 import type { CheckinCooldownBlock } from "@/lib/checkin-rules";
 import type { QueueEntry } from "@/lib/types";
 import {
   COOLDOWN_MESSAGE,
   CHECKIN_SUCCESS,
   MOTORISTA_HOME,
+  REMOTE_CHECKIN_INFO,
   VEHICLE_TYPES,
 } from "@/lib/constants";
 import { formatPhone, formatPlaca } from "@/lib/utils";
@@ -20,12 +26,11 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { MapPin, CheckCircle2 } from "lucide-react";
+import { Info } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { PanelPageTitle } from "@/components/brand/PanelShellHeader";
-import { GeofenceStatusBanner } from "@/components/motorista/GeofenceStatusBanner";
 import { CheckinCooldownAlert } from "@/components/motorista/CheckinCooldownAlert";
 import { isValidPlaca, PLACA_MERCOSUL_HINT } from "@/lib/checkin-validation";
 
@@ -33,7 +38,6 @@ export default function CheckInPage() {
   const router = useRouter();
   const supabase = createClient();
   const { profile, checking, authError } = useMotoristaGuard();
-  const geo = useMotoristaGeofence(!!profile && !checking);
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -89,9 +93,8 @@ export default function CheckInPage() {
     };
   }, [profile, supabase, router]);
 
-  const geoLoading = geo.step === "loading" && !geo.skipGeofence;
   const onCooldown = cooldownBlock != null;
-  const canSubmit = geo.canCheckIn && !!geo.coords && !onCooldown;
+  const canSubmit = !onCooldown;
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -120,10 +123,6 @@ export default function CheckInPage() {
   }
 
   async function submitCheckIn(formData: typeof form) {
-    if (!geo.canCheckIn || !geo.coords) {
-      setErrors({ form: "Confirme sua localização no pátio antes de enviar." });
-      return;
-    }
     if (!validateForm(formData)) return;
 
     setSubmitting(true);
@@ -144,8 +143,8 @@ export default function CheckInPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          checkin_lat: geo.coords.lat,
-          checkin_lng: geo.coords.lng,
+          checkin_lat: null,
+          checkin_lng: null,
           device_id: getDeviceId(),
           user_agent: getUserAgent(),
           retorno_racks_vazios: formData.retorno_racks_vazios === "sim",
@@ -179,10 +178,6 @@ export default function CheckInPage() {
       });
       return;
     }
-    if (data.error === "outside_geofence") {
-      router.replace(`${MOTORISTA_HOME}?motivo=fora`);
-      return;
-    }
     if (data.error === "Acesso negado") {
       setErrors({ form: "Conta sem permissão de motorista." });
       return;
@@ -210,53 +205,28 @@ export default function CheckInPage() {
     return <PageLoader error={authError} onRetry={() => window.location.reload()} />;
   }
 
-  if (checking || !profile || geoLoading || eligibilityLoading) {
-    return <PageLoader message="Verificando localização…" />;
+  if (checking || !profile || eligibilityLoading) {
+    return <PageLoader message="Carregando…" />;
   }
 
   return (
     <MotoristaShell profile={profile} checkinNavEnabled>
       <div className="space-y-4">
         <PanelPageTitle
-          title="Check-in"
+          title="Check-in de viagem"
           subtitle={
             onCooldown
-              ? "Aguarde o prazo para um novo check-in na fila."
-              : "Preencha os dados da carga para entrar na fila de descarregamento."
+              ? "Aguarde o prazo para um novo check-in."
+              : "Registre após o carregamento em Belém."
           }
         />
 
         {cooldownBlock && <CheckinCooldownAlert block={cooldownBlock} />}
 
-        <Card className="card-brand">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-brand">
-              <MapPin className="h-5 w-5" /> Localização GPS
-            </CardTitle>
-          </CardHeader>
-          {geo.step === "loading" && (
-            <div className="flex items-center gap-3 text-slate-600">
-              <Spinner size="md" className="h-5 w-5" /> Verificando GPS...
-            </div>
-          )}
-          {(geo.step === "inside" || geo.step === "skipped") && (
-            <div className="alert-success">
-              <CheckCircle2 className="h-6 w-6 shrink-0" />
-              <p>Localização confirmada no pátio!</p>
-            </div>
-          )}
-          <GeofenceStatusBanner
-            variant="checkin"
-            step={geo.step}
-            distanceLabel={geo.distanceLabel}
-            onRetry={geo.retry}
-          />
-          {geo.skipGeofence && (
-            <p className="alert-warning mt-3">
-              Modo teste LAN: geofence desativado — remova antes da operação real.
-            </p>
-          )}
-        </Card>
+        <div className="alert-banner alert-banner--info flex gap-3 text-sm">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
+          <p>{REMOTE_CHECKIN_INFO}</p>
+        </div>
 
         <Card className="card-brand">
           <CardHeader>
@@ -278,12 +248,6 @@ export default function CheckInPage() {
             <Textarea label="Observações" value={form.observacoes} onChange={(e) => updateField("observacoes", e.target.value)} />
             </fieldset>
 
-            {!canSubmit && geo.step !== "loading" && !onCooldown && (
-              <p className="alert-warning">
-                Confirme sua localização no pátio para liberar o formulário.
-              </p>
-            )}
-
             {errors.form && <p className="alert-error text-left">{errors.form}</p>}
 
             <Button type="submit" className="w-full py-4 text-lg" size="lg" disabled={!canSubmit || submitting}>
@@ -292,7 +256,7 @@ export default function CheckInPage() {
               ) : onCooldown ? (
                 "Check-in indisponível"
               ) : (
-                "Confirmar check-in"
+                "Confirmar check-in de viagem"
               )}
             </Button>
           </form>

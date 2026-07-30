@@ -2,6 +2,7 @@ import { getStatusColor, getStatusLabel, getStatusShortLabel } from "@/lib/const
 import { cn } from "@/lib/utils";
 
 const statusDot: Record<string, string> = {
+  em_viagem: "bg-sky-500",
   aguardando_descarregamento: "bg-brand",
   ausente: "bg-orange-500",
   finalizado: "bg-emerald-500",

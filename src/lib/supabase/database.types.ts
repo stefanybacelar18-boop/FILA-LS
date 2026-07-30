@@ -14,6 +14,7 @@ type UserRole =
   | "administrador";
 
 type QueueStatus =
+  | "em_viagem"
   | "aguardando_descarregamento"
   | "ausente"
   | "finalizado"
@@ -158,6 +159,9 @@ export interface Database {
           doca: string | null;
           previsao_descarregamento: string | null;
           posicao_fila: number | null;
+          chegada_pad_at: string | null;
+          chegada_lat: number | null;
+          chegada_lng: number | null;
           checkin_lat: number | null;
           checkin_lng: number | null;
           device_id: string | null;
@@ -193,6 +197,9 @@ export interface Database {
           doca?: string | null;
           previsao_descarregamento?: string | null;
           posicao_fila?: number | null;
+          chegada_pad_at?: string | null;
+          chegada_lat?: number | null;
+          chegada_lng?: number | null;
           checkin_lat?: number | null;
           checkin_lng?: number | null;
           device_id?: string | null;
@@ -228,6 +235,9 @@ export interface Database {
           doca?: string | null;
           previsao_descarregamento?: string | null;
           posicao_fila?: number | null;
+          chegada_pad_at?: string | null;
+          chegada_lat?: number | null;
+          chegada_lng?: number | null;
           checkin_lat?: number | null;
           checkin_lng?: number | null;
           device_id?: string | null;
