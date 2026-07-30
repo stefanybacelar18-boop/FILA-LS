@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useMotoristaGuard } from "@/hooks/useAuthGuard";
 import { getDisplayPlaca } from "@/lib/checkin-rules";
 import { getStatusLabel } from "@/lib/constants";
+import { formatDateTime, formatPrevisaoDate } from "@/lib/utils";
 import { MotoristaShell } from "@/components/layout/MotoristaShell";
 import { StatusBanner } from "@/components/ui/PageHeader";
 import { LinkButton } from "@/components/ui/LinkButton";
@@ -33,7 +34,7 @@ function CheckInSuccessContent() {
       if (token) {
         const { data } = await supabase
           .from("queue_entries")
-          .select("id, token, minuta, status, placa_cavalo, transportadora, retorno_racks_vazios, created_at")
+          .select("id, token, minuta, status, placa_cavalo, transportadora, retorno_racks_vazios, created_at, previsao_descarregamento")
           .eq("token", token)
           .eq("driver_user_id", profile!.id)
           .is("deleted_at", null)
@@ -99,8 +100,8 @@ function CheckInSuccessContent() {
         <StatusBanner
           tone="success"
           icon={<CheckCircle2 className="h-14 w-14" strokeWidth={2.5} />}
-          title="Check-in realizado!"
-          description="Seus dados foram registrados. Aguarde sua vez na fila de descarregamento."
+          title="Viagem registrada!"
+          description="Seus dados foram salvos. Ao chegar no pátio do PAD, confirme a chegada no app para entrar na fila."
         />
 
         {importWarning === "minuta_nao_importada" && (
@@ -118,6 +119,16 @@ function CheckInSuccessContent() {
             <CardTitle className="text-brand">Resumo do check-in</CardTitle>
           </CardHeader>
           <dl className="space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Início da viagem</dt>
+              <dd className="font-semibold text-right">{formatDateTime(entry.created_at)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Previsão de descarregamento</dt>
+              <dd className="font-semibold text-right">
+                {formatPrevisaoDate(entry.previsao_descarregamento)}
+              </dd>
+            </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Status</dt>
               <dd className="font-semibold text-right">{getStatusLabel(entry.status)}</dd>
@@ -144,7 +155,7 @@ function CheckInSuccessContent() {
         </Card>
 
         <p className="text-center text-sm text-slate-500">
-          Você receberá atualizações quando for chamado para a doca.
+          No pátio do PAD, abra o app e toque em <strong>Cheguei no pátio</strong> com o GPS ligado.
         </p>
 
         {entry.token && (
@@ -155,7 +166,7 @@ function CheckInSuccessContent() {
 
         <LinkButton href="/motorista" className="w-full py-3.5 text-base">
           <ListOrdered className="h-5 w-5" />
-          Ver minha fila
+          Ver meu painel
         </LinkButton>
       </div>
     </MotoristaShell>

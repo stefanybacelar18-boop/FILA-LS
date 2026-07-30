@@ -22,14 +22,30 @@ export function useDriverQueueData(profile: Profile | null) {
   const profileId = profile?.id;
 
   const applyEntries = useCallback(
-    (entries: MotoristaQueueEntry[]) => {
+    async (entries: MotoristaQueueEntry[]) => {
       setAllEntries(entries);
       if (!profileId) return;
-      const mineEntries = entries.filter((e) => isMotoristaOwnEntry(e));
-      setEntry(hasActiveCheckIn(mineEntries as QueueEntry[]));
+
+      const mineInQueue = entries.filter((e) => isMotoristaOwnEntry(e));
+      let myEntry = hasActiveCheckIn(mineInQueue as QueueEntry[]);
+
+      if (!myEntry) {
+        const { data: transit } = await supabase
+          .from("queue_entries")
+          .select("*")
+          .eq("driver_user_id", profileId)
+          .eq("status", "em_viagem")
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (transit) myEntry = transit as QueueEntry;
+      }
+
+      setEntry(myEntry);
       setLoading(false);
     },
-    [profileId]
+    [profileId, supabase]
   );
 
   const fetchInFlightRef = useRef(false);

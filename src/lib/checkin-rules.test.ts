@@ -48,6 +48,11 @@ describe("hasActiveCheckIn", () => {
     expect(hasActiveCheckIn([active])?.id).toBe("1");
   });
 
+  it("retorna entrada em viagem", () => {
+    const transit = entry({ status: "em_viagem" });
+    expect(hasActiveCheckIn([transit])?.id).toBe("1");
+  });
+
   it("ignora finalizados", () => {
     const closed = entry({ status: "finalizado" });
     expect(hasActiveCheckIn([closed])).toBeNull();

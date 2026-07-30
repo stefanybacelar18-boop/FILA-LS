@@ -10,6 +10,7 @@ export function toAppRole(role: string): UserRole {
 }
 
 export type QueueStatus =
+  | "em_viagem"
   | "aguardando_descarregamento"
   | "ausente"
   | "finalizado";
@@ -65,6 +66,9 @@ export interface QueueEntry {
   doca: string | null;
   previsao_descarregamento: string | null;
   posicao_fila: number | null;
+  chegada_pad_at?: string | null;
+  chegada_lat?: number | null;
+  chegada_lng?: number | null;
   checkin_lat: number | null;
   checkin_lng: number | null;
   device_id: string | null;

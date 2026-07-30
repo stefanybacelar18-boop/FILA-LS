@@ -1,4 +1,4 @@
-import { CHECKIN_COOLDOWN_DAYS, isActiveQueueStatus, skipCheckinLimits } from "./constants";
+import { CHECKIN_COOLDOWN_DAYS, isActiveQueueStatus, isEmViagemStatus, skipCheckinLimits } from "./constants";
 import { OPERATIONAL_TIMEZONE } from "./queue-day";
 import type { Profile, QueueEntry } from "./types";
 
@@ -140,6 +140,14 @@ export function formatCheckinCooldownMessage(block: CheckinCooldownBlock): strin
 
 export function hasActiveCheckIn(entries: QueueEntry[]): QueueEntry | null {
   return (
-    entries.find((e) => !e.deleted_at && isActiveQueueStatus(e.status)) ?? null
+    entries.find(
+      (e) =>
+        !e.deleted_at && (isEmViagemStatus(e.status) || isActiveQueueStatus(e.status))
+    ) ?? null
   );
+}
+
+/** Motorista na fila operacional (já chegou no pátio). */
+export function hasQueueActiveCheckIn(entries: QueueEntry[]): QueueEntry | null {
+  return entries.find((e) => !e.deleted_at && isActiveQueueStatus(e.status)) ?? null;
 }
