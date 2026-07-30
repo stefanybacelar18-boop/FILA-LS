@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { upsertGoogleFormRow } from "@/lib/google-form-upsert";
 import type { GoogleFormRowPayload } from "@/lib/google-form-sync";
+import {
+  GOOGLE_FORM_SYNC_DISABLED_MESSAGE,
+  isGoogleFormSyncEnabled,
+} from "@/lib/google-form-feature";
 import { invalidateEnrichedQueueCache } from "@/lib/queue-enrich";
 import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 
@@ -39,6 +43,13 @@ function verifySecret(request: NextRequest, bodySecret?: string | null): boolean
 }
 
 export async function POST(request: NextRequest) {
+  if (!isGoogleFormSyncEnabled()) {
+    return NextResponse.json(
+      { error: "disabled", message: GOOGLE_FORM_SYNC_DISABLED_MESSAGE },
+      { status: 410 }
+    );
+  }
+
   if (!normalizeSecret(process.env.GOOGLE_FORM_WEBHOOK_SECRET)) {
     return NextResponse.json(
       { error: "GOOGLE_FORM_WEBHOOK_SECRET não configurado no servidor." },
@@ -112,6 +123,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "google-form-webhook",
+    enabled: isGoogleFormSyncEnabled(),
     configured: Boolean(process.env.GOOGLE_FORM_WEBHOOK_SECRET?.trim()),
   });
 }
