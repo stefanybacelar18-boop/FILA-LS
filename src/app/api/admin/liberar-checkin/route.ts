@@ -103,15 +103,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (driver.checkin_liberado) {
-      const { error: resetError } = await admin
-        .from("profiles")
-        .update({ checkin_liberado: false })
-        .eq("id", driver.id);
+    const { error: liberarError } = await admin
+      .from("profiles")
+      .update({ checkin_liberado: true })
+      .eq("id", driver.id);
 
-      if (resetError) {
-        return NextResponse.json({ error: resetError.message }, { status: 500 });
-      }
+    if (liberarError) {
+      return NextResponse.json({ error: liberarError.message }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -119,7 +117,7 @@ export async function POST(request: NextRequest) {
       email: driver.email,
       nome: driver.full_name,
       finalizados: openIds.length,
-      cooldownAplica: true,
+      checkinLiberado: true,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro interno";

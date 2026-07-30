@@ -231,7 +231,7 @@ export const REMOTE_CHECKIN_INFO =
   "Registre a viagem após o carregamento em Belém. Você entrará na fila de descarregamento ao chegar no pátio do PAD.";
 
 export const COOLDOWN_MESSAGE =
-  "Novo check-in indisponível: aguarde 6 dias após o último check-in.";
+  "Novo check-in indisponível: aguarde 6 dias após o último check-in ou solicite liberação à administração do pátio.";
 
 export const WHATSAPP_CALL_TEMPLATE =
   "PAD SIF\n\nMotorista da minuta {MINUTA},\n\nFavor dirigir-se imediatamente para a doca {DOCA} para início do descarregamento.\n\nObrigado.";
