@@ -4,6 +4,9 @@ import { countAusentes, countFinalizadasNoDiaOperacional } from "./queue-counter
 import { isEntryClosedToday } from "./queue-day";
 import type { QueueEntry } from "./types";
 
+const FINALIZADOS_STATS_CACHE_MS = 30_000;
+let finalizadosStatsCache: { expiresAt: number; data: QueueEntry[] } | null = null;
+
 export interface PublicQueueStats {
   aguardando: number;
   ausentes: number;
@@ -25,6 +28,11 @@ export function computePublicQueueStats(
 export async function loadFinalizadosHojeForStats(
   admin: SupabaseClient
 ): Promise<QueueEntry[]> {
+  const now = Date.now();
+  if (finalizadosStatsCache && finalizadosStatsCache.expiresAt > now) {
+    return finalizadosStatsCache.data;
+  }
+
   const { data, error } = await admin
     .from("queue_entries")
     .select("id, status, finished_at, updated_at, created_at")
@@ -35,5 +43,14 @@ export async function loadFinalizadosHojeForStats(
 
   if (error) return [];
 
-  return ((data ?? []) as QueueEntry[]).filter((entry) => isEntryClosedToday(entry));
+  const filtered = ((data ?? []) as QueueEntry[]).filter((entry) => isEntryClosedToday(entry));
+  finalizadosStatsCache = {
+    expiresAt: now + FINALIZADOS_STATS_CACHE_MS,
+    data: filtered,
+  };
+  return filtered;
+}
+
+export function invalidateFinalizadosStatsCache(): void {
+  finalizadosStatsCache = null;
 }

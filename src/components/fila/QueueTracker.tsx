@@ -35,11 +35,16 @@ export function QueueTracker({ token, lgpd = true }: { token: string; lgpd?: boo
       return;
     }
 
-    setEntry(sanitizeQueueEntry(row as QueueEntry));
+    const sanitized = sanitizeQueueEntry(row as QueueEntry);
+    setEntry(sanitized);
 
-    setAllEntries(
-      await fetchEnrichedOperationalQueue(supabase, options)
-    );
+    if (isEmViagemStatus(sanitized.status)) {
+      setAllEntries([]);
+      setLoading(false);
+      return;
+    }
+
+    setAllEntries(await fetchEnrichedOperationalQueue(supabase, options));
     setLoading(false);
   }, [supabase, token]);
 

@@ -13,6 +13,8 @@ import {
   loadFinalizadosHojeForStats,
 } from "@/lib/public-queue-stats";
 import { withTimeout } from "@/lib/async-timeout";
+import { getClientIp } from "@/lib/request-ip";
+import { rateLimitAllow, rateLimitRetryAfterSec } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
 export const dynamic = "force-dynamic";
@@ -42,6 +44,20 @@ export async function GET(request: NextRequest) {
 
       if (profile?.role === "motorista") scope = "motorista";
       else if (profile?.role && isStaffRole(profile.role)) scope = "staff";
+    }
+
+    if (scope === "public") {
+      const ip = getClientIp(request);
+      const rateKey = `queue-public:${ip}`;
+      if (!rateLimitAllow(rateKey, 90, 60_000)) {
+        return NextResponse.json(
+          { error: "rate_limit", message: "Muitas requisições. Aguarde um momento." },
+          {
+            status: 429,
+            headers: { "Retry-After": String(rateLimitRetryAfterSec(rateKey, 60_000)) },
+          }
+        );
+      }
     }
 
     const admin = createAdminClient();

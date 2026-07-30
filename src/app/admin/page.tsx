@@ -54,15 +54,20 @@ export default function AdminPage() {
   const appUrl = usePublicAppUrl();
 
   const loadRoleCounts = useCallback(async () => {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("role, email")
-      .is("deleted_at", null);
-
+    const roles = ["motorista", "empilhador", "administrador", "operador", "supervisor"] as const;
     const counts: Record<string, number> = {};
-    for (const p of profiles ?? []) {
-      counts[p.role] = (counts[p.role] ?? 0) + 1;
-    }
+
+    await Promise.all(
+      roles.map(async (role) => {
+        const { count } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("role", role)
+          .is("deleted_at", null);
+        if (count) counts[role] = count;
+      })
+    );
+
     setRoleCounts(counts);
   }, [supabase]);
 

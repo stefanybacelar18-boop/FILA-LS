@@ -15,6 +15,7 @@ import {
   OPERATIONAL_PANEL_DB_STATUSES,
 } from "./constants";
 import { isEntryClosedToday } from "./queue-day";
+import { invalidateFinalizadosStatsCache } from "./public-queue-stats";
 import type { QueueEntry } from "./types";
 
 const CLOSED_QUEUE_DB_STATUSES = ["finalizado", "cancelado"] as const;
@@ -24,7 +25,7 @@ export type EnrichedQueueEntry = QueueEntry & {
   previsao_automatica?: boolean;
 };
 
-const ENRICH_CACHE_MS = 12_000;
+const ENRICH_CACHE_MS = 20_000;
 
 type EnrichCacheSlot = {
   expiresAt: number;
@@ -102,6 +103,7 @@ export async function loadEnrichedQueueEntries(
 
 export function invalidateEnrichedQueueCache(): void {
   enrichCache.clear();
+  invalidateFinalizadosStatsCache();
 }
 
 async function loadEnrichedQueueEntriesUncached(

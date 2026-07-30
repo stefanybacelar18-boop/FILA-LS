@@ -137,16 +137,14 @@ export async function GET() {
       .eq("key", "google_form_last_sync")
       .maybeSingle();
 
-    const pulled = await fetchGoogleFormSheetRows();
-    const rowCount = pulled.ok ? pulled.totalInSheet : null;
-
     return NextResponse.json({
       ok: true,
       enabled: true,
       webhookConfigured: Boolean(process.env.GOOGLE_FORM_WEBHOOK_SECRET?.trim()),
-      rowsInSheet: rowCount,
+      rowsInSheet: null,
       lastSync: data?.value ?? null,
-      sheetError: pulled.ok ? null : pulled.error,
+      sheetError: null,
+      note: "Contagem da planilha disponível apenas ao sincronizar (POST).",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro interno";
