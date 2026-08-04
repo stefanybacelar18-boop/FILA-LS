@@ -1111,6 +1111,7 @@ export function createPlanningRouter(io: Server) {
                 return {
                   dealershipId: d.id,
                   order,
+                  motoCount: dest?.motoCount ?? null,
                   minExpiryDate:
                     !excluded && dest?.minExpiryDate != null
                       ? new Date(`${dest.minExpiryDate}T12:00:00.000Z`)

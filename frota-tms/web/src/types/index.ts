@@ -124,6 +124,7 @@ export interface RouteDealership {
   routeId: string
   dealershipId: string
   minExpiryDate?: string | null
+  motoCount?: number | null
   dealership: Dealership
 }
 

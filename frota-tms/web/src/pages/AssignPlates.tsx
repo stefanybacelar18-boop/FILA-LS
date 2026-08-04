@@ -20,11 +20,9 @@ import {
 import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
-import {
-  RouteDestinationExpiryList,
-  RouteExpiryBadge,
-  routeDestinationCities,
-} from '../components/RouteDestinationExpiry'
+import { compareRoutesByLoadPriority } from '../lib/route-priority'
+import { RouteLoadCard } from '../components/RouteLoadCard'
+import type { RouteLoadDestination } from '../lib/route-priority'
 
 interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
   expectedReturn?: string | null
@@ -77,6 +75,7 @@ interface PlatesBoard {
     city: string
     order: number
     minExpiryDate?: string | null
+    motoCount?: number | null
   }[]
   available: PlatesBoardVehicle[]
   unavailable: PlatesBoardVehicle[]
@@ -102,11 +101,13 @@ function routeDestinations(route: Route) {
   return []
 }
 
-function routeDestinationItems(route: Route) {
+function routeDestinationItems(route: Route): RouteLoadDestination[] {
   return routeDestinations(route).map((rd) => ({
     city: rd.dealership.city,
-    name: rd.dealership.name,
+    dealershipName: rd.dealership.name,
     minExpiryDate: rd.minExpiryDate,
+    motoCount: rd.motoCount,
+    order: rd.order,
   }))
 }
 
@@ -165,16 +166,7 @@ export function AssignPlates() {
           (r) =>
             r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
         )
-        .sort((a, b) => {
-          const p = Number(b.hasPriority) - Number(a.hasPriority)
-          if (p !== 0) return p
-          if (a.hasPriority && b.hasPriority) {
-            const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
-            const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
-            return ae - be
-          }
-          return new Date(a.date).getTime() - new Date(b.date).getTime()
-        }),
+        .sort(compareRoutesByLoadPriority),
     [routes],
   )
 
@@ -377,10 +369,10 @@ export function AssignPlates() {
   // ——— Lista de rotas (sem detalhe) ———
   if (!routeId) {
     return (
-      <div className="page-desktop max-w-3xl">
+      <div className="page-desktop max-w-5xl">
         <PageHeader
           title="Definir placa"
-          description="Prioridade no topo — Admin e Operação podem definir."
+          description="Vencido ou vencendo em 1 dia no topo — dados da carga por destino."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
@@ -403,47 +395,18 @@ export function AssignPlates() {
             description="Quando o Admin disponibilizar um roteiro, ele aparece aqui."
           />
         ) : (
-          <div className="space-y-3">
-            {pendingRoutes.map((r) => {
-              const destinations = routeDestinationItems(r)
-              const cities = routeDestinationCities(destinations)
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => pickRoute(r.id)}
-                  className={cn(
-                    'w-full rounded-xl border p-4 text-left transition',
-                    r.hasPriority
-                      ? 'border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 hover:border-[var(--color-danger)]/55'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
-                  )}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-[var(--color-text)]">{r.name}</p>
-                      <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
-                        {formatDate(r.date)} · 06:00
-                        {destinations.length > 0
-                          ? ` · ${destinations.length} destino${destinations.length === 1 ? '' : 's'}`
-                          : ''}
-                      </p>
-                    </div>
-                    {r.hasPriority && (
-                      <RouteExpiryBadge expiryDate={r.priorityExpiryDate} />
-                    )}
-                  </div>
-                  {cities.length > 0 && (
-                    <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                      {cities.join(' · ')}
-                    </p>
-                  )}
-                  {destinations.length > 0 && (
-                    <RouteDestinationExpiryList items={destinations} showHeader={false} />
-                  )}
-                </button>
-              )
-            })}
+          <div className="space-y-4">
+            {pendingRoutes.map((r) => (
+              <RouteLoadCard
+                key={r.id}
+                name={r.name}
+                loadDate={r.date}
+                destinations={routeDestinationItems(r)}
+                priorityExpiryDate={r.priorityExpiryDate}
+                notes={r.notes}
+                onClick={() => pickRoute(r.id)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -451,30 +414,24 @@ export function AssignPlates() {
   }
 
   // ——— Detalhe da rota (tela focada) ———
-  const priority =
-    board?.route?.hasPriority ?? board?.hasPriority ?? selectedRoute?.hasPriority ?? false
   const expiry =
     board?.route?.priorityExpiryDate ??
     board?.priorityExpiryDate ??
     selectedRoute?.priorityExpiryDate ??
     null
 
-  const destinationRows =
+  const destinationRows: RouteLoadDestination[] =
     board?.destinations?.map((d) => ({
       city: d.city,
-      name: d.name,
+      dealershipName: d.name,
       minExpiryDate: d.minExpiryDate,
+      motoCount: d.motoCount,
+      order: d.order,
     })) ??
-    (selectedRoute
-      ? routeDestinations(selectedRoute).map((rd) => ({
-          city: rd.dealership.city,
-          name: rd.dealership.name,
-          minExpiryDate: rd.minExpiryDate,
-        }))
-      : [])
+    (selectedRoute ? routeDestinationItems(selectedRoute) : [])
 
   return (
-    <div className="page-desktop flex max-w-xl flex-col pb-28">
+    <div className="page-desktop flex max-w-5xl flex-col pb-28">
       <button
         type="button"
         onClick={backToList}
@@ -485,32 +442,17 @@ export function AssignPlates() {
       </button>
 
       <div className="mb-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
-              {selectedRoute?.name ?? 'Rota'}
-            </h1>
-            <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
-              {formatDate(selectedRoute?.date)} · 06:00
-              {board?.returnForecast
-                ? ` · retorno previsto ${formatDate(board.returnForecast.expectedReturn)}`
-                : ''}
-            </p>
-          </div>
-          {priority && <RouteExpiryBadge expiryDate={expiry} />}
-        </div>
-        {destinationRows.length > 0 && (
-          <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-              Vencimento por concessionária
-            </p>
-            {routeDestinationCities(destinationRows).length > 0 && (
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                {routeDestinationCities(destinationRows).join(' · ')}
-              </p>
-            )}
-            <RouteDestinationExpiryList items={destinationRows} />
-          </div>
+        <RouteLoadCard
+          name={selectedRoute?.name ?? 'Rota'}
+          loadDate={selectedRoute?.date ?? new Date().toISOString()}
+          destinations={destinationRows}
+          priorityExpiryDate={expiry}
+          notes={selectedRoute?.notes}
+        />
+        {board?.returnForecast && (
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+            Retorno previsto: {formatDate(board.returnForecast.expectedReturn)}
+          </p>
         )}
       </div>
 
@@ -640,7 +582,7 @@ export function AssignPlates() {
       </section>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 px-4 py-3 backdrop-blur-sm md:static md:mt-4 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
-        <div className="mx-auto max-w-xl">
+        <div className="mx-auto max-w-5xl">
           <Button
             className="w-full"
             size="lg"
