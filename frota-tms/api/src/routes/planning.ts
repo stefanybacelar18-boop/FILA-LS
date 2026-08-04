@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import ExcelJS from 'exceljs';
 import { Role, RouteStatus, TripStatus, VehicleStatus } from '../types/enums';
@@ -10,6 +11,16 @@ import { addDays, format, startOfDay } from 'date-fns';
 import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 import { isFirstRouteSentToday } from '../services/notify';
+import {
+  buildChronusPreview,
+  parseChronusFile,
+  type ChronusImportPreview,
+} from '../lib/chronus-import';
+
+const chronusUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
 
 function normalizeCity(city: string): string {
   return city.trim().replace(/\s+/g, ' ');
@@ -951,6 +962,184 @@ export function createPlanningRouter(io: Server) {
     });
     io.emit('planning:changed', { action: 'import', batchId: batch.id });
     res.json({ committed: created.length, cities: created });
+  });
+
+  /**
+   * Importação Chronus — 1 manifesto = 1 roteiro (AGUARDANDO_PLACAS).
+   * POST /import/chronus/preview  multipart file
+   * POST /import/chronus/commit   { batchId }
+   */
+  router.post(
+    '/import/chronus/preview',
+    authorize(Role.ADMIN),
+    (req, res, next) => {
+      chronusUpload.single('file')(req, res, (err) => {
+        if (err) return res.status(400).json({ error: err.message || 'Falha no upload' });
+        next();
+      });
+    },
+    async (req: AuthRequest, res) => {
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: 'Envie o arquivo Chronus (CSV ou XLSX).' });
+
+      try {
+        const parsed = await parseChronusFile(file.buffer, file.originalname);
+        const dealers = await prisma.dealership.findMany({
+          where: { active: true },
+          select: { id: true, code: true, name: true, city: true, region: true, active: true },
+        });
+
+        const previewBase = await buildChronusPreview(parsed.rows, dealers, {
+          importDate: new Date(),
+          existingRouteNames: await prisma.route.findMany({
+            select: { id: true, name: true, date: true },
+          }),
+        });
+        const preview: ChronusImportPreview = {
+          ...previewBase,
+          totalRows: parsed.totalRows,
+          rowsWithoutManifesto: parsed.skippedWithoutManifesto,
+        };
+
+        const batch = await prisma.importBatch.create({
+          data: {
+            filename: file.originalname,
+            status: 'PREVIEW',
+            rowCount: preview.manifestCount,
+            previewJson: JSON.stringify(preview),
+            createdById: req.user!.id,
+          },
+        });
+
+        res.status(201).json({
+          batchId: batch.id,
+          ...preview,
+          message:
+            'Preview pronto. Revise e confirme com POST /planning/import/chronus/commit.',
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Falha ao ler o arquivo Chronus';
+        res.status(400).json({ error: message });
+      }
+    },
+  );
+
+  router.post('/import/chronus/commit', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const schema = z.object({ batchId: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Informe batchId' });
+
+    const batch = await prisma.importBatch.findUnique({ where: { id: parsed.data.batchId } });
+    if (!batch || batch.status !== 'PREVIEW' || !batch.previewJson) {
+      return res.status(400).json({ error: 'Lote inválido ou já processado' });
+    }
+
+    const preview = JSON.parse(batch.previewJson) as ChronusImportPreview;
+    const toCreate = preview.routes.filter(
+      (r) => !r.duplicateRouteId && r.destinations.some((d) => d.matched),
+    );
+    const skippedDuplicates = preview.routes.filter((r) => r.duplicateRouteId);
+    const skippedInvalid = preview.routes.filter(
+      (r) => !r.duplicateRouteId && !r.destinations.some((d) => d.matched),
+    );
+
+    if (toCreate.length === 0) {
+      return res.status(400).json({
+        error: 'Nenhum roteiro novo para criar.',
+        skippedDuplicates: skippedDuplicates.length,
+        skippedInvalid: skippedInvalid.length,
+      });
+    }
+
+    const blockers = toCreate.filter((r) => r.unmatchedDealerCodes.length > 0);
+    if (blockers.length > 0) {
+      return res.status(400).json({
+        error: 'Há manifestos com concessionária não cadastrada.',
+        manifestos: blockers.map((r) => ({
+          manifesto: r.manifesto,
+          codes: r.unmatchedDealerCodes,
+        })),
+      });
+    }
+
+    const firstOfDay = await isFirstRouteSentToday();
+
+    const createdRoutes = await prisma.$transaction(async (tx) => {
+      const routes = [];
+      for (const item of toCreate) {
+        const dealerIds = item.destinations
+          .map((d) => d.dealershipId)
+          .filter((id): id is string => !!id);
+        const uniqueIds = [...new Set(dealerIds)];
+        const dealers = await tx.dealership.findMany({ where: { id: { in: uniqueIds } } });
+        const ordered = uniqueIds.map((id) => dealers.find((d) => d.id === id)!);
+        const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
+        const notes = item.plateHint ? `Placa Chronus: ${item.plateHint}` : null;
+
+        const route = await tx.route.create({
+          data: {
+            name: item.name,
+            date: new Date(`${item.date}T12:00:00.000Z`),
+            dealershipId: ordered[0]?.id,
+            region,
+            notes,
+            hasPriority: item.hasPriority,
+            priorityExpiryDate:
+              item.hasPriority && item.priorityExpiryDate
+                ? new Date(`${item.priorityExpiryDate}T12:00:00.000Z`)
+                : null,
+            plannedVehicleCount: 1,
+            status: RouteStatus.AGUARDANDO_PLACAS,
+            readyForOperation: true,
+            sentToOperationAt: new Date(),
+            sentToOperationById: req.user!.id,
+            createdById: req.user!.id,
+            dealerships: {
+              create: ordered.map((d, order) => ({ dealershipId: d.id, order })),
+            },
+          },
+          include: routeInclude,
+        });
+        routes.push(route);
+      }
+
+      await tx.importBatch.update({
+        where: { id: batch.id },
+        data: { status: 'COMMITTED' },
+      });
+
+      return routes;
+    });
+
+    await audit('CHRONUS_IMPORT', 'ImportBatch', {
+      userId: req.user!.id,
+      entityId: batch.id,
+      details: `${createdRoutes.length} roteiros · ${batch.filename || 'chronus'}`,
+    });
+
+    if (firstOfDay && createdRoutes[0]) {
+      io.emit('notify:first-route', {
+        routeId: createdRoutes[0].id,
+        routeName: createdRoutes[0].name,
+        routeDate: format(createdRoutes[0].date, 'dd/MM/yyyy'),
+        createdByName: req.user!.name || 'Admin',
+      });
+    }
+
+    io.emit('planning:changed', { action: 'chronus-import', batchId: batch.id });
+    io.emit('routes:changed', { action: 'chronus-import', count: createdRoutes.length });
+
+    res.json({
+      created: createdRoutes.length,
+      routes: createdRoutes,
+      skippedDuplicates: skippedDuplicates.map((r) => ({
+        manifesto: r.manifesto,
+        name: r.name,
+        existingRouteId: r.duplicateRouteId,
+      })),
+      skippedInvalid: skippedInvalid.map((r) => r.manifesto),
+      rowsWithoutManifesto: preview.rowsWithoutManifesto,
+    });
   });
 
   /** Sugestão de nome (utilitário UI) */
