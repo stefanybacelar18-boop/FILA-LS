@@ -18,6 +18,7 @@ import {
   routeFleetRequirement,
   vehicleMatchesRouteLoad,
 } from '../lib/chronus-plate-hint';
+import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 
@@ -555,7 +556,12 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas ou inativas' });
     }
 
-    const ordered = parsed.data.dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
+    const ordered = orderStopsNearestFromPad(
+      parsed.data.dealershipIds.map((id, order) => {
+        const dealer = dealerships.find((d) => d.id === id)!;
+        return { ...dealer, order };
+      }),
+    );
     const hasPriority = !!parsed.data.hasPriority;
     if (hasPriority && !parsed.data.priorityExpiryDate) {
       return res.status(400).json({
@@ -715,7 +721,12 @@ export function createRoutesRouter(io: Server) {
       if (dealerships.length !== dealershipIds.length) {
         return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas ou inativas' });
       }
-      const ordered = dealershipIds.map((id) => dealerships.find((d) => d.id === id)!);
+      const ordered = orderStopsNearestFromPad(
+        dealershipIds.map((id, order) => {
+          const dealer = dealerships.find((d) => d.id === id)!;
+          return { ...dealer, order };
+        }),
+      );
       data.dealershipId = ordered[0]?.id;
       if (rest.region === undefined) {
         data.region = [...new Set(ordered.map((d) => d.region))].join(' / ') || ordered[0]?.region;

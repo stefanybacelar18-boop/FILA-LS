@@ -19,6 +19,7 @@ import {
   chronusRouteLoadData,
   type ChronusImportPreview,
 } from '../lib/chronus-import';
+import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 
 const chronusUpload = multer({
   storage: multer.memoryStorage(),
@@ -309,7 +310,12 @@ export function createPlanningRouter(io: Server) {
     }
 
     const dealers = await prisma.dealership.findMany({ where: { id: { in: dealerIds } } });
-    const ordered = dealerIds.map((id) => dealers.find((d) => d.id === id)!);
+    const ordered = orderStopsNearestFromPad(
+      dealerIds.map((id, order) => {
+        const dealer = dealers.find((d) => d.id === id)!;
+        return { ...dealer, order };
+      }),
+    );
     const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
 
     const route = await prisma.$transaction(async (tx) => {

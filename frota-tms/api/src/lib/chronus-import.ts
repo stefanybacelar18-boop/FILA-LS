@@ -6,6 +6,7 @@ import {
   type ChronusPlateHint,
 } from './chronus-plate-hint';
 import { hasActivePriority } from './route-priority.js';
+import { orderStopsNearestFromPad } from './route-stop-order.js';
 
 export type ChronusRow = {
   manifesto: string;
@@ -312,32 +313,34 @@ export async function buildChronusPreview(
       dealerGroups.set(key, group);
     }
 
-    const destinations = dealerOrder.map((key, orderIndex) => {
-      const group = dealerGroups.get(key)!;
-      const sample = group[0];
-      const dealer = sample.dealerCode ? dealerByCode.get(sample.dealerCode) : undefined;
-      const city = dealer?.city ?? sample.city;
-      const expiryExcluded = isExpiryCityExcluded(city);
-      const expiryDates = group
-        .filter((row) => !isExpiryCityExcluded(row.city))
-        .map((row) => parseChronusDate(row.expiryRaw))
-        .filter((d): d is Date => !!d);
-      const minExpiry =
-        !expiryExcluded && expiryDates.length > 0
-          ? expiryDates.sort((a, b) => a.getTime() - b.getTime())[0]!
-          : null;
-      return {
-        dealerCode: sample.dealerCode,
-        dealerName: dealer?.name ?? sample.dealerName,
-        city,
-        dealershipId: dealer?.id ?? null,
-        matched: !!dealer,
-        motoCount: group.length,
-        minExpiryDate: minExpiry ? minExpiry.toISOString().slice(0, 10) : null,
-        expiryExcluded,
-        order: orderIndex,
-      };
-    });
+    const destinations = orderStopsNearestFromPad(
+      dealerOrder.map((key, orderIndex) => {
+        const group = dealerGroups.get(key)!;
+        const sample = group[0];
+        const dealer = sample.dealerCode ? dealerByCode.get(sample.dealerCode) : undefined;
+        const city = dealer?.city ?? sample.city;
+        const expiryExcluded = isExpiryCityExcluded(city);
+        const expiryDates = group
+          .filter((row) => !isExpiryCityExcluded(row.city))
+          .map((row) => parseChronusDate(row.expiryRaw))
+          .filter((d): d is Date => !!d);
+        const minExpiry =
+          !expiryExcluded && expiryDates.length > 0
+            ? expiryDates.sort((a, b) => a.getTime() - b.getTime())[0]!
+            : null;
+        return {
+          dealerCode: sample.dealerCode,
+          dealerName: dealer?.name ?? sample.dealerName,
+          city,
+          dealershipId: dealer?.id ?? null,
+          matched: !!dealer,
+          motoCount: group.length,
+          minExpiryDate: minExpiry ? minExpiry.toISOString().slice(0, 10) : null,
+          expiryExcluded,
+          order: orderIndex,
+        };
+      }),
+    );
 
     const expiryCandidates = items
       .filter((row) => !isExpiryCityExcluded(row.city))
