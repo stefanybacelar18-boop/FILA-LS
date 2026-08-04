@@ -9,6 +9,7 @@ import {
   formatExpiryCell,
   routeLoadUrgency,
   totalMotoCountFromDestinations,
+  urgencyLabel,
   type RouteLoadDestination,
 } from '../lib/route-priority'
 import { routeFleetRequirement } from '../lib/chronus-plate-hint'
@@ -33,15 +34,32 @@ function sortDestinations(items: RouteLoadDestination[]) {
   })
 }
 
-function urgencyAccentClass(urgency: ReturnType<typeof routeLoadUrgency>) {
+function urgencyCardClass(urgency: ReturnType<typeof routeLoadUrgency>) {
   switch (urgency) {
     case 'expired':
-      return 'border-l-[var(--color-danger)]/80'
+      return 'border-[var(--color-danger)]/45 border-l-4 border-l-[var(--color-danger)] bg-[var(--color-danger)]/[0.07] ring-1 ring-[var(--color-danger)]/10'
     case 'urgent':
-      return 'border-l-amber-500/80'
+      return 'border-amber-400/55 border-l-4 border-l-amber-500 bg-amber-500/[0.07] ring-1 ring-amber-500/10'
     default:
-      return 'border-l-[var(--color-border)]'
+      return 'border-[var(--color-border)] border-l-[3px] border-l-[var(--color-border)]'
   }
+}
+
+function urgencyExpiryPillClass(urgency: ReturnType<typeof routeLoadUrgency>) {
+  switch (urgency) {
+    case 'expired':
+      return 'bg-[var(--color-danger)]/12 font-semibold text-[var(--color-danger)]'
+    case 'urgent':
+      return 'bg-amber-500/15 font-semibold text-amber-800 dark:text-amber-200'
+    default:
+      return 'text-[var(--color-text-muted)]'
+  }
+}
+
+function urgencyStatusPillClass(urgency: 'expired' | 'urgent') {
+  return urgency === 'expired'
+    ? 'bg-[var(--color-danger)] text-white'
+    : 'bg-amber-500 text-amber-950'
 }
 
 function expiryTextClass(urgency: ReturnType<typeof expiryUrgency>) {
@@ -50,17 +68,6 @@ function expiryTextClass(urgency: ReturnType<typeof expiryUrgency>) {
       return 'font-medium text-[var(--color-danger)]'
     case 'urgent':
       return 'font-medium text-amber-700 dark:text-amber-300'
-    default:
-      return 'text-[var(--color-text-muted)]'
-  }
-}
-
-function expiryHeaderClass(urgency: ReturnType<typeof routeLoadUrgency>) {
-  switch (urgency) {
-    case 'expired':
-      return 'text-[var(--color-danger)]'
-    case 'urgent':
-      return 'text-amber-700 dark:text-amber-300'
     default:
       return 'text-[var(--color-text-muted)]'
   }
@@ -94,7 +101,11 @@ export function RouteLoadTable({
           return (
             <li
               key={`${d.city}-${d.dealershipName ?? ''}-${idx}`}
-              className="grid gap-1 px-1 py-2.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_3.5rem_5.5rem] sm:items-baseline sm:gap-3"
+              className={cn(
+                'grid gap-1 px-1 py-2.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_3.5rem_5.5rem] sm:items-baseline sm:gap-3',
+                cell.urgency === 'expired' && 'rounded-lg bg-[var(--color-danger)]/[0.05]',
+                cell.urgency === 'urgent' && 'rounded-lg bg-amber-500/[0.06]',
+              )}
             >
               <span className="text-sm font-medium text-[var(--color-text)]">{d.city}</span>
               <span className="text-sm text-[var(--color-text-muted)] sm:truncate">
@@ -171,8 +182,8 @@ export function RouteLoadCard({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'group w-full rounded-2xl border border-[var(--color-border)] border-l-[3px] bg-[var(--color-surface)] p-4 text-left transition sm:p-5',
-        urgencyAccentClass(urgency),
+        'group w-full rounded-2xl border bg-[var(--color-surface)] p-4 text-left transition sm:p-5',
+        urgencyCardClass(urgency),
         onClick &&
           'hover:border-[var(--color-primary)]/25 hover:bg-[var(--color-surface-2)]/30',
         className,
@@ -180,13 +191,28 @@ export function RouteLoadCard({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h3 className="text-base font-semibold tracking-tight text-[var(--color-text)]">
-              {name}
-            </h3>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold tracking-tight text-[var(--color-text)]">
+                {name}
+              </h3>
+              {(urgency === 'expired' || urgency === 'urgent') && (
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                    urgencyStatusPillClass(urgency),
+                  )}
+                >
+                  {urgencyLabel(urgency)}
+                </span>
+              )}
+            </div>
             {priorityExpiryDate && (
               <span
-                className={cn('shrink-0 text-sm tabular-nums', expiryHeaderClass(urgency))}
+                className={cn(
+                  'shrink-0 rounded-md px-2 py-0.5 text-sm tabular-nums',
+                  urgencyExpiryPillClass(urgency),
+                )}
               >
                 Venc. {formatDate(priorityExpiryDate)}
               </span>

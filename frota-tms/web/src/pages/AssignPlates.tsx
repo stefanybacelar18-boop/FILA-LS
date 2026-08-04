@@ -419,7 +419,18 @@ export function AssignPlates() {
             description="Quando o Admin disponibilizar um roteiro, ele aparece aqui."
           />
         ) : (
-          <div className="space-y-4">
+          <>
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-danger)]" />
+                Vencido
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                Vence em 1 dia
+              </span>
+            </div>
+            <div className="space-y-5">
             {pendingRoutes.map((r) => (
               <RouteLoadCard
                 key={r.id}
@@ -434,7 +445,8 @@ export function AssignPlates() {
                 onClick={() => pickRoute(r.id)}
               />
             ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
     )
