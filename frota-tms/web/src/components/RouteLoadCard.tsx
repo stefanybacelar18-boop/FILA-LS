@@ -18,6 +18,10 @@ export type { RouteLoadDestination }
 
 function sortDestinations(items: RouteLoadDestination[]) {
   return [...items].sort((a, b) => {
+    const orderA = a.order ?? Number.MAX_SAFE_INTEGER
+    const orderB = b.order ?? Number.MAX_SAFE_INTEGER
+    if (orderA !== orderB) return orderA - orderB
+
     const aExcluded = isExpiryCityExcluded(a.city)
     const bExcluded = isExpiryCityExcluded(b.city)
     if (aExcluded !== bExcluded) return aExcluded ? 1 : -1
@@ -30,7 +34,7 @@ function sortDestinations(items: RouteLoadDestination[]) {
     const aTime = a.minExpiryDate ? new Date(a.minExpiryDate).getTime() : Infinity
     const bTime = b.minExpiryDate ? new Date(b.minExpiryDate).getTime() : Infinity
     if (aTime !== bTime) return aTime - bTime
-    return (a.order ?? 0) - (b.order ?? 0)
+    return 0
   })
 }
 
