@@ -23,6 +23,7 @@ import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { plateOwner } from '../lib/plateOwner'
 import { hasActivePriority } from '../lib/route-priority'
+import { resetBodyScroll } from '../lib/scroll-lock'
 
 function dealershipStops(r: Route): { name: string; city: string }[] {
   if (r.dealerships && r.dealerships.length > 0) {
@@ -129,6 +130,10 @@ export function Routes() {
   const [okMsg, setOkMsg] = useState('')
 
   useEffect(() => {
+    return () => resetBodyScroll()
+  }, [])
+
+  useEffect(() => {
     const t = searchParams.get('tab')
     if (t === 'prioridades' || t === 'todos' || t === 'pendentes') setTab(t)
   }, [searchParams])
@@ -142,6 +147,9 @@ export function Routes() {
   }, [location, navigate])
 
   function selectTab(next: Tab) {
+    setDetailRoute(null)
+    setCancelId(null)
+    setSendId(null)
     setTab(next)
     if (next === 'pendentes') {
       setSearchParams({}, { replace: true })
@@ -643,6 +651,7 @@ export function Routes() {
                   variant="outline"
                   onClick={() => {
                     setSendId(detailRoute.id)
+                    setDetailRoute(null)
                   }}
                 >
                   <Send className="h-3.5 w-3.5" />
@@ -788,7 +797,10 @@ export function Routes() {
                     variant="ghost"
                     size="sm"
                     className="text-[var(--color-danger)] hover:bg-red-500/10"
-                    onClick={() => setCancelId(detailRoute.id)}
+                    onClick={() => {
+                      setCancelId(detailRoute.id)
+                      setDetailRoute(null)
+                    }}
                   >
                     <Ban className="h-3.5 w-3.5" />
                     Cancelar roteiro
