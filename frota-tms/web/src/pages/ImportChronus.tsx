@@ -14,6 +14,7 @@ interface ChronusDestination {
   dealershipId: string | null
   matched: boolean
   motoCount: number
+  minExpiryDate: string | null
 }
 
 interface ChronusRoutePreview {
@@ -230,6 +231,24 @@ export function ImportChronus() {
                   <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                     {route.destinations.map((d) => d.city).join(' · ')}
                   </p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {route.destinations.map((d) => (
+                      <li
+                        key={`${d.dealerCode}-${d.city}`}
+                        className="flex flex-wrap items-center justify-between gap-2 text-[var(--color-text-muted)]"
+                      >
+                        <span>
+                          {d.city}
+                          {d.dealerName ? ` · ${d.dealerName}` : ''} ({d.motoCount} motos)
+                        </span>
+                        {d.minExpiryDate && (
+                          <span className="font-medium text-[var(--color-text)]">
+                            Venc. {formatDate(d.minExpiryDate)}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )
             })}

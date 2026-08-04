@@ -123,6 +123,7 @@ export interface RouteDealership {
   order: number
   routeId: string
   dealershipId: string
+  minExpiryDate?: string | null
   dealership: Dealership
 }
 

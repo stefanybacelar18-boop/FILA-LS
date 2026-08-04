@@ -129,6 +129,7 @@ model Route {
 model RouteDealership {
   id           String @id @default(cuid())
   order        Int    @default(0)
+  minExpiryDate DateTime? // menor vencimento N.F. por destino (Chronus / AG)
   routeId      String
   route        Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
   dealershipId String
