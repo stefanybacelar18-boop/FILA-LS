@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 import { addDays, format, startOfDay } from 'date-fns';
 
 export type ChronusRow = {
@@ -101,17 +101,38 @@ function resolveColumns(headers: string[]) {
   return { manifesto, dealerCode, dealerName, city, expiryRaw, plate };
 }
 
-function cellText(value: ExcelJS.CellValue): string {
+function cellToString(value: unknown): string {
   if (value == null) return '';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value).trim();
-  }
   if (value instanceof Date) return format(value, 'dd/MM/yyyy');
-  if (typeof value === 'object' && 'text' in value && value.text) return String(value.text).trim();
-  if (typeof value === 'object' && 'result' in value && value.result != null) {
-    return cellText(value.result as ExcelJS.CellValue);
-  }
   return String(value).trim();
+}
+
+function parseCsvRows(buffer: Buffer): string[][] {
+  const text = buffer.toString('latin1').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  return lines.map((line) => {
+    const cells: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ';' && !inQuotes) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  });
 }
 
 export function isExpiryCityExcluded(city: string): boolean {
@@ -145,58 +166,35 @@ export function parseChronusDate(value: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function parseCsvRows(buffer: Buffer): string[][] {
-  const text = buffer.toString('latin1').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
-  return lines.map((line) => {
-    const cells: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i += 1) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"';
-          i += 1;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === ';' && !inQuotes) {
-        cells.push(current.trim());
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-    cells.push(current.trim());
-    return cells;
+/** Lê .xls (Excel 97-2003), .xlsx e .xlsm via SheetJS. */
+function parseSpreadsheetRows(buffer: Buffer): string[][] {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    raw: false,
+    defval: '',
   });
+
+  return rows
+    .map((row) => (Array.isArray(row) ? row.map(cellToString) : []))
+    .filter((row) => row.some((cell) => cell.length > 0));
 }
 
-async function parseXlsxRows(buffer: Buffer): Promise<string[][]> {
-  const workbook = new ExcelJS.Workbook();
-  // exceljs typings expect Node Buffer; multer provides compatible bytes
-  await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-  const sheet = workbook.worksheets[0];
-  if (!sheet) return [];
-  const rows: string[][] = [];
-  sheet.eachRow((row) => {
-    const values = row.values as ExcelJS.CellValue[];
-    const cells = values.slice(1).map((v) => cellText(v));
-    if (cells.some((c) => c.length > 0)) rows.push(cells);
-  });
-  return rows;
+function isExcelFilename(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.xlsm');
 }
 
 export async function parseChronusFile(
   buffer: Buffer,
   filename: string,
 ): Promise<{ rows: ChronusRow[]; skippedWithoutManifesto: number; totalRows: number }> {
-  const lower = filename.toLowerCase();
-  const table =
-    lower.endsWith('.xlsx') || lower.endsWith('.xlsm')
-      ? await parseXlsxRows(buffer)
-      : parseCsvRows(buffer);
+  const table = isExcelFilename(filename) ? parseSpreadsheetRows(buffer) : parseCsvRows(buffer);
 
   if (table.length < 2) {
     throw new Error('Arquivo vazio ou sem cabeçalho.');
@@ -205,7 +203,11 @@ export async function parseChronusFile(
   const header = table[0];
   const col = resolveColumns(header);
 
-  if (col.manifesto < 0) throw new Error('Coluna Manifesto não encontrada no arquivo.');
+  if (col.manifesto < 0) {
+    throw new Error(
+      'Coluna Manifesto não encontrada no arquivo. Use o export Entregas do Chronus (.xls, .xlsx ou CSV).',
+    );
+  }
   if (col.dealerCode < 0) throw new Error('Coluna Cód. Concessionária não encontrada no arquivo.');
 
   const parsed: ChronusRow[] = [];

@@ -118,7 +118,7 @@ export function ImportChronus() {
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       <PageHeader
         title="Importar Chronus"
-        description="Exporte Entregas do Chronus (CSV ou XLSX), envie aqui e crie os roteiros por manifesto."
+        description="Exporte Entregas do Chronus (.xls, .xlsx ou CSV), envie aqui e crie os roteiros por manifesto."
         actions={
           <Link to="/roteiros">
             <Button variant="secondary" size="sm">
