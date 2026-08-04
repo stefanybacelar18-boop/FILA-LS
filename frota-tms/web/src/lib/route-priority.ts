@@ -83,24 +83,31 @@ export function routeLoadUrgency(
   return best
 }
 
+/** Roteiros aguardando placa: menor vencimento primeiro. */
 export function compareRoutesByLoadPriority(
-  a: { hasPriority: boolean; priorityExpiryDate?: string | null; date: string },
-  b: { hasPriority: boolean; priorityExpiryDate?: string | null; date: string },
+  a: {
+    priorityExpiryDate?: string | null
+    date: string
+    createdAt?: string
+  },
+  b: {
+    priorityExpiryDate?: string | null
+    date: string
+    createdAt?: string
+  },
 ): number {
-  const aUrgent = isUrgentExpiry(a.priorityExpiryDate)
-  const bUrgent = isUrgentExpiry(b.priorityExpiryDate)
-  if (aUrgent !== bUrgent) return aUrgent ? -1 : 1
+  const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
+  const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
+  if (ae !== be) return ae - be
 
-  const priorityDiff = Number(b.hasPriority) - Number(a.hasPriority)
-  if (priorityDiff !== 0) return priorityDiff
+  const da = new Date(a.date).getTime()
+  const db = new Date(b.date).getTime()
+  if (da !== db) return da - db
 
-  if (a.hasPriority && b.hasPriority) {
-    const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
-    const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
-    return ae - be
+  if (a.createdAt && b.createdAt) {
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   }
-
-  return new Date(a.date).getTime() - new Date(b.date).getTime()
+  return 0
 }
 
 export function totalMotoCountFromDestinations(
