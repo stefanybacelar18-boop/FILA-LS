@@ -1091,10 +1091,11 @@ export function createPlanningRouter(io: Server) {
           await tx.routeDealership.updateMany({
             where: { routeId, dealershipId: dest.dealershipId },
             data: {
+              order: dest.order,
               motoCount: dest.motoCount,
               minExpiryDate: chronusDealershipLoadRow(
                 dest.dealershipId,
-                0,
+                dest.order,
                 dest,
               ).minExpiryDate,
             },
@@ -1113,9 +1114,16 @@ export function createPlanningRouter(io: Server) {
         const dealerIds = item.destinations
           .map((d) => d.dealershipId)
           .filter((id): id is string => !!id);
-        const uniqueIds = [...new Set(dealerIds)];
+        const uniqueIds: string[] = [];
+        const seenDealerIds = new Set<string>();
+        for (const id of dealerIds) {
+          if (seenDealerIds.has(id)) continue;
+          seenDealerIds.add(id);
+          uniqueIds.push(id);
+        }
         const dealers = await tx.dealership.findMany({ where: { id: { in: uniqueIds } } });
-        const ordered = uniqueIds.map((id) => dealers.find((d) => d.id === id)!);
+        const dealerById = new Map(dealers.map((d) => [d.id, d]));
+        const ordered = uniqueIds.map((id) => dealerById.get(id)!);
         const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
         const destByDealerId = chronusDestinationsByDealershipId(item.destinations);
 
@@ -1133,9 +1141,10 @@ export function createPlanningRouter(io: Server) {
             sentToOperationById: req.user!.id,
             createdById: req.user!.id,
             dealerships: {
-              create: ordered.map((d, order) =>
-                chronusDealershipLoadRow(d.id, order, destByDealerId.get(d.id)),
-              ),
+              create: ordered.map((d) => {
+                const dest = destByDealerId.get(d.id);
+                return chronusDealershipLoadRow(d.id, dest?.order ?? 0, dest);
+              }),
             },
           },
           include: routeInclude,

@@ -36,6 +36,8 @@ export type ChronusManifestPreview = {
     motoCount: number;
     minExpiryDate: string | null;
     expiryExcluded: boolean;
+    /** Ordem da parada no manifesto (1ª aparição no arquivo Chronus). */
+    order: number;
   }[];
   unmatchedDealerCodes: string[];
   duplicateRouteId: string | null;
@@ -273,8 +275,10 @@ export async function buildChronusPreview(
     if (d.code) dealerByCode.set(d.code.trim(), d);
   }
 
+  const manifestOrder: string[] = [];
   const byManifesto = new Map<string, ChronusRow[]>();
   for (const row of rows) {
+    if (!byManifesto.has(row.manifesto)) manifestOrder.push(row.manifesto);
     const list = byManifesto.get(row.manifesto) ?? [];
     list.push(row);
     byManifesto.set(row.manifesto, list);
@@ -292,20 +296,24 @@ export async function buildChronusPreview(
 
   const routes: ChronusManifestPreview[] = [];
 
-  for (const [manifesto, items] of [...byManifesto.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+  for (const manifesto of manifestOrder) {
+    const items = byManifesto.get(manifesto)!;
     const name = buildRouteName(manifesto, routeDate);
     const dupKey = `${name.trim().toLowerCase()}|${routeDateIso}`;
     const duplicate = existingNames.get(dupKey) ?? null;
 
     const dealerGroups = new Map<string, ChronusRow[]>();
+    const dealerOrder: string[] = [];
     for (const item of items) {
       const key = item.dealerCode || `${item.dealerName}|${item.city}`;
+      if (!dealerGroups.has(key)) dealerOrder.push(key);
       const group = dealerGroups.get(key) ?? [];
       group.push(item);
       dealerGroups.set(key, group);
     }
 
-    const destinations = [...dealerGroups.entries()].map(([_key, group]) => {
+    const destinations = dealerOrder.map((key, orderIndex) => {
+      const group = dealerGroups.get(key)!;
       const sample = group[0];
       const dealer = sample.dealerCode ? dealerByCode.get(sample.dealerCode) : undefined;
       const city = dealer?.city ?? sample.city;
@@ -327,10 +335,9 @@ export async function buildChronusPreview(
         motoCount: group.length,
         minExpiryDate: minExpiry ? minExpiry.toISOString().slice(0, 10) : null,
         expiryExcluded,
+        order: orderIndex,
       };
     });
-
-    destinations.sort((a, b) => a.city.localeCompare(b.city, 'pt-BR'));
 
     const expiryCandidates = items
       .filter((row) => !isExpiryCityExcluded(row.city))
