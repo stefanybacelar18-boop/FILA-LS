@@ -164,6 +164,8 @@ export interface Route {
   priorityExpiryDate?: string | null
   plannedVehicleCount?: number | null
   totalMotoCount?: number | null
+  requiredFleetOwner?: 'LSL' | 'AG' | null
+  requiredCapacityMotos?: number | null
   createdAt: string
   updatedAt: string
   dealershipId: string | null

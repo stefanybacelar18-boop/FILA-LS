@@ -21,8 +21,11 @@ import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { compareRoutesByLoadPriority } from '../lib/route-priority'
+import { routeFleetRequirement } from '../lib/chronus-plate-hint'
 import { RouteLoadCard } from '../components/RouteLoadCard'
 import type { RouteLoadDestination } from '../lib/route-priority'
+import { useAuthStore } from '../stores/auth'
+import { plateOwner } from '../lib/plateOwner'
 
 interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
   expectedReturn?: string | null
@@ -46,6 +49,13 @@ interface PlatesBoard {
   hasPriority?: boolean
   priorityExpiryDate?: string | null
   priorityNotes?: string | null
+  requiredFleetOwner?: 'LSL' | 'AG' | null
+  requiredCapacityMotos?: number | null
+  loadRequirement?: {
+    fleetOwner: 'LSL' | 'AG' | null
+    capacityMotos: number | null
+    label: string | null
+  }
   route?: {
     id: string
     name: string
@@ -139,6 +149,8 @@ const cannotLoadPresets = [
 
 export function AssignPlates() {
   const qc = useQueryClient()
+  const isOps = useAuthStore((s) => s.hasRole('OPERACAO'))
+  const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const [searchParams, setSearchParams] = useSearchParams()
   const [routeId, setRouteId] = useState(searchParams.get('routeId') || '')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -162,12 +174,18 @@ export function AssignPlates() {
   const pendingRoutes = useMemo(
     () =>
       routes
-        .filter(
-          (r) =>
-            r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0),
-        )
+        .filter((r) => {
+          if (r.status !== 'AGUARDANDO_PLACAS' || (r.vehicles && r.vehicles.length > 0)) {
+            return false
+          }
+          if (isOps && !isAdmin) {
+            const req = routeFleetRequirement(r)
+            if (req.fleetOwner === 'LSL') return false
+          }
+          return true
+        })
         .sort(compareRoutesByLoadPriority),
-    [routes],
+    [routes, isOps, isAdmin],
   )
 
   useEffect(() => {
@@ -220,8 +238,14 @@ export function AssignPlates() {
       setError('Este roteiro já não está aguardando placa.')
       setRouteId('')
       setSearchParams({})
+      return
     }
-  }, [routeId, loadingRoutes, routesError, selectedRoute, setSearchParams])
+    if (isOps && !isAdmin && routeFleetRequirement(selectedRoute).fleetOwner === 'LSL') {
+      setError('Roteiro LSL — apenas Admin define placa.')
+      setRouteId('')
+      setSearchParams({})
+    }
+  }, [routeId, loadingRoutes, routesError, selectedRoute, setSearchParams, isOps, isAdmin])
 
   // Só placas que JÁ DEVERIAM ter voltado (previsão ≤ 06:00) ou bloqueadas —
   // não listar toda a frota em viagem (isso polui e confunde)
@@ -405,6 +429,8 @@ export function AssignPlates() {
                 priorityExpiryDate={r.priorityExpiryDate}
                 notes={r.notes}
                 totalMotoCount={r.totalMotoCount}
+                requiredFleetOwner={r.requiredFleetOwner}
+                requiredCapacityMotos={r.requiredCapacityMotos}
                 onClick={() => pickRoute(r.id)}
               />
             ))}
@@ -450,6 +476,8 @@ export function AssignPlates() {
           priorityExpiryDate={expiry}
           notes={selectedRoute?.notes}
           totalMotoCount={selectedRoute?.totalMotoCount}
+          requiredFleetOwner={selectedRoute?.requiredFleetOwner}
+          requiredCapacityMotos={selectedRoute?.requiredCapacityMotos}
         />
         {board?.returnForecast && (
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
@@ -481,6 +509,12 @@ export function AssignPlates() {
             {returningLaterCount > 0 ? ` · ${returningLaterCount} em viagem` : ''}
           </p>
         </div>
+        {board?.loadRequirement?.label && (
+          <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]/60 px-3 py-2 text-sm text-[var(--color-text-muted)]">
+            Veículo exigido pelo Chronus:{' '}
+            <strong className="text-[var(--color-text)]">{board.loadRequirement.label}</strong>
+          </p>
+        )}
 
         {loadingBoard ? (
           <div className="flex justify-center py-8">
@@ -527,7 +561,7 @@ export function AssignPlates() {
                 value: v.id,
                 label: v.plate,
                 description: [
-                  v.capacityMotos ? `${v.capacityMotos} motos` : null,
+                  `${plateOwner(v.plate)} · ${v.capacityMotos} motos`,
                   v.defaultDriver ? `padrão ${v.defaultDriver}` : null,
                 ]
                   .filter(Boolean)
