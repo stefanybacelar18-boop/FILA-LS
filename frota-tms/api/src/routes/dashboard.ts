@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { isOverdue, routeDepartureAt } from '../utils/status';
 import { addDays, startOfDay, subDays, format } from 'date-fns';
 import { sumUsefulCapacityMotos } from '../lib/capacity';
+import { hasActivePriority } from '../lib/route-priority.js';
 
 const router = Router();
 router.use(authenticate);
@@ -13,6 +14,12 @@ router.get('/', async (_req, res) => {
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
   const dayAfter = addDays(today, 2);
+
+  const openRouteStatuses = [
+    RouteStatus.AGUARDANDO_PLACAS,
+    RouteStatus.RASCUNHO,
+    RouteStatus.EM_ANDAMENTO,
+  ];
 
   const [
     fleet,
@@ -26,6 +33,11 @@ router.get('/', async (_req, res) => {
     priorityRoutes,
     awaitingPlatesRoutes,
     pendingRoutes,
+    routesByStatus,
+    chronusImportsToday,
+    openRoutesWithExpiry,
+    motosAgg,
+    chronusRoutesActive,
   ] = await Promise.all([
     prisma.vehicle.count(),
     prisma.vehicle.findMany({
@@ -67,7 +79,7 @@ router.get('/', async (_req, res) => {
     }),
     prisma.route.findMany({
       where: {
-        status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.RASCUNHO, RouteStatus.EM_ANDAMENTO] },
+        status: { in: openRouteStatuses },
         date: { gte: today, lt: dayAfter },
       },
       include: {
@@ -77,6 +89,35 @@ router.get('/', async (_req, res) => {
         unavailabilities: true,
       },
       orderBy: { date: 'asc' },
+    }),
+    prisma.route.groupBy({
+      by: ['status'],
+      where: { status: { not: RouteStatus.CANCELADO } },
+      _count: { id: true },
+    }),
+    prisma.importBatch.count({
+      where: { status: 'COMMITTED', updatedAt: { gte: today } },
+    }),
+    prisma.route.findMany({
+      where: {
+        status: { in: openRouteStatuses },
+        priorityExpiryDate: { not: null },
+      },
+      select: { hasPriority: true, priorityExpiryDate: true },
+    }),
+    prisma.route.aggregate({
+      where: {
+        status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.EM_ANDAMENTO] },
+        totalMotoCount: { not: null },
+      },
+      _sum: { totalMotoCount: true },
+      _count: { id: true },
+    }),
+    prisma.route.count({
+      where: {
+        status: { in: openRouteStatuses },
+        totalMotoCount: { not: null },
+      },
     }),
   ]);
 
@@ -98,12 +139,10 @@ router.get('/', async (_req, res) => {
     (t) => isOverdue(t.expectedReturn, t.returnedAt) && !t.delayReason,
   ).length;
 
-  // Placas cujo dia de previsão já passou e ainda estão fora
   const deveriamEstarDisponiveis = openTrips.filter((t) =>
     isOverdue(t.expectedReturn, t.returnedAt),
   ).length;
 
-  // Justificativas pendentes em roteiros aguardando placas (placa fora que já deveria ter retornado até o load)
   const pendingPlateRoutes = await prisma.route.findMany({
     where: { status: { in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.RASCUNHO] } },
     include: { unavailabilities: true },
@@ -118,6 +157,8 @@ router.get('/', async (_req, res) => {
     );
     justificativasPendentes += overdueOpen.length;
   }
+
+  const urgentRoutes = openRoutesWithExpiry.filter((r) => hasActivePriority(r)).length;
 
   const dealershipIds = dealershipTripCounts.map((d) => d.dealershipId);
   const dealerships = await prisma.dealership.findMany({ where: { id: { in: dealershipIds } } });
@@ -165,6 +206,7 @@ router.get('/', async (_req, res) => {
       hasPriority: r.hasPriority,
       status: r.status,
       cities: dest,
+      motoCount: r.totalMotoCount,
       assignedPlates: assigned,
       plannedPlates: planned,
       coverage:
@@ -192,9 +234,20 @@ router.get('/', async (_req, res) => {
     ops: {
       awaitingPlates: awaitingPlatesRoutes,
       priorityRoutes,
+      urgentRoutes,
       justificativasPendentes,
       atrasadasSemJustificativa,
     },
+    chronus: {
+      importsToday: chronusImportsToday,
+      activeRoutes: chronusRoutesActive,
+      motosInOpenRoutes: motosAgg._sum.totalMotoCount ?? 0,
+      routesWithLoad: motosAgg._count.id,
+    },
+    routesByStatus: routesByStatus.map((r) => ({
+      status: r.status,
+      count: r._count.id,
+    })),
     hojeCarregamento,
     topDealership: ranking[0] ?? null,
     avgTravelDays: Math.round(avgTravelDays * 10) / 10,

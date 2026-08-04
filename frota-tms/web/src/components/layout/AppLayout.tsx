@@ -18,6 +18,7 @@ import {
   KeyRound,
   Wrench,
   ClipboardList,
+  LayoutDashboard,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -36,6 +37,7 @@ interface NavItem {
 const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   ADMIN: {
     primary: [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/definir-placas', label: 'Definir placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
