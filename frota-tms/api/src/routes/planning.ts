@@ -14,6 +14,7 @@ import { isFirstRouteSentToday } from '../services/notify';
 import {
   buildChronusPreview,
   parseChronusFile,
+  isExpiryCityExcluded,
   type ChronusImportPreview,
 } from '../lib/chronus-import';
 
@@ -1106,11 +1107,12 @@ export function createPlanningRouter(io: Server) {
             dealerships: {
               create: ordered.map((d, order) => {
                 const dest = destByDealerId.get(d.id);
+                const excluded = isExpiryCityExcluded(d.city);
                 return {
                   dealershipId: d.id,
                   order,
                   minExpiryDate:
-                    dest?.minExpiryDate != null
+                    !excluded && dest?.minExpiryDate != null
                       ? new Date(`${dest.minExpiryDate}T12:00:00.000Z`)
                       : null,
                 };

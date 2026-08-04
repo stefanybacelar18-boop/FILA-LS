@@ -20,6 +20,7 @@ import {
 import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
+import { isExpiryCityExcluded } from '../lib/chronus-rules'
 
 interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
   expectedReturn?: string | null
@@ -118,8 +119,11 @@ function DestinationExpiryList({
   return (
     <ul className={cn('space-y-1', compact ? 'mt-2' : 'mt-3')}>
       {items.map((d) => {
+        const excluded = isExpiryCityExcluded(d.city)
         const past =
-          d.minExpiryDate && toInputDate(d.minExpiryDate) <= toInputDate(new Date())
+          !excluded &&
+          d.minExpiryDate &&
+          toInputDate(d.minExpiryDate) <= toInputDate(new Date())
         return (
           <li
             key={`${d.city}-${d.name ?? ''}`}
@@ -131,14 +135,20 @@ function DestinationExpiryList({
             </span>
             <span
               className={
-                d.minExpiryDate
-                  ? past
-                    ? 'font-semibold text-[var(--color-danger)]'
-                    : 'font-medium text-[var(--color-text)]'
-                  : 'text-[var(--color-text-muted)]'
+                excluded
+                  ? 'text-xs text-[var(--color-text-muted)]'
+                  : d.minExpiryDate
+                    ? past
+                      ? 'font-semibold text-[var(--color-danger)]'
+                      : 'font-medium text-[var(--color-text)]'
+                    : 'text-[var(--color-text-muted)]'
               }
             >
-              {d.minExpiryDate ? `Venc. ${formatDate(d.minExpiryDate)}` : 'Venc. —'}
+              {excluded
+                ? 'Venc. desconsiderado'
+                : d.minExpiryDate
+                  ? `Venc. ${formatDate(d.minExpiryDate)}`
+                  : 'Venc. —'}
             </span>
           </li>
         )
