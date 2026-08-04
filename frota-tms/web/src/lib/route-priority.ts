@@ -103,7 +103,9 @@ export function compareRoutesByLoadPriority(
   return new Date(a.date).getTime() - new Date(b.date).getTime()
 }
 
-export function totalMotoCount(destinations: RouteLoadDestination[]): number | null {
+export function totalMotoCountFromDestinations(
+  destinations: RouteLoadDestination[],
+): number | null {
   if (destinations.length === 0) return null
   let sum = 0
   let hasAny = false

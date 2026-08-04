@@ -31,6 +31,8 @@ export type ChronusManifestPreview = {
   unmatchedDealerCodes: string[];
   duplicateRouteId: string | null;
   duplicateRouteName: string | null;
+  /** Roteiro duplicado aguardando placa — reimport atualiza motos/vencimento. */
+  canRefreshLoad: boolean;
 };
 
 export type ChronusImportPreview = {
@@ -252,7 +254,7 @@ export async function buildChronusPreview(
   dealers: DealerRow[],
   options?: {
     importDate?: Date;
-    existingRouteNames?: { id: string; name: string; date: Date }[];
+    existingRouteNames?: { id: string; name: string; date: Date; status: string }[];
   },
 ): Promise<ChronusImportPreview> {
   const routeDate = routeDateFromImport(options?.importDate ?? new Date());
@@ -269,12 +271,13 @@ export async function buildChronusPreview(
     byManifesto.set(row.manifesto, list);
   }
 
-  const existingNames = new Map<string, { id: string; name: string }>();
+  const existingNames = new Map<string, { id: string; name: string; status: string }>();
   for (const route of options?.existingRouteNames ?? []) {
     const day = route.date.toISOString().slice(0, 10);
     existingNames.set(`${route.name.trim().toLowerCase()}|${day}`, {
       id: route.id,
       name: route.name,
+      status: route.status,
     });
   }
 
@@ -344,6 +347,7 @@ export async function buildChronusPreview(
       unmatchedDealerCodes: destinations.filter((d) => !d.matched).map((d) => d.dealerCode),
       duplicateRouteId: duplicate?.id ?? null,
       duplicateRouteName: duplicate?.name ?? null,
+      canRefreshLoad: duplicate?.status === 'AGUARDANDO_PLACAS',
     });
   }
 
@@ -354,5 +358,44 @@ export async function buildChronusPreview(
     rowsWithoutManifesto: 0,
     manifestCount: routes.length,
     routes,
+  };
+}
+
+export type ChronusDestinationInput = ChronusManifestPreview['destinations'][number];
+
+export function chronusDestinationsByDealershipId(destinations: ChronusDestinationInput[]) {
+  return new Map(
+    destinations
+      .filter((d) => d.dealershipId)
+      .map((d) => [d.dealershipId!, d]),
+  );
+}
+
+export function chronusDealershipLoadRow(
+  dealershipId: string,
+  order: number,
+  dest: ChronusDestinationInput | undefined,
+) {
+  const excluded = dest ? isExpiryCityExcluded(dest.city) : false;
+  return {
+    dealershipId,
+    order,
+    motoCount: dest?.motoCount ?? null,
+    minExpiryDate:
+      !excluded && dest?.minExpiryDate != null
+        ? new Date(`${dest.minExpiryDate}T12:00:00.000Z`)
+        : null,
+  };
+}
+
+export function chronusRouteLoadData(item: ChronusManifestPreview) {
+  return {
+    totalMotoCount: item.motoCount,
+    hasPriority: item.hasPriority,
+    priorityExpiryDate:
+      item.hasPriority && item.priorityExpiryDate
+        ? new Date(`${item.priorityExpiryDate}T12:00:00.000Z`)
+        : null,
+    notes: item.plateHint ? `Placa Chronus: ${item.plateHint}` : null,
   };
 }

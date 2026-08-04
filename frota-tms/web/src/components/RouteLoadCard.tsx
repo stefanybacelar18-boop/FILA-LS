@@ -8,7 +8,7 @@ import {
   expiryUrgency,
   formatExpiryCell,
   routeLoadUrgency,
-  totalMotoCount,
+  totalMotoCountFromDestinations,
   urgencyBadgeTone,
   urgencyLabel,
   type RouteLoadDestination,
@@ -120,6 +120,7 @@ export function RouteLoadCard({
   destinations,
   priorityExpiryDate,
   notes,
+  totalMotoCount,
   onClick,
   className,
 }: {
@@ -128,11 +129,12 @@ export function RouteLoadCard({
   destinations: RouteLoadDestination[]
   priorityExpiryDate?: string | null
   notes?: string | null
+  totalMotoCount?: number | null
   onClick?: () => void
   className?: string
 }) {
   const urgency = routeLoadUrgency(priorityExpiryDate, destinations)
-  const motos = totalMotoCount(destinations)
+  const motos = totalMotoCount ?? totalMotoCountFromDestinations(destinations)
   const plateHint = chronusPlateFromNotes(notes)
   const Wrapper = onClick ? 'button' : 'div'
 

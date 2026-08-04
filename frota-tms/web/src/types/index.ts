@@ -163,6 +163,7 @@ export interface Route {
   priorityNotes?: string | null
   priorityExpiryDate?: string | null
   plannedVehicleCount?: number | null
+  totalMotoCount?: number | null
   createdAt: string
   updatedAt: string
   dealershipId: string | null

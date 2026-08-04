@@ -30,6 +30,7 @@ interface ChronusRoutePreview {
   unmatchedDealerCodes: string[]
   duplicateRouteId: string | null
   duplicateRouteName: string | null
+  canRefreshLoad?: boolean
 }
 
 interface ChronusPreviewResponse {
@@ -78,6 +79,7 @@ export function ImportChronus() {
       (
         await api.post<{
           created: number
+          refreshed: number
           skippedDuplicates: { manifesto: string; name: string }[]
         }>('/planning/import/chronus/commit', { batchId })
       ).data,
@@ -89,7 +91,10 @@ export function ImportChronus() {
       ])
       navigate('/roteiros', {
         state: {
-          importOk: `${data.created} roteiro(s) criado(s) a partir do Chronus.`,
+          importOk:
+            data.refreshed > 0
+              ? `${data.created} roteiro(s) criado(s) · ${data.refreshed} carga(s) atualizada(s).`
+              : `${data.created} roteiro(s) criado(s) a partir do Chronus.`,
         },
       })
     },
@@ -104,7 +109,12 @@ export function ImportChronus() {
   const creatable = preview?.routes.filter(
     (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length === 0,
   )
-  const duplicates = preview?.routes.filter((r) => r.duplicateRouteId) ?? []
+  const refreshable =
+    preview?.routes.filter(
+      (r) => r.canRefreshLoad && r.duplicateRouteId && r.unmatchedDealerCodes.length === 0,
+    ) ?? []
+  const duplicates =
+    preview?.routes.filter((r) => r.duplicateRouteId && !r.canRefreshLoad) ?? []
   const invalid = preview?.routes.filter(
     (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length > 0,
   ) ?? []
@@ -178,16 +188,24 @@ export function ImportChronus() {
 
       {preview && (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Stat label="Data dos roteiros" value={preview.routeDateLabel} />
             <Stat label="Manifestos" value={String(preview.manifestCount)} />
             <Stat label="Sem manifesto (ignoradas)" value={String(preview.rowsWithoutManifesto)} />
             <Stat label="Novos roteiros" value={String(creatable?.length ?? 0)} />
+            <Stat label="Atualizar carga" value={String(refreshable.length)} />
           </div>
+
+          {refreshable.length > 0 && (
+            <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">
+              {refreshable.length} roteiro(s) já existem e terão <strong>motos e vencimento</strong>{' '}
+              atualizados ao confirmar.
+            </p>
+          )}
 
           {duplicates.length > 0 && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-              {duplicates.length} manifesto(s) já existem como roteiro e serão ignorados.
+              {duplicates.length} manifesto(s) já existem em andamento e não podem ser alterados.
             </p>
           )}
 
@@ -199,12 +217,19 @@ export function ImportChronus() {
 
           <div className="space-y-4">
             {preview.routes.map((route) => {
-              const blocked = !!route.duplicateRouteId || route.unmatchedDealerCodes.length > 0
+              const blocked =
+                (!!route.duplicateRouteId && !route.canRefreshLoad) ||
+                route.unmatchedDealerCodes.length > 0
               return (
                 <div key={route.manifesto} className={cn(blocked && 'opacity-70')}>
                   {(route.duplicateRouteId || route.unmatchedDealerCodes.length > 0) && (
                     <div className="mb-2 flex flex-wrap gap-2">
-                      {route.duplicateRouteId && <Badge tone="warning">Já existe</Badge>}
+                      {route.canRefreshLoad && route.duplicateRouteId && (
+                        <Badge tone="info">Atualizar carga</Badge>
+                      )}
+                      {route.duplicateRouteId && !route.canRefreshLoad && (
+                        <Badge tone="warning">Já existe</Badge>
+                      )}
                       {!route.duplicateRouteId && route.unmatchedDealerCodes.length > 0 && (
                         <Badge tone="danger">Sem cadastro</Badge>
                       )}
@@ -234,11 +259,23 @@ export function ImportChronus() {
             <Button
               onClick={() => preview && commitMutation.mutate(preview.batchId)}
               disabled={
-                !creatable?.length || commitMutation.isPending || previewMutation.isPending
+                (!creatable?.length && !refreshable.length) ||
+                commitMutation.isPending ||
+                previewMutation.isPending
               }
             >
               {commitMutation.isPending ? <Spinner size="sm" /> : null}
-              Criar {creatable?.length ?? 0} roteiro(s)
+              Confirmar
+              {(creatable?.length ?? 0) + refreshable.length > 0
+                ? ` (${[
+                    creatable?.length ? `${creatable.length} novo${creatable.length === 1 ? '' : 's'}` : '',
+                    refreshable.length
+                      ? `${refreshable.length} atualização${refreshable.length === 1 ? '' : 'ões'}`
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')})`
+                : ''}
             </Button>
           </div>
         </div>
