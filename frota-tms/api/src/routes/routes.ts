@@ -355,6 +355,13 @@ export function createRoutesRouter(io: Server) {
       hasPriority: route.hasPriority,
       priorityExpiryDate: route.priorityExpiryDate,
       priorityNotes: route.priorityNotes,
+      destinations: route.dealerships.map((rd) => ({
+        id: rd.dealership.id,
+        name: rd.dealership.name,
+        city: rd.dealership.city,
+        order: rd.order,
+        minExpiryDate: rd.minExpiryDate,
+      })),
       route: {
         id: route.id,
         name: route.name,

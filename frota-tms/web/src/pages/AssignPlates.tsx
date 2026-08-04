@@ -66,6 +66,13 @@ interface PlatesBoard {
     departureAt: string
     expectedReturn: string
   } | null
+  destinations?: {
+    id: string
+    name: string
+    city: string
+    order: number
+    minExpiryDate?: string | null
+  }[]
   available: PlatesBoardVehicle[]
   unavailable: PlatesBoardVehicle[]
   summary?: {
@@ -88,9 +95,56 @@ function citiesOf(route: Route): string[] {
 
 function dealersOf(route: Route) {
   if (route.dealerships && route.dealerships.length > 0) {
-    return route.dealerships.map((rd) => rd.dealership)
+    return [...route.dealerships].sort((a, b) => a.order - b.order).map((rd) => rd.dealership)
   }
   return route.dealership ? [route.dealership] : []
+}
+
+function routeDestinations(route: Route) {
+  if (route.dealerships && route.dealerships.length > 0) {
+    return [...route.dealerships].sort((a, b) => a.order - b.order)
+  }
+  return []
+}
+
+function DestinationExpiryList({
+  items,
+  compact = false,
+}: {
+  items: { city: string; name?: string; minExpiryDate?: string | null }[]
+  compact?: boolean
+}) {
+  if (items.length === 0) return null
+  return (
+    <ul className={cn('space-y-1', compact ? 'mt-2' : 'mt-3')}>
+      {items.map((d) => {
+        const past =
+          d.minExpiryDate && toInputDate(d.minExpiryDate) <= toInputDate(new Date())
+        return (
+          <li
+            key={`${d.city}-${d.name ?? ''}`}
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm"
+          >
+            <span className="text-[var(--color-text-muted)]">
+              {d.city}
+              {d.name ? ` · ${d.name}` : ''}
+            </span>
+            <span
+              className={
+                d.minExpiryDate
+                  ? past
+                    ? 'font-semibold text-[var(--color-danger)]'
+                    : 'font-medium text-[var(--color-text)]'
+                  : 'text-[var(--color-text-muted)]'
+              }
+            >
+              {d.minExpiryDate ? `Venc. ${formatDate(d.minExpiryDate)}` : 'Venc. —'}
+            </span>
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 function allowedTypesForRoute(route: Route): {
@@ -430,9 +484,17 @@ export function AssignPlates() {
                           : 'mt-2 text-sm font-medium text-[var(--color-text)]'
                       }
                     >
-                      Menor vencimento: {formatDate(r.priorityExpiryDate)}
+                      Menor vencimento (roteiro): {formatDate(r.priorityExpiryDate)}
                     </p>
                   )}
+                  <DestinationExpiryList
+                    compact
+                    items={routeDestinations(r).map((rd) => ({
+                      city: rd.dealership.city,
+                      name: rd.dealership.name,
+                      minExpiryDate: rd.minExpiryDate,
+                    }))}
+                  />
                 </button>
               )
             })}
@@ -450,6 +512,20 @@ export function AssignPlates() {
     board?.priorityExpiryDate ??
     selectedRoute?.priorityExpiryDate ??
     null
+
+  const destinationRows =
+    board?.destinations?.map((d) => ({
+      city: d.city,
+      name: d.name,
+      minExpiryDate: d.minExpiryDate,
+    })) ??
+    (selectedRoute
+      ? routeDestinations(selectedRoute).map((rd) => ({
+          city: rd.dealership.city,
+          name: rd.dealership.name,
+          minExpiryDate: rd.minExpiryDate,
+        }))
+      : [])
 
   return (
     <div className="page-desktop flex max-w-xl flex-col pb-28">
@@ -478,6 +554,13 @@ export function AssignPlates() {
 
       {error && <p className="mb-2 text-sm text-[var(--color-danger)]">{error}</p>}
       {okMsg && <p className="mb-2 text-sm text-[var(--color-success)]">{okMsg}</p>}
+
+      {destinationRows.length > 0 && (
+        <section className="mb-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <h2 className="text-sm font-semibold">Vencimento por concessionária</h2>
+          <DestinationExpiryList items={destinationRows} />
+        </section>
+      )}
 
       {pendingReport.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-red-500/25 bg-red-500/5 px-3 py-2">

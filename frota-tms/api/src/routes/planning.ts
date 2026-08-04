@@ -992,6 +992,9 @@ export function createPlanningRouter(io: Server) {
         const previewBase = await buildChronusPreview(parsed.rows, dealers, {
           importDate: new Date(),
           existingRouteNames: await prisma.route.findMany({
+            where: {
+              status: { notIn: [RouteStatus.CANCELADO, RouteStatus.CONCLUIDO] },
+            },
             select: { id: true, name: true, date: true },
           }),
         });
@@ -1076,6 +1079,12 @@ export function createPlanningRouter(io: Server) {
         const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
         const notes = item.plateHint ? `Placa Chronus: ${item.plateHint}` : null;
 
+        const destByDealerId = new Map(
+          item.destinations
+            .filter((d) => d.dealershipId)
+            .map((d) => [d.dealershipId!, d]),
+        );
+
         const route = await tx.route.create({
           data: {
             name: item.name,
@@ -1095,7 +1104,17 @@ export function createPlanningRouter(io: Server) {
             sentToOperationById: req.user!.id,
             createdById: req.user!.id,
             dealerships: {
-              create: ordered.map((d, order) => ({ dealershipId: d.id, order })),
+              create: ordered.map((d, order) => {
+                const dest = destByDealerId.get(d.id);
+                return {
+                  dealershipId: d.id,
+                  order,
+                  minExpiryDate:
+                    dest?.minExpiryDate != null
+                      ? new Date(`${dest.minExpiryDate}T12:00:00.000Z`)
+                      : null,
+                };
+              }),
             },
           },
           include: routeInclude,
