@@ -5,6 +5,7 @@ import {
   resolveManifestPlateHint,
   type ChronusPlateHint,
 } from './chronus-plate-hint';
+import { hasActivePriority } from './route-priority.js';
 
 export type ChronusRow = {
   manifesto: string;
@@ -336,10 +337,11 @@ export async function buildChronusPreview(
       .map((row) => parseChronusDate(row.expiryRaw))
       .filter((d): d is Date => !!d);
 
-    const hasPriority = expiryCandidates.length > 0;
-    const priorityExpiryDate = hasPriority
-      ? expiryCandidates.sort((a, b) => a.getTime() - b.getTime())[0]!.toISOString().slice(0, 10)
-      : null;
+    const priorityExpiryDate =
+      expiryCandidates.length > 0
+        ? expiryCandidates.sort((a, b) => a.getTime() - b.getTime())[0]!.toISOString().slice(0, 10)
+        : null;
+    const hasPriority = hasActivePriority({ priorityExpiryDate });
 
     const plates = [...new Set(items.map((i) => i.plate).filter(Boolean))];
     const plateResolved = resolveManifestPlateHint(plates);
@@ -413,10 +415,9 @@ export function chronusRouteLoadData(item: ChronusManifestPreview) {
   return {
     totalMotoCount: item.motoCount,
     hasPriority: item.hasPriority,
-    priorityExpiryDate:
-      item.hasPriority && item.priorityExpiryDate
-        ? new Date(`${item.priorityExpiryDate}T12:00:00.000Z`)
-        : null,
+    priorityExpiryDate: item.priorityExpiryDate
+      ? new Date(`${item.priorityExpiryDate}T12:00:00.000Z`)
+      : null,
     notes: chronusPlateNotes(plateHint),
     requiredFleetOwner: item.requiredFleetOwner,
     requiredCapacityMotos: item.requiredCapacityMotos,

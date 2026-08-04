@@ -22,6 +22,7 @@ import { routeStatusLabels } from '../lib/labels'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { plateOwner } from '../lib/plateOwner'
+import { hasActivePriority } from '../lib/route-priority'
 
 function dealershipStops(r: Route): { name: string; city: string }[] {
   if (r.dealerships && r.dealerships.length > 0) {
@@ -44,9 +45,9 @@ function destinationsSummary(stops: { name: string; city: string }[]): string {
 
 function sortRoutesByPriority(list: Route[]): Route[] {
   return [...list].sort((a, b) => {
-    const p = Number(b.hasPriority) - Number(a.hasPriority)
+    const p = Number(hasActivePriority(b)) - Number(hasActivePriority(a))
     if (p !== 0) return p
-    if (a.hasPriority && b.hasPriority) {
+    if (hasActivePriority(a) && hasActivePriority(b)) {
       const ae = a.priorityExpiryDate ? new Date(a.priorityExpiryDate).getTime() : Infinity
       const be = b.priorityExpiryDate ? new Date(b.priorityExpiryDate).getTime() : Infinity
       if (ae !== be) return ae - be
@@ -288,7 +289,7 @@ export function Routes() {
   const priorities = useMemo(
     () =>
       sortOpenPriorities(
-        data.filter((r) => r.hasPriority && isOpenRoute(r)),
+        data.filter((r) => hasActivePriority(r) && isOpenRoute(r)),
       ),
     [data],
   )
@@ -532,7 +533,7 @@ export function Routes() {
                           <span className="block truncate font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)]">
                             {r.name}
                           </span>
-                          {r.hasPriority && (
+                          {hasActivePriority(r) && (
                             <span className="mt-0.5 inline-block text-[11px] font-medium text-[var(--color-danger)]">
                               Prioridade
                             </span>
@@ -671,7 +672,7 @@ export function Routes() {
               <Badge tone={statusTone(detailRoute.status)}>
                 {routeStatusLabels[detailRoute.status]}
               </Badge>
-              {detailRoute.hasPriority && <Badge tone="danger">Prioridade</Badge>}
+              {hasActivePriority(detailRoute) && <Badge tone="danger">Prioridade</Badge>}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -713,7 +714,7 @@ export function Routes() {
               </div>
             </div>
 
-            {detailRoute.hasPriority && (
+            {hasActivePriority(detailRoute) && (
               <div className="rounded-[var(--radius)] border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/[0.04] px-4 py-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-danger)]">
                   Prioridade · vencimento
