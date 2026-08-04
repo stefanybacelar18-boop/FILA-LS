@@ -150,7 +150,7 @@ export function ImportChronus() {
             <p className="text-sm font-medium">Arquivo do Chronus</p>
             <p className="text-sm text-[var(--color-text-muted)]">
               Linhas sem manifesto são ignoradas. Cada manifesto vira um roteiro com operação.
-              A ordem das concessionárias segue a sequência das linhas no arquivo Chronus.
+              A ordem das concessionárias é calculada automaticamente por proximidade geográfica a partir do PAD (vizinho mais próximo).
             </p>
           </div>
           <div className="flex items-center gap-2">
