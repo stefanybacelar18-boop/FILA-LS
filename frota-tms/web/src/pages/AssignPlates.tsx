@@ -396,7 +396,7 @@ export function AssignPlates() {
       <div className="page-desktop max-w-5xl">
         <PageHeader
           title="Definir placa"
-          description="Ordenados pelo menor vencimento — dados da carga por destino."
+          description="Menor vencimento primeiro."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
@@ -510,9 +510,11 @@ export function AssignPlates() {
           </p>
         </div>
         {board?.loadRequirement?.label && (
-          <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]/60 px-3 py-2 text-sm text-[var(--color-text-muted)]">
-            Veículo exigido pelo Chronus:{' '}
-            <strong className="text-[var(--color-text)]">{board.loadRequirement.label}</strong>
+          <p className="mb-3 text-sm text-[var(--color-text-muted)]">
+            Veículo:{' '}
+            <span className="font-medium text-[var(--color-text)]">
+              {board.loadRequirement.label}
+            </span>
           </p>
         )}
 
