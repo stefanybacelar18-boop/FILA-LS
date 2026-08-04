@@ -372,7 +372,7 @@ export function AssignPlates() {
       <div className="page-desktop max-w-5xl">
         <PageHeader
           title="Definir placa"
-          description="Vencido ou vencendo em 1 dia no topo — dados da carga por destino."
+          description="Ordenados pelo menor vencimento — dados da carga por destino."
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
