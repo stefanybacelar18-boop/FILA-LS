@@ -1,7 +1,7 @@
 /**
  * PAD (ponto de saída da frota) — coordenadas oficiais.
  * Distância PAD ↔ concessionária para referência;
- * dias de retorno preferem faixas operacionais (0 / 1 / 3 dias).
+ * dias de retorno preferem faixas operacionais (0 / 1 / 2 / 3 dias).
  */
 export const PAD_LAT = -12.809004;
 export const PAD_LNG = -38.428719;
@@ -52,7 +52,7 @@ export function avgTravelDaysFromDistance(distanceKm: number): number {
 
 /**
  * Faixas operacionais de previsão de retorno (regra de negócio).
- * 0 = mesmo dia · 1 = dia seguinte · 3 = três dias.
+ * 0 = mesmo dia · 1 = dia seguinte · 2 = dois dias · 3 = três dias.
  */
 export const SAME_DAY_RETURN_CITIES = new Set([
   'CAMACARI',
@@ -118,7 +118,7 @@ export const NEXT_DAY_RETURN_CITIES = new Set([
   'MACAUBAS',
 ]);
 
-export const THREE_DAY_RETURN_CITIES = new Set([
+export const TWO_DAY_RETURN_CITIES = new Set([
   'EUNAPOLIS',
   'PORTO',
   'PORTO SEGURO',
@@ -152,7 +152,7 @@ export function resolveCityAlias(cityKey: string): string {
 }
 
 /**
- * Dias de retorno pela regra operacional (0 / 1 / 3).
+ * Dias de retorno pela regra operacional (0 / 1 / 2 / 3).
  * `null` = usar fórmula por distância.
  * Com `owner: 'LSL'`, Aracaju (e Socorro) sobe para dia seguinte.
  */
@@ -174,8 +174,8 @@ export function operationalReturnDays(
       days = 1;
       break;
     }
-    if (THREE_DAY_RETURN_CITIES.has(c)) {
-      days = 3;
+    if (TWO_DAY_RETURN_CITIES.has(c)) {
+      days = 2;
       break;
     }
   }
@@ -189,9 +189,9 @@ export function operationalReturnDays(
     else if (key.startsWith('VITORIA DA CONQUISTA')) days = 1;
     else if (key.startsWith('NOSSA SENHORA DA GLORIA')) days = 1;
     else if (key.startsWith('TOBIAS')) days = 1;
-    else if (key.startsWith('PORTO SEGURO')) days = 3;
-    else if (key.startsWith('TEIXEIRA')) days = 3;
-    else if (key.startsWith('BOM JESUS DA LAPA')) days = 3;
+    else if (key.startsWith('PORTO SEGURO')) days = 2;
+    else if (key.startsWith('TEIXEIRA')) days = 2;
+    else if (key.startsWith('BOM JESUS DA LAPA')) days = 2;
   }
 
   if (owner === 'LSL' && isLslNextDayOverrideCity(city)) {

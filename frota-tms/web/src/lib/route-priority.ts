@@ -25,6 +25,15 @@ export function isUrgentExpiry(date: string | null | undefined): boolean {
   return expiry <= addDays(today, 1)
 }
 
+/** Prioridade ativa: vencimento urgente ou flag manual sem data. */
+export function hasActivePriority(route: {
+  hasPriority?: boolean
+  priorityExpiryDate?: string | Date | null
+}): boolean {
+  if (route.priorityExpiryDate) return isUrgentExpiry(String(route.priorityExpiryDate).slice(0, 10))
+  return !!route.hasPriority
+}
+
 export function expiryUrgency(
   date: string | null | undefined,
   city?: string,
