@@ -294,7 +294,10 @@ export function Routes() {
     [data],
   )
 
-  const allSorted = useMemo(() => sortRoutesByNewest(data), [data])
+  const allSorted = useMemo(
+    () => sortRoutesByNewest(data.filter((r) => r.status !== 'CANCELADO')),
+    [data],
+  )
   const visible =
     tab === 'pendentes' ? pending : tab === 'prioridades' ? priorities : allSorted
   const showPriorityColumns = tab === 'prioridades'

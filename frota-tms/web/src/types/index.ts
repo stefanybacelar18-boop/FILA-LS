@@ -264,9 +264,17 @@ export interface DashboardData {
   ops?: {
     awaitingPlates: number
     priorityRoutes: number
+    urgentRoutes?: number
     justificativasPendentes: number
     atrasadasSemJustificativa: number
   }
+  chronus?: {
+    importsToday: number
+    activeRoutes: number
+    motosInOpenRoutes: number
+    routesWithLoad: number
+  }
+  routesByStatus?: { status: string; count: number }[]
   hojeCarregamento?: {
     id: string
     name: string
@@ -274,6 +282,7 @@ export interface DashboardData {
     hasPriority: boolean
     status: string
     cities: string
+    motoCount?: number | null
     assignedPlates: number
     plannedPlates: number | null
     coverage: number | null

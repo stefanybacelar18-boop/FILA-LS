@@ -127,9 +127,13 @@ export function createRoutesRouter(io: Server) {
   });
 
   router.get('/', async (req, res) => {
-    const { status, date, q } = req.query;
+    const { status, date, q, includeCancelled } = req.query;
     const where: Record<string, unknown> = {};
-    if (status) where.status = String(status);
+    if (status) {
+      where.status = String(status);
+    } else if (includeCancelled !== 'true') {
+      where.status = { not: RouteStatus.CANCELADO };
+    }
     if (date) {
       const d = new Date(String(date));
       if (Number.isNaN(d.getTime())) {
@@ -1366,6 +1370,39 @@ export function createRoutesRouter(io: Server) {
       console.error('cancel route failed', err);
       return res.status(500).json({ error: 'Falha ao cancelar roteiro' });
     }
+  });
+
+  /** Remove permanentemente roteiros cancelados (limpeza de testes). */
+  router.post('/purge-cancelled', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const cancelled = await prisma.route.findMany({
+      where: { status: RouteStatus.CANCELADO },
+      select: { id: true, name: true },
+    });
+    if (cancelled.length === 0) {
+      return res.json({ deleted: 0, names: [] as string[] });
+    }
+
+    const ids = cancelled.map((r) => r.id);
+    await prisma.$transaction(async (tx) => {
+      await tx.trip.deleteMany({ where: { routeId: { in: ids } } });
+      await tx.planningCity.updateMany({
+        where: { routeId: { in: ids } },
+        data: { routeId: null, status: 'PENDENTE' },
+      });
+      await tx.route.deleteMany({ where: { id: { in: ids } } });
+    });
+
+    await audit('PURGE', 'Route', {
+      userId: req.user!.id,
+      details: `${ids.length} roteiro(s) cancelado(s) removido(s) do banco`,
+    });
+    io.emit('routes:changed', { action: 'purge-cancelled', count: ids.length });
+    io.emit('planning:changed', { action: 'purge-cancelled' });
+
+    res.json({
+      deleted: ids.length,
+      names: cancelled.map((r) => r.name),
+    });
   });
 
   return router;

@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   Bar,
@@ -17,21 +18,57 @@ import {
   Tags,
   RotateCcw,
   ClipboardList,
+  FileSpreadsheet,
+  Trash2,
+  Upload,
 } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, downloadReport } from '../lib/api'
 import type { DashboardData } from '../types'
-import { PageHeader, Spinner, Card, Badge, Button } from '../components/ui'
+import { PageHeader, Spinner, Card, Badge, Button, ConfirmModal } from '../components/ui'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
 import { routeStatusLabels } from '../lib/labels'
 
 export function Dashboard() {
+  const qc = useQueryClient()
+  const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const canOperate = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
+  const [purgeOpen, setPurgeOpen] = useState(false)
+  const [purgeMsg, setPurgeMsg] = useState('')
+  const [reportLoading, setReportLoading] = useState<string | null>(null)
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => (await api.get<DashboardData>('/dashboard')).data,
   })
+
+  const purgeMutation = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ deleted: number; names: string[] }>('/routes/purge-cancelled')).data,
+    onSuccess: (result) => {
+      setPurgeOpen(false)
+      setPurgeMsg(
+        result.deleted > 0
+          ? `${result.deleted} roteiro(s) cancelado(s) removido(s) permanentemente.`
+          : 'Nenhum roteiro cancelado encontrado.',
+      )
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+      void qc.invalidateQueries({ queryKey: ['routes'] })
+    },
+    onError: () => {
+      setPurgeMsg('Falha ao remover roteiros cancelados.')
+    },
+  })
+
+  async function quickReport(type: string) {
+    setReportLoading(type)
+    try {
+      await downloadReport(`/reports/excel/${type}`, `relatorio-${type}.xlsx`)
+    } finally {
+      setReportLoading(null)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -47,6 +84,14 @@ export function Dashboard() {
 
   const ops = data.ops
   const alerts = [
+    {
+      show: (ops?.urgentRoutes ?? 0) > 0,
+      tone: 'danger' as const,
+      title: `${ops?.urgentRoutes ?? 0} roteiro(s) com vencimento urgente`,
+      href: '/roteiros',
+      cta: 'Ver prioridades',
+      roles: true,
+    },
     {
       show: (ops?.awaitingPlates ?? 0) > 0,
       tone: 'info' as const,
@@ -118,12 +163,68 @@ export function Dashboard() {
     label: formatDate(d.date, 'dd/MM'),
   }))
 
+  const chronusKpis = [
+    {
+      label: 'Motos em roteiros abertos',
+      value: data.chronus?.motosInOpenRoutes ?? 0,
+      icon: Upload,
+      tone: 'text-teal-600',
+    },
+    {
+      label: 'Roteiros com carga Chronus',
+      value: data.chronus?.activeRoutes ?? 0,
+      icon: ClipboardList,
+      tone: 'text-teal-600',
+    },
+    {
+      label: 'Imports Chronus hoje',
+      value: data.chronus?.importsToday ?? 0,
+      icon: FileSpreadsheet,
+      tone: 'text-slate-600',
+    },
+    {
+      label: 'Vencimento urgente',
+      value: data.ops?.urgentRoutes ?? 0,
+      icon: AlertTriangle,
+      tone: 'text-red-600',
+    },
+  ]
+
+  const statusLabels: Record<string, string> = {
+    AGUARDANDO_PLACAS: 'Aguardando placa',
+    EM_ANDAMENTO: 'Em andamento',
+    RASCUNHO: 'Rascunho',
+    CONCLUIDO: 'Concluído',
+  }
+
   return (
     <div>
       <PageHeader
         title="Dashboard"
         description="Central operacional: o que precisa de ação hoje"
+        actions={
+          isAdmin ? (
+            <div className="flex flex-wrap gap-2">
+              <Link to="/roteiros/importar-chronus">
+                <Button size="sm" variant="secondary">
+                  <Upload className="h-4 w-4" />
+                  Importar Chronus
+                </Button>
+              </Link>
+              <Button size="sm" variant="ghost" onClick={() => setPurgeOpen(true)}>
+                <Trash2 className="h-4 w-4" />
+                Limpar cancelados
+              </Button>
+            </div>
+          ) : undefined
+        }
       />
+
+      {purgeMsg && (
+        <p className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm">
+          {purgeMsg}
+        </p>
+      )}
 
       {alerts.length > 0 && (
         <div className="mb-5 space-y-2">
@@ -169,6 +270,21 @@ export function Dashboard() {
         ))}
       </div>
 
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {chronusKpis.map((k) => (
+          <div
+            key={k.label}
+            className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-sm)]"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">{k.label}</span>
+              <k.icon className={cn('h-4 w-4', k.tone)} />
+            </div>
+            <p className="font-display text-2xl font-bold">{k.value}</p>
+          </div>
+        ))}
+      </div>
+
       {(data.hojeCarregamento?.length ?? 0) > 0 && (
         <Card
           title="Carregamento de hoje (saída 06:00)"
@@ -187,6 +303,7 @@ export function Dashboard() {
                 <tr>
                   <th>Roteiro</th>
                   <th>Destinos</th>
+                  <th>Motos</th>
                   <th>Placas</th>
                   <th>Cobertura</th>
                   <th>Status</th>
@@ -206,6 +323,7 @@ export function Dashboard() {
                       </p>
                     </td>
                     <td>{r.cities || '—'}</td>
+                    <td>{r.motoCount ?? '—'}</td>
                     <td>
                       {r.assignedPlates}
                       {r.plannedPlates != null ? ` / ${r.plannedPlates}` : ''}
@@ -258,6 +376,51 @@ export function Dashboard() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Roteiros por status">
+          <div className="space-y-2">
+            {(data.routesByStatus ?? []).length === 0 && (
+              <p className="text-sm text-[var(--color-text-muted)]">Sem roteiros ativos.</p>
+            )}
+            {(data.routesByStatus ?? []).map((r) => (
+              <div key={r.status} className="flex items-center justify-between text-sm">
+                <span>{statusLabels[r.status] ?? r.status}</span>
+                <span className="font-display font-semibold">{r.count}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Relatórios rápidos">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { type: 'disponiveis', label: 'Placas disponíveis' },
+              { type: 'diario', label: 'Viagens do dia' },
+              { type: 'frota', label: 'Frota completa' },
+              { type: 'concessionarias', label: 'Concessionárias' },
+            ].map((r) => (
+              <Button
+                key={r.type}
+                size="sm"
+                variant="secondary"
+                disabled={reportLoading === r.type}
+                onClick={() => void quickReport(r.type)}
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                {reportLoading === r.type ? 'Baixando…' : r.label}
+              </Button>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+            Exportações em Excel. Relatórios completos em{' '}
+            <Link to="/relatorios" className="text-[var(--color-primary)] hover:underline">
+              Relatórios
+            </Link>
+            .
+          </p>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card title="Viagens por dia (14 dias)">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -298,6 +461,17 @@ export function Dashboard() {
           </div>
         </Card>
       </div>
+
+      <ConfirmModal
+        open={purgeOpen}
+        onClose={() => setPurgeOpen(false)}
+        title="Remover roteiros cancelados"
+        message="Isso apaga permanentemente todos os roteiros com status Cancelado (incluindo testes). Esta ação não pode ser desfeita."
+        confirmLabel="Remover permanentemente"
+        danger
+        loading={purgeMutation.isPending}
+        onConfirm={() => purgeMutation.mutate()}
+      />
     </div>
   )
 }
