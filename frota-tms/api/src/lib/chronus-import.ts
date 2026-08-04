@@ -26,6 +26,7 @@ export type ChronusManifestPreview = {
     matched: boolean;
     motoCount: number;
     minExpiryDate: string | null;
+    expiryExcluded: boolean;
   }[];
   unmatchedDealerCodes: string[];
   duplicateRouteId: string | null;
@@ -295,21 +296,25 @@ export async function buildChronusPreview(
     const destinations = [...dealerGroups.entries()].map(([_key, group]) => {
       const sample = group[0];
       const dealer = sample.dealerCode ? dealerByCode.get(sample.dealerCode) : undefined;
+      const city = dealer?.city ?? sample.city;
+      const expiryExcluded = isExpiryCityExcluded(city);
       const expiryDates = group
+        .filter((row) => !isExpiryCityExcluded(row.city))
         .map((row) => parseChronusDate(row.expiryRaw))
         .filter((d): d is Date => !!d);
       const minExpiry =
-        expiryDates.length > 0
+        !expiryExcluded && expiryDates.length > 0
           ? expiryDates.sort((a, b) => a.getTime() - b.getTime())[0]!
           : null;
       return {
         dealerCode: sample.dealerCode,
         dealerName: dealer?.name ?? sample.dealerName,
-        city: dealer?.city ?? sample.city,
+        city,
         dealershipId: dealer?.id ?? null,
         matched: !!dealer,
         motoCount: group.length,
         minExpiryDate: minExpiry ? minExpiry.toISOString().slice(0, 10) : null,
+        expiryExcluded,
       };
     });
 

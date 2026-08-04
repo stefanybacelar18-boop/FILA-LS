@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { PageHeader, Button, Spinner, Badge } from '../components/ui'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
+import { isExpiryCityExcluded } from '../lib/chronus-rules'
 
 interface ChronusDestination {
   dealerCode: string
@@ -15,6 +16,7 @@ interface ChronusDestination {
   matched: boolean
   motoCount: number
   minExpiryDate: string | null
+  expiryExcluded?: boolean
 }
 
 interface ChronusRoutePreview {
@@ -241,11 +243,15 @@ export function ImportChronus() {
                           {d.city}
                           {d.dealerName ? ` · ${d.dealerName}` : ''} ({d.motoCount} motos)
                         </span>
-                        {d.minExpiryDate && (
+                        {d.expiryExcluded || isExpiryCityExcluded(d.city) ? (
+                          <span className="text-xs text-[var(--color-text-muted)]">
+                            Venc. desconsiderado
+                          </span>
+                        ) : d.minExpiryDate ? (
                           <span className="font-medium text-[var(--color-text)]">
                             Venc. {formatDate(d.minExpiryDate)}
                           </span>
-                        )}
+                        ) : null}
                       </li>
                     ))}
                   </ul>
