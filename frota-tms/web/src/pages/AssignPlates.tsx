@@ -20,7 +20,11 @@ import {
 import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
-import { isExpiryCityExcluded } from '../lib/chronus-rules'
+import {
+  RouteDestinationExpiryList,
+  RouteExpiryBadge,
+  routeDestinationCities,
+} from '../components/RouteDestinationExpiry'
 
 interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
   expectedReturn?: string | null
@@ -84,16 +88,6 @@ interface PlatesBoard {
   }
 }
 
-function citiesOf(route: Route): string[] {
-  const dealers =
-    route.dealerships && route.dealerships.length > 0
-      ? route.dealerships.map((rd) => rd.dealership)
-      : route.dealership
-        ? [route.dealership]
-        : []
-  return [...new Set(dealers.map((d) => d.city))]
-}
-
 function dealersOf(route: Route) {
   if (route.dealerships && route.dealerships.length > 0) {
     return [...route.dealerships].sort((a, b) => a.order - b.order).map((rd) => rd.dealership)
@@ -108,53 +102,12 @@ function routeDestinations(route: Route) {
   return []
 }
 
-function DestinationExpiryList({
-  items,
-  compact = false,
-}: {
-  items: { city: string; name?: string; minExpiryDate?: string | null }[]
-  compact?: boolean
-}) {
-  if (items.length === 0) return null
-  return (
-    <ul className={cn('space-y-1', compact ? 'mt-2' : 'mt-3')}>
-      {items.map((d) => {
-        const excluded = isExpiryCityExcluded(d.city)
-        const past =
-          !excluded &&
-          d.minExpiryDate &&
-          toInputDate(d.minExpiryDate) <= toInputDate(new Date())
-        return (
-          <li
-            key={`${d.city}-${d.name ?? ''}`}
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm"
-          >
-            <span className="text-[var(--color-text-muted)]">
-              {d.city}
-              {d.name ? ` · ${d.name}` : ''}
-            </span>
-            <span
-              className={
-                excluded
-                  ? 'text-xs text-[var(--color-text-muted)]'
-                  : d.minExpiryDate
-                    ? past
-                      ? 'font-semibold text-[var(--color-danger)]'
-                      : 'font-medium text-[var(--color-text)]'
-                    : 'text-[var(--color-text-muted)]'
-              }
-            >
-              {excluded
-                ? 'Venc. desconsiderado'
-                : d.minExpiryDate
-                  ? `Venc. ${formatDate(d.minExpiryDate)}`
-                  : 'Venc. —'}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
-  )
+function routeDestinationItems(route: Route) {
+  return routeDestinations(route).map((rd) => ({
+    city: rd.dealership.city,
+    name: rd.dealership.name,
+    minExpiryDate: rd.minExpiryDate,
+  }))
 }
 
 function allowedTypesForRoute(route: Route): {
@@ -231,7 +184,6 @@ export function AssignPlates() {
   }, [searchParams, routeId])
 
   const selectedRoute = routes.find((r) => r.id === routeId)
-  const cities = selectedRoute ? citiesOf(selectedRoute) : []
   const typeRule = selectedRoute ? allowedTypesForRoute(selectedRoute) : null
   const allowedTypes = typeRule?.types ?? null
   const incompatibleTypes = !!typeRule?.incompatible
@@ -451,60 +403,44 @@ export function AssignPlates() {
             description="Quando o Admin disponibilizar um roteiro, ele aparece aqui."
           />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {pendingRoutes.map((r) => {
-              const c = citiesOf(r)
-              const expiryPast =
-                r.priorityExpiryDate &&
-                toInputDate(r.priorityExpiryDate) <= toInputDate(new Date())
+              const destinations = routeDestinationItems(r)
+              const cities = routeDestinationCities(destinations)
               return (
                 <button
                   key={r.id}
                   type="button"
                   onClick={() => pickRoute(r.id)}
-                  className={
+                  className={cn(
+                    'w-full rounded-xl border p-4 text-left transition',
                     r.hasPriority
-                      ? 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 px-3.5 py-3 text-left transition hover:border-[var(--color-danger)]/60'
-                      : 'flex w-full flex-col items-start rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-3 text-left transition hover:border-[var(--color-primary)]/40'
-                  }
+                      ? 'border-[var(--color-danger)]/35 bg-[var(--color-danger)]/5 hover:border-[var(--color-danger)]/55'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40',
+                  )}
                 >
-                  <div className="flex w-full items-center justify-between gap-2">
-                    <span className="text-base font-semibold">{r.name}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[var(--color-text)]">{r.name}</p>
+                      <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+                        {formatDate(r.date)} · 06:00
+                        {destinations.length > 0
+                          ? ` · ${destinations.length} destino${destinations.length === 1 ? '' : 's'}`
+                          : ''}
+                      </p>
+                    </div>
                     {r.hasPriority && (
-                      <span
-                        className={
-                          expiryPast
-                            ? 'text-xs font-semibold text-[var(--color-danger)]'
-                            : 'text-xs font-medium text-amber-700 dark:text-amber-300'
-                        }
-                      >
-                        Prioridade · vencimento
-                      </span>
+                      <RouteExpiryBadge expiryDate={r.priorityExpiryDate} />
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                    {formatDate(r.date)} · 06:00
-                    {c.length > 0 ? ` · ${c.join(', ')}` : ''}
-                  </p>
-                  {r.hasPriority && r.priorityExpiryDate && (
-                    <p
-                      className={
-                        expiryPast
-                          ? 'mt-2 text-sm font-semibold text-[var(--color-danger)]'
-                          : 'mt-2 text-sm font-medium text-[var(--color-text)]'
-                      }
-                    >
-                      Menor vencimento (roteiro): {formatDate(r.priorityExpiryDate)}
+                  {cities.length > 0 && (
+                    <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                      {cities.join(' · ')}
                     </p>
                   )}
-                  <DestinationExpiryList
-                    compact
-                    items={routeDestinations(r).map((rd) => ({
-                      city: rd.dealership.city,
-                      name: rd.dealership.name,
-                      minExpiryDate: rd.minExpiryDate,
-                    }))}
-                  />
+                  {destinations.length > 0 && (
+                    <RouteDestinationExpiryList items={destinations} showHeader={false} />
+                  )}
                 </button>
               )
             })}
@@ -548,29 +484,38 @@ export function AssignPlates() {
         Voltar às rotas
       </button>
 
-      <div className="mb-3">
-        <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
-          {selectedRoute?.name ?? 'Rota'}
-        </h1>
-        <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
-          {formatDate(selectedRoute?.date)} · 06:00
-          {cities.length ? ` · ${cities.join(', ')}` : ''}
-          {board?.returnForecast
-            ? ` · fim ${formatDate(board.returnForecast.expectedReturn)}`
-            : ''}
-          {priority && expiry ? ` · prioridade até ${formatDate(expiry)}` : ''}
-        </p>
+      <div className="mb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
+              {selectedRoute?.name ?? 'Rota'}
+            </h1>
+            <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+              {formatDate(selectedRoute?.date)} · 06:00
+              {board?.returnForecast
+                ? ` · retorno previsto ${formatDate(board.returnForecast.expectedReturn)}`
+                : ''}
+            </p>
+          </div>
+          {priority && <RouteExpiryBadge expiryDate={expiry} />}
+        </div>
+        {destinationRows.length > 0 && (
+          <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+              Vencimento por concessionária
+            </p>
+            {routeDestinationCities(destinationRows).length > 0 && (
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                {routeDestinationCities(destinationRows).join(' · ')}
+              </p>
+            )}
+            <RouteDestinationExpiryList items={destinationRows} />
+          </div>
+        )}
       </div>
 
       {error && <p className="mb-2 text-sm text-[var(--color-danger)]">{error}</p>}
       {okMsg && <p className="mb-2 text-sm text-[var(--color-success)]">{okMsg}</p>}
-
-      {destinationRows.length > 0 && (
-        <section className="mb-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <h2 className="text-sm font-semibold">Vencimento por concessionária</h2>
-          <DestinationExpiryList items={destinationRows} />
-        </section>
-      )}
 
       {pendingReport.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-red-500/25 bg-red-500/5 px-3 py-2">

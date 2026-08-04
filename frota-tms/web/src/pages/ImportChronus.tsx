@@ -4,9 +4,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileSpreadsheet, Upload } from 'lucide-react'
 import { api } from '../lib/api'
 import { PageHeader, Button, Spinner, Badge } from '../components/ui'
-import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
-import { isExpiryCityExcluded } from '../lib/chronus-rules'
+import {
+  RouteDestinationExpiryList,
+  RouteExpiryBadge,
+  routeDestinationCities,
+} from '../components/RouteDestinationExpiry'
 
 interface ChronusDestination {
   dealerCode: string
@@ -222,8 +225,8 @@ export function ImportChronus() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {route.duplicateRouteId && <Badge tone="warning">Já existe</Badge>}
-                      {route.hasPriority && route.priorityExpiryDate && (
-                        <Badge tone="danger">Venc. {formatDate(route.priorityExpiryDate)}</Badge>
+                      {route.hasPriority && (
+                        <RouteExpiryBadge expiryDate={route.priorityExpiryDate} />
                       )}
                       {!route.duplicateRouteId && route.unmatchedDealerCodes.length > 0 && (
                         <Badge tone="danger">Sem cadastro</Badge>
@@ -231,30 +234,19 @@ export function ImportChronus() {
                     </div>
                   </div>
                   <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                    {route.destinations.map((d) => d.city).join(' · ')}
+                    {routeDestinationCities(
+                      route.destinations.map((d) => ({ city: d.city })),
+                    ).join(' · ')}
                   </p>
-                  <ul className="mt-2 space-y-1 text-sm">
-                    {route.destinations.map((d) => (
-                      <li
-                        key={`${d.dealerCode}-${d.city}`}
-                        className="flex flex-wrap items-center justify-between gap-2 text-[var(--color-text-muted)]"
-                      >
-                        <span>
-                          {d.city}
-                          {d.dealerName ? ` · ${d.dealerName}` : ''} ({d.motoCount} motos)
-                        </span>
-                        {d.expiryExcluded || isExpiryCityExcluded(d.city) ? (
-                          <span className="text-xs text-[var(--color-text-muted)]">
-                            Venc. desconsiderado
-                          </span>
-                        ) : d.minExpiryDate ? (
-                          <span className="font-medium text-[var(--color-text)]">
-                            Venc. {formatDate(d.minExpiryDate)}
-                          </span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
+                  <RouteDestinationExpiryList
+                    showHeader={false}
+                    items={route.destinations.map((d) => ({
+                      city: d.city,
+                      name: d.dealerName,
+                      minExpiryDate: d.minExpiryDate,
+                      motoCount: d.motoCount,
+                    }))}
+                  />
                 </div>
               )
             })}
