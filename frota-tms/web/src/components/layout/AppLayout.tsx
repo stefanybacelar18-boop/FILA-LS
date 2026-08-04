@@ -160,8 +160,8 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen min-w-[1100px]">
-      <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)]">
+    <div className="flex h-screen min-w-[1100px] overflow-hidden">
+      <aside className="flex h-full w-60 shrink-0 flex-col bg-[var(--color-bg-sidebar)] text-[var(--color-text-sidebar)]">
         <div className="flex h-14 items-center px-5">
           <Link to={homePath} className="font-display text-lg font-semibold tracking-tight text-white">
             Frota<span className="text-teal-400">TMS</span>
@@ -185,8 +185,8 @@ export function AppLayout() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="z-20 flex h-14 shrink-0 items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-6">
           <form onSubmit={onSearch} className="relative w-80 max-w-full">
             <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
             <input
@@ -253,7 +253,7 @@ export function AppLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-6 xl:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto p-6 xl:p-8">
           <Outlet />
         </main>
       </div>
