@@ -105,6 +105,7 @@ model Route {
   priorityExpiryDate DateTime?
   // Meta de placas que o admin espera neste carregamento (cobertura operacional)
   plannedVehicleCount Int?
+  totalMotoCount Int? // total de motos da carga (import Chronus)
   // Handoff papel → operação (terceira)
   readyForOperation Boolean  @default(false)
   sentToOperationAt DateTime?

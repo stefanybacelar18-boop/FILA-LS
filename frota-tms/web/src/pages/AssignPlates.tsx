@@ -404,6 +404,7 @@ export function AssignPlates() {
                 destinations={routeDestinationItems(r)}
                 priorityExpiryDate={r.priorityExpiryDate}
                 notes={r.notes}
+                totalMotoCount={r.totalMotoCount}
                 onClick={() => pickRoute(r.id)}
               />
             ))}
@@ -448,6 +449,7 @@ export function AssignPlates() {
           destinations={destinationRows}
           priorityExpiryDate={expiry}
           notes={selectedRoute?.notes}
+          totalMotoCount={selectedRoute?.totalMotoCount}
         />
         {board?.returnForecast && (
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">

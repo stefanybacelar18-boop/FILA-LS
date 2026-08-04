@@ -14,7 +14,9 @@ import { isFirstRouteSentToday } from '../services/notify';
 import {
   buildChronusPreview,
   parseChronusFile,
-  isExpiryCityExcluded,
+  chronusDestinationsByDealershipId,
+  chronusDealershipLoadRow,
+  chronusRouteLoadData,
   type ChronusImportPreview,
 } from '../lib/chronus-import';
 
@@ -996,7 +998,7 @@ export function createPlanningRouter(io: Server) {
             where: {
               status: { notIn: [RouteStatus.CANCELADO, RouteStatus.CONCLUIDO] },
             },
-            select: { id: true, name: true, date: true },
+            select: { id: true, name: true, date: true, status: true },
           }),
         });
         const preview: ChronusImportPreview = {
@@ -1042,14 +1044,23 @@ export function createPlanningRouter(io: Server) {
     const toCreate = preview.routes.filter(
       (r) => !r.duplicateRouteId && r.destinations.some((d) => d.matched),
     );
-    const skippedDuplicates = preview.routes.filter((r) => r.duplicateRouteId);
+    const toRefresh = preview.routes.filter(
+      (r) =>
+        r.canRefreshLoad &&
+        !!r.duplicateRouteId &&
+        r.unmatchedDealerCodes.length === 0 &&
+        r.destinations.some((d) => d.matched),
+    );
+    const skippedDuplicates = preview.routes.filter(
+      (r) => r.duplicateRouteId && !r.canRefreshLoad,
+    );
     const skippedInvalid = preview.routes.filter(
       (r) => !r.duplicateRouteId && !r.destinations.some((d) => d.matched),
     );
 
-    if (toCreate.length === 0) {
+    if (toCreate.length === 0 && toRefresh.length === 0) {
       return res.status(400).json({
-        error: 'Nenhum roteiro novo para criar.',
+        error: 'Nenhum roteiro novo ou atualizável.',
         skippedDuplicates: skippedDuplicates.length,
         skippedInvalid: skippedInvalid.length,
       });
@@ -1068,8 +1079,36 @@ export function createPlanningRouter(io: Server) {
 
     const firstOfDay = await isFirstRouteSentToday();
 
-    const createdRoutes = await prisma.$transaction(async (tx) => {
+    const { createdRoutes, refreshedRoutes } = await prisma.$transaction(async (tx) => {
       const routes = [];
+      const refreshed = [];
+
+      for (const item of toRefresh) {
+        const routeId = item.duplicateRouteId!;
+
+        for (const dest of item.destinations) {
+          if (!dest.dealershipId) continue;
+          await tx.routeDealership.updateMany({
+            where: { routeId, dealershipId: dest.dealershipId },
+            data: {
+              motoCount: dest.motoCount,
+              minExpiryDate: chronusDealershipLoadRow(
+                dest.dealershipId,
+                0,
+                dest,
+              ).minExpiryDate,
+            },
+          });
+        }
+
+        const route = await tx.route.update({
+          where: { id: routeId },
+          data: chronusRouteLoadData(item),
+          include: routeInclude,
+        });
+        refreshed.push(route);
+      }
+
       for (const item of toCreate) {
         const dealerIds = item.destinations
           .map((d) => d.dealershipId)
@@ -1078,13 +1117,7 @@ export function createPlanningRouter(io: Server) {
         const dealers = await tx.dealership.findMany({ where: { id: { in: uniqueIds } } });
         const ordered = uniqueIds.map((id) => dealers.find((d) => d.id === id)!);
         const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
-        const notes = item.plateHint ? `Placa Chronus: ${item.plateHint}` : null;
-
-        const destByDealerId = new Map(
-          item.destinations
-            .filter((d) => d.dealershipId)
-            .map((d) => [d.dealershipId!, d]),
-        );
+        const destByDealerId = chronusDestinationsByDealershipId(item.destinations);
 
         const route = await tx.route.create({
           data: {
@@ -1092,12 +1125,7 @@ export function createPlanningRouter(io: Server) {
             date: new Date(`${item.date}T12:00:00.000Z`),
             dealershipId: ordered[0]?.id,
             region,
-            notes,
-            hasPriority: item.hasPriority,
-            priorityExpiryDate:
-              item.hasPriority && item.priorityExpiryDate
-                ? new Date(`${item.priorityExpiryDate}T12:00:00.000Z`)
-                : null,
+            ...chronusRouteLoadData(item),
             plannedVehicleCount: 1,
             status: RouteStatus.AGUARDANDO_PLACAS,
             readyForOperation: true,
@@ -1105,19 +1133,9 @@ export function createPlanningRouter(io: Server) {
             sentToOperationById: req.user!.id,
             createdById: req.user!.id,
             dealerships: {
-              create: ordered.map((d, order) => {
-                const dest = destByDealerId.get(d.id);
-                const excluded = isExpiryCityExcluded(d.city);
-                return {
-                  dealershipId: d.id,
-                  order,
-                  motoCount: dest?.motoCount ?? null,
-                  minExpiryDate:
-                    !excluded && dest?.minExpiryDate != null
-                      ? new Date(`${dest.minExpiryDate}T12:00:00.000Z`)
-                      : null,
-                };
-              }),
+              create: ordered.map((d, order) =>
+                chronusDealershipLoadRow(d.id, order, destByDealerId.get(d.id)),
+              ),
             },
           },
           include: routeInclude,
@@ -1130,13 +1148,13 @@ export function createPlanningRouter(io: Server) {
         data: { status: 'COMMITTED' },
       });
 
-      return routes;
+      return { createdRoutes: routes, refreshedRoutes: refreshed };
     });
 
     await audit('CHRONUS_IMPORT', 'ImportBatch', {
       userId: req.user!.id,
       entityId: batch.id,
-      details: `${createdRoutes.length} roteiros · ${batch.filename || 'chronus'}`,
+      details: `${createdRoutes.length} criados · ${refreshedRoutes.length} atualizados · ${batch.filename || 'chronus'}`,
     });
 
     if (firstOfDay && createdRoutes[0]) {
@@ -1149,11 +1167,16 @@ export function createPlanningRouter(io: Server) {
     }
 
     io.emit('planning:changed', { action: 'chronus-import', batchId: batch.id });
-    io.emit('routes:changed', { action: 'chronus-import', count: createdRoutes.length });
+    io.emit('routes:changed', {
+      action: 'chronus-import',
+      count: createdRoutes.length + refreshedRoutes.length,
+    });
 
     res.json({
       created: createdRoutes.length,
+      refreshed: refreshedRoutes.length,
       routes: createdRoutes,
+      refreshedRoutes,
       skippedDuplicates: skippedDuplicates.map((r) => ({
         manifesto: r.manifesto,
         name: r.name,
