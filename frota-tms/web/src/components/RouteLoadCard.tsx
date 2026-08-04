@@ -13,6 +13,9 @@ import {
   urgencyLabel,
   type RouteLoadDestination,
 } from '../lib/route-priority'
+import {
+  routeFleetRequirement,
+} from '../lib/chronus-plate-hint'
 
 export type { RouteLoadDestination }
 
@@ -121,6 +124,8 @@ export function RouteLoadCard({
   priorityExpiryDate,
   notes,
   totalMotoCount,
+  requiredFleetOwner,
+  requiredCapacityMotos,
   onClick,
   className,
 }: {
@@ -130,12 +135,18 @@ export function RouteLoadCard({
   priorityExpiryDate?: string | null
   notes?: string | null
   totalMotoCount?: number | null
+  requiredFleetOwner?: 'LSL' | 'AG' | null
+  requiredCapacityMotos?: number | null
   onClick?: () => void
   className?: string
 }) {
   const urgency = routeLoadUrgency(priorityExpiryDate, destinations)
   const motos = totalMotoCount ?? totalMotoCountFromDestinations(destinations)
-  const plateHint = chronusPlateFromNotes(notes)
+  const fleetReq = routeFleetRequirement({
+    requiredFleetOwner,
+    requiredCapacityMotos,
+    notes,
+  })
   const Wrapper = onClick ? 'button' : 'div'
 
   return (
@@ -155,6 +166,11 @@ export function RouteLoadCard({
             <h3 className="text-base font-semibold text-[var(--color-text)]">{name}</h3>
             {(urgency === 'expired' || urgency === 'urgent') && (
               <Badge tone={urgencyBadgeTone(urgency)}>{urgencyLabel(urgency)}</Badge>
+            )}
+            {fleetReq.label && (
+              <Badge tone={fleetReq.fleetOwner === 'LSL' ? 'primary' : 'info'}>
+                {fleetReq.label}
+              </Badge>
             )}
             {priorityExpiryDate && (
               <Badge tone={urgencyBadgeTone(expiryUrgency(priorityExpiryDate))}>
@@ -179,10 +195,20 @@ export function RouteLoadCard({
             <span>
               Saída <strong className="font-semibold text-[var(--color-text)]">{formatDate(loadDate)} 06:00</strong>
             </span>
-            {plateHint && (
+            {fleetReq.label && (
               <span className="inline-flex items-center gap-1.5">
                 <Truck className="h-3.5 w-3.5 shrink-0" />
-                Placa Chronus: <strong className="font-semibold text-[var(--color-text)]">{plateHint}</strong>
+                Veículo:{' '}
+                <strong className="font-semibold text-[var(--color-text)]">{fleetReq.label}</strong>
+              </span>
+            )}
+            {!fleetReq.fleetOwner && !fleetReq.capacityMotos && chronusPlateFromNotes(notes) && (
+              <span className="inline-flex items-center gap-1.5">
+                <Truck className="h-3.5 w-3.5 shrink-0" />
+                Placa Chronus:{' '}
+                <strong className="font-semibold text-[var(--color-text)]">
+                  {chronusPlateFromNotes(notes)}
+                </strong>
               </span>
             )}
           </div>

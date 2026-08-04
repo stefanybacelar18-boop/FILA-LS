@@ -14,6 +14,10 @@ import {
   isPlateHiddenFromOperator,
   plateOwner,
 } from '../data/operatorVisibility';
+import {
+  routeFleetRequirement,
+  vehicleMatchesRouteLoad,
+} from '../lib/chronus-plate-hint';
 import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 
@@ -250,9 +254,13 @@ export function createRoutesRouter(io: Server) {
           ? [route.dealership]
           : [];
 
+    const loadRequirement = routeFleetRequirement(route);
     let returnForecast = null;
     if (linked.length > 0) {
-      const farthest = farthestDealershipFromPad(linked);
+      const farthest = farthestDealershipFromPad(
+        linked,
+        loadRequirement.fleetOwner ?? undefined,
+      );
       const expectedReturn = expectedReturnDate(loadAt, farthest.padAvgTravelDays);
       returnForecast = {
         basis: 'PAD_DISTANCE' as const,
@@ -308,6 +316,7 @@ export function createRoutesRouter(io: Server) {
         color: vehicleColor(v.status, open?.expectedReturn),
         expectedReturn: open?.expectedReturn ?? null,
         activeTripId: open?.id ?? null,
+        matchesLoadRequirement: vehicleMatchesRouteLoad(v, route),
         report: report
           ? {
               id: report.id,
@@ -320,7 +329,9 @@ export function createRoutesRouter(io: Server) {
       };
 
       if (isFree) {
-        available.push(enriched);
+        if (enriched.matchesLoadRequirement) {
+          available.push(enriched);
+        }
       } else {
         let statusLabel = v.status;
         if (open) {
@@ -355,6 +366,9 @@ export function createRoutesRouter(io: Server) {
       hasPriority: route.hasPriority,
       priorityExpiryDate: route.priorityExpiryDate,
       priorityNotes: route.priorityNotes,
+      requiredFleetOwner: route.requiredFleetOwner,
+      requiredCapacityMotos: route.requiredCapacityMotos,
+      loadRequirement,
       destinations: route.dealerships.map((rd) => ({
         id: rd.dealership.id,
         name: rd.dealership.name,
@@ -853,6 +867,15 @@ export function createRoutesRouter(io: Server) {
             throw Object.assign(new Error('Placa não disponível para o perfil Operação'), {
               status: 403,
             });
+          }
+          if (!vehicleMatchesRouteLoad(vehicle, route)) {
+            const req = routeFleetRequirement(route);
+            throw Object.assign(
+              new Error(
+                `Placa ${vehicle.plate} não atende a carga (${req.label ?? 'requisito Chronus'})`,
+              ),
+              { status: 400 },
+            );
           }
 
           const owner = plateOwner(vehicle.plate);

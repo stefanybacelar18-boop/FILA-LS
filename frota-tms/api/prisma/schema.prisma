@@ -106,6 +106,8 @@ model Route {
   // Meta de placas que o admin espera neste carregamento (cobertura operacional)
   plannedVehicleCount Int?
   totalMotoCount Int? // total de motos da carga (import Chronus)
+  requiredFleetOwner String? // LSL | AG (placa fictícia Chronus)
+  requiredCapacityMotos Int? // capacidade mínima do veículo (40, 50, 70…)
   // Handoff papel → operação (terceira)
   readyForOperation Boolean  @default(false)
   sentToOperationAt DateTime?

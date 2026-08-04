@@ -24,6 +24,9 @@ interface ChronusRoutePreview {
   date: string
   motoCount: number
   plateHint: string | null
+  requiredFleetOwner?: 'LSL' | 'AG' | null
+  requiredCapacityMotos?: number | null
+  plateHintIsFictional?: boolean
   hasPriority: boolean
   priorityExpiryDate: string | null
   destinations: ChronusDestination[]
@@ -240,6 +243,8 @@ export function ImportChronus() {
                     loadDate={route.date}
                     priorityExpiryDate={route.priorityExpiryDate}
                     notes={route.plateHint ? `Placa Chronus: ${route.plateHint}` : null}
+                    requiredFleetOwner={route.requiredFleetOwner}
+                    requiredCapacityMotos={route.requiredCapacityMotos}
                     destinations={route.destinations.map((d) => ({
                       city: d.city,
                       dealershipName: d.dealerName,

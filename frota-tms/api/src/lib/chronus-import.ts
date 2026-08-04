@@ -1,5 +1,10 @@
 import * as XLSX from 'xlsx';
 import { addDays, format, startOfDay } from 'date-fns';
+import {
+  chronusPlateNotes,
+  resolveManifestPlateHint,
+  type ChronusPlateHint,
+} from './chronus-plate-hint';
 
 export type ChronusRow = {
   manifesto: string;
@@ -16,6 +21,9 @@ export type ChronusManifestPreview = {
   date: string;
   motoCount: number;
   plateHint: string | null;
+  requiredFleetOwner: 'LSL' | 'AG' | null;
+  requiredCapacityMotos: number | null;
+  plateHintIsFictional: boolean;
   hasPriority: boolean;
   priorityExpiryDate: string | null;
   destinations: {
@@ -334,13 +342,17 @@ export async function buildChronusPreview(
       : null;
 
     const plates = [...new Set(items.map((i) => i.plate).filter(Boolean))];
+    const plateResolved = resolveManifestPlateHint(plates);
 
     routes.push({
       manifesto,
       name,
       date: routeDateIso,
       motoCount: items.length,
-      plateHint: plates.length === 1 ? plates[0]! : plates.length > 1 ? plates.join(', ') : null,
+      plateHint: plateResolved?.raw ?? (plates.length === 1 ? plates[0]! : plates.length > 1 ? plates.join(', ') : null),
+      requiredFleetOwner: plateResolved?.fleetOwner ?? null,
+      requiredCapacityMotos: plateResolved?.capacityMotos ?? null,
+      plateHintIsFictional: plateResolved?.isFictional ?? false,
       hasPriority,
       priorityExpiryDate,
       destinations,
@@ -389,6 +401,15 @@ export function chronusDealershipLoadRow(
 }
 
 export function chronusRouteLoadData(item: ChronusManifestPreview) {
+  const plateHint: ChronusPlateHint | null = item.plateHint
+    ? {
+        raw: item.plateHint,
+        isFictional: item.plateHintIsFictional,
+        fleetOwner: item.requiredFleetOwner,
+        capacityMotos: item.requiredCapacityMotos,
+      }
+    : null;
+
   return {
     totalMotoCount: item.motoCount,
     hasPriority: item.hasPriority,
@@ -396,6 +417,8 @@ export function chronusRouteLoadData(item: ChronusManifestPreview) {
       item.hasPriority && item.priorityExpiryDate
         ? new Date(`${item.priorityExpiryDate}T12:00:00.000Z`)
         : null,
-    notes: item.plateHint ? `Placa Chronus: ${item.plateHint}` : null,
+    notes: chronusPlateNotes(plateHint),
+    requiredFleetOwner: item.requiredFleetOwner,
+    requiredCapacityMotos: item.requiredCapacityMotos,
   };
 }
