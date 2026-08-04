@@ -361,6 +361,7 @@ export function createRoutesRouter(io: Server) {
         city: rd.dealership.city,
         order: rd.order,
         minExpiryDate: rd.minExpiryDate,
+        motoCount: rd.motoCount,
       })),
       route: {
         id: route.id,

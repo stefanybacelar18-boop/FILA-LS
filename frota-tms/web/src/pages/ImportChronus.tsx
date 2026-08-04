@@ -5,11 +5,7 @@ import { ArrowLeft, FileSpreadsheet, Upload } from 'lucide-react'
 import { api } from '../lib/api'
 import { PageHeader, Button, Spinner, Badge } from '../components/ui'
 import { cn } from '../lib/cn'
-import {
-  RouteDestinationExpiryList,
-  RouteExpiryBadge,
-  routeDestinationCities,
-} from '../components/RouteDestinationExpiry'
+import { RouteLoadCard } from '../components/RouteLoadCard'
 
 interface ChronusDestination {
   dealerCode: string
@@ -201,48 +197,27 @@ export function ImportChronus() {
             </p>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {preview.routes.map((route) => {
               const blocked = !!route.duplicateRouteId || route.unmatchedDealerCodes.length > 0
               return (
-                <div
-                  key={route.manifesto}
-                  className={cn(
-                    'rounded-xl border p-4',
-                    blocked
-                      ? 'border-[var(--color-border)] opacity-70'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface)]',
-                  )}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{route.name}</p>
-                      <p className="text-sm text-[var(--color-text-muted)]">
-                        Manifesto {route.manifesto} · {route.motoCount} motos ·{' '}
-                        {route.destinations.length} destinos
-                        {route.plateHint ? ` · placa Chronus: ${route.plateHint}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                <div key={route.manifesto} className={cn(blocked && 'opacity-70')}>
+                  {(route.duplicateRouteId || route.unmatchedDealerCodes.length > 0) && (
+                    <div className="mb-2 flex flex-wrap gap-2">
                       {route.duplicateRouteId && <Badge tone="warning">Já existe</Badge>}
-                      {route.hasPriority && (
-                        <RouteExpiryBadge expiryDate={route.priorityExpiryDate} />
-                      )}
                       {!route.duplicateRouteId && route.unmatchedDealerCodes.length > 0 && (
                         <Badge tone="danger">Sem cadastro</Badge>
                       )}
                     </div>
-                  </div>
-                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                    {routeDestinationCities(
-                      route.destinations.map((d) => ({ city: d.city })),
-                    ).join(' · ')}
-                  </p>
-                  <RouteDestinationExpiryList
-                    showHeader={false}
-                    items={route.destinations.map((d) => ({
+                  )}
+                  <RouteLoadCard
+                    name={route.name}
+                    loadDate={route.date}
+                    priorityExpiryDate={route.priorityExpiryDate}
+                    notes={route.plateHint ? `Placa Chronus: ${route.plateHint}` : null}
+                    destinations={route.destinations.map((d) => ({
                       city: d.city,
-                      name: d.dealerName,
+                      dealershipName: d.dealerName,
                       minExpiryDate: d.minExpiryDate,
                       motoCount: d.motoCount,
                     }))}
