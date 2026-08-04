@@ -28,6 +28,7 @@ import { AlertsCenter } from './pages/AlertsCenter'
 import { Maintenance } from './pages/Maintenance'
 import { Justifications } from './pages/Justifications'
 import { MyRoute } from './pages/MyRoute'
+import { ImportChronus } from './pages/ImportChronus'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,6 +101,14 @@ export default function App() {
               <Route path="concessionarias" element={<Dealerships />} />
               <Route path="motoristas" element={<Drivers />} />
               <Route path="roteiros" element={<RoutesPage />} />
+              <Route
+                path="roteiros/importar-chronus"
+                element={
+                  <RoleGate roles={['ADMIN']}>
+                    <ImportChronus />
+                  </RoleGate>
+                }
+              />
               <Route
                 path="roteiros/novo"
                 element={

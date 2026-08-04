@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight } from 'lucide-react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, Route, Vehicle } from '../types'
 import {
@@ -104,6 +104,7 @@ type Tab = 'pendentes' | 'prioridades' | 'todos'
 
 export function Routes() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const isOps = useAuthStore((s) => s.hasRole('OPERACAO'))
@@ -123,12 +124,21 @@ export function Routes() {
   const [reassignVehicleId, setReassignVehicleId] = useState('')
   const [reassignDriverId, setReassignDriverId] = useState('')
   const [error, setError] = useState('')
+  const location = useLocation()
   const [okMsg, setOkMsg] = useState('')
 
   useEffect(() => {
     const t = searchParams.get('tab')
     if (t === 'prioridades' || t === 'todos' || t === 'pendentes') setTab(t)
   }, [searchParams])
+
+  useEffect(() => {
+    const msg = (location.state as { importOk?: string } | null)?.importOk
+    if (msg) {
+      setOkMsg(msg)
+      navigate(location.pathname + location.search, { replace: true, state: {} })
+    }
+  }, [location, navigate])
 
   function selectTab(next: Tab) {
     setTab(next)
@@ -387,12 +397,20 @@ export function Routes() {
         }
         actions={
           isAdmin ? (
-            <Link to="/roteiros/novo">
-              <Button>
-                <Plus className="h-4 w-4" />
-                Novo roteiro
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/roteiros/importar-chronus">
+                <Button variant="secondary">
+                  <Upload className="h-4 w-4" />
+                  Importar Chronus
+                </Button>
+              </Link>
+              <Link to="/roteiros/novo">
+                <Button>
+                  <Plus className="h-4 w-4" />
+                  Novo roteiro
+                </Button>
+              </Link>
+            </div>
           ) : undefined
         }
       />
