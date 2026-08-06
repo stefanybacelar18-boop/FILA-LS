@@ -118,6 +118,21 @@ export function routeFleetRequirement(route: {
   return { fleetOwner: null, capacityMotos: null, label: hint?.raw ?? null };
 }
 
+/** Roteiro destinado à frota LSL (só Admin define placa na Operação AG). */
+export function isRouteForLslFleet(route: {
+  requiredFleetOwner?: string | null;
+  requiredCapacityMotos?: number | null;
+  notes?: string | null;
+  name?: string;
+}): boolean {
+  if (route.requiredFleetOwner === 'AG') return false;
+  if (route.requiredFleetOwner === 'LSL') return true;
+  const req = routeFleetRequirement(route);
+  if (req.fleetOwner === 'LSL') return true;
+  if (req.fleetOwner === 'AG') return false;
+  return !!(route.name && /\bLSL\b/i.test(route.name));
+}
+
 export function formatFleetRequirementLabel(
   fleetOwner: PlateOwner | null,
   capacityMotos: number | null,

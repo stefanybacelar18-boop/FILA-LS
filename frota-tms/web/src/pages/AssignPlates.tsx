@@ -21,7 +21,7 @@ import { delayReasonPresets, vehicleStatusLabels } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { compareRoutesByLoadPriority } from '../lib/route-priority'
-import { routeFleetRequirement } from '../lib/chronus-plate-hint'
+import { isRouteForLslFleet } from '../lib/chronus-plate-hint'
 import { RouteLoadCard } from '../components/RouteLoadCard'
 import type { RouteLoadDestination } from '../lib/route-priority'
 import { useAuthStore } from '../stores/auth'
@@ -178,10 +178,7 @@ export function AssignPlates() {
           if (r.status !== 'AGUARDANDO_PLACAS' || (r.vehicles && r.vehicles.length > 0)) {
             return false
           }
-          if (isOps && !isAdmin) {
-            const req = routeFleetRequirement(r)
-            if (req.fleetOwner === 'LSL') return false
-          }
+          if (isOps && !isAdmin && isRouteForLslFleet(r)) return false
           return true
         })
         .sort(compareRoutesByLoadPriority),
@@ -240,7 +237,7 @@ export function AssignPlates() {
       setSearchParams({})
       return
     }
-    if (isOps && !isAdmin && routeFleetRequirement(selectedRoute).fleetOwner === 'LSL') {
+    if (isOps && !isAdmin && isRouteForLslFleet(selectedRoute)) {
       setError('Roteiro LSL — apenas Admin define placa.')
       setRouteId('')
       setSearchParams({})

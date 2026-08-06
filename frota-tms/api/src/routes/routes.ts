@@ -17,6 +17,7 @@ import {
 import {
   routeFleetRequirement,
   vehicleMatchesRouteLoad,
+  isRouteForLslFleet,
 } from '../lib/chronus-plate-hint';
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 import { isFirstRouteSentToday } from '../services/notify';
@@ -250,6 +251,10 @@ export function createRoutesRouter(io: Server) {
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
+    if (req.user?.role === Role.OPERACAO && isRouteForLslFleet(route)) {
+      return res.status(403).json({ error: 'Roteiro LSL — apenas Admin define placa.' });
+    }
+
     const loadAt = routeDepartureAt(route.date);
 
     const linked: DealershipRow[] =
@@ -423,6 +428,10 @@ export function createRoutesRouter(io: Server) {
       const routeId = paramId(req);
       const route = await prisma.route.findUnique({ where: { id: routeId } });
       if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+
+      if (req.user?.role === Role.OPERACAO && isRouteForLslFleet(route)) {
+        return res.status(403).json({ error: 'Roteiro LSL — apenas Admin define placa.' });
+      }
 
       const vehicle = await prisma.vehicle.findUnique({ where: { id: parsed.data.vehicleId } });
       if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -841,6 +850,9 @@ export function createRoutesRouter(io: Server) {
       },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+    if (isOps && isRouteForLslFleet(route)) {
+      return res.status(403).json({ error: 'Roteiro LSL — apenas Admin define placa.' });
+    }
     if (route.status !== RouteStatus.AGUARDANDO_PLACAS) {
       return res.status(400).json({
         error: 'Só rotas enviadas pelo Admin (aguardando placas) podem receber veículo',
