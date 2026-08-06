@@ -246,54 +246,25 @@ export interface AuditLog {
 }
 
 export interface DashboardData {
-  fleet: {
-    total: number
-    trucksAvailable: number
-    carretasAvailable: number
-    availableForRoutes?: number
-    availableCapacityMotos?: number
+  period: {
+    tripsChartDays: number
+    rankingDays: number
+  }
+  summary: {
+    placasDisponiveis: number
     emViagem: number
-    emManutencao: number
-    bloqueados?: number
-    retornamHoje: number
-    retornamAmanha: number
-    atrasadas: number
-    atrasadasSemJustificativa?: number
-    deveriamEstarDisponiveis?: number
+    aguardandoPlaca: number
+    vencimentoUrgente: number
+    viagensAtrasadas: number
   }
-  ops?: {
-    awaitingPlates: number
-    priorityRoutes: number
-    urgentRoutes?: number
-    justificativasPendentes: number
-    atrasadasSemJustificativa: number
-  }
-  chronus?: {
-    importsToday: number
-    activeRoutes: number
-    motosInOpenRoutes: number
-    routesWithLoad: number
-  }
-  routesByStatus?: { status: string; count: number }[]
-  hojeCarregamento?: {
-    id: string
-    name: string
-    date: string
-    hasPriority: boolean
-    status: string
-    cities: string
-    motoCount?: number | null
-    assignedPlates: number
-    plannedPlates: number | null
-    coverage: number | null
-    justifications: number
-  }[]
-  topDealership: { dealershipId: string; name: string; city: string; trips: number } | null
-  avgTravelDays: number
   tripsPerDay: { date: string; count: number }[]
-  tripsPerDealership: { dealershipId: string; name: string; city: string; trips: number }[]
-  ranking: { dealershipId: string; name: string; city: string; trips: number }[]
-  priorityRoutes?: number
+  dealershipRanking: { dealershipId: string; name: string; city: string; trips: number }[]
+  plateRanking: {
+    vehicleId: string
+    plate: string
+    type: string | null
+    trips: number
+  }[]
 }
 
 export interface ProductsPanel {
