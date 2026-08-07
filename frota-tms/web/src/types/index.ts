@@ -271,10 +271,9 @@ export interface DashboardData {
     trips: number
   }[]
   pernoiteRanking: {
-    vehicleId: string
-    plate: string
-    type: string | null
-    driverName: string | null
+    driverKey: string
+    driverName: string
+    plates: string[]
     pernoites: number
     trips: number
   }[]
@@ -294,13 +293,12 @@ export interface PernoitesData {
   summary: {
     totalPernoites: number
     totalTrips: number
-    platesWithPernoites: number
+    driversWithPernoites: number
   }
   ranking: {
-    vehicleId: string
-    plate: string
-    type: string | null
-    driverName: string | null
+    driverKey: string
+    driverName: string
+    plates: string[]
     pernoites: number
     trips: number
   }[]

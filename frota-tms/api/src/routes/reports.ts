@@ -112,14 +112,35 @@ router.get('/excel/:type', async (req, res) => {
     ];
     items.forEach((d) => ws.addRow(d));
   } else if (type === 'pernoites-lsl') {
+    wb.removeWorksheet(ws.id);
     const offset = Number(req.query.offset ?? 0);
     const safeOffset = Number.isFinite(offset) ? Math.trunc(offset) : 0;
     const period = payrollPeriodOffset(new Date(), safeOffset);
     const data = await fetchLslPernoitesForPeriod(period);
 
-    ws.columns = [
-      { header: 'Placa', key: 'plate', width: 12 },
+    const wsRanking = wb.addWorksheet('Ranking motoristas');
+    wsRanking.columns = [
+      { header: 'Motorista', key: 'driver', width: 28 },
+      { header: 'Pernoites', key: 'nights', width: 12 },
+      { header: 'Viagens', key: 'trips', width: 10 },
+      { header: 'Placas no período', key: 'plates', width: 36 },
+    ];
+    data.ranking.forEach((r) =>
+      wsRanking.addRow({
+        driver: r.driverName,
+        nights: r.pernoites,
+        trips: r.trips,
+        plates: r.plates.join(', '),
+      }),
+    );
+    wsRanking.addRow([]);
+    wsRanking.addRow({ driver: `Período: ${period.label}` });
+    wsRanking.addRow({ driver: `Total de pernoites: ${data.totalPernoites}` });
+
+    const wsTrips = wb.addWorksheet('Viagens');
+    wsTrips.columns = [
       { header: 'Motorista', key: 'driver', width: 22 },
+      { header: 'Placa', key: 'plate', width: 12 },
       { header: 'Saída', key: 'departure', width: 12 },
       { header: 'Previsão retorno', key: 'expected', width: 14 },
       { header: 'Retorno real', key: 'returned', width: 14 },
@@ -130,9 +151,9 @@ router.get('/excel/:type', async (req, res) => {
       { header: 'Situação', key: 'status', width: 14 },
     ];
     data.trips.forEach((t) =>
-      ws.addRow({
-        plate: t.plate,
+      wsTrips.addRow({
         driver: t.driverName ?? '—',
+        plate: t.plate,
         departure: format(t.departureAt, 'dd/MM/yyyy'),
         expected: format(t.expectedReturn, 'dd/MM/yyyy'),
         returned: t.returnedAt ? format(t.returnedAt, 'dd/MM/yyyy') : '—',
@@ -144,9 +165,9 @@ router.get('/excel/:type', async (req, res) => {
       }),
     );
 
-    const summary = ws.addRow([]);
+    const summary = wsTrips.addRow([]);
     summary.getCell(1).value = `Período: ${period.label}`;
-    const totalRow = ws.addRow([]);
+    const totalRow = wsTrips.addRow([]);
     totalRow.getCell(1).value = `Total de pernoites: ${data.totalPernoites}`;
   } else if (type === 'historico-placa' && vehicleId) {
     const trips = await prisma.trip.findMany({

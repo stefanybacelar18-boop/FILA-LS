@@ -19,14 +19,14 @@ import { cn } from '../lib/cn'
 
 function RankingRow({
   rank,
-  plate,
   driverName,
+  plates,
   pernoites,
   trips,
 }: {
   rank: number
-  plate: string
-  driverName: string | null
+  driverName: string
+  plates: string[]
   pernoites: number
   trips: number
 }) {
@@ -43,9 +43,11 @@ function RankingRow({
         {rank}
       </span>
       <div className="min-w-0 flex-1">
-        <PlateBadge plate={plate} color="blue" />
-        {driverName && (
-          <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">{driverName}</p>
+        <p className="truncate text-sm font-medium text-[var(--color-text)]">{driverName}</p>
+        {plates.length > 0 && (
+          <p className="mt-0.5 truncate text-xs text-[var(--color-text-muted)]">
+            {plates.length === 1 ? `Placa ${plates[0]}` : `Placas: ${plates.join(', ')}`}
+          </p>
         )}
       </div>
       <div className="text-right">
@@ -95,7 +97,7 @@ export function Pernoites() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Pernoites LSL"
-        description="Conferência de pernoites da frota LSL para pagamento ao RH"
+        description="Conferência de pernoites por motorista para pagamento ao RH"
         actions={
           <Button size="sm" variant="secondary" loading={exporting} onClick={() => void exportExcel()}>
             <FileSpreadsheet className="h-4 w-4" />
@@ -131,8 +133,8 @@ export function Pernoites() {
 
       <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">
         <strong>Pernoite</strong> = viagem em que o retorno é em dia diferente da saída (não conta
-        retorno no mesmo dia). Cada noite fora conta 1 pernoite — compare o total por placa com o
-        informado pelo motorista ao RH.
+        retorno no mesmo dia). O total é agrupado por <strong>motorista</strong>, somando todas as
+        viagens no período — mesmo que tenha trocado de veículo.
       </p>
 
       <div className="mb-6 grid grid-cols-3 gap-3">
@@ -145,25 +147,25 @@ export function Pernoites() {
           <p className="font-display text-2xl font-bold tabular-nums">{data.summary.totalTrips}</p>
         </div>
         <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5">
-          <p className="text-xs font-medium text-[var(--color-text-muted)]">Placas no período</p>
+          <p className="text-xs font-medium text-[var(--color-text-muted)]">Motoristas no período</p>
           <p className="font-display text-2xl font-bold tabular-nums">
-            {data.summary.platesWithPernoites}
+            {data.summary.driversWithPernoites}
           </p>
         </div>
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card title="Ranking por placa">
+        <Card title="Ranking por motorista">
           {data.ranking.length === 0 ? (
             <EmptyState title="Nenhuma pernoite" description="Não há viagens com pernoite neste período." />
           ) : (
             <div className="divide-y divide-[var(--color-border)]/80">
               {data.ranking.map((r, i) => (
                 <RankingRow
-                  key={r.vehicleId}
+                  key={r.driverKey}
                   rank={i + 1}
-                  plate={r.plate}
                   driverName={r.driverName}
+                  plates={r.plates}
                   pernoites={r.pernoites}
                   trips={r.trips}
                 />
@@ -175,8 +177,8 @@ export function Pernoites() {
         <Card title="Como conferir">
           <ol className="list-decimal space-y-2 pl-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
             <li>Peça ao motorista a quantidade de pernoites do período (16 a 15).</li>
-            <li>Localize a placa no ranking ao lado.</li>
-            <li>Compare o total — cada linha da tabela abaixo detalha saída, retorno e noites.</li>
+            <li>Localize o <strong>nome do motorista</strong> no ranking ao lado.</li>
+            <li>Compare o total — a tabela abaixo lista cada viagem, com a placa usada.</li>
             <li>
               <strong>Confirmado</strong> = retorno já registrado; <strong>Previsto</strong> = ainda
               em viagem ou retorno pendente.
@@ -201,8 +203,8 @@ export function Pernoites() {
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] text-xs text-[var(--color-text-muted)]">
-                  <th className="pb-2 pr-3 font-medium">Placa</th>
                   <th className="pb-2 pr-3 font-medium">Motorista</th>
+                  <th className="pb-2 pr-3 font-medium">Placa</th>
                   <th className="pb-2 pr-3 font-medium">Saída</th>
                   <th className="pb-2 pr-3 font-medium">Retorno</th>
                   <th className="pb-2 pr-3 font-medium">Destino</th>
@@ -213,11 +215,9 @@ export function Pernoites() {
               <tbody className="divide-y divide-[var(--color-border)]/60">
                 {data.trips.map((t) => (
                   <tr key={t.id} className="align-middle">
+                    <td className="py-2.5 pr-3 font-medium">{t.driverName ?? '—'}</td>
                     <td className="py-2.5 pr-3">
                       <PlateBadge plate={t.plate} color="blue" />
-                    </td>
-                    <td className="py-2.5 pr-3 text-[var(--color-text-muted)]">
-                      {t.driverName ?? '—'}
                     </td>
                     <td className="py-2.5 pr-3 tabular-nums">{formatDate(t.departureAt)}</td>
                     <td className="py-2.5 pr-3 tabular-nums">
@@ -227,7 +227,7 @@ export function Pernoites() {
                       )}
                     </td>
                     <td className="py-2.5 pr-3">
-                      <span className="block truncate max-w-[180px]">{t.dealershipName}</span>
+                      <span className="block max-w-[180px] truncate">{t.dealershipName}</span>
                       <span className="text-xs text-[var(--color-text-muted)]">{t.dealershipCity}</span>
                     </td>
                     <td className="py-2.5 pr-3 text-center font-semibold tabular-nums">{t.nights}</td>

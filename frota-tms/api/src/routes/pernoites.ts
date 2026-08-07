@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
     summary: {
       totalPernoites: data.totalPernoites,
       totalTrips: data.totalTrips,
-      platesWithPernoites: data.ranking.length,
+      driversWithPernoites: data.ranking.length,
     },
     ranking: data.ranking,
     trips: data.trips.map((t) => ({
