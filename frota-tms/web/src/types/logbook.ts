@@ -101,4 +101,15 @@ export type LogbookDetail = LogbookSession['logbook'] & {
   returnSignedAt: string | null
   coordinatorSignedAt: string | null
   formCode: string
+  checklistItems: ChecklistItemDef[]
+  checklistDeparture: ChecklistState
+  checklistReturn: ChecklistState
+  driverMatricula: string | null
+  helperName: string | null
+  helperMatricula: string | null
+  fuelDieselDeparture: string | null
+  fuelOilDeparture: string | null
+  fuelDieselReturn: string | null
+  fuelOilReturn: string | null
+  departureComplete: boolean
 }

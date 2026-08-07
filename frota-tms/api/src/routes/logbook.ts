@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { format } from 'date-fns';
 import { authenticate, authorize, type AuthRequest } from '../middleware/auth';
 import { Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { serializeLogbook } from '../lib/logbook-service';
-import { validateSignaturePng } from '../lib/logbook-checklist';
+import { validateSignaturePng, LOGBOOK_CHECKLIST_ITEMS } from '../lib/logbook-checklist';
+import { buildLogbookPdf } from '../lib/logbook-pdf';
 
 const router = Router();
 router.use(authenticate);
@@ -85,7 +87,36 @@ router.get('/:tripId', async (req, res) => {
     departureSignedAt: logbook.departureSignedAt?.toISOString() ?? null,
     returnSignedAt: logbook.returnSignedAt?.toISOString() ?? null,
     coordinatorSignedAt: logbook.coordinatorSignedAt?.toISOString() ?? null,
+    checklistItems: LOGBOOK_CHECKLIST_ITEMS,
   });
+});
+
+router.get('/:tripId/pdf', async (req, res) => {
+  const tripId = String(req.params.tripId);
+  const logbook = await prisma.tripLogbook.findUnique({
+    where: { tripId },
+    include: {
+      trip: { include: tripInclude },
+      vehicle: { select: { plate: true, brand: true, model: true } },
+      coordinatorUser: { select: { name: true } },
+    },
+  });
+  if (!logbook) return res.status(404).json({ error: 'Diário não encontrado.' });
+  if (!logbook.departureSignedAt) {
+    return res.status(400).json({ error: 'Diário ainda não foi preenchido pelo motorista.' });
+  }
+
+  const plate = logbook.vehicle.plate.replace(/[^A-Z0-9]/gi, '');
+  const date = format(logbook.trip.departureAt, 'yyyy-MM-dd');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename=diario-bordo-${plate}-${date}.pdf`,
+  );
+
+  const doc = buildLogbookPdf(logbook);
+  doc.pipe(res);
+  doc.end();
 });
 
 const signSchema = z.object({ signaturePng: z.string().min(100) });
