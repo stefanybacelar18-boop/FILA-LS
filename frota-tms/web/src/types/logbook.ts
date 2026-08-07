@@ -66,6 +66,12 @@ export type LogbookSession = {
   fuelLevels: FuelLevel[]
 }
 
+export type LogbookWorkflowStatus =
+  | 'PENDENTE_SAIDA'
+  | 'PENDENTE_RETORNO'
+  | 'AGUARDANDO_COORDENADOR'
+  | 'ARQUIVADO'
+
 export type LogbookListItem = {
   id: string
   tripId: string
@@ -77,7 +83,14 @@ export type LogbookListItem = {
   returnComplete: boolean
   coordinatorComplete: boolean
   coordinatorName: string | null
+  status: LogbookWorkflowStatus
+  statusLabel: string
   updatedAt: string
+}
+
+export type LogbookListResponse = {
+  pendingCoordinator: number
+  items: LogbookListItem[]
 }
 
 export type LogbookDetail = LogbookSession['logbook'] & {
@@ -112,4 +125,6 @@ export type LogbookDetail = LogbookSession['logbook'] & {
   fuelDieselReturn: string | null
   fuelOilReturn: string | null
   departureComplete: boolean
+  status: LogbookWorkflowStatus
+  statusLabel: string
 }

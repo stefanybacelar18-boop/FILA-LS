@@ -5,6 +5,7 @@ import type { TripLogbook } from '@prisma/client';
 import {
   LOGBOOK_CHECKLIST_ITEMS,
   LOGBOOK_FORM_CODE,
+  logbookWorkflowStatus,
   parseChecklistJson,
   parseFuelingJson,
 } from './logbook-checklist';
@@ -28,133 +29,164 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
 }
 
 function fmtDate(d: Date | null | undefined) {
-  if (!d) return '—';
+  if (!d) return '________';
   return format(d, 'dd/MM/yyyy', { locale: ptBR });
 }
 
-function fmtDateTime(d: Date | null | undefined) {
-  if (!d) return '—';
-  return format(d, 'dd/MM/yyyy HH:mm', { locale: ptBR });
+function fmtTime(d: Date | null | undefined) {
+  if (!d) return '________';
+  return format(d, 'HH:mm', { locale: ptBR });
 }
 
 function cell(state: ReturnType<typeof parseChecklistJson>[string]) {
   if (!state?.status) return '—';
-  const q = state.qty != null ? ` (${state.qty})` : '';
+  const q = state.qty != null ? ` ${state.qty}` : '';
   return `${state.status}${q}`;
 }
 
+function drawWatermark(doc: InstanceType<typeof PDFDocument>, text: string) {
+  doc.save();
+  doc.rotate(-35, { origin: [300, 400] });
+  doc.fontSize(44).fillColor('#cccccc').opacity(0.35).text(text, 80, 380, { align: 'center', width: 440 });
+  doc.opacity(1).fillColor('#000');
+  doc.restore();
+}
+
 export function buildLogbookPdf(logbook: LogbookPdfInput) {
-  const doc = new PDFDocument({ margin: 36, size: 'A4' });
+  const doc = new PDFDocument({ margin: 28, size: 'A4' });
   const dep = parseChecklistJson(logbook.checklistDeparture);
   const ret = parseChecklistJson(logbook.checklistReturn);
-  const fuelDep = parseFuelingJson(logbook.fuelingDepartureJson);
-  const fuelRet = parseFuelingJson(logbook.fuelingReturnJson);
+  const status = logbookWorkflowStatus(logbook);
+  const archived = status === 'ARQUIVADO';
 
-  doc.fontSize(14).text('LSL TRANSPORTES LTDA', { align: 'center' });
-  doc.fontSize(11).text('CHECK-LIST FROTA — Diário de bordo digital', { align: 'center' });
-  doc.fontSize(9).fillColor('#444').text(logbook.formCode || LOGBOOK_FORM_CODE, { align: 'center' });
-  doc.moveDown(0.5);
-  doc.fillColor('#000');
-
-  doc.fontSize(9);
-  doc.text(`Placa: ${logbook.vehicle.plate}  ·  ${logbook.vehicle.brand} ${logbook.vehicle.model}`);
-  doc.text(`Motorista: ${logbook.trip.driverName ?? '—'}  ·  Matrícula: ${logbook.driverMatricula ?? '—'}`);
-  if (logbook.helperName) {
-    doc.text(`Ajudante: ${logbook.helperName}  ·  Matrícula: ${logbook.helperMatricula ?? '—'}`);
-  }
-  doc.text(`Roteiro: ${logbook.trip.route?.name ?? '—'}`);
-  doc.text(`Destino: ${logbook.trip.dealership.name} — ${logbook.trip.dealership.city}`);
-  doc.text(
-    `Saída: ${fmtDateTime(logbook.trip.departureAt)}  ·  Retorno prev.: ${fmtDate(logbook.trip.expectedReturn)}  ·  Retorno real: ${fmtDateTime(logbook.trip.returnedAt)}`,
-  );
-  doc.text(
-    `KM inicial: ${logbook.kmInitial ?? '—'}  ·  KM final: ${logbook.kmFinal ?? '—'}  ·  Diesel saída/retorno: ${logbook.fuelDieselDeparture ?? '—'} / ${logbook.fuelDieselReturn ?? '—'}  ·  Óleo: ${logbook.fuelOilDeparture ?? '—'} / ${logbook.fuelOilReturn ?? '—'}`,
-  );
-
-  if (logbook.damageDescription) doc.text(`Avaria: ${logbook.damageDescription}`);
-  if (logbook.maintenanceDescription) doc.text(`Manutenção: ${logbook.maintenanceDescription}`);
-
-  doc.moveDown(0.5);
-  doc.fontSize(10).text('Pontos de verificação', { underline: true });
-  doc.moveDown(0.25);
-
-  const colItem = 36;
-  const colDep = 300;
-  const colRet = 380;
-  doc.fontSize(8).fillColor('#666');
-  doc.text('Item', colItem, doc.y, { continued: false });
-  const headerY = doc.y - 10;
-  doc.text('Saída', colDep, headerY);
-  doc.text('Retorno', colRet, headerY);
-  doc.moveDown(0.3);
-  doc.fillColor('#000');
-
-  for (const item of LOGBOOK_CHECKLIST_ITEMS) {
-    const y = doc.y;
-    if (y > 700) {
-      doc.addPage();
-      doc.fontSize(8);
-    }
-    doc.fontSize(7.5).text(item.label, colItem, doc.y, { width: 250 });
-    const rowY = doc.y - 10;
-    doc.text(cell(dep[item.id]), colDep, rowY);
-    doc.text(cell(ret[item.id]), colRet, rowY);
-    doc.moveDown(0.15);
-  }
-
-  doc.moveDown(0.5);
-  doc.fontSize(8).fillColor('#444');
-  if (fuelDep.length > 0 || fuelRet.length > 0) {
-    doc.text(`Abastecimento saída: ${JSON.stringify(fuelDep)}  ·  retorno: ${JSON.stringify(fuelRet)}`);
-  }
-  doc.text(`Assinatura saída: ${fmtDateTime(logbook.departureSignedAt)}  ·  retorno: ${fmtDateTime(logbook.returnSignedAt)}`);
-  if (logbook.coordinatorSignedAt) {
-    doc.text(
-      `Validado por ${logbook.coordinatorUser?.name ?? 'coordenador'} em ${fmtDateTime(logbook.coordinatorSignedAt)}`,
+  if (!archived) {
+    drawWatermark(
+      doc,
+      status === 'AGUARDANDO_COORDENADOR' ? 'AGUARDANDO\nCOORDENADOR' : 'RASCUNHO',
     );
   }
-  doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`);
+
+  // —— Cabeçalho (modelo FCDE-LSLT-018c-01) ——
+  doc.fontSize(13).text('LSL TRANSPORTES LTDA', { align: 'center' });
+  doc.fontSize(11).text('CHECK-LIST FROTA', { align: 'center' });
+  doc.fontSize(8).fillColor('#333').text(logbook.formCode || LOGBOOK_FORM_CODE, { align: 'center' });
+  doc.moveDown(0.4);
+  doc.fillColor('#000').fontSize(8);
+
+  const y0 = doc.y;
+  doc.text(`MOTORISTA: ${logbook.trip.driverName ?? '________________'}`, 28, y0);
+  doc.text(`MAT: ${logbook.driverMatricula ?? '______'}`, 320, y0);
+  doc.text(`AJUDANTE: ${logbook.helperName ?? '________________'}`, 28, y0 + 12);
+  doc.text(`MAT: ${logbook.helperMatricula ?? '______'}`, 320, y0 + 12);
+  doc.text(`DATA: ${fmtDate(logbook.trip.departureAt)}`, 28, y0 + 24);
+  doc.text(`PLACA: ${logbook.vehicle.plate}`, 320, y0 + 24);
+  doc.y = y0 + 40;
+
+  doc.fontSize(7).fillColor('#444');
+  doc.text('PONTOS DE VERIFICAÇÃO — OK / NG / QTDE', { align: 'center' });
   doc.fillColor('#000');
 
-  doc.moveDown(0.5);
-  const sigY = doc.y;
-  const sigW = 160;
-  const sigH = 55;
+  const tableTop = doc.y + 4;
+  const colL = 28;
+  const colR = 300;
+  const colDepL = 200;
+  const colRetL = 248;
+  const colDepR = 472;
+  const colRetR = 520;
+  const rowH = 11;
 
-  if (logbook.departureSignaturePng) {
-    try {
-      doc.fontSize(7).text('Motorista (saída)', 36, sigY);
-      doc.image(dataUrlToBuffer(logbook.departureSignaturePng), 36, sigY + 10, {
-        fit: [sigW, sigH],
-      });
-    } catch {
-      doc.text('Assinatura saída indisponível', 36, sigY + 12);
+  doc.fontSize(6.5);
+  doc.text('SAÍDA', colDepL, tableTop);
+  doc.text('RETOR.', colRetL, tableTop);
+  doc.text('SAÍDA', colDepR, tableTop);
+  doc.text('RETOR.', colRetR, tableTop);
+
+  let y = tableTop + 10;
+  for (let i = 0; i < LOGBOOK_CHECKLIST_ITEMS.length; i += 2) {
+    if (y > 520) {
+      doc.addPage();
+      if (!archived) drawWatermark(doc, 'AGUARDANDO COORDENADOR');
+      y = 40;
     }
+    const left = LOGBOOK_CHECKLIST_ITEMS[i];
+    const right = LOGBOOK_CHECKLIST_ITEMS[i + 1];
+    doc.fontSize(6.5).text(left.label.toUpperCase(), colL, y, { width: 165 });
+    doc.text(cell(dep[left.id]), colDepL, y, { width: 40 });
+    doc.text(cell(ret[left.id]), colRetL, y, { width: 40 });
+    if (right) {
+      doc.text(right.label.toUpperCase(), colR, y, { width: 165 });
+      doc.text(cell(dep[right.id]), colDepR, y, { width: 40 });
+      doc.text(cell(ret[right.id]), colRetR, y, { width: 40 });
+    }
+    y += rowH;
+  }
+
+  doc.y = Math.max(y + 8, 540);
+  doc.fontSize(8);
+  doc.text(
+    `KM INICIAL: ${logbook.kmInitial ?? '________'}    KM FINAL: ${logbook.kmFinal ?? '________'}`,
+  );
+  doc.text(
+    `DATA SAÍDA: ${fmtDate(logbook.trip.departureAt)}    DATA RETORNO: ${fmtDate(logbook.trip.returnedAt ?? logbook.trip.expectedReturn)}`,
+  );
+  doc.text(
+    `HORÁRIO SAÍDA: ${fmtTime(logbook.departureSignedAt)}    HORÁRIO RETORNO: ${fmtTime(logbook.returnSignedAt)}`,
+  );
+  doc.text(
+    `DIESEL saída/retorno: ${logbook.fuelDieselDeparture ?? '—'} / ${logbook.fuelDieselReturn ?? '—'}    ÓLEO: ${logbook.fuelOilDeparture ?? '—'} / ${logbook.fuelOilReturn ?? '—'}`,
+  );
+
+  if (logbook.damageDescription) doc.text(`LOCAL AVARIADO: ${logbook.damageDescription}`);
+  if (logbook.maintenanceDescription) doc.text(`DESCRIÇÃO MANUTENÇÃO: ${logbook.maintenanceDescription}`);
+
+  const sigY = doc.y + 12;
+  const sigW = 155;
+  const sigH = 50;
+
+  doc.fontSize(7);
+  if (logbook.departureSignaturePng) {
+    doc.text('Motorista (saída)', 28, sigY);
+    try {
+      doc.image(dataUrlToBuffer(logbook.departureSignaturePng), 28, sigY + 10, { fit: [sigW, sigH] });
+    } catch {
+      doc.text('(assinatura)', 28, sigY + 20);
+    }
+  } else {
+    doc.text('Motorista (saída) ___________________', 28, sigY + 20);
   }
 
   if (logbook.returnSignaturePng) {
+    doc.text('Motorista (retorno)', 210, sigY);
     try {
-      doc.fontSize(7).text('Motorista (retorno)', 220, sigY);
-      doc.image(dataUrlToBuffer(logbook.returnSignaturePng), 220, sigY + 10, {
-        fit: [sigW, sigH],
-      });
+      doc.image(dataUrlToBuffer(logbook.returnSignaturePng), 210, sigY + 10, { fit: [sigW, sigH] });
     } catch {
-      doc.text('Assinatura retorno indisponível', 220, sigY + 12);
+      doc.text('(assinatura)', 210, sigY + 20);
     }
+  } else {
+    doc.text('Motorista (retorno) ___________________', 210, sigY + 20);
   }
 
   if (logbook.coordinatorSignaturePng) {
+    const coordName = logbook.coordinatorUser?.name ?? 'Coordenador';
+    doc.text(`Líder ou Coordenador — ${coordName}`, 392, sigY);
     try {
-      doc.fontSize(7).text('Líder / Coordenador', 400, sigY);
-      doc.image(dataUrlToBuffer(logbook.coordinatorSignaturePng), 400, sigY + 10, {
-        fit: [sigW, sigH],
-      });
+      doc.image(dataUrlToBuffer(logbook.coordinatorSignaturePng), 392, sigY + 10, { fit: [sigW, sigH] });
     } catch {
-      doc.text('Assinatura coordenador indisponível', 400, sigY + 12);
+      doc.text('(assinatura)', 392, sigY + 20);
     }
+    doc.fontSize(7).fillColor('#166534');
+    doc.text(`CONFERIDO em ${fmtDate(logbook.coordinatorSignedAt)}`, 392, sigY + sigH + 14);
+    doc.fillColor('#000');
+  } else {
+    doc.text('Líder ou Coordenador ___________________', 392, sigY + 20);
   }
 
-  doc.fontSize(7).fillColor('#888').text('Período de retenção: 1 ano', 36, 780, { align: 'center' });
+  doc.fontSize(6.5).fillColor('#666');
+  doc.text('PERÍODO DE RETENÇÃO: 1 ANO', 28, 800, { align: 'center', width: 540 });
+  if (archived) {
+    doc.fillColor('#166534').text('DOCUMENTO ARQUIVADO — CÓPIA OFICIAL', { align: 'center', width: 540 });
+  }
+  doc.fillColor('#000');
 
   return doc;
 }

@@ -184,7 +184,9 @@ export function LogbookDriver() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Falha ao salvar retorno.')
       setSession((s) => (s ? { ...s, logbook: { ...s.logbook, ...data.logbook } } : s))
-      setSuccess('Checklist de retorno assinado. Aguarde validação do coordenador.')
+      setSuccess(
+        'Diário concluído e enviado para o coordenador conferir e assinar. Não é necessário entregar papel.',
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar.')
     } finally {
@@ -425,13 +427,22 @@ export function LogbookDriver() {
                   onClick={() => void submitReturn()}
                   disabled={!sigRet || !kmFinal}
                 >
-                  Assinar e concluir retorno
+                  Assinar retorno e enviar ao coordenador
                 </Button>
               </>
             )}
-            {retLocked && (
-              <p className="text-center text-sm text-[var(--color-text-muted)]">
-                Retorno assinado. {logbook.coordinatorComplete ? 'Validado pelo coordenador.' : 'Aguardando coordenador.'}
+            {retLocked && !logbook.coordinatorComplete && (
+              <div className="rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-3 text-center text-sm">
+                <p className="font-medium text-teal-900 dark:text-teal-100">Entregue ao coordenador</p>
+                <p className="mt-1 text-[var(--color-text-muted)]">
+                  Seu diário está na fila para conferência e assinatura. Retorno assinado em{' '}
+                  {formatDateTime(logbook.returnSignedAt ?? undefined)}.
+                </p>
+              </div>
+            )}
+            {retLocked && logbook.coordinatorComplete && (
+              <p className="text-center text-sm text-[var(--color-success)]">
+                Diário conferido e arquivado pelo coordenador.
               </p>
             )}
           </div>
