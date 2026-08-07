@@ -22,6 +22,64 @@ export type FuelingEntry = {
   valueReais?: number
 }
 
+export type LogbookStopEntry = {
+  order: number
+  dealershipId?: string | null
+  dealershipName: string
+  city: string
+  plannedMotoCount?: number | null
+  kmArrival?: number | null
+  arrivalTime?: string | null
+  departureTime?: string | null
+  boxQty?: number | null
+  motoQty?: number | null
+}
+
+export type PernoiteEntry = {
+  date?: string | null
+  arrival?: string | null
+  cityHotel?: string | null
+  arrivalTime?: string | null
+  departureTime?: string | null
+}
+
+export type MealEntry = {
+  date?: string | null
+  city?: string | null
+  startTime?: string | null
+  endTime?: string | null
+}
+
+export type TimedEntry = {
+  local?: string | null
+  date?: string | null
+  start?: string | null
+  end?: string | null
+  total?: string | null
+}
+
+export type MaintenanceReport = {
+  local?: string | null
+  kmArrival?: number | null
+  service?: string | null
+  arrivalTime?: string | null
+  departureTime?: string | null
+  mecanica?: boolean
+  hidraulica?: boolean
+  eletrica?: boolean
+  lavagem?: boolean
+  borracharia?: boolean
+  bau?: boolean
+}
+
+export type LogbookReportExtras = {
+  pernoites: PernoiteEntry[]
+  meals: MealEntry[]
+  restTimes: TimedEntry[]
+  waitTimes: TimedEntry[]
+  maintenance: MaintenanceReport
+}
+
 export type LogbookSession = {
   prefilled: {
     tripId: string
@@ -34,7 +92,14 @@ export type LogbookSession = {
     expectedReturn: string
     returnedAt: string | null
     tripStatus: string
-    destinations: { name: string; city: string; state: string }[]
+    destinations: {
+      id: string | null
+      name: string
+      city: string
+      state: string
+      order: number
+      plannedMotoCount: number | null
+    }[]
     company: string
   }
   logbook: {
@@ -60,6 +125,11 @@ export type LogbookSession = {
     coordinatorComplete: boolean
     departureSignedAt: string | null
     returnSignedAt: string | null
+    reportFormCode: string
+    stops: LogbookStopEntry[]
+    reportExtras: LogbookReportExtras
+    tripObservations: string | null
+    reportStopsComplete: boolean
   }
   suggestedKmInitial: number | null
   checklistItems: ChecklistItemDef[]
@@ -127,4 +197,8 @@ export type LogbookDetail = LogbookSession['logbook'] & {
   departureComplete: boolean
   status: LogbookWorkflowStatus
   statusLabel: string
+  stops: LogbookStopEntry[]
+  reportExtras: LogbookReportExtras
+  tripObservations: string | null
+  reportStopsComplete: boolean
 }

@@ -235,6 +235,44 @@ export function LogbookAdmin() {
                 </p>
               </div>
 
+              {detail.stops && detail.stops.some((s) => s.dealershipName.trim()) && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">Paradas / concessionárias</p>
+                  <div className="overflow-x-auto rounded border border-[var(--color-border)]">
+                    <table className="w-full text-xs">
+                      <thead className="bg-[var(--color-surface-2)]">
+                        <tr>
+                          <th className="px-2 py-1 text-left">#</th>
+                          <th className="px-2 py-1 text-left">Concessionária</th>
+                          <th className="px-2 py-1 text-left">Cidade</th>
+                          <th className="px-2 py-1 text-right">KM</th>
+                          <th className="px-2 py-1 text-center">Cheg.</th>
+                          <th className="px-2 py-1 text-center">Saída</th>
+                          <th className="px-2 py-1 text-right">Caixa</th>
+                          <th className="px-2 py-1 text-right">Motos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detail.stops
+                          .filter((s) => s.dealershipName.trim() || s.city.trim())
+                          .map((s) => (
+                            <tr key={s.order} className="border-t border-[var(--color-border)]">
+                              <td className="px-2 py-1">{s.order}</td>
+                              <td className="px-2 py-1">{s.dealershipName}</td>
+                              <td className="px-2 py-1">{s.city}</td>
+                              <td className="px-2 py-1 text-right">{s.kmArrival ?? '—'}</td>
+                              <td className="px-2 py-1 text-center">{s.arrivalTime ?? '—'}</td>
+                              <td className="px-2 py-1 text-center">{s.departureTime ?? '—'}</td>
+                              <td className="px-2 py-1 text-right">{s.boxQty ?? '—'}</td>
+                              <td className="px-2 py-1 text-right">{s.motoQty ?? s.plannedMotoCount ?? '—'}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {detail.returnComplete && (
                 <>
                   <div>

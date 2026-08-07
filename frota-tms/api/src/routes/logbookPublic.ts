@@ -10,12 +10,14 @@ import {
 } from '../lib/logbook-checklist';
 import {
   buildPrefilledTrip,
+  ensureLogbookStops,
   findOpenLslTripByPlate,
   getOrCreateLogbook,
   serializeLogbook,
   suggestedKmInitial,
 } from '../lib/logbook-service';
 import { LOGBOOK_CHECKLIST_ITEMS } from '../lib/logbook-checklist';
+import { validateStopsForSubmit, parseStopsJson } from '../lib/logbook-report';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
@@ -91,11 +93,16 @@ router.post('/session', async (req, res) => {
 
   const { trip } = auth;
   const logbook = await getOrCreateLogbook(trip.id);
+  await ensureLogbookStops(logbook.id, {
+    routeDealerships: trip.route?.dealerships,
+    tripDealership: trip.dealership,
+  });
+  const fresh = await prisma.tripLogbook.findUniqueOrThrow({ where: { id: logbook.id } });
   const kmSuggestion = await suggestedKmInitial(trip.vehicleId);
 
   res.json({
     prefilled: buildPrefilledTrip(trip),
-    logbook: serializeLogbook(logbook),
+    logbook: serializeLogbook(fresh),
     suggestedKmInitial: kmSuggestion,
     checklistItems: LOGBOOK_CHECKLIST_ITEMS,
     fuelLevels: FUEL_LEVELS,
@@ -209,6 +216,10 @@ router.post('/return', async (req, res) => {
   if (logbook.returnSignedAt) {
     return res.status(400).json({ error: 'Checklist de retorno já assinado.' });
   }
+  const stopsErr = validateStopsForSubmit(parseStopsJson(logbook.stopsJson));
+  if (stopsErr) {
+    return res.status(400).json({ error: `Relatório de paradas incompleto: ${stopsErr}` });
+  }
   if (parsed.data.kmFinal < (logbook.kmInitial ?? 0)) {
     return res.status(400).json({ error: 'KM final não pode ser menor que o KM inicial.' });
   }
@@ -228,6 +239,64 @@ router.post('/return', async (req, res) => {
       returnSignaturePng: parsed.data.signaturePng,
       returnSignedIp: ipMeta.ip,
       returnUserAgent: ipMeta.userAgent.slice(0, 500),
+    },
+  });
+
+  res.json({ ok: true, logbook: serializeLogbook(updated) });
+});
+
+const stopSchema = z.object({
+  order: z.number().int().min(1).max(10),
+  dealershipId: z.string().nullable().optional(),
+  dealershipName: z.string().max(120),
+  city: z.string().max(80),
+  plannedMotoCount: z.number().int().nullable().optional(),
+  kmArrival: z.number().int().nullable().optional(),
+  arrivalTime: z.string().max(8).nullable().optional(),
+  departureTime: z.string().max(8).nullable().optional(),
+  boxQty: z.number().int().nullable().optional(),
+  motoQty: z.number().int().nullable().optional(),
+});
+
+const reportSchema = authSchema.extend({
+  stops: z.array(stopSchema).min(1).max(10),
+  reportExtras: z.object({
+    pernoites: z.array(z.record(z.string(), z.any())).max(3),
+    meals: z.array(z.record(z.string(), z.any())).max(3),
+    restTimes: z.array(z.record(z.string(), z.any())).max(3),
+    waitTimes: z.array(z.record(z.string(), z.any())).max(3),
+    maintenance: z.record(z.string(), z.any()),
+  }),
+  tripObservations: z.string().max(4000).optional(),
+});
+
+router.post('/report', async (req, res) => {
+  const ipMeta = clientMeta(req);
+  if (rateLimited(ipMeta.ip)) return res.status(429).json({ error: 'Muitas tentativas.' });
+
+  const parsed = reportSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Dados do relatório inválidos.' });
+
+  const auth = await authenticateDriver(parsed.data.plate, parsed.data.pin);
+  if ('error' in auth) return res.status(auth.status).json({ error: auth.error });
+
+  const logbook = await getOrCreateLogbook(auth.trip.id);
+  if (!logbook.departureSignedAt) {
+    return res.status(400).json({ error: 'Assine o checklist de saída antes de registrar paradas.' });
+  }
+  if (logbook.returnSignedAt) {
+    return res.status(400).json({ error: 'Relatório bloqueado — retorno já assinado.' });
+  }
+
+  const stopsErr = validateStopsForSubmit(parsed.data.stops);
+  if (stopsErr) return res.status(400).json({ error: stopsErr });
+
+  const updated = await prisma.tripLogbook.update({
+    where: { id: logbook.id },
+    data: {
+      stopsJson: JSON.stringify(parsed.data.stops),
+      reportExtrasJson: JSON.stringify(parsed.data.reportExtras),
+      tripObservations: parsed.data.tripObservations?.trim() || null,
     },
   });
 

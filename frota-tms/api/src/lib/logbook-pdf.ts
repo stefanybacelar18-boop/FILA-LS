@@ -5,11 +5,12 @@ import type { TripLogbook } from '@prisma/client';
 import {
   LOGBOOK_CHECKLIST_ITEMS,
   LOGBOOK_FORM_CODE,
-  type FuelingEntry,
   logbookWorkflowStatus,
   parseChecklistJson,
   parseFuelingJson,
+  type FuelingEntry,
 } from './logbook-checklist';
+import { drawLogbookReportPage } from './logbook-report-pdf';
 
 type LogbookPdfInput = TripLogbook & {
   trip: {
@@ -228,12 +229,17 @@ function formatFuelingRow(entries: FuelingEntry[]) {
 
 export function buildLogbookPdf(logbook: LogbookPdfInput) {
   const doc = new PDFDocument({ margin: 0, size: 'A4' });
+  const status = logbookWorkflowStatus(logbook);
+  const archived = status === 'ARQUIVADO';
+
+  drawLogbookReportPage(doc, logbook);
+
+  doc.addPage({ margin: 0, size: 'A4' });
+
   const dep = parseChecklistJson(logbook.checklistDeparture);
   const ret = parseChecklistJson(logbook.checklistReturn);
   const fuelDep = parseFuelingJson(logbook.fuelingDepartureJson);
   const fuelRet = parseFuelingJson(logbook.fuelingReturnJson);
-  const status = logbookWorkflowStatus(logbook);
-  const archived = status === 'ARQUIVADO';
 
   if (!archived) {
     drawWatermark(
