@@ -139,6 +139,7 @@ router.post('/meu-roteiro', async (req, res) => {
       : null,
     status: route.status,
     tripStatus: openTrip.status,
+    tripId: openTrip.id,
     destinations: stops,
   });
 });

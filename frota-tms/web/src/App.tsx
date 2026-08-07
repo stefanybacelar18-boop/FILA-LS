@@ -30,6 +30,8 @@ import { Maintenance } from './pages/Maintenance'
 import { Justifications } from './pages/Justifications'
 import { MyRoute } from './pages/MyRoute'
 import { ImportChronus } from './pages/ImportChronus'
+import { LogbookDriver } from './pages/LogbookDriver'
+import { LogbookAdmin } from './pages/LogbookAdmin'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +85,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/meu-roteiro" element={<MyRoute />} />
+            <Route path="/diario-bordo" element={<LogbookDriver />} />
             <Route
               element={
                 <AuthGate>
@@ -160,6 +163,14 @@ export default function App() {
                 }
               />
               <Route path="historico" element={<History />} />
+              <Route
+                path="diario-bordo-admin"
+                element={
+                  <RoleGate roles={['ADMIN', 'OPERACAO', 'CONSULTA']}>
+                    <LogbookAdmin />
+                  </RoleGate>
+                }
+              />
               <Route
                 path="pernoites"
                 element={
