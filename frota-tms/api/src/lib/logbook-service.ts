@@ -12,10 +12,20 @@ import {
   type FuelingEntry,
   type LogbookWorkflowStatus,
 } from './logbook-checklist';
+import {
+  buildInitialStops,
+  emptyReportExtras,
+  LOGBOOK_REPORT_FORM_CODE,
+  parseReportExtrasJson,
+  parseStopsJson,
+  type LogbookReportExtras,
+  type LogbookStopEntry,
+  validateStopsForSubmit,
+} from './logbook-report';
 
 const tripInclude = {
   vehicle: { select: { id: true, plate: true, brand: true, model: true, defaultDriver: true } },
-  dealership: { select: { name: true, city: true, state: true } },
+  dealership: { select: { id: true, name: true, city: true, state: true } },
   route: {
     select: {
       id: true,
@@ -23,7 +33,12 @@ const tripInclude = {
       date: true,
       dealerships: {
         orderBy: { order: 'asc' as const },
-        include: { dealership: { select: { name: true, city: true, state: true } } },
+        select: {
+          order: true,
+          motoCount: true,
+          dealershipId: true,
+          dealership: { select: { id: true, name: true, city: true, state: true } },
+        },
       },
     },
   },
@@ -44,17 +59,41 @@ export async function getOrCreateLogbook(tripId: string) {
 
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
-    select: { vehicleId: true },
+    select: {
+      vehicleId: true,
+      dealership: { select: { name: true, city: true } },
+      route: {
+        select: {
+          dealerships: {
+            orderBy: { order: 'asc' },
+            select: {
+              order: true,
+              motoCount: true,
+              dealershipId: true,
+              dealership: { select: { name: true, city: true } },
+            },
+          },
+        },
+      },
+    },
   });
   if (!trip) throw new Error('Viagem não encontrada');
+
+  const initialStops = buildInitialStops({
+    routeDealerships: trip.route?.dealerships,
+    tripDealership: trip.dealership,
+  });
 
   return prisma.tripLogbook.create({
     data: {
       tripId,
       vehicleId: trip.vehicleId,
       formCode: LOGBOOK_FORM_CODE,
+      reportFormCode: LOGBOOK_REPORT_FORM_CODE,
       checklistDeparture: JSON.stringify(emptyChecklistState()),
       checklistReturn: JSON.stringify(emptyChecklistState()),
+      stopsJson: JSON.stringify(initialStops),
+      reportExtrasJson: JSON.stringify(emptyReportExtras()),
     },
   });
 }
@@ -93,6 +132,11 @@ export function serializeLogbook(row: Awaited<ReturnType<typeof getOrCreateLogbo
     coordinatorComplete: !!row.coordinatorSignedAt,
     status,
     statusLabel: LOGBOOK_STATUS_LABELS[status],
+    reportFormCode: row.reportFormCode,
+    stops: parseStopsJson(row.stopsJson),
+    reportExtras: parseReportExtrasJson(row.reportExtrasJson),
+    tripObservations: row.tripObservations,
+    reportStopsComplete: validateStopsForSubmit(parseStopsJson(row.stopsJson)) === null,
   };
 }
 
@@ -110,11 +154,32 @@ export function buildPrefilledTrip(trip: {
   route: {
     name: string;
     date: Date;
-    dealerships: { dealership: { name: string; city: string; state: string } }[];
+    dealerships: {
+      order: number;
+      motoCount: number | null;
+      dealershipId: string;
+      dealership: { id: string; name: string; city: string; state: string };
+    }[];
   } | null;
 }) {
   const destinations =
-    trip.route?.dealerships.map((d) => d.dealership) ?? [trip.dealership];
+    trip.route?.dealerships.map((d) => ({
+      id: d.dealership.id,
+      name: d.dealership.name,
+      city: d.dealership.city,
+      state: d.dealership.state,
+      order: d.order,
+      plannedMotoCount: d.motoCount,
+    })) ?? [
+      {
+        id: null,
+        name: trip.dealership.name,
+        city: trip.dealership.city,
+        state: trip.dealership.state,
+        order: 0,
+        plannedMotoCount: null,
+      },
+    ];
   return {
     tripId: trip.id,
     plate: trip.vehicle.plate,
@@ -146,6 +211,19 @@ export async function findOpenLslTripByPlate(plateNorm: string) {
   });
 }
 
+export async function ensureLogbookStops(logbookId: string, trip: Parameters<typeof buildInitialStops>[0]) {
+  const row = await prisma.tripLogbook.findUnique({ where: { id: logbookId }, select: { stopsJson: true } });
+  if (!row || row.stopsJson) return;
+  const initialStops = buildInitialStops(trip);
+  await prisma.tripLogbook.update({
+    where: { id: logbookId },
+    data: {
+      stopsJson: JSON.stringify(initialStops),
+      reportExtrasJson: JSON.stringify(emptyReportExtras()),
+    },
+  });
+}
+
 export type DeparturePayload = {
   driverMatricula?: string;
   helperName?: string;
@@ -168,4 +246,10 @@ export type ReturnPayload = {
   damageMarks?: { x: number; y: number }[];
   maintenanceDescription?: string;
   signaturePng: string;
+};
+
+export type ReportPayload = {
+  stops: LogbookStopEntry[];
+  reportExtras: LogbookReportExtras;
+  tripObservations?: string;
 };

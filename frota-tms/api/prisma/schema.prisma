@@ -363,4 +363,9 @@ model TripLogbook {
   coordinatorSignaturePng String?
   coordinatorUserId       String?
   coordinatorUser         User? @relation("LogbookCoordinator", fields: [coordinatorUserId], references: [id])
+
+  reportFormCode   String  @default("RB-LSL-01B-01")
+  stopsJson        String?
+  reportExtrasJson String?
+  tripObservations String?
 }

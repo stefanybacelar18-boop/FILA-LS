@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Moon, Sun, ClipboardCheck, CheckCircle2 } from 'lucide-react'
+import { Moon, Sun, ClipboardCheck, CheckCircle2, MapPin } from 'lucide-react'
 import { useThemeStore } from '../stores/theme'
 import { Button, Input } from '../components/ui'
 import { SignaturePad } from '../components/logbook/SignaturePad'
 import { ChecklistForm } from '../components/logbook/ChecklistForm'
+import { ReportStopsForm } from '../components/logbook/ReportStopsForm'
 import { formatDateTime } from '../lib/format'
-import type { ChecklistState, FuelLevel, LogbookSession } from '../types/logbook'
+import type { ChecklistState, FuelLevel, LogbookReportExtras, LogbookSession, LogbookStopEntry } from '../types/logbook'
 import { cn } from '../lib/cn'
 
 const PLATE_KEY = 'frotatms-diario-placa'
@@ -68,7 +69,7 @@ export function LogbookDriver() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [session, setSession] = useState<LogbookSession | null>(null)
-  const [step, setStep] = useState<'saída' | 'retorno'>('saída')
+  const [step, setStep] = useState<'saída' | 'paradas' | 'retorno'>('saída')
 
   const [matricula, setMatricula] = useState(() => localStorage.getItem(MAT_KEY) ?? '')
   const [helperName, setHelperName] = useState('')
@@ -85,6 +86,15 @@ export function LogbookDriver() {
   const [maintenance, setMaintenance] = useState('')
   const [sigDep, setSigDep] = useState<string | null>(null)
   const [sigRet, setSigRet] = useState<string | null>(null)
+  const [stops, setStops] = useState<LogbookStopEntry[]>([])
+  const [reportExtras, setReportExtras] = useState<LogbookReportExtras>({
+    pernoites: [{}, {}, {}],
+    meals: [{}, {}, {}],
+    restTimes: [{}, {}, {}],
+    waitTimes: [{}, {}, {}],
+    maintenance: {},
+  })
+  const [tripObservations, setTripObservations] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState('')
 
@@ -117,7 +127,12 @@ export function LogbookDriver() {
       if (data.logbook.fuelOilReturn) setOilRet(data.logbook.fuelOilReturn)
       if (data.logbook.damageDescription) setDamage(data.logbook.damageDescription)
       if (data.logbook.maintenanceDescription) setMaintenance(data.logbook.maintenanceDescription)
-      setStep(data.logbook.departureComplete ? 'retorno' : 'saída')
+      if (data.logbook.stops?.length) setStops(data.logbook.stops)
+      if (data.logbook.reportExtras) setReportExtras(data.logbook.reportExtras)
+      if (data.logbook.tripObservations) setTripObservations(data.logbook.tripObservations)
+      setStep(
+        data.logbook.returnComplete ? 'retorno' : data.logbook.departureComplete ? 'paradas' : 'saída',
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao conectar.')
     } finally {
@@ -152,6 +167,35 @@ export function LogbookDriver() {
       if (!res.ok) throw new Error(data.error || 'Falha ao salvar saída.')
       setSession((s) => (s ? { ...s, logbook: { ...s.logbook, ...data.logbook } } : s))
       setSuccess('Checklist de saída assinado e salvo.')
+      setStep('paradas')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitReport() {
+    if (!session) return
+    setError('')
+    setSuccess('')
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/public/diario-bordo/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plate: plate.trim().toUpperCase(),
+          pin,
+          stops,
+          reportExtras,
+          tripObservations,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Falha ao salvar paradas.')
+      setSession((s) => (s ? { ...s, logbook: { ...s.logbook, ...data.logbook } } : s))
+      setSuccess('Paradas salvas. Agora complete o checklist de retorno.')
       setStep('retorno')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar.')
@@ -270,21 +314,23 @@ export function LogbookDriver() {
           </p>
         </div>
 
-        <div className="flex gap-2">
-          {(['saída', 'retorno'] as const).map((s) => (
+        <div className="flex gap-1">
+          {(['saída', 'paradas', 'retorno'] as const).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setStep(s)}
               className={cn(
-                'flex flex-1 items-center justify-center gap-1 rounded-lg py-2 text-sm font-medium capitalize',
+                'flex flex-1 items-center justify-center gap-1 rounded-lg py-2 text-xs font-medium capitalize sm:text-sm',
                 step === s
                   ? 'bg-[var(--color-primary)] text-white'
                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-muted)]',
               )}
             >
-              {(s === 'saída' ? depLocked : retLocked) && <CheckCircle2 className="h-4 w-4" />}
-              {s}
+              {s === 'saída' && depLocked && <CheckCircle2 className="h-4 w-4" />}
+              {s === 'paradas' && session.logbook.reportStopsComplete && <CheckCircle2 className="h-4 w-4" />}
+              {s === 'retorno' && retLocked && <CheckCircle2 className="h-4 w-4" />}
+              {s === 'paradas' ? 'Paradas' : s}
             </button>
           ))}
         </div>
@@ -372,6 +418,36 @@ export function LogbookDriver() {
           </div>
         )}
 
+        {step === 'paradas' && (
+          <div className="space-y-4">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <MapPin className="h-5 w-5" /> Relatório de paradas
+            </h2>
+            {!depLocked && (
+              <p className="text-sm text-amber-600">Complete o checklist de saída primeiro.</p>
+            )}
+            <ReportStopsForm
+              stops={stops}
+              extras={reportExtras}
+              observations={tripObservations}
+              disabled={!depLocked || retLocked}
+              onStopsChange={setStops}
+              onExtrasChange={setReportExtras}
+              onObservationsChange={setTripObservations}
+            />
+            {depLocked && !retLocked && (
+              <Button className="w-full" loading={submitting} onClick={() => void submitReport()}>
+                Salvar paradas e continuar
+              </Button>
+            )}
+            {session.logbook.reportStopsComplete && !retLocked && (
+              <p className="text-center text-sm text-[var(--color-text-muted)]">
+                Paradas registradas. Complete o retorno quando finalizar a viagem.
+              </p>
+            )}
+          </div>
+        )}
+
         {step === 'retorno' && (
           <div className="space-y-4">
             <h2 className="flex items-center gap-2 font-semibold">
@@ -379,6 +455,11 @@ export function LogbookDriver() {
             </h2>
             {!depLocked && (
               <p className="text-sm text-amber-600">Complete o checklist de saída primeiro.</p>
+            )}
+            {depLocked && !logbook.reportStopsComplete && (
+              <p className="text-sm text-amber-600">
+                Registre as paradas (concessionárias e motos) antes de assinar o retorno.
+              </p>
             )}
             <Input
               label="KM final"
@@ -418,7 +499,7 @@ export function LogbookDriver() {
               onChange={(e) => setMaintenance(e.target.value)}
               disabled={retLocked || !depLocked}
             />
-            {!retLocked && depLocked && (
+            {!retLocked && depLocked && session.logbook.reportStopsComplete && (
               <>
                 <SignaturePad label="Assinatura — motorista (retorno)" onChange={setSigRet} />
                 <Button
