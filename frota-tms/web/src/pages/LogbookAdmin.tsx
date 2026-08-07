@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardCheck } from 'lucide-react'
-import { api } from '../lib/api'
+import { ClipboardCheck, Download, FileText } from 'lucide-react'
+import { api, downloadReport } from '../lib/api'
 import type { LogbookDetail, LogbookListItem } from '../types/logbook'
 import { PageHeader, Spinner, Card, Button, Badge, EmptyState } from '../components/ui'
 import { SignaturePad } from '../components/logbook/SignaturePad'
-import { formatDateTime } from '../lib/format'
+import { ChecklistReviewTable } from '../components/logbook/ChecklistReviewTable'
+import { formatDate, formatDateTime } from '../lib/format'
 import { useAuthStore } from '../stores/auth'
 
 function SignatureImg({ src, label }: { src: string | null; label: string }) {
@@ -13,7 +14,7 @@ function SignatureImg({ src, label }: { src: string | null; label: string }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">{label}</p>
-      <img src={src} alt={label} className="max-h-24 rounded border border-[var(--color-border)] bg-white" />
+      <img src={src} alt={label} className="max-h-28 rounded border border-[var(--color-border)] bg-white" />
     </div>
   )
 }
@@ -21,9 +22,10 @@ function SignatureImg({ src, label }: { src: string | null; label: string }) {
 export function LogbookAdmin() {
   const qc = useQueryClient()
   const canSign = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
-  const [pendingOnly, setPendingOnly] = useState(true)
+  const [pendingOnly, setPendingOnly] = useState(false)
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [coordSig, setCoordSig] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   const { data: list = [], isLoading } = useQuery({
     queryKey: ['logbook', pendingOnly],
@@ -49,11 +51,23 @@ export function LogbookAdmin() {
     },
   })
 
+  async function downloadPdf() {
+    if (!detail || !selectedTripId) return
+    setDownloading(true)
+    try {
+      const plate = detail.plate.replace(/[^A-Z0-9]/gi, '')
+      const date = formatDate(detail.trip.departureAt, 'yyyy-MM-dd')
+      await downloadReport(`/logbook/${selectedTripId}/pdf`, `diario-bordo-${plate}-${date}.pdf`)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Diário de bordo"
-        description="Checklists digitais LSL com assinaturas — validação do coordenador"
+        description="Visualize o checklist preenchido, assinaturas e baixe o PDF para arquivo"
         actions={
           <Button
             size="sm"
@@ -63,7 +77,7 @@ export function LogbookAdmin() {
               setSelectedTripId(null)
             }}
           >
-            {pendingOnly ? 'Só pendentes' : 'Todos recentes'}
+            {pendingOnly ? 'Só pendentes de validação' : 'Todos recentes'}
           </Button>
         }
       />
@@ -75,7 +89,7 @@ export function LogbookAdmin() {
           ) : list.length === 0 ? (
             <EmptyState description="Nenhum diário neste filtro." />
           ) : (
-            <div className="max-h-[32rem] space-y-1 overflow-y-auto">
+            <div className="max-h-[36rem] space-y-1 overflow-y-auto">
               {list.map((row) => (
                 <button
                   key={row.id}
@@ -87,12 +101,17 @@ export function LogbookAdmin() {
                       : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">{row.plate}</span>
-                    {!row.coordinatorComplete && row.returnComplete && (
-                      <Badge tone="warning">Validar</Badge>
-                    )}
-                    {row.coordinatorComplete && <Badge tone="success">OK</Badge>}
+                    <div className="flex gap-1">
+                      {row.departureComplete && !row.returnComplete && (
+                        <Badge tone="info">Só saída</Badge>
+                      )}
+                      {!row.coordinatorComplete && row.returnComplete && (
+                        <Badge tone="warning">Validar</Badge>
+                      )}
+                      {row.coordinatorComplete && <Badge tone="success">Arquivado</Badge>}
+                    </div>
                   </div>
                   <p className="text-xs text-[var(--color-text-muted)]">
                     {row.driverName ?? '—'} · {row.routeName ?? 'Sem roteiro'}
@@ -106,38 +125,86 @@ export function LogbookAdmin() {
           )}
         </Card>
 
-        <Card className="lg:col-span-3" title="Detalhe">
+        <Card
+          className="lg:col-span-3"
+          title="Diário preenchido"
+          action={
+            detail?.departureComplete ? (
+              <Button size="sm" variant="secondary" loading={downloading} onClick={() => void downloadPdf()}>
+                <Download className="h-4 w-4" />
+                Baixar PDF
+              </Button>
+            ) : undefined
+          }
+        >
           {!selectedTripId ? (
             <EmptyState
               icon={<ClipboardCheck className="h-8 w-8" />}
-              description="Selecione uma viagem para revisar assinaturas e dados."
+              description="Selecione uma viagem para ver o checklist completo e as assinaturas."
             />
           ) : detailLoading || !detail ? (
             <Spinner />
           ) : (
             <div className="space-y-4">
-              <div className="grid gap-2 text-sm sm:grid-cols-2">
+              <div className="grid gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm sm:grid-cols-2">
                 <p>
-                  <span className="text-[var(--color-text-muted)]">Placa:</span> {detail.plate}
+                  <span className="text-[var(--color-text-muted)]">Placa:</span> {detail.plate} ·{' '}
+                  {detail.vehicleLabel}
                 </p>
                 <p>
                   <span className="text-[var(--color-text-muted)]">Motorista:</span>{' '}
                   {detail.trip.driverName ?? '—'}
+                  {detail.driverMatricula ? ` (${detail.driverMatricula})` : ''}
+                </p>
+                {detail.helperName && (
+                  <p>
+                    <span className="text-[var(--color-text-muted)]">Ajudante:</span> {detail.helperName}
+                    {detail.helperMatricula ? ` (${detail.helperMatricula})` : ''}
+                  </p>
+                )}
+                <p>
+                  <span className="text-[var(--color-text-muted)]">Roteiro:</span>{' '}
+                  {detail.trip.route?.name ?? '—'}
                 </p>
                 <p>
-                  <span className="text-[var(--color-text-muted)]">KM:</span>{' '}
-                  {detail.kmInitial ?? '—'} → {detail.kmFinal ?? '—'}
+                  <span className="text-[var(--color-text-muted)]">KM:</span> {detail.kmInitial ?? '—'} →{' '}
+                  {detail.kmFinal ?? '—'}
                 </p>
                 <p>
+                  <span className="text-[var(--color-text-muted)]">Combustível:</span> Diesel{' '}
+                  {detail.fuelDieselDeparture ?? '—'}/{detail.fuelDieselReturn ?? '—'} · Óleo{' '}
+                  {detail.fuelOilDeparture ?? '—'}/{detail.fuelOilReturn ?? '—'}
+                </p>
+                <p className="sm:col-span-2">
                   <span className="text-[var(--color-text-muted)]">Formulário:</span> {detail.formCode}
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <SignatureImg src={detail.departureSignaturePng} label="Motorista (saída)" />
-                <SignatureImg src={detail.returnSignaturePng} label="Motorista (retorno)" />
-                <SignatureImg src={detail.coordinatorSignaturePng} label="Coordenador" />
-              </div>
+              {!detail.departureComplete ? (
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Motorista ainda não concluiu o checklist de saída.
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+                      <FileText className="h-4 w-4" />
+                      Checklist de verificação
+                    </p>
+                    <ChecklistReviewTable
+                      items={detail.checklistItems}
+                      departure={detail.checklistDeparture}
+                      returnState={detail.checklistReturn}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <SignatureImg src={detail.departureSignaturePng} label="Motorista (saída)" />
+                    <SignatureImg src={detail.returnSignaturePng} label="Motorista (retorno)" />
+                    <SignatureImg src={detail.coordinatorSignaturePng} label="Coordenador" />
+                  </div>
+                </>
+              )}
 
               {detail.maintenanceDescription && (
                 <p className="text-sm">
@@ -168,13 +235,17 @@ export function LogbookAdmin() {
               {detail.coordinatorComplete && (
                 <p className="text-sm text-[var(--color-success)]">
                   Validado por {detail.coordinatorName ?? 'coordenador'} em{' '}
-                  {formatDateTime(detail.coordinatorSignedAt)}
+                  {formatDateTime(detail.coordinatorSignedAt)} — use <strong>Baixar PDF</strong> para
+                  arquivar.
                 </p>
               )}
 
-              <p className="text-xs text-[var(--color-text-muted)]">
-                Retenção recomendada: 1 ano · Modelo {detail.formCode}
-              </p>
+              {detail.departureComplete && (
+                <Button variant="outline" loading={downloading} onClick={() => void downloadPdf()}>
+                  <Download className="h-4 w-4" />
+                  Baixar diário em PDF
+                </Button>
+              )}
             </div>
           )}
         </Card>
