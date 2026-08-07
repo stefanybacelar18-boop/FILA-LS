@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Truck, MapPinned, Tags, AlertTriangle, Upload, Trash2 } from 'lucide-react'
+import { Truck, MapPinned, Tags, AlertTriangle, Upload, Trash2, Moon } from 'lucide-react'
 import { api } from '../lib/api'
 import type { DashboardData } from '../types'
 import { PageHeader, Spinner, Card, Button, ConfirmModal, PlateBadge } from '../components/ui'
@@ -344,6 +344,42 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+
+      <Card className="mb-6" title="Pernoites LSL — período de folha">
+        <div className="-mt-2 mb-3 flex flex-wrap items-start justify-between gap-2">
+          <p className="max-w-2xl text-xs leading-relaxed text-[var(--color-text-muted)]">
+            Viagens da frota LSL em que o retorno é em <strong>dia diferente da saída</strong> — período
+            de {period.pernoites.label}. Total:{' '}
+            <strong>{data.pernoiteSummary.totalPernoites} pernoite(s)</strong> em{' '}
+            {data.pernoiteSummary.totalTrips} viagem(ns).
+          </p>
+          <Link
+            to="/pernoites"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-primary)] hover:underline"
+          >
+            <Moon className="h-3.5 w-3.5" />
+            Conferir e exportar
+          </Link>
+        </div>
+        {data.pernoiteRanking.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
+            Nenhuma pernoite no período de folha.
+          </p>
+        ) : (
+          <div className="divide-y divide-[var(--color-border)]/80">
+            {data.pernoiteRanking.map((r, i) => (
+              <RankingRow
+                key={r.vehicleId}
+                rank={i + 1}
+                title={r.plate}
+                subtitle={r.driverName ?? undefined}
+                value={r.pernoites}
+                valueLabel={r.trips === 1 ? '1 viagem' : `${r.trips} viagens`}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
 
       <p className="mt-6 text-center text-xs text-[var(--color-text-muted)]">
         Exportações detalhadas em{' '}

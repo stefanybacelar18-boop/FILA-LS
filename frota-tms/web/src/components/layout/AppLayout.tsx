@@ -42,6 +42,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/definir-placas', label: 'Definir placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
       { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
+      { to: '/pernoites', label: 'Pernoites LSL', icon: Moon },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
     ],
     secondary: [
@@ -68,7 +69,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/frota', label: 'Frota', icon: Truck },
     ],
-    secondary: [{ to: '/historico', label: 'Histórico', icon: History }],
+    secondary: [{ to: '/historico', label: 'Histórico', icon: History }, { to: '/pernoites', label: 'Pernoites LSL', icon: Moon }],
   },
 }
 

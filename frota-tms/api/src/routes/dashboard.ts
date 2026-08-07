@@ -5,6 +5,8 @@ import { authenticate } from '../middleware/auth';
 import { isOverdue } from '../utils/status';
 import { addDays, startOfDay, subDays, format } from 'date-fns';
 import { hasActivePriority } from '../lib/route-priority.js';
+import { fetchLslPernoitesForPeriod } from '../lib/pernoite-service';
+import { payrollPeriodForDate } from '../utils/pernoite';
 
 const router = Router();
 router.use(authenticate);
@@ -105,10 +107,19 @@ router.get('/', async (_req, res) => {
     tripsPerDay.push({ date: key, count });
   }
 
+  const payrollPeriod = payrollPeriodForDate(today);
+  const pernoiteData = await fetchLslPernoitesForPeriod(payrollPeriod);
+  const pernoiteRanking = pernoiteData.ranking.slice(0, RANKING_LIMIT);
+
   res.json({
     period: {
       tripsChartDays: TRIPS_CHART_DAYS,
       rankingDays: RANKING_DAYS,
+      pernoites: {
+        start: payrollPeriod.start.toISOString(),
+        end: payrollPeriod.end.toISOString(),
+        label: payrollPeriod.label,
+      },
     },
     summary: {
       placasDisponiveis: availableForRoutes,
@@ -120,6 +131,11 @@ router.get('/', async (_req, res) => {
     tripsPerDay,
     dealershipRanking,
     plateRanking,
+    pernoiteRanking,
+    pernoiteSummary: {
+      totalPernoites: pernoiteData.totalPernoites,
+      totalTrips: pernoiteData.totalTrips,
+    },
   });
 });
 

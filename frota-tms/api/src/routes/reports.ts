@@ -6,6 +6,8 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { Role } from '../types/enums';
 import { daysUntilExpiry } from '../utils/status';
 import { format } from 'date-fns';
+import { fetchLslPernoitesForPeriod } from '../lib/pernoite-service';
+import { payrollPeriodOffset } from '../utils/pernoite';
 
 const router = Router();
 router.use(authenticate);
@@ -109,6 +111,43 @@ router.get('/excel/:type', async (req, res) => {
       { header: 'Veículo', key: 'allowedVehicle', width: 12 },
     ];
     items.forEach((d) => ws.addRow(d));
+  } else if (type === 'pernoites-lsl') {
+    const offset = Number(req.query.offset ?? 0);
+    const safeOffset = Number.isFinite(offset) ? Math.trunc(offset) : 0;
+    const period = payrollPeriodOffset(new Date(), safeOffset);
+    const data = await fetchLslPernoitesForPeriod(period);
+
+    ws.columns = [
+      { header: 'Placa', key: 'plate', width: 12 },
+      { header: 'Motorista', key: 'driver', width: 22 },
+      { header: 'Saída', key: 'departure', width: 12 },
+      { header: 'Previsão retorno', key: 'expected', width: 14 },
+      { header: 'Retorno real', key: 'returned', width: 14 },
+      { header: 'Destino', key: 'dealership', width: 24 },
+      { header: 'Cidade', key: 'city', width: 16 },
+      { header: 'Pernoites', key: 'nights', width: 10 },
+      { header: 'Confirmado', key: 'confirmed', width: 12 },
+      { header: 'Situação', key: 'status', width: 14 },
+    ];
+    data.trips.forEach((t) =>
+      ws.addRow({
+        plate: t.plate,
+        driver: t.driverName ?? '—',
+        departure: format(t.departureAt, 'dd/MM/yyyy'),
+        expected: format(t.expectedReturn, 'dd/MM/yyyy'),
+        returned: t.returnedAt ? format(t.returnedAt, 'dd/MM/yyyy') : '—',
+        dealership: t.dealershipName,
+        city: t.dealershipCity,
+        nights: t.nights,
+        confirmed: t.confirmed ? 'Sim' : 'Previsto',
+        status: t.status,
+      }),
+    );
+
+    const summary = ws.addRow([]);
+    summary.getCell(1).value = `Período: ${period.label}`;
+    const totalRow = ws.addRow([]);
+    totalRow.getCell(1).value = `Total de pernoites: ${data.totalPernoites}`;
   } else if (type === 'historico-placa' && vehicleId) {
     const trips = await prisma.trip.findMany({
       where: { vehicleId: String(vehicleId) },
