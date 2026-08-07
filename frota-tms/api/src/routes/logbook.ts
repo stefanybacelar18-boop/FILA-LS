@@ -5,7 +5,7 @@ import { authenticate, authorize, type AuthRequest } from '../middleware/auth';
 import { Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { serializeLogbook } from '../lib/logbook-service';
-import { validateSignaturePng, LOGBOOK_CHECKLIST_ITEMS } from '../lib/logbook-checklist';
+import { validateSignaturePng, LOGBOOK_CHECKLIST_ITEMS, LOGBOOK_STATUS_LABELS, logbookWorkflowStatus } from '../lib/logbook-checklist';
 import { buildLogbookPdf } from '../lib/logbook-pdf';
 
 const router = Router();
@@ -24,32 +24,43 @@ router.get('/', async (req, res) => {
     ? { returnSignedAt: { not: null }, coordinatorSignedAt: null }
     : {};
 
-  const rows = await prisma.tripLogbook.findMany({
-    where,
-    orderBy: { updatedAt: 'desc' },
-    take: 80,
-    include: {
-      trip: { include: tripInclude },
-      vehicle: { select: { plate: true } },
-      coordinatorUser: { select: { name: true } },
-    },
-  });
+  const [rows, pendingCoordinator] = await Promise.all([
+    prisma.tripLogbook.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 80,
+      include: {
+        trip: { include: tripInclude },
+        vehicle: { select: { plate: true } },
+        coordinatorUser: { select: { name: true } },
+      },
+    }),
+    prisma.tripLogbook.count({
+      where: { returnSignedAt: { not: null }, coordinatorSignedAt: null },
+    }),
+  ]);
 
-  res.json(
-    rows.map((r) => ({
-      id: r.id,
-      tripId: r.tripId,
-      plate: r.vehicle.plate,
-      driverName: r.trip.driverName,
-      routeName: r.trip.route?.name ?? null,
-      departureAt: r.trip.departureAt.toISOString(),
-      departureComplete: !!r.departureSignedAt,
-      returnComplete: !!r.returnSignedAt,
-      coordinatorComplete: !!r.coordinatorSignedAt,
-      coordinatorName: r.coordinatorUser?.name ?? null,
-      updatedAt: r.updatedAt.toISOString(),
-    })),
-  );
+  res.json({
+    pendingCoordinator,
+    items: rows.map((r) => {
+      const status = logbookWorkflowStatus(r);
+      return {
+        id: r.id,
+        tripId: r.tripId,
+        plate: r.vehicle.plate,
+        driverName: r.trip.driverName,
+        routeName: r.trip.route?.name ?? null,
+        departureAt: r.trip.departureAt.toISOString(),
+        departureComplete: !!r.departureSignedAt,
+        returnComplete: !!r.returnSignedAt,
+        coordinatorComplete: !!r.coordinatorSignedAt,
+        coordinatorName: r.coordinatorUser?.name ?? null,
+        status,
+        statusLabel: LOGBOOK_STATUS_LABELS[status],
+        updatedAt: r.updatedAt.toISOString(),
+      };
+    }),
+  });
 });
 
 router.get('/:tripId', async (req, res) => {
@@ -102,8 +113,10 @@ router.get('/:tripId/pdf', async (req, res) => {
     },
   });
   if (!logbook) return res.status(404).json({ error: 'Diário não encontrado.' });
-  if (!logbook.departureSignedAt) {
-    return res.status(400).json({ error: 'Diário ainda não foi preenchido pelo motorista.' });
+  if (!logbook.returnSignedAt) {
+    return res.status(400).json({
+      error: 'Diário incompleto — aguardando motorista concluir saída e retorno.',
+    });
   }
 
   const plate = logbook.vehicle.plate.replace(/[^A-Z0-9]/gi, '');

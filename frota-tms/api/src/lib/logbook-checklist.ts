@@ -102,6 +102,30 @@ export function parseFuelingJson(raw: string | null | undefined): FuelingEntry[]
   }
 }
 
+export type LogbookWorkflowStatus =
+  | 'PENDENTE_SAIDA'
+  | 'PENDENTE_RETORNO'
+  | 'AGUARDANDO_COORDENADOR'
+  | 'ARQUIVADO';
+
+export function logbookWorkflowStatus(row: {
+  departureSignedAt: Date | null;
+  returnSignedAt: Date | null;
+  coordinatorSignedAt: Date | null;
+}): LogbookWorkflowStatus {
+  if (!row.departureSignedAt) return 'PENDENTE_SAIDA';
+  if (!row.returnSignedAt) return 'PENDENTE_RETORNO';
+  if (!row.coordinatorSignedAt) return 'AGUARDANDO_COORDENADOR';
+  return 'ARQUIVADO';
+}
+
+export const LOGBOOK_STATUS_LABELS: Record<LogbookWorkflowStatus, string> = {
+  PENDENTE_SAIDA: 'Motorista — checklist de saída',
+  PENDENTE_RETORNO: 'Motorista — checklist de retorno',
+  AGUARDANDO_COORDENADOR: 'Aguardando conferência do coordenador',
+  ARQUIVADO: 'Conferido e arquivado',
+};
+
 export function validateChecklistComplete(state: ChecklistState): string | null {
   for (const item of LOGBOOK_CHECKLIST_ITEMS) {
     const row = state[item.id];

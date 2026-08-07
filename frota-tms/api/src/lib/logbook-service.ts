@@ -4,10 +4,13 @@ import { TripStatus } from '../types/enums';
 import {
   emptyChecklistState,
   LOGBOOK_FORM_CODE,
+  LOGBOOK_STATUS_LABELS,
+  logbookWorkflowStatus,
   parseChecklistJson,
   parseFuelingJson,
   type ChecklistState,
   type FuelingEntry,
+  type LogbookWorkflowStatus,
 } from './logbook-checklist';
 
 const tripInclude = {
@@ -57,6 +60,7 @@ export async function getOrCreateLogbook(tripId: string) {
 }
 
 export function serializeLogbook(row: Awaited<ReturnType<typeof getOrCreateLogbook>>) {
+  const status = logbookWorkflowStatus(row);
   return {
     id: row.id,
     tripId: row.tripId,
@@ -87,8 +91,12 @@ export function serializeLogbook(row: Awaited<ReturnType<typeof getOrCreateLogbo
     departureComplete: !!row.departureSignedAt,
     returnComplete: !!row.returnSignedAt,
     coordinatorComplete: !!row.coordinatorSignedAt,
+    status,
+    statusLabel: LOGBOOK_STATUS_LABELS[status],
   };
 }
+
+export type { LogbookWorkflowStatus };
 
 export function buildPrefilledTrip(trip: {
   id: string;
