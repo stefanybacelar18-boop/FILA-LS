@@ -19,6 +19,7 @@ import {
   Wrench,
   ClipboardList,
   LayoutDashboard,
+  ClipboardCheck,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -43,6 +44,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
       { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
       { to: '/pernoites', label: 'Pernoites LSL', icon: Moon },
+      { to: '/diario-bordo-admin', label: 'Diário de bordo', icon: ClipboardCheck },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
     ],
     secondary: [
