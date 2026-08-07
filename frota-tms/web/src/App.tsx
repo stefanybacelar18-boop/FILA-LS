@@ -21,6 +21,7 @@ import { Trips } from './pages/Trips'
 import { Returns } from './pages/Returns'
 import { History } from './pages/History'
 import { Reports } from './pages/Reports'
+import { Pernoites } from './pages/Pernoites'
 import { Users } from './pages/Users'
 import { Audit } from './pages/Audit'
 import { Search } from './pages/Search'
@@ -159,6 +160,14 @@ export default function App() {
                 }
               />
               <Route path="historico" element={<History />} />
+              <Route
+                path="pernoites"
+                element={
+                  <RoleGate roles={['ADMIN', 'CONSULTA']}>
+                    <Pernoites />
+                  </RoleGate>
+                }
+              />
               <Route path="relatorios" element={<Reports />} />
               <Route
                 path="usuarios"

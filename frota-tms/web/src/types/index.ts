@@ -249,6 +249,11 @@ export interface DashboardData {
   period: {
     tripsChartDays: number
     rankingDays: number
+    pernoites: {
+      start: string
+      end: string
+      label: string
+    }
   }
   summary: {
     placasDisponiveis: number
@@ -264,6 +269,56 @@ export interface DashboardData {
     plate: string
     type: string | null
     trips: number
+  }[]
+  pernoiteRanking: {
+    vehicleId: string
+    plate: string
+    type: string | null
+    driverName: string | null
+    pernoites: number
+    trips: number
+  }[]
+  pernoiteSummary: {
+    totalPernoites: number
+    totalTrips: number
+  }
+}
+
+export interface PernoitesData {
+  period: {
+    start: string
+    end: string
+    label: string
+    offset: number
+  }
+  summary: {
+    totalPernoites: number
+    totalTrips: number
+    platesWithPernoites: number
+  }
+  ranking: {
+    vehicleId: string
+    plate: string
+    type: string | null
+    driverName: string | null
+    pernoites: number
+    trips: number
+  }[]
+  trips: {
+    id: string
+    vehicleId: string
+    plate: string
+    vehicleType: string | null
+    driverName: string | null
+    dealershipName: string
+    dealershipCity: string
+    routeName: string | null
+    departureAt: string
+    expectedReturn: string
+    returnedAt: string | null
+    status: string
+    nights: number
+    confirmed: boolean
   }[]
 }
 

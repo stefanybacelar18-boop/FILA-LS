@@ -14,6 +14,7 @@ const reportTypes = [
   { type: 'periodo', label: 'Viagens por período' },
   { type: 'concessionarias', label: 'Concessionárias' },
   { type: 'historico-placa', label: 'Histórico por placa' },
+  { type: 'pernoites-lsl', label: 'Pernoites LSL (período folha)' },
 ]
 
 export function Reports() {
