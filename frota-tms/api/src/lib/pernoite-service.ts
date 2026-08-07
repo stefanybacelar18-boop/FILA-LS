@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { OPERATOR_HIDDEN_PLATES } from '../data/operatorVisibility';
+import { OPERATOR_HIDDEN_PLATES, normalizeDriverName } from '../data/operatorVisibility';
 import { TripStatus } from '../types/enums';
 import { isPernoite, pernoiteNights, type PayrollPeriod } from '../utils/pernoite';
 
@@ -8,6 +8,9 @@ const tripInclude = {
   dealership: { select: { id: true, name: true, city: true } },
   route: { select: { id: true, name: true } },
 } as const;
+
+const UNKNOWN_DRIVER_KEY = '__SEM_MOTORISTA__';
+const UNKNOWN_DRIVER_LABEL = 'Motorista não informado';
 
 export type PernoiteTripRow = {
   id: string;
@@ -26,14 +29,24 @@ export type PernoiteTripRow = {
   confirmed: boolean;
 };
 
-export type PernoitePlateRanking = {
-  vehicleId: string;
-  plate: string;
-  type: string | null;
-  driverName: string | null;
+export type PernoiteDriverRanking = {
+  driverKey: string;
+  driverName: string;
+  plates: string[];
   pernoites: number;
   trips: number;
 };
+
+function resolveTripDriver(trip: {
+  driverName: string | null;
+  vehicle: { defaultDriver: string | null };
+}): { key: string; name: string } {
+  const raw = trip.driverName?.trim() || trip.vehicle.defaultDriver?.trim() || '';
+  if (!raw) {
+    return { key: UNKNOWN_DRIVER_KEY, name: UNKNOWN_DRIVER_LABEL };
+  }
+  return { key: normalizeDriverName(raw), name: raw };
+}
 
 export async function fetchLslPernoitesForPeriod(period: PayrollPeriod) {
   const trips = await prisma.trip.findMany({
@@ -47,19 +60,19 @@ export async function fetchLslPernoitesForPeriod(period: PayrollPeriod) {
   });
 
   const pernoiteTrips: PernoiteTripRow[] = [];
-  const byPlate = new Map<string, PernoitePlateRanking>();
+  const byDriver = new Map<string, PernoiteDriverRanking & { plateSet: Set<string> }>();
 
   for (const t of trips) {
     const nights = pernoiteNights(t);
     if (!isPernoite(t)) continue;
 
-    const driverName = t.driverName ?? t.vehicle.defaultDriver ?? null;
+    const driver = resolveTripDriver(t);
     pernoiteTrips.push({
       id: t.id,
       vehicleId: t.vehicleId,
       plate: t.vehicle.plate,
       vehicleType: t.vehicle.type,
-      driverName,
+      driverName: driver.name === UNKNOWN_DRIVER_LABEL ? null : driver.name,
       dealershipName: t.dealership.name,
       dealershipCity: t.dealership.city,
       routeName: t.route?.name ?? null,
@@ -71,24 +84,34 @@ export async function fetchLslPernoitesForPeriod(period: PayrollPeriod) {
       confirmed: t.returnedAt != null,
     });
 
-    const existing = byPlate.get(t.vehicleId);
+    const existing = byDriver.get(driver.key);
     if (existing) {
       existing.pernoites += nights;
       existing.trips += 1;
-      if (!existing.driverName && driverName) existing.driverName = driverName;
+      existing.plateSet.add(t.vehicle.plate);
     } else {
-      byPlate.set(t.vehicleId, {
-        vehicleId: t.vehicleId,
-        plate: t.vehicle.plate,
-        type: t.vehicle.type,
-        driverName,
+      byDriver.set(driver.key, {
+        driverKey: driver.key,
+        driverName: driver.name,
+        plates: [],
+        plateSet: new Set([t.vehicle.plate]),
         pernoites: nights,
         trips: 1,
       });
     }
   }
 
-  const ranking = [...byPlate.values()].sort((a, b) => b.pernoites - a.pernoites || b.trips - a.trips);
+  const ranking = [...byDriver.values()]
+    .map(({ plateSet, ...row }) => ({
+      ...row,
+      plates: [...plateSet].sort(),
+    }))
+    .sort(
+      (a, b) =>
+        b.pernoites - a.pernoites ||
+        b.trips - a.trips ||
+        a.driverName.localeCompare(b.driverName, 'pt-BR'),
+    );
 
   return {
     trips: pernoiteTrips,

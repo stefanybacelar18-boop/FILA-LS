@@ -351,7 +351,7 @@ export function Dashboard() {
             Viagens da frota LSL em que o retorno é em <strong>dia diferente da saída</strong> — período
             de {period.pernoites.label}. Total:{' '}
             <strong>{data.pernoiteSummary.totalPernoites} pernoite(s)</strong> em{' '}
-            {data.pernoiteSummary.totalTrips} viagem(ns).
+            {data.pernoiteSummary.totalTrips} viagem(ns), agrupados por motorista.
           </p>
           <Link
             to="/pernoites"
@@ -369,10 +369,16 @@ export function Dashboard() {
           <div className="divide-y divide-[var(--color-border)]/80">
             {data.pernoiteRanking.map((r, i) => (
               <RankingRow
-                key={r.vehicleId}
+                key={r.driverKey}
                 rank={i + 1}
-                title={r.plate}
-                subtitle={r.driverName ?? undefined}
+                title={r.driverName}
+                subtitle={
+                  r.plates.length > 0
+                    ? r.plates.length === 1
+                      ? `Placa ${r.plates[0]}`
+                      : `Placas: ${r.plates.join(', ')}`
+                    : undefined
+                }
                 value={r.pernoites}
                 valueLabel={r.trips === 1 ? '1 viagem' : `${r.trips} viagens`}
               />
