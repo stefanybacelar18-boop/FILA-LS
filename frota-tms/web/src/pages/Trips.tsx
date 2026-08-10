@@ -18,13 +18,16 @@ import { delayReasonPresets, tripStatusLabels } from '../lib/labels'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
+import { TripScheduleModal } from '../components/TripScheduleModal'
 
 export function Trips() {
   const qc = useQueryClient()
   const canOperate = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
+  const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
   const [reportTrip, setReportTrip] = useState<Trip | null>(null)
+  const [scheduleTrip, setScheduleTrip] = useState<Trip | null>(null)
   const [preset, setPreset] = useState('')
   const [reason, setReason] = useState('')
   const [markUnavailable, setMarkUnavailable] = useState(false)
@@ -124,7 +127,7 @@ export function Trips() {
                 <th>Status</th>
                 <th>Justificativa</th>
                 <th>Responsável</th>
-                {canOperate && <th />}
+                {canOperate && <th>Ações</th>}
               </tr>
             </thead>
             <tbody>
@@ -174,21 +177,28 @@ export function Trips() {
                     <td>{t.assignedBy.name}</td>
                     {canOperate && (
                       <td>
-                        {open && (
-                          <Button
-                            size="sm"
-                            variant={t.needsDelayReason ? 'primary' : 'secondary'}
-                            onClick={() => {
-                              setError('')
-                              setReportTrip(t)
-                              setPreset('')
-                              setReason(t.delayReason ?? '')
-                              setMarkUnavailable(!!t.unavailableReason)
-                            }}
-                          >
-                            {t.delayReason ? 'Atualizar' : 'Informar'}
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {isAdmin && (
+                            <Button size="sm" variant="ghost" onClick={() => setScheduleTrip(t)}>
+                              Datas
+                            </Button>
+                          )}
+                          {open && (
+                            <Button
+                              size="sm"
+                              variant={t.needsDelayReason ? 'primary' : 'secondary'}
+                              onClick={() => {
+                                setError('')
+                                setReportTrip(t)
+                                setPreset('')
+                                setReason(t.delayReason ?? '')
+                                setMarkUnavailable(!!t.unavailableReason)
+                              }}
+                            >
+                              {t.delayReason ? 'Atualizar' : 'Informar'}
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -255,6 +265,8 @@ export function Trips() {
           </div>
         </div>
       </Modal>
+
+      <TripScheduleModal trip={scheduleTrip} onClose={() => setScheduleTrip(null)} />
     </div>
   )
 }
