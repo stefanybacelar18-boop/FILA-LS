@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, FileSpreadsheet, Moon } from 'lucide-react'
+import { CalendarClock, ChevronLeft, ChevronRight, FileSpreadsheet, Moon } from 'lucide-react'
 import { api, downloadReport } from '../lib/api'
-import type { PernoitesData } from '../types'
+import type { PernoitesData, TripStatus } from '../types'
 import {
   PageHeader,
   Spinner,
@@ -13,9 +13,25 @@ import {
   Badge,
   EmptyState,
 } from '../components/ui'
+import { TripScheduleModal, type TripScheduleTarget } from '../components/TripScheduleModal'
+import { useAuthStore } from '../stores/auth'
 import { formatDate } from '../lib/format'
 import { tripStatusLabels } from '../lib/labels'
 import { cn } from '../lib/cn'
+
+function toScheduleTarget(t: PernoitesData['trips'][number]): TripScheduleTarget {
+  return {
+    id: t.id,
+    departureAt: t.departureAt,
+    expectedReturn: t.expectedReturn,
+    returnedAt: t.returnedAt,
+    status: t.status as TripStatus,
+    driverName: t.driverName,
+    vehicle: { plate: t.plate },
+    dealership: { name: t.dealershipName },
+    route: t.routeName ? { name: t.routeName } : null,
+  }
+}
 
 function RankingRow({
   rank,
@@ -63,6 +79,8 @@ function RankingRow({
 export function Pernoites() {
   const [offset, setOffset] = useState(0)
   const [exporting, setExporting] = useState(false)
+  const [scheduleTrip, setScheduleTrip] = useState<TripScheduleTarget | null>(null)
+  const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['pernoites', offset],
@@ -209,7 +227,8 @@ export function Pernoites() {
                   <th className="pb-2 pr-3 font-medium">Retorno</th>
                   <th className="pb-2 pr-3 font-medium">Destino</th>
                   <th className="pb-2 pr-3 font-medium text-center">Pernoites</th>
-                  <th className="pb-2 font-medium">Situação</th>
+                  <th className="pb-2 pr-3 font-medium">Situação</th>
+                  {isAdmin && <th className="pb-2 font-medium" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]/60">
@@ -231,7 +250,7 @@ export function Pernoites() {
                       <span className="text-xs text-[var(--color-text-muted)]">{t.dealershipCity}</span>
                     </td>
                     <td className="py-2.5 pr-3 text-center font-semibold tabular-nums">{t.nights}</td>
-                    <td className="py-2.5">
+                    <td className="py-2.5 pr-3">
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge tone={t.confirmed ? 'success' : 'warning'}>
                           {t.confirmed ? 'Confirmado' : 'Previsto'}
@@ -241,6 +260,14 @@ export function Pernoites() {
                         </span>
                       </div>
                     </td>
+                    {isAdmin && (
+                      <td className="py-2.5">
+                        <Button size="sm" variant="ghost" onClick={() => setScheduleTrip(toScheduleTarget(t))}>
+                          <CalendarClock className="h-4 w-4" />
+                          Datas
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -248,6 +275,8 @@ export function Pernoites() {
           </div>
         )}
       </Card>
+
+      <TripScheduleModal trip={scheduleTrip} onClose={() => setScheduleTrip(null)} />
     </div>
   )
 }
