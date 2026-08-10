@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronUp,
   FileText,
   ImageIcon,
   Paperclip,
@@ -28,6 +30,9 @@ import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
 import { TripScheduleModal } from '../components/TripScheduleModal'
+import { RouteLoadTable } from '../components/RouteLoadCard'
+import { tripRouteDestinations, tripRouteMotoTotal } from '../lib/trip-route-load'
+import { hasActivePriority } from '../lib/route-priority'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,application/pdf'
 const MAX_FILES = 6
@@ -239,15 +244,21 @@ function TripCard({
   onProblem,
   onSchedule,
   isAdmin,
+  canViewLoad,
 }: {
   trip: Trip
   onReturn: () => void
   onProblem: () => void
   onSchedule?: () => void
   isAdmin?: boolean
+  canViewLoad?: boolean
 }) {
+  const [loadOpen, setLoadOpen] = useState(false)
   const evidences = trip.evidences ?? []
   const hasProblem = !!trip.delayReason || evidences.length > 0
+  const destinations = tripRouteDestinations(trip)
+  const motoTotal = tripRouteMotoTotal(trip)
+  const route = trip.route
 
   return (
     <div
@@ -344,6 +355,41 @@ function TripCard({
           ))}
         </div>
       )}
+
+      {canViewLoad && destinations.length > 0 && (
+        <div className="mt-2 border-t border-[var(--color-border)]/70 pt-2">
+          <button
+            type="button"
+            onClick={() => setLoadOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-surface-2)]"
+          >
+            <span>
+              {loadOpen ? 'Ocultar entregas' : 'Ver entregas do roteiro'}
+              {' · '}
+              {destinations.length} parada{destinations.length !== 1 ? 's' : ''}
+              {motoTotal != null ? ` · ${motoTotal} motos` : ''}
+            </span>
+            {loadOpen ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+          </button>
+
+          {loadOpen && (
+            <div className="mt-1 rounded-lg border border-[var(--color-border)]/80 bg-[var(--color-bg)] px-2 pb-2">
+              {route && hasActivePriority(route) && route.priorityExpiryDate && (
+                <p className="mb-2 mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  Prioridade · vencimento {formatDate(route.priorityExpiryDate)}
+                  {route.priorityNotes ? ` — ${route.priorityNotes}` : ''}
+                </p>
+              )}
+              {route?.notes && (
+                <p className="mb-2 text-xs text-[var(--color-text-muted)]">
+                  <span className="font-medium text-[var(--color-text)]">Obs. roteiro:</span> {route.notes}
+                </p>
+              )}
+              <RouteLoadTable destinations={destinations} className="mt-0 border-t-0 pt-2" />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -357,6 +403,7 @@ function Section({
   onProblem,
   onSchedule,
   isAdmin,
+  canViewLoad,
 }: {
   title: string
   trips: Trip[]
@@ -366,6 +413,7 @@ function Section({
   onProblem: (t: Trip) => void
   onSchedule?: (t: Trip) => void
   isAdmin?: boolean
+  canViewLoad?: boolean
 }) {
   if (hideIfEmpty && trips.length === 0) return null
 
@@ -396,6 +444,7 @@ function Section({
               onProblem={() => onProblem(t)}
               onSchedule={onSchedule ? () => onSchedule(t) : undefined}
               isAdmin={isAdmin}
+              canViewLoad={canViewLoad}
             />
           ))}
         </div>
@@ -407,6 +456,7 @@ function Section({
 export function Returns() {
   const qc = useQueryClient()
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
+  const canViewLoad = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
   const [confirmTrip, setConfirmTrip] = useState<Trip | null>(null)
   const [reportTrip, setReportTrip] = useState<Trip | null>(null)
   const [scheduleTrip, setScheduleTrip] = useState<Trip | null>(null)
@@ -551,7 +601,7 @@ export function Returns() {
     <div className="page-desktop max-w-4xl space-y-4">
       <PageHeader
         title="Retornos"
-        description="Confirme o retorno ou registre problema (fotos opcionais)."
+        description="Confirme o retorno ou registre problema. Expanda “Ver entregas” para conferir o roteiro antes de retornar."
       />
 
       {error && !reportTrip && (
@@ -580,6 +630,7 @@ export function Returns() {
             onProblem={openProblemHandler}
             onSchedule={isAdmin ? setScheduleTrip : undefined}
             isAdmin={isAdmin}
+            canViewLoad={canViewLoad}
           />
           <Section
             title="Previsão hoje"
@@ -590,6 +641,7 @@ export function Returns() {
             onProblem={openProblemHandler}
             onSchedule={isAdmin ? setScheduleTrip : undefined}
             isAdmin={isAdmin}
+            canViewLoad={canViewLoad}
           />
           <Section
             title="Amanhã"
@@ -600,6 +652,7 @@ export function Returns() {
             onProblem={openProblemHandler}
             onSchedule={isAdmin ? setScheduleTrip : undefined}
             isAdmin={isAdmin}
+            canViewLoad={canViewLoad}
           />
           <Section
             title="Em 2 dias"
@@ -610,6 +663,7 @@ export function Returns() {
             onProblem={openProblemHandler}
             onSchedule={isAdmin ? setScheduleTrip : undefined}
             isAdmin={isAdmin}
+            canViewLoad={canViewLoad}
           />
           <Section
             title="Depois"
@@ -620,6 +674,7 @@ export function Returns() {
             onProblem={openProblemHandler}
             onSchedule={isAdmin ? setScheduleTrip : undefined}
             isAdmin={isAdmin}
+            canViewLoad={canViewLoad}
           />
         </div>
       )}
