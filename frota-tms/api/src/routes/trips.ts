@@ -67,7 +67,15 @@ const scheduleSchema = z.object({
 const tripInclude = {
   vehicle: true,
   dealership: true,
-  route: true,
+  route: {
+    include: {
+      dealership: true,
+      dealerships: {
+        orderBy: { order: 'asc' as const },
+        include: { dealership: true },
+      },
+    },
+  },
   assignedBy: { select: { id: true, name: true } },
   returnedBy: { select: { id: true, name: true } },
   delayReportedBy: { select: { id: true, name: true } },
