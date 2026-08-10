@@ -412,7 +412,7 @@ export function createTripsRouter(io: Server) {
     if (denyHiddenTripForOps(req.user?.role, trip)) {
       return res.status(404).json({ error: 'Viagem não encontrada' });
     }
-    if (trip.status === TripStatus.RETORNOU) {
+    if (trip.status === TripStatus.RETORNOU || trip.status === TripStatus.CANCELADO) {
       return res.status(400).json({ error: 'Viagem já finalizada' });
     }
 

@@ -3,12 +3,14 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
-import { Button, Input } from '../components/ui'
+import { Button, Input, Spinner } from '../components/ui'
 
 export function Login() {
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
+  const hydrated = useAuthStore((s) => s.hydrated)
+  const hydrate = useAuthStore((s) => s.hydrate)
   const login = useAuthStore((s) => s.login)
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggle)
@@ -22,6 +24,18 @@ export function Login() {
     root.classList.add('public-mobile')
     return () => root.classList.remove('public-mobile')
   }, [])
+
+  useEffect(() => {
+    void hydrate()
+  }, [hydrate])
+
+  if (!hydrated) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-[var(--color-bg)]">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
 
   if (token && user) return <Navigate to="/" replace />
 
@@ -58,16 +72,14 @@ export function Login() {
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">Entre para continuar</p>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
           <Input
             label="E-mail"
-            type="text"
+            type="email"
             autoComplete="username"
-            inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="h-11 max-w-full text-base"
           />
           <Input
             label="Senha"
@@ -76,24 +88,18 @@ export function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="h-11 max-w-full text-base"
           />
-          {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
-          <Button type="submit" className="h-11 w-full" loading={loading}>
+
+          {error && (
+            <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+              {error}
+            </p>
+          )}
+
+          <Button type="submit" className="w-full" loading={loading}>
             Entrar
           </Button>
         </form>
-
-        <p className="mt-6 text-center text-sm text-[var(--color-text-muted)]">
-          Motorista LSL?{' '}
-          <a href="/meu-roteiro" className="font-medium text-[var(--color-primary)] hover:underline">
-            Meu roteiro
-          </a>
-          {' · '}
-          <a href="/diario-bordo" className="font-medium text-[var(--color-primary)] hover:underline">
-            Diário de bordo
-          </a>
-        </p>
       </div>
     </div>
   )

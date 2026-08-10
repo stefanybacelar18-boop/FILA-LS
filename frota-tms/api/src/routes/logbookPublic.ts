@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { normalizePlate, plateOwner } from '../data/operatorVisibility';
+import { requireLslDriverPin } from '../lib/driver-pin';
 import {
   FUEL_LEVELS,
   validateChecklistComplete,
@@ -65,7 +66,7 @@ async function authenticateDriver(
   | { trip: NonNullable<Awaited<ReturnType<typeof findOpenLslTripByPlate>>> }
   | { error: string; status: number }
 > {
-  const expectedPin = (process.env.LSL_DRIVER_PIN || 'lsl2026').trim();
+  const expectedPin = requireLslDriverPin();
   if (!pinOk(pin.trim(), expectedPin)) {
     return { error: 'Senha incorreta.', status: 403 as const };
   }

@@ -13,9 +13,10 @@ import {
   Button,
   Modal,
   Textarea,
+  Input,
 } from '../components/ui'
 import { delayReasonPresets, tripStatusLabels } from '../lib/labels'
-import { formatDate } from '../lib/format'
+import { formatDate, combineDateAndTime, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
 import { TripScheduleModal } from '../components/TripScheduleModal'
@@ -31,6 +32,7 @@ export function Trips() {
   const [preset, setPreset] = useState('')
   const [reason, setReason] = useState('')
   const [markUnavailable, setMarkUnavailable] = useState(false)
+  const [expectedDate, setExpectedDate] = useState('')
   const [error, setError] = useState('')
 
   const { data = [], isLoading } = useQuery({
@@ -50,6 +52,7 @@ export function Trips() {
         .join(' — ')
       return api.post(`/trips/${reportTrip.id}/delay-report`, {
         reason: text,
+        newExpectedReturn: combineDateAndTime(expectedDate, '12:00').toISOString(),
         markUnavailable,
         unavailableReason: markUnavailable ? text : undefined,
       })
@@ -58,9 +61,12 @@ export function Trips() {
       void qc.invalidateQueries({ queryKey: ['trips'] })
       void qc.invalidateQueries({ queryKey: ['returns'] })
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['justifications'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
       setReportTrip(null)
       setPreset('')
       setReason('')
+      setExpectedDate('')
       setMarkUnavailable(false)
       setError('')
     },
@@ -193,6 +199,9 @@ export function Trips() {
                                 setPreset('')
                                 setReason(t.delayReason ?? '')
                                 setMarkUnavailable(!!t.unavailableReason)
+                                const d = new Date()
+                                d.setDate(d.getDate() + 2)
+                                setExpectedDate(toInputDate(d))
                               }}
                             >
                               {t.delayReason ? 'Atualizar' : 'Informar'}
@@ -226,6 +235,13 @@ export function Trips() {
             options={delayReasonPresets.map((label) => ({ value: label, label }))}
             placeholder="Selecione um motivo"
           />
+          <Input
+            label="Nova previsão de retorno"
+            type="date"
+            value={expectedDate}
+            onChange={(e) => setExpectedDate(e.target.value)}
+            required
+          />
           <Textarea
             label="Detalhe / justificativa"
             value={reason}
@@ -257,7 +273,7 @@ export function Trips() {
             </Button>
             <Button
               loading={reportMutation.isPending}
-              disabled={reason.trim().length < 5 && !preset}
+              disabled={(reason.trim().length < 5 && !preset) || !expectedDate}
               onClick={() => reportMutation.mutate()}
             >
               Salvar informe

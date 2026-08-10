@@ -5,6 +5,7 @@ import { PageHeader, Button, Input, Select, Card } from '../components/ui'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { Vehicle } from '../types'
+import { useAuthStore } from '../stores/auth'
 
 const reportTypes = [
   { type: 'frota', label: 'Frota completa' },
@@ -14,8 +15,8 @@ const reportTypes = [
   { type: 'periodo', label: 'Viagens por período' },
   { type: 'concessionarias', label: 'Concessionárias' },
   { type: 'historico-placa', label: 'Histórico por placa' },
-  { type: 'pernoites-lsl', label: 'Pernoites LSL (período folha)' },
-]
+  { type: 'pernoites-lsl', label: 'Pernoites LSL (período folha)', adminOnly: true },
+] as const
 
 export function Reports() {
   const [from, setFrom] = useState('')
@@ -23,6 +24,8 @@ export function Reports() {
   const [vehicleId, setVehicleId] = useState('')
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const canViewPernoites = useAuthStore((s) => s.hasRole('ADMIN', 'CONSULTA'))
+  const visibleReports = reportTypes.filter((r) => !('adminOnly' in r && r.adminOnly) || canViewPernoites)
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ['vehicles'],
@@ -82,7 +85,7 @@ export function Reports() {
       )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {reportTypes.map((r) => {
+        {visibleReports.map((r) => {
           const needsPlate = r.type === 'historico-placa' && !vehicleId
           const needsPeriod = r.type === 'periodo' && (!from || !to)
           const disabled = needsPlate || needsPeriod

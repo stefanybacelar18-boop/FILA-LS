@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { normalizePlate, plateOwner } from '../data/operatorVisibility';
+import { requireLslDriverPin } from '../lib/driver-pin';
 import { TripStatus } from '../types/enums';
 
 const router = Router();
@@ -54,7 +55,7 @@ router.post('/meu-roteiro', async (req, res) => {
     return res.status(400).json({ error: 'Informe a placa e a senha.' });
   }
 
-  const expectedPin = (process.env.LSL_DRIVER_PIN || 'lsl2026').trim();
+  const expectedPin = requireLslDriverPin();
   if (!pinOk(parsed.data.pin.trim(), expectedPin)) {
     return res.status(403).json({ error: 'Senha incorreta.' });
   }

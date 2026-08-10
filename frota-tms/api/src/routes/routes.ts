@@ -879,6 +879,21 @@ export function createRoutesRouter(io: Server) {
 
     try {
       const results = await prisma.$transaction(async (tx) => {
+        const claim = await tx.route.updateMany({
+          where: {
+            id: route.id,
+            status: RouteStatus.AGUARDANDO_PLACAS,
+            vehicles: { none: {} },
+            trips: {
+              none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+            },
+          },
+          data: { status: RouteStatus.EM_ANDAMENTO, plannedVehicleCount: 1 },
+        });
+        if (claim.count !== 1) {
+          throw Object.assign(new Error('Esta rota já tem placa definida'), { status: 409 });
+        }
+
         const trips: Array<{
           trip: Awaited<ReturnType<typeof tx.trip.create>>;
           farthest: DealershipWithPadTravel;
@@ -978,14 +993,6 @@ export function createRoutesRouter(io: Server) {
 
           trips.push({ trip: t, farthest, owner });
         }
-
-        await tx.route.update({
-          where: { id: route.id },
-          data: {
-            status: RouteStatus.EM_ANDAMENTO,
-            plannedVehicleCount: 1,
-          },
-        });
 
         return trips;
       });

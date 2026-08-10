@@ -47,6 +47,7 @@ export function LogbookAdmin() {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [coordSig, setCoordSig] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [signError, setSignError] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['logbook', queueOnly],
@@ -70,6 +71,7 @@ export function LogbookAdmin() {
       return api.post(`/logbook/${selectedTripId}/coordinator-sign`, { signaturePng: coordSig })
     },
     onSuccess: async () => {
+      setSignError('')
       setCoordSig(null)
       await qc.invalidateQueries({ queryKey: ['logbook'] })
       if (selectedTripId && detail) {
@@ -77,6 +79,12 @@ export function LogbookAdmin() {
         const date = formatDate(detail.trip.departureAt, 'yyyy-MM-dd')
         await downloadReport(`/logbook/${selectedTripId}/pdf`, `diario-bordo-${plate}-${date}.pdf`)
       }
+    },
+    onError: (err: unknown) => {
+      setSignError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível assinar e arquivar o diário.',
+      )
     },
   })
 
@@ -302,6 +310,11 @@ export function LogbookAdmin() {
                     Após conferir, assine abaixo. O PDF oficial será baixado automaticamente para arquivo.
                   </p>
                   <SignaturePad label="Líder ou coordenador" onChange={setCoordSig} />
+                  {signError && (
+                    <p className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+                      {signError}
+                    </p>
+                  )}
                   <Button
                     className="mt-3"
                     loading={signMutation.isPending}
