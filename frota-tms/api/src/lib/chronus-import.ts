@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { addDays, format, startOfDay } from 'date-fns';
+import { addDays, format } from 'date-fns';
+import { operationalDateKey, parseOperationalDateTime } from '../utils/timezone';
 import {
   chronusPlateNotes,
   resolveManifestPlateHint,
@@ -157,8 +158,10 @@ export function isExpiryCityExcluded(city: string): boolean {
 }
 
 export function routeDateFromImport(baseDate = new Date()): Date {
-  let d = addDays(startOfDay(baseDate), 1);
-  while (d.getDay() === 0) d = addDays(d, 1);
+  let d = addDays(parseOperationalDateTime(operationalDateKey(baseDate), '12:00:00'), 1);
+  while (new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bahia', weekday: 'short' }).format(d) === 'Sun') {
+    d = addDays(d, 1);
+  }
   return d;
 }
 

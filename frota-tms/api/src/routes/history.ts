@@ -1,19 +1,26 @@
 import { Router } from 'express';
 import { Role } from '../types/enums';
 import { prisma } from '../lib/prisma';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, type AuthRequest } from '../middleware/auth';
 import { paramId } from '../utils/params';
 import { vehicleColor, isOverdue } from '../utils/status';
+import {
+  filterTripsForRole,
+  isPlateHiddenFromOperator,
+} from '../data/operatorVisibility';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/vehicle/:id', async (req, res) => {
+router.get('/vehicle/:id', async (req: AuthRequest, res) => {
   const vehicle = await prisma.vehicle.findUnique({
     where: { id: paramId(req) },
     include: { blockedBy: { select: { id: true, name: true } } },
   });
   if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
+  if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(vehicle.plate)) {
+    return res.status(404).json({ error: 'Veículo não encontrado' });
+  }
 
   const [history, trips, activeTrip] = await Promise.all([
     prisma.vehicleHistory.findMany({
@@ -56,7 +63,7 @@ router.get('/vehicle/:id', async (req, res) => {
   });
 });
 
-router.get('/trips', async (req, res) => {
+router.get('/trips', async (req: AuthRequest, res) => {
   const { dealershipId, userId, vehicleType, from, to, plate } = req.query;
   const where: Record<string, unknown> = {};
   if (dealershipId) where.dealershipId = String(dealershipId);
@@ -85,7 +92,7 @@ router.get('/trips', async (req, res) => {
     take: 500,
   });
   res.json(
-    trips.map((t) => ({
+    filterTripsForRole(req.user?.role, trips).map((t) => ({
       ...t,
       overdue: isOverdue(t.expectedReturn, t.returnedAt),
       color: vehicleColor(t.vehicle.status, t.expectedReturn),

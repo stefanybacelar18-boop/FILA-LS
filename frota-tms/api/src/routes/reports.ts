@@ -2,7 +2,7 @@ import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import { authenticate, type AuthRequest } from '../middleware/auth';
 import { Role } from '../types/enums';
 import { daysUntilExpiry } from '../utils/status';
 import { format } from 'date-fns';
@@ -30,8 +30,21 @@ async function tripRows(from?: string, to?: string) {
   });
 }
 
-router.get('/excel/:type', async (req, res) => {
-  const { type } = req.params;
+const SENSITIVE_REPORT_TYPES = new Set(['pernoites-lsl']);
+
+function denySensitiveReport(req: AuthRequest, type: string): boolean {
+  return (
+    SENSITIVE_REPORT_TYPES.has(type) &&
+    req.user?.role !== Role.ADMIN &&
+    req.user?.role !== Role.CONSULTA
+  );
+}
+
+router.get('/excel/:type', async (req: AuthRequest, res) => {
+  const type = String(req.params.type);
+  if (denySensitiveReport(req, type)) {
+    return res.status(403).json({ error: 'Acesso negado a este relatório' });
+  }
   const { from, to, vehicleId } = req.query;
   const wb = new ExcelJS.Workbook();
   wb.creator = 'FrotaTMS';
@@ -199,8 +212,11 @@ router.get('/excel/:type', async (req, res) => {
   res.end();
 });
 
-router.get('/pdf/:type', async (req, res) => {
-  const { type } = req.params;
+router.get('/pdf/:type', async (req: AuthRequest, res) => {
+  const type = String(req.params.type);
+  if (denySensitiveReport(req, type)) {
+    return res.status(403).json({ error: 'Acesso negado a este relatório' });
+  }
   const doc = new PDFDocument({ margin: 40, size: 'A4' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=relatorio-${type}.pdf`);

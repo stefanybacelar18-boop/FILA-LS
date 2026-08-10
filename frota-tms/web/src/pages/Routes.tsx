@@ -19,7 +19,7 @@ import {
 import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { useAuthStore } from '../stores/auth'
 import { routeStatusLabels } from '../lib/labels'
-import { formatDate } from '../lib/format'
+import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { plateOwner } from '../lib/plateOwner'
 import { hasActivePriority } from '../lib/route-priority'
@@ -526,7 +526,7 @@ export function Routes() {
                     r.status === 'AGUARDANDO_PLACAS' && (!r.vehicles || r.vehicles.length === 0)
                   const expiryPast =
                     !!r.priorityExpiryDate &&
-                    new Date(r.priorityExpiryDate) < new Date(new Date().toDateString())
+                    toInputDate(r.priorityExpiryDate) < toInputDate(new Date())
                   const returnDate = r.returnForecast?.expectedReturn
                     ? formatDate(r.returnForecast.expectedReturn)
                     : null
@@ -735,7 +735,7 @@ export function Routes() {
                   className={cn(
                     'mt-1 text-sm font-medium',
                     detailRoute.priorityExpiryDate &&
-                      new Date(detailRoute.priorityExpiryDate) < new Date()
+                      toInputDate(detailRoute.priorityExpiryDate) < toInputDate(new Date())
                       ? 'text-[var(--color-danger)]'
                       : 'text-[var(--color-text)]',
                   )}

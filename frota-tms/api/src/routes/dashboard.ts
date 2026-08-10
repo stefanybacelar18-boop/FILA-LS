@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { TripStatus, VehicleStatus, RouteStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { Role } from '../types/enums';
 import { isOverdue } from '../utils/status';
 import { addDays, startOfDay, subDays, format } from 'date-fns';
 import { hasActivePriority } from '../lib/route-priority.js';
@@ -15,7 +16,7 @@ const TRIPS_CHART_DAYS = 14;
 const RANKING_DAYS = 30;
 const RANKING_LIMIT = 10;
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req: AuthRequest, res) => {
   const today = startOfDay(new Date());
   const rankingSince = subDays(today, RANKING_DAYS - 1);
   const chartSince = subDays(today, TRIPS_CHART_DAYS - 1);
@@ -111,6 +112,9 @@ router.get('/', async (_req, res) => {
   const pernoiteData = await fetchLslPernoitesForPeriod(payrollPeriod);
   const pernoiteRanking = pernoiteData.ranking.slice(0, RANKING_LIMIT);
 
+  const showPernoites =
+    req.user?.role === Role.ADMIN || req.user?.role === Role.CONSULTA;
+
   res.json({
     period: {
       tripsChartDays: TRIPS_CHART_DAYS,
@@ -131,11 +135,13 @@ router.get('/', async (_req, res) => {
     tripsPerDay,
     dealershipRanking,
     plateRanking,
-    pernoiteRanking,
-    pernoiteSummary: {
-      totalPernoites: pernoiteData.totalPernoites,
-      totalTrips: pernoiteData.totalTrips,
-    },
+    pernoiteRanking: showPernoites ? pernoiteRanking : [],
+    pernoiteSummary: showPernoites
+      ? {
+          totalPernoites: pernoiteData.totalPernoites,
+          totalTrips: pernoiteData.totalTrips,
+        }
+      : { totalPernoites: 0, totalTrips: 0 },
   });
 });
 

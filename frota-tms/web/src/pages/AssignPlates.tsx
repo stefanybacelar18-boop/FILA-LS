@@ -313,6 +313,7 @@ export function AssignPlates() {
         qc.invalidateQueries({ queryKey: ['dashboard'] }),
         qc.invalidateQueries({ queryKey: ['plates-board'] }),
         qc.invalidateQueries({ queryKey: ['planning-alerts'] }),
+        qc.invalidateQueries({ queryKey: ['returns'] }),
       ])
     },
     onError: (err: unknown) => {

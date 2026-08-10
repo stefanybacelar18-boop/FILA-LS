@@ -12,6 +12,11 @@ import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 import { isFirstRouteSentToday } from '../services/notify';
 import {
+  filterPlatesForRole,
+  filterTripsForRole,
+} from '../data/operatorVisibility';
+import { normalizeRouteDateInput } from '../utils/timezone';
+import {
   buildChronusPreview,
   parseChronusFile,
   chronusDestinationsByDealershipId,
@@ -287,8 +292,13 @@ export function createPlanningRouter(io: Server) {
     if (cities.length === 0) {
       return res.status(400).json({ error: 'Nenhuma cidade pendente selecionada' });
     }
+    if (cities.length !== parsed.data.planningCityIds.length) {
+      return res.status(409).json({
+        error: 'Uma ou mais cidades já foram usadas em outro roteiro',
+      });
+    }
 
-    const date = new Date(parsed.data.date);
+    const date = normalizeRouteDateInput(parsed.data.date);
     const cityNames = cities.map((c) => c.city);
     const name = parsed.data.name?.trim() || suggestRouteName(cityNames, date);
 
@@ -510,7 +520,7 @@ export function createPlanningRouter(io: Server) {
 
     const data: Record<string, unknown> = {};
     if (parsed.data.name) data.name = parsed.data.name.trim();
-    if (parsed.data.date) data.date = new Date(parsed.data.date);
+    if (parsed.data.date) data.date = normalizeRouteDateInput(parsed.data.date);
     if (parsed.data.hasPriority !== undefined) {
       data.hasPriority = parsed.data.hasPriority;
       if (!parsed.data.hasPriority) {
@@ -666,7 +676,7 @@ export function createPlanningRouter(io: Server) {
   });
 
   /** Central de Alertas */
-  router.get('/alerts', async (_req, res) => {
+  router.get('/alerts', async (req: AuthRequest, res) => {
     const today = startOfDay(new Date());
     const tomorrow = addDays(today, 1);
     const dayAfter = addDays(today, 2);
@@ -698,11 +708,14 @@ export function createPlanningRouter(io: Server) {
       }),
     ]);
 
-    const atrasados = openTrips.filter((t) => isOverdue(t.expectedReturn, t.returnedAt));
-    const retornosHoje = openTrips.filter(
+    const visibleTrips = filterTripsForRole(req.user?.role, openTrips);
+    const visibleBloqueados = filterPlatesForRole(req.user?.role, bloqueados);
+
+    const atrasados = visibleTrips.filter((t) => isOverdue(t.expectedReturn, t.returnedAt));
+    const retornosHoje = visibleTrips.filter(
       (t) => t.expectedReturn >= today && t.expectedReturn < tomorrow,
     );
-    const retornosAmanha = openTrips.filter(
+    const retornosAmanha = visibleTrips.filter(
       (t) => t.expectedReturn >= tomorrow && t.expectedReturn < dayAfter,
     );
 
@@ -716,7 +729,7 @@ export function createPlanningRouter(io: Server) {
       criticas: criticas.map((r) => ({ ...r, ...coverageOf(r) })),
       prioritarias: prioritarias.map((r) => ({ ...r, ...coverageOf(r) })),
       atrasados,
-      bloqueados,
+      bloqueados: visibleBloqueados,
       retornosHoje,
       retornosAmanha,
       counts: {
@@ -919,6 +932,14 @@ export function createPlanningRouter(io: Server) {
     }[];
 
     const created = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.importBatch.updateMany({
+        where: { id: batch.id, status: 'PREVIEW' },
+        data: { status: 'COMMITTED' },
+      });
+      if (claimed.count !== 1) {
+        throw Object.assign(new Error('Lote já processado'), { status: 409 });
+      }
+
       const rows = [];
       for (const p of preview) {
         const existing = await tx.planningCity.findFirst({
@@ -957,10 +978,6 @@ export function createPlanningRouter(io: Server) {
           );
         }
       }
-      await tx.importBatch.update({
-        where: { id: batch.id },
-        data: { status: 'COMMITTED' },
-      });
       return rows;
     });
 
@@ -1086,6 +1103,14 @@ export function createPlanningRouter(io: Server) {
     const firstOfDay = await isFirstRouteSentToday();
 
     const { createdRoutes, refreshedRoutes } = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.importBatch.updateMany({
+        where: { id: batch.id, status: 'PREVIEW' },
+        data: { status: 'COMMITTED' },
+      });
+      if (claimed.count !== 1) {
+        throw Object.assign(new Error('Lote já processado'), { status: 409 });
+      }
+
       const routes = [];
       const refreshed = [];
 
@@ -1094,16 +1119,22 @@ export function createPlanningRouter(io: Server) {
 
         for (const dest of item.destinations) {
           if (!dest.dealershipId) continue;
-          await tx.routeDealership.updateMany({
-            where: { routeId, dealershipId: dest.dealershipId },
-            data: {
+          const loadRow = chronusDealershipLoadRow(dest.dealershipId, dest.order, dest);
+          await tx.routeDealership.upsert({
+            where: {
+              routeId_dealershipId: { routeId, dealershipId: dest.dealershipId },
+            },
+            create: {
+              routeId,
+              dealershipId: dest.dealershipId,
               order: dest.order,
               motoCount: dest.motoCount,
-              minExpiryDate: chronusDealershipLoadRow(
-                dest.dealershipId,
-                dest.order,
-                dest,
-              ).minExpiryDate,
+              minExpiryDate: loadRow.minExpiryDate,
+            },
+            update: {
+              order: dest.order,
+              motoCount: dest.motoCount,
+              minExpiryDate: loadRow.minExpiryDate,
             },
           });
         }
@@ -1157,11 +1188,6 @@ export function createPlanningRouter(io: Server) {
         });
         routes.push(route);
       }
-
-      await tx.importBatch.update({
-        where: { id: batch.id },
-        data: { status: 'COMMITTED' },
-      });
 
       return { createdRoutes: routes, refreshedRoutes: refreshed };
     });

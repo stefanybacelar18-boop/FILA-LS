@@ -26,7 +26,7 @@ import {
   Input,
 } from '../components/ui'
 import { delayReasonPresets } from '../lib/labels'
-import { formatDate, toInputDate } from '../lib/format'
+import { formatDate, toInputDate, combineDateAndTime } from '../lib/format'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
 import { TripScheduleModal } from '../components/TripScheduleModal'
@@ -522,7 +522,7 @@ export function Returns() {
 
       const form = new FormData()
       form.append('reason', text)
-      form.append('newExpectedReturn', newExpectedReturn)
+      form.append('newExpectedReturn', combineDateAndTime(newExpectedReturn, '12:00').toISOString())
       form.append('markUnavailable', markUnavailable ? 'true' : 'false')
       if (markUnavailable) form.append('unavailableReason', text)
       files.forEach((f) => form.append('evidence', f))

@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, endOfDay, format, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { operationalDateKey, parseOperationalDateTime } from './timezone';
 
 export interface PayrollPeriod {
   start: Date;
@@ -53,10 +54,16 @@ export function pernoiteNights(trip: {
   expectedReturn: Date;
   returnedAt?: Date | null;
 }): number {
-  const depDay = startOfDay(trip.departureAt);
+  const depKey = operationalDateKey(trip.departureAt);
   const returnRef = trip.returnedAt ?? trip.expectedReturn;
-  const retDay = startOfDay(returnRef);
-  return Math.max(0, differenceInCalendarDays(retDay, depDay));
+  const retKey = operationalDateKey(returnRef);
+  return Math.max(
+    0,
+    differenceInCalendarDays(
+      parseOperationalDateTime(retKey, '12:00:00'),
+      parseOperationalDateTime(depKey, '12:00:00'),
+    ),
+  );
 }
 
 export function isPernoite(trip: {

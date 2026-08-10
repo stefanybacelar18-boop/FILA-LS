@@ -29,6 +29,7 @@ import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
+import { requireLslDriverPin } from './lib/driver-pin';
 
 const app = express();
 const server = http.createServer(app);
@@ -84,10 +85,9 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/justifications', justificationsRoutes);
 app.use('/api/evidences', evidencesRoutes);
 
-/** Evidências de atraso (fotos/PDF) */
+/** Evidências de atraso (fotos/PDF) — servidas apenas via /api/evidences/:id */
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 fs.mkdirSync(path.join(uploadsDir, 'trip-evidence'), { recursive: true });
-app.use('/uploads', express.static(uploadsDir));
 
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -149,6 +149,12 @@ io.on('connection', (socket) => {
 });
 
 const PORT = Number(process.env.PORT) || 4000;
+try {
+  requireLslDriverPin();
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
   void ensureBootstrapUsers(prisma).catch((err) =>

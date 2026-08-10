@@ -94,8 +94,10 @@ function SummaryKpi({
 export function Dashboard() {
   const qc = useQueryClient()
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
+  const canOperate = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
   const [purgeOpen, setPurgeOpen] = useState(false)
   const [purgeMsg, setPurgeMsg] = useState('')
+  const [purgeError, setPurgeError] = useState('')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
@@ -107,6 +109,7 @@ export function Dashboard() {
       (await api.post<{ deleted: number; names: string[] }>('/routes/purge-cancelled')).data,
     onSuccess: (result) => {
       setPurgeOpen(false)
+      setPurgeError('')
       setPurgeMsg(
         result.deleted > 0
           ? `${result.deleted} roteiro(s) cancelado(s) removido(s).`
@@ -114,6 +117,12 @@ export function Dashboard() {
       )
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       void qc.invalidateQueries({ queryKey: ['routes'] })
+    },
+    onError: (err: unknown) => {
+      setPurgeError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível remover os roteiros cancelados.',
+      )
     },
   })
 
@@ -141,16 +150,18 @@ export function Dashboard() {
       href: '/roteiros?tab=prioridades',
       tone: 'danger' as const,
     },
-    summary.aguardandoPlaca > 0 && {
-      text: `${summary.aguardandoPlaca} aguardando placa`,
-      href: '/definir-placas',
-      tone: 'info' as const,
-    },
-    summary.viagensAtrasadas > 0 && {
-      text: `${summary.viagensAtrasadas} viagem(ns) em atraso`,
-      href: '/retornos',
-      tone: 'warning' as const,
-    },
+    canOperate &&
+      summary.aguardandoPlaca > 0 && {
+        text: `${summary.aguardandoPlaca} aguardando placa`,
+        href: '/definir-placas',
+        tone: 'info' as const,
+      },
+    canOperate &&
+      summary.viagensAtrasadas > 0 && {
+        text: `${summary.viagensAtrasadas} viagem(ns) em atraso`,
+        href: '/retornos',
+        tone: 'warning' as const,
+      },
   ].filter(Boolean) as { text: string; href: string; tone: 'danger' | 'info' | 'warning' }[]
 
   return (
@@ -216,21 +227,21 @@ export function Dashboard() {
           value={summary.emViagem}
           icon={MapPinned}
           tone="text-blue-600"
-          href="/retornos"
+          href={canOperate ? '/retornos' : undefined}
         />
         <SummaryKpi
           label="Aguardando placa"
           value={summary.aguardandoPlaca}
           icon={Tags}
           tone="text-[var(--color-primary)]"
-          href="/definir-placas"
+          href={canOperate ? '/definir-placas' : undefined}
         />
         <SummaryKpi
           label="Viagens atrasadas"
           value={summary.viagensAtrasadas}
           icon={AlertTriangle}
           tone="text-red-600"
-          href="/retornos"
+          href={canOperate ? '/retornos' : undefined}
         />
       </div>
 
@@ -394,9 +405,18 @@ export function Dashboard() {
         </Link>
       </p>
 
+      {purgeError && (
+        <p className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+          {purgeError}
+        </p>
+      )}
+
       <ConfirmModal
         open={purgeOpen}
-        onClose={() => setPurgeOpen(false)}
+        onClose={() => {
+          setPurgeOpen(false)
+          setPurgeError('')
+        }}
         title="Remover roteiros cancelados"
         message="Isso apaga permanentemente todos os roteiros com status Cancelado. Esta ação não pode ser desfeita."
         confirmLabel="Remover permanentemente"
