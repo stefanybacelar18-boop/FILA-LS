@@ -28,6 +28,7 @@ import { prisma } from './lib/prisma';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
+import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
 
 const app = express();
 const server = http.createServer(app);
@@ -160,6 +161,10 @@ server.listen(PORT, '0.0.0.0', () => {
       if (typeof n === 'number' && n > 0) console.log(`Motoristas oficiais ativos: ${n}`);
     })
     .catch((err) => console.warn('Bootstrap/sync operacional:', err?.message ?? err));
+
+  void applyOneOffTripFixes().catch((err) =>
+    console.warn('Correções pontuais de viagem:', err?.message ?? err),
+  );
 
   // Atualiza dias de viagem (inclui regra de retorno no mesmo dia)
   void (async () => {

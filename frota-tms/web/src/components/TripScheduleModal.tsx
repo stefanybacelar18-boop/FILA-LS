@@ -1,23 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { addDays } from 'date-fns'
 import { CalendarClock } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Trip } from '../types'
 import { Button, Input, Modal } from './ui'
 import { combineDateAndTime, toInputDate, toInputTime } from '../lib/format'
 
-export type TripScheduleTarget = Pick<
-  Trip,
-  'id' | 'departureAt' | 'expectedReturn' | 'returnedAt' | 'status' | 'driverName'
-> & {
-  vehicle: { plate: string }
-  dealership: { name: string }
-  route?: { name: string } | null
-}
-
 type Props = {
-  trip: TripScheduleTarget | null
+  trip: Trip | null
   onClose: () => void
   onSuccess?: () => void
 }
@@ -28,12 +18,8 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
   const [departureTime, setDepartureTime] = useState('06:00')
   const [expectedDate, setExpectedDate] = useState('')
   const [expectedTime, setExpectedTime] = useState('06:00')
-  const [returnedDate, setReturnedDate] = useState('')
-  const [returnedTime, setReturnedTime] = useState('06:00')
   const [shiftReturn, setShiftReturn] = useState(true)
   const [error, setError] = useState('')
-
-  const hasActualReturn = trip?.status === 'RETORNOU' || !!trip?.returnedAt
 
   useEffect(() => {
     if (!trip) return
@@ -41,9 +27,6 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
     setDepartureTime(toInputTime(trip.departureAt))
     setExpectedDate(toInputDate(trip.expectedReturn))
     setExpectedTime(toInputTime(trip.expectedReturn))
-    const returnRef = trip.returnedAt ?? trip.expectedReturn
-    setReturnedDate(toInputDate(returnRef))
-    setReturnedTime(toInputTime(returnRef))
     setShiftReturn(true)
     setError('')
   }, [trip])
@@ -52,18 +35,11 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
     mutationFn: async () => {
       if (!trip) return
       const departureAt = combineDateAndTime(departureDate, departureTime)
-      const body: {
-        departureAt: string
-        expectedReturn?: string
-        returnedAt?: string
-      } = {
+      const body: { departureAt: string; expectedReturn?: string } = {
         departureAt: departureAt.toISOString(),
       }
       if (!shiftReturn) {
         body.expectedReturn = combineDateAndTime(expectedDate, expectedTime).toISOString()
-      }
-      if (hasActualReturn) {
-        body.returnedAt = combineDateAndTime(returnedDate, returnedTime).toISOString()
       }
       return api.patch(`/trips/${trip.id}/schedule`, body)
     },
@@ -84,17 +60,6 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
     },
   })
 
-  function setReturnNextDay() {
-    const departure = combineDateAndTime(departureDate, departureTime)
-    const nextDay = addDays(departure, 1)
-    setReturnedDate(toInputDate(nextDay))
-    setReturnedTime(departureTime)
-    if (!shiftReturn) {
-      setExpectedDate(toInputDate(nextDay))
-      setExpectedTime(departureTime)
-    }
-  }
-
   if (!trip) return null
 
   return (
@@ -105,8 +70,8 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
     >
       <div className="space-y-4">
         <p className="text-sm text-[var(--color-text-muted)]">
-          Altere o início da viagem{hasActualReturn ? ', o retorno real' : ''} e a previsão de
-          retorno. Funciona para viagens em andamento e já concluídas. Apenas administrador.
+          Altere o início da viagem e a previsão de retorno. Funciona para viagens em andamento e
+          já concluídas. Apenas administrador.
         </p>
 
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs">
@@ -148,31 +113,6 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
         >
           Usar hoje como data de saída
         </Button>
-
-        {hasActualReturn && (
-          <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-3">
-            <p className="text-sm font-medium">Retorno real (confirma pernoites)</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                label="Data de retorno"
-                type="date"
-                value={returnedDate}
-                onChange={(e) => setReturnedDate(e.target.value)}
-                required
-              />
-              <Input
-                label="Hora de retorno"
-                type="time"
-                value={returnedTime}
-                onChange={(e) => setReturnedTime(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="button" variant="secondary" size="sm" onClick={setReturnNextDay}>
-              Retorno no dia seguinte (1 pernoite)
-            </Button>
-          </div>
-        )}
 
         <label className="flex items-start gap-2 text-sm">
           <input
@@ -218,7 +158,7 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
           </Button>
           <Button
             loading={saveMutation.isPending}
-            disabled={!departureDate || (hasActualReturn && !returnedDate)}
+            disabled={!departureDate}
             onClick={() => saveMutation.mutate()}
           >
             <CalendarClock className="h-4 w-4" />
