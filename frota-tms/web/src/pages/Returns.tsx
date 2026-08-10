@@ -26,6 +26,8 @@ import {
 import { delayReasonPresets } from '../lib/labels'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
+import { useAuthStore } from '../stores/auth'
+import { TripScheduleModal } from '../components/TripScheduleModal'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,application/pdf'
 const MAX_FILES = 6
@@ -235,10 +237,14 @@ function TripCard({
   trip,
   onReturn,
   onProblem,
+  onSchedule,
+  isAdmin,
 }: {
   trip: Trip
   onReturn: () => void
   onProblem: () => void
+  onSchedule?: () => void
+  isAdmin?: boolean
 }) {
   const evidences = trip.evidences ?? []
   const hasProblem = !!trip.delayReason || evidences.length > 0
@@ -303,6 +309,11 @@ function TripCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-1.5 sm:flex-col sm:items-stretch">
+          {isAdmin && onSchedule && (
+            <Button size="sm" variant="ghost" onClick={onSchedule}>
+              Ajustar saída
+            </Button>
+          )}
           <Button size="sm" onClick={onReturn}>
             <Check className="h-3.5 w-3.5" />
             Retorna
@@ -344,6 +355,8 @@ function Section({
   hideIfEmpty,
   onReturn,
   onProblem,
+  onSchedule,
+  isAdmin,
 }: {
   title: string
   trips: Trip[]
@@ -351,6 +364,8 @@ function Section({
   hideIfEmpty?: boolean
   onReturn: (t: Trip) => void
   onProblem: (t: Trip) => void
+  onSchedule?: (t: Trip) => void
+  isAdmin?: boolean
 }) {
   if (hideIfEmpty && trips.length === 0) return null
 
@@ -379,6 +394,8 @@ function Section({
               trip={t}
               onReturn={() => onReturn(t)}
               onProblem={() => onProblem(t)}
+              onSchedule={onSchedule ? () => onSchedule(t) : undefined}
+              isAdmin={isAdmin}
             />
           ))}
         </div>
@@ -389,8 +406,10 @@ function Section({
 
 export function Returns() {
   const qc = useQueryClient()
+  const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const [confirmTrip, setConfirmTrip] = useState<Trip | null>(null)
   const [reportTrip, setReportTrip] = useState<Trip | null>(null)
+  const [scheduleTrip, setScheduleTrip] = useState<Trip | null>(null)
   const [delayReason, setDelayReason] = useState('')
   const [preset, setPreset] = useState('')
   const [newExpectedReturn, setNewExpectedReturn] = useState('')
@@ -559,6 +578,8 @@ export function Returns() {
             tone="text-[var(--color-danger)]"
             onReturn={openReturn}
             onProblem={openProblemHandler}
+            onSchedule={isAdmin ? setScheduleTrip : undefined}
+            isAdmin={isAdmin}
           />
           <Section
             title="Previsão hoje"
@@ -567,6 +588,8 @@ export function Returns() {
             hideIfEmpty
             onReturn={openReturn}
             onProblem={openProblemHandler}
+            onSchedule={isAdmin ? setScheduleTrip : undefined}
+            isAdmin={isAdmin}
           />
           <Section
             title="Amanhã"
@@ -575,6 +598,8 @@ export function Returns() {
             hideIfEmpty
             onReturn={openReturn}
             onProblem={openProblemHandler}
+            onSchedule={isAdmin ? setScheduleTrip : undefined}
+            isAdmin={isAdmin}
           />
           <Section
             title="Em 2 dias"
@@ -583,6 +608,8 @@ export function Returns() {
             hideIfEmpty
             onReturn={openReturn}
             onProblem={openProblemHandler}
+            onSchedule={isAdmin ? setScheduleTrip : undefined}
+            isAdmin={isAdmin}
           />
           <Section
             title="Depois"
@@ -591,6 +618,8 @@ export function Returns() {
             hideIfEmpty
             onReturn={openReturn}
             onProblem={openProblemHandler}
+            onSchedule={isAdmin ? setScheduleTrip : undefined}
+            isAdmin={isAdmin}
           />
         </div>
       )}
@@ -719,6 +748,8 @@ export function Returns() {
           )}
         </div>
       </Modal>
+
+      <TripScheduleModal trip={scheduleTrip} onClose={() => setScheduleTrip(null)} />
     </div>
   )
 }

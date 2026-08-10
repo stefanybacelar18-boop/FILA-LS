@@ -37,3 +37,17 @@ export function toInputDate(value?: string | Date | null) {
   if (!value) return ''
   return calendarDay(value) ?? ''
 }
+
+export function toInputTime(value?: string | Date | null, fallback = '06:00') {
+  if (!value) return fallback
+  const d = typeof value === 'string' ? parseISO(value) : value
+  if (!isValid(d)) return fallback
+  return format(d, 'HH:mm')
+}
+
+/** Monta Date local a partir de YYYY-MM-DD e HH:mm (sem deslocar o dia por UTC). */
+export function combineDateAndTime(dateYmd: string, timeHm: string): Date {
+  const [y, mo, day] = dateYmd.split('-').map(Number)
+  const [h, m] = timeHm.split(':').map(Number)
+  return new Date(y, (mo || 1) - 1, day || 1, h ?? 6, m ?? 0, 0, 0)
+}

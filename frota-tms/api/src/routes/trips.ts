@@ -9,8 +9,6 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { isOverdue, vehicleColor, expectedReturnDate } from '../utils/status';
 import { addDays, differenceInCalendarDays, startOfDay } from 'date-fns';
-
-import type { Server } from 'socket.io';
 import { paramId } from '../utils/params';
 import {
   filterTripsForRole,
@@ -19,6 +17,8 @@ import {
   plateOwner,
 } from '../data/operatorVisibility';
 import { isLslNextDayOverrideCity } from '../utils/geo';
+
+import type { Server } from 'socket.io';
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads/trip-evidence');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -54,6 +54,14 @@ const delayReportSchema = z.object({
 const returnSchema = z.object({
   delayReason: z.string().min(5).optional(),
   notes: z.string().optional().nullable(),
+});
+
+const scheduleSchema = z.object({
+  departureAt: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Data/hora de saída inválida'),
+  expectedReturn: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'Previsão de retorno inválida')
+    .optional(),
 });
 
 const tripInclude = {
@@ -487,6 +495,78 @@ export function createTripsRouter(io: Server) {
     io.emit('fleet:changed', { action: 'return', tripId: trip.id });
     io.emit('trips:changed', { action: 'return' });
     res.json(updated);
+  });
+
+  /** Admin: ajusta manualmente saída e previsão de retorno (inclusive viagens concluídas). */
+  router.patch('/:id/schedule', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const parsed = scheduleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Informe data/hora de saída válida.', details: parsed.error.flatten() });
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: paramId(req) },
+      include: { vehicle: true },
+    });
+    if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+
+    const departureAt = new Date(parsed.data.departureAt);
+    let expectedReturn = parsed.data.expectedReturn
+      ? new Date(parsed.data.expectedReturn)
+      : addDays(
+          trip.expectedReturn,
+          differenceInCalendarDays(startOfDay(departureAt), startOfDay(trip.departureAt)),
+        );
+
+    if (expectedReturn < departureAt) {
+      return res.status(400).json({
+        error: 'A previsão de retorno não pode ser anterior à saída.',
+      });
+    }
+
+    const wasFinished = trip.status === TripStatus.RETORNOU;
+    let nextStatus = trip.status;
+    if (!wasFinished) {
+      nextStatus = isOverdue(expectedReturn, null) ? TripStatus.ATRASADO : TripStatus.EM_ANDAMENTO;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const t = await tx.trip.update({
+        where: { id: trip.id },
+        data: {
+          departureAt,
+          expectedReturn,
+          status: nextStatus,
+        },
+        include: tripInclude,
+      });
+
+      await tx.vehicleHistory.create({
+        data: {
+          vehicleId: trip.vehicleId,
+          userId: req.user!.id,
+          tripId: trip.id,
+          action: 'AJUSTE_DATAS',
+          fromStatus: trip.vehicle.status,
+          toStatus: trip.vehicle.status,
+          details: `Saída ${trip.departureAt.toISOString().slice(0, 16)} → ${departureAt.toISOString().slice(0, 16)} · previsão ${trip.expectedReturn.toISOString().slice(0, 10)} → ${expectedReturn.toISOString().slice(0, 10)}`,
+        },
+      });
+
+      return t;
+    });
+
+    await audit('TRIP_SCHEDULE_ADJUST', 'Trip', {
+      userId: req.user!.id,
+      entityId: trip.id,
+      details: `${trip.vehicle.plate}: saída ajustada pelo admin`,
+    });
+    io.emit('trips:changed', { action: 'schedule-adjust', tripId: trip.id });
+    res.json({
+      ...updated,
+      overdue: isOverdue(updated.expectedReturn, updated.returnedAt),
+      color: vehicleColor(updated.vehicle.status, updated.expectedReturn),
+    });
   });
 
   return router;
