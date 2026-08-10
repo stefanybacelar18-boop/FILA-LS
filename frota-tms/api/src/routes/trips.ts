@@ -62,10 +62,6 @@ const scheduleSchema = z.object({
     .string()
     .refine((v) => !Number.isNaN(Date.parse(v)), 'Previsão de retorno inválida')
     .optional(),
-  returnedAt: z
-    .string()
-    .refine((v) => !Number.isNaN(Date.parse(v)), 'Data/hora de retorno inválida')
-    .optional(),
 });
 
 const tripInclude = {
@@ -536,16 +532,6 @@ export function createTripsRouter(io: Server) {
       });
     }
 
-    let returnedAt: Date | undefined;
-    if (parsed.data.returnedAt) {
-      returnedAt = new Date(parsed.data.returnedAt);
-      if (returnedAt < departureAt) {
-        return res.status(400).json({
-          error: 'O retorno real não pode ser anterior à saída.',
-        });
-      }
-    }
-
     const wasFinished = trip.status === TripStatus.RETORNOU;
     let nextStatus = trip.status;
     if (!wasFinished) {
@@ -559,22 +545,9 @@ export function createTripsRouter(io: Server) {
           departureAt,
           expectedReturn,
           status: nextStatus,
-          ...(returnedAt ? { returnedAt } : {}),
         },
         include: tripInclude,
       });
-
-      const historyParts = [
-        `Saída ${trip.departureAt.toISOString().slice(0, 16)} → ${departureAt.toISOString().slice(0, 16)}`,
-        `previsão ${trip.expectedReturn.toISOString().slice(0, 10)} → ${expectedReturn.toISOString().slice(0, 10)}`,
-      ];
-      if (returnedAt && trip.returnedAt) {
-        historyParts.push(
-          `retorno ${trip.returnedAt.toISOString().slice(0, 16)} → ${returnedAt.toISOString().slice(0, 16)}`,
-        );
-      } else if (returnedAt) {
-        historyParts.push(`retorno → ${returnedAt.toISOString().slice(0, 16)}`);
-      }
 
       await tx.vehicleHistory.create({
         data: {
@@ -584,7 +557,7 @@ export function createTripsRouter(io: Server) {
           action: 'AJUSTE_DATAS',
           fromStatus: trip.vehicle.status,
           toStatus: trip.vehicle.status,
-          details: historyParts.join(' · '),
+          details: `Saída ${trip.departureAt.toISOString().slice(0, 16)} → ${departureAt.toISOString().slice(0, 16)} · previsão ${trip.expectedReturn.toISOString().slice(0, 10)} → ${expectedReturn.toISOString().slice(0, 10)}`,
         },
       });
 
