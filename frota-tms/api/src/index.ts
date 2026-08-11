@@ -29,6 +29,9 @@ import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
+import { captureApiException, initApiMonitoring } from './lib/monitoring';
+
+initApiMonitoring();
 
 const app = express();
 const server = http.createServer(app);
@@ -59,6 +62,7 @@ app.get('/api/health', async (_req, res) => {
       ok: true,
       service: 'frota-tms-api',
       db: 'up',
+      uptimeSec: Math.floor(process.uptime()),
       commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) || process.env.GIT_COMMIT?.slice(0, 7) || null,
     });
   } catch {
@@ -91,6 +95,7 @@ fs.mkdirSync(path.join(uploadsDir, 'trip-evidence'), { recursive: true });
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
+  captureApiException(err);
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
 

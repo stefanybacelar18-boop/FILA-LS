@@ -111,6 +111,14 @@ Se ainda falhar: crie o Postgres free **na mão** (New → Postgres → Free →
 | `CORS_ORIGIN` | domínio do app (ou `*` só se necessário) |
 | `SEED_ON_START` | `false` após o go-live |
 | `FORCE_SEED` | `false` após o go-live |
+| `SENTRY_DSN` | opcional — erros na API ([guia](./docs/MONITORAMENTO.md)) |
+| `VITE_SENTRY_DSN` | opcional — erros no front (redeploy após configurar) |
+
+---
+
+## Monitoramento (opcional)
+
+Ver **[docs/MONITORAMENTO.md](./docs/MONITORAMENTO.md)** — UptimeRobot + Sentry, passo a passo.
 
 ---
 
@@ -121,6 +129,8 @@ Se ainda falhar: crie o Postgres free **na mão** (New → Postgres → Free →
 - [ ] Trocar senha do admin (e operação)  
 - [ ] Seed **não** roda a cada restart  
 - [ ] Backup agendado (`scripts/backup.sh` ou snapshot do Postgres)  
+- [ ] UptimeRobot em `/api/health` (opcional)  
+- [ ] Sentry configurado no Render (opcional)  
 - [ ] Confirmar que o **Vercel do FilaDock** continua no ar e **não** aponta para `frota-tms`  
 - [ ] URL do FrotaTMS é **outro** host (Docker / onrender / railway)
 
