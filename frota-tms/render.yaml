@@ -66,6 +66,11 @@ services:
       # Senha compartilhada dos motoristas LSL em /meu-roteiro
       - key: LSL_DRIVER_PIN
         value: lsl2026
+      # Monitoramento opcional — ver frota-tms/docs/MONITORAMENTO.md
+      - key: SENTRY_DSN
+        sync: false
+      - key: VITE_SENTRY_DSN
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: frota-tms-db
