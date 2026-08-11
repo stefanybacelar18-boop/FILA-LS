@@ -3,26 +3,22 @@ set -e
 
 mkdir -p /app/data /app/backups /app/uploads/trip-evidence
 
-# Schema: se URL for Postgres e provider ainda for sqlite, ajusta em runtime
-if echo "${DATABASE_URL:-}" | grep -qiE '^postgres(ql)?://'; then
-  if [ -x ./scripts/prepare-postgres-schema.sh ]; then
-    ./scripts/prepare-postgres-schema.sh ./prisma/schema.prisma
-  elif grep -q 'provider = "sqlite"' prisma/schema.prisma 2>/dev/null; then
-    echo "Ajustando Prisma provider → postgresql"
-    sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
-    if [ -f prisma/migrations/migration_lock.toml ]; then
-      sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/migrations/migration_lock.toml || true
-    fi
-  fi
-  if grep -q 'provider = "postgresql"' prisma/schema.prisma 2>/dev/null; then
-    npx prisma generate >/dev/null
-  fi
-  echo "Aplicando schema no PostgreSQL..."
+if [ -x ./scripts/apply-database-schema.sh ]; then
+  ./scripts/apply-database-schema.sh
+elif [ -f /app/scripts/apply-database-schema.sh ]; then
+  /app/scripts/apply-database-schema.sh
 else
-  echo "Aplicando schema (SQLite)..."
+  # Fallback legado
+  if echo "${DATABASE_URL:-}" | grep -qiE '^postgres(ql)?://'; then
+    if [ -x ./scripts/prepare-postgres-schema.sh ]; then
+      ./scripts/prepare-postgres-schema.sh ./prisma/schema.prisma
+    fi
+    npx prisma generate >/dev/null
+    npx prisma migrate deploy
+  else
+    npx prisma db push
+  fi
 fi
-
-npx prisma db push
 
 # NUNCA reseedar automaticamente em produção (apagaria dados operacionais).
 if [ "${SEED_ON_START:-false}" = "true" ]; then

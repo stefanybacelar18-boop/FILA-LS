@@ -26,6 +26,10 @@ if echo "${URL:-}" | grep -qiE '^postgres(ql)?://'; then
   else
     pg_dump "$URL" | gzip >"$FILE"
   fi
+  # Mantém os 14 backups Postgres mais recentes
+  ls -t "$OUT_DIR"/frota-tms-*.sql.gz 2>/dev/null | awk 'NR>14' | while read -r old; do
+    rm -f "$old"
+  done
 else
   DB_FILE="$ROOT/api/prisma/dev.db"
   if [ ! -f "$DB_FILE" ]; then

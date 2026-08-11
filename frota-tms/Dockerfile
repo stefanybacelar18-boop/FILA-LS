@@ -37,8 +37,9 @@ COPY --from=api-build /app/prisma ./prisma
 COPY --from=api-build /app/package*.json ./
 COPY api/docker-entrypoint.sh ./
 COPY scripts/prepare-postgres-schema.sh ./scripts/prepare-postgres-schema.sh
+COPY scripts/apply-database-schema.sh ./scripts/apply-database-schema.sh
 COPY --from=web-build /web/dist ./public
-RUN chmod +x docker-entrypoint.sh scripts/prepare-postgres-schema.sh \
+RUN chmod +x docker-entrypoint.sh scripts/prepare-postgres-schema.sh scripts/apply-database-schema.sh \
   && mkdir -p /app/data /app/backups /app/uploads
 EXPOSE 4000
 ENTRYPOINT ["./docker-entrypoint.sh"]

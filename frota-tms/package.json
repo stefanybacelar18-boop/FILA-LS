@@ -12,6 +12,8 @@
     "test:api": "npm run test --prefix api",
     "db:seed": "npm run db:seed --prefix api",
     "db:migrate": "npm run db:migrate --prefix api",
+    "db:deploy": "npm run db:deploy --prefix api",
+    "db:apply": "bash ./scripts/apply-database-schema.sh",
     "setup": "npm install --prefix api && npm install --prefix web && npm run db:push --prefix api && npm run db:seed --prefix api",
     "backup": "bash ./scripts/backup.sh",
     "docker:up": "docker compose up --build -d",
