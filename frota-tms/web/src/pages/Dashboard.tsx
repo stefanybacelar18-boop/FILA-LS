@@ -291,12 +291,12 @@ export function Dashboard() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Ranking de concessionárias">
           <p className="-mt-2 mb-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
-            Concessionárias com mais <strong>destinos atendidos</strong> no período — cada viagem
-            registrada para a loja conta 1 ponto (últimos {period.rankingDays} dias).
+            Concessionárias com maior <strong>volume de motos entregues</strong> no período — soma
+            das motos de cada destino nos roteiros (últimos {period.rankingDays} dias).
           </p>
           {data.dealershipRanking.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
-              Nenhuma viagem no período.
+              Nenhuma entrega no período.
             </p>
           ) : (
             <div className="divide-y divide-[var(--color-border)]/80">
@@ -306,8 +306,8 @@ export function Dashboard() {
                   rank={i + 1}
                   title={r.name}
                   subtitle={r.city}
-                  value={r.trips}
-                  valueLabel="viagens"
+                  value={r.motos}
+                  valueLabel={r.motos === 1 ? 'moto' : 'motos'}
                 />
               ))}
             </div>
