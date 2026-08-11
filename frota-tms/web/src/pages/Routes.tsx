@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload, Undo2 } from 'lucide-react'
+import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload, Undo2, Calendar } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, Route, Vehicle } from '../types'
 import {
@@ -15,6 +15,7 @@ import {
   Modal,
   Combobox,
   PlateBadge,
+  Input,
 } from '../components/ui'
 import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { useAuthStore } from '../stores/auth'
@@ -109,6 +110,11 @@ function canReleaseToPlates(r: Route): boolean {
   return openTrip || hasPlate
 }
 
+function matchesRouteDate(route: Route, filterDate: string): boolean {
+  if (!filterDate) return true
+  return toInputDate(route.date) === filterDate
+}
+
 type Tab = 'pendentes' | 'prioridades' | 'todos'
 
 export function Routes() {
@@ -126,6 +132,12 @@ export function Routes() {
         : 'pendentes'
   const [tab, setTab] = useState<Tab>(initialTab)
   const [q, setQ] = useState('')
+  const [filterDate, setFilterDate] = useState(() => {
+    const d = searchParams.get('date')
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    if (initialTab === 'todos') return toInputDate(new Date())
+    return ''
+  })
   const [detailRoute, setDetailRoute] = useState<Route | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [sendId, setSendId] = useState<string | null>(null)
@@ -144,6 +156,9 @@ export function Routes() {
   useEffect(() => {
     const t = searchParams.get('tab')
     if (t === 'prioridades' || t === 'todos' || t === 'pendentes') setTab(t)
+    const d = searchParams.get('date')
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setFilterDate(d)
+    else if (t === 'todos') setFilterDate(toInputDate(new Date()))
   }, [searchParams])
 
   useEffect(() => {
@@ -159,18 +174,29 @@ export function Routes() {
     setCancelId(null)
     setSendId(null)
     setTab(next)
-    if (next === 'pendentes') {
-      setSearchParams({}, { replace: true })
-    } else {
-      setSearchParams({ tab: next }, { replace: true })
+    if (next === 'todos' && !filterDate) {
+      setFilterDate(toInputDate(new Date()))
     }
+    const params: Record<string, string> = {}
+    if (next !== 'pendentes') params.tab = next
+    if (filterDate) params.date = filterDate
+    setSearchParams(params, { replace: true })
+  }
+
+  function setRouteDateFilter(next: string) {
+    setFilterDate(next)
+    const params: Record<string, string> = {}
+    if (tab !== 'pendentes') params.tab = tab
+    if (next) params.date = next
+    setSearchParams(params, { replace: true })
   }
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ['routes', q],
+    queryKey: ['routes', q, filterDate],
     queryFn: async () => {
       const params: Record<string, string> = {}
       if (q) params.q = q
+      if (filterDate) params.date = filterDate
       return (await api.get<Route[]>('/routes', { params })).data
     },
   })
@@ -314,9 +340,12 @@ export function Routes() {
     () => sortRoutesByNewest(data.filter((r) => r.status !== 'CANCELADO')),
     [data],
   )
-  const visible =
-    tab === 'pendentes' ? pending : tab === 'prioridades' ? priorities : allSorted
+  const visible = useMemo(() => {
+    const base = tab === 'pendentes' ? pending : tab === 'prioridades' ? priorities : allSorted
+    return base.filter((r) => matchesRouteDate(r, filterDate))
+  }, [tab, pending, priorities, allSorted, filterDate])
   const showPriorityColumns = tab === 'prioridades'
+  const hideDateColumn = !!filterDate && !showPriorityColumns
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => api.delete(`/routes/${id}`),
@@ -438,7 +467,9 @@ export function Routes() {
             ? 'Prioridades abertas, ordenadas pelo vencimento.'
             : tab === 'pendentes'
               ? 'Fila aguardando definição de placa.'
-              : 'Clique no nome para ver detalhes.'
+              : filterDate
+                ? `Roteiros do dia ${formatDate(filterDate)}.`
+                : 'Clique no nome para ver detalhes.'
         }
         actions={
           isAdmin ? (
@@ -465,40 +496,76 @@ export function Routes() {
       {okMsg && <p className="mb-3 text-sm text-[var(--color-success)]">{okMsg}</p>}
       {error && <p className="mb-3 text-sm text-[var(--color-danger)]">{error}</p>}
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex flex-wrap rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          {(
-            [
-              { id: 'pendentes' as const, label: 'Aguardando', count: pending.length },
-              { id: 'prioridades' as const, label: 'Prioridades', count: priorities.length },
-              { id: 'todos' as const, label: 'Todos', count: data.length },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => selectTab(t.id)}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition',
-                tab === t.id
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-              )}
-            >
-              {t.label}
-              <span
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex flex-wrap rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+            {(
+              [
+                { id: 'pendentes' as const, label: 'Aguardando', count: pending.length },
+                { id: 'prioridades' as const, label: 'Prioridades', count: priorities.length },
+                { id: 'todos' as const, label: 'Todos', count: allSorted.length },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => selectTab(t.id)}
                 className={cn(
-                  'ml-1.5 inline-flex min-w-[1.1rem] justify-center text-xs tabular-nums',
-                  tab === t.id ? 'text-white/80' : 'text-[var(--color-text-muted)]',
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition',
+                  tab === t.id
+                    ? 'bg-[var(--color-primary)] text-white'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
                 )}
               >
-                {t.count}
-              </span>
-            </button>
-          ))}
+                {t.label}
+                <span
+                  className={cn(
+                    'ml-1.5 inline-flex min-w-[1.1rem] justify-center text-xs tabular-nums',
+                    tab === t.id ? 'text-white/80' : 'text-[var(--color-text-muted)]',
+                  )}
+                >
+                  {t.count}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="w-full lg:max-w-xs">
+            <SearchInput value={q} onChange={setQ} placeholder="Buscar roteiro…" />
+          </div>
         </div>
-        <div className="w-full sm:max-w-xs">
-          <SearchInput value={q} onChange={setQ} placeholder="Buscar roteiro…" />
+
+        <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5">
+          <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+            <Calendar className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+            <span className="font-medium">Data do roteiro</span>
+          </div>
+          <Input
+            type="date"
+            value={filterDate}
+            onChange={(e) => setRouteDateFilter(e.target.value)}
+            className="w-[10.5rem]"
+            aria-label="Filtrar por data"
+          />
+          <Button type="button" size="sm" variant="secondary" onClick={() => setRouteDateFilter(toInputDate(new Date()))}>
+            Hoje
+          </Button>
+          {filterDate && (
+            <Button type="button" size="sm" variant="ghost" onClick={() => setRouteDateFilter('')}>
+              Limpar data
+            </Button>
+          )}
+          <span className="ml-auto text-xs text-[var(--color-text-muted)]">
+            {filterDate ? (
+              <>
+                <strong className="text-[var(--color-text)]">{visible.length}</strong> roteiro(s) em{' '}
+                {formatDate(filterDate)}
+              </>
+            ) : (
+              <>
+                <strong className="text-[var(--color-text)]">{visible.length}</strong> roteiro(s) exibidos
+              </>
+            )}
+          </span>
         </div>
       </div>
 
@@ -509,25 +576,33 @@ export function Routes() {
       ) : visible.length === 0 ? (
         <EmptyState
           title={
-            tab === 'pendentes'
-              ? 'Nenhum roteiro aguardando placa'
-              : tab === 'prioridades'
-                ? 'Nenhuma prioridade aberta'
-                : 'Nenhum roteiro'
+            filterDate
+              ? `Nenhum roteiro em ${formatDate(filterDate)}`
+              : tab === 'pendentes'
+                ? 'Nenhum roteiro aguardando placa'
+                : tab === 'prioridades'
+                  ? 'Nenhuma prioridade aberta'
+                  : 'Nenhum roteiro'
           }
           description={
-            tab === 'pendentes'
-              ? isAdmin
-                ? 'Crie um roteiro e disponibilize para a Operação.'
-                : 'Quando o Admin disponibilizar, aparece aqui.'
-              : tab === 'prioridades'
-                ? 'Prioridades abertas (com ou sem placa) aparecem aqui.'
-                : isAdmin
-                  ? 'Crie o primeiro roteiro.'
-                  : undefined
+            filterDate
+              ? 'Tente outra data ou limpe o filtro para ver todos.'
+              : tab === 'pendentes'
+                ? isAdmin
+                  ? 'Crie um roteiro e disponibilize para a Operação.'
+                  : 'Quando o Admin disponibilizar, aparece aqui.'
+                : tab === 'prioridades'
+                  ? 'Prioridades abertas (com ou sem placa) aparecem aqui.'
+                  : isAdmin
+                    ? 'Crie o primeiro roteiro.'
+                    : undefined
           }
           action={
-            isAdmin && tab === 'todos' ? (
+            filterDate ? (
+              <Button variant="secondary" onClick={() => setRouteDateFilter('')}>
+                Limpar filtro de data
+              </Button>
+            ) : isAdmin && tab === 'todos' ? (
               <Link to="/roteiros/novo">
                 <Button>Novo roteiro</Button>
               </Link>
@@ -541,9 +616,11 @@ export function Routes() {
               <thead>
                 <tr className="border-b border-[var(--color-border)] text-xs font-medium text-[var(--color-text-muted)]">
                   <th className="px-4 py-2.5 font-medium">Roteiro</th>
-                  <th className="px-4 py-2.5 font-medium whitespace-nowrap">
-                    {showPriorityColumns ? 'Vencimento' : 'Datas'}
-                  </th>
+                  {showPriorityColumns ? (
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">Vencimento</th>
+                  ) : hideDateColumn ? null : (
+                    <th className="px-4 py-2.5 font-medium whitespace-nowrap">Datas</th>
+                  )}
                   <th className="px-4 py-2.5 font-medium">Destinos</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5 font-medium">Placa</th>
@@ -572,37 +649,42 @@ export function Routes() {
                         <button
                           type="button"
                           onClick={() => setDetailRoute(r)}
-                          className="group max-w-[16rem] text-left"
+                          className="group max-w-[14rem] text-left"
                         >
                           <span className="block truncate font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)]">
                             {r.name}
                           </span>
-                          {hasActivePriority(r) && (
-                            <span className="mt-0.5 inline-block text-[11px] font-medium text-[var(--color-danger)]">
-                              Prioridade
-                            </span>
-                          )}
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
+                            {hasActivePriority(r) && (
+                              <span className="font-medium text-[var(--color-danger)]">Prioridade</span>
+                            )}
+                            {hideDateColumn && (
+                              <span>{formatDate(r.date)}</span>
+                            )}
+                          </span>
                         </button>
                       </td>
-                      <td className="px-4 py-3 align-middle whitespace-nowrap text-[var(--color-text)]">
-                        {showPriorityColumns ? (
-                          r.priorityExpiryDate ? (
+                      {showPriorityColumns ? (
+                        <td className="px-4 py-3 align-middle whitespace-nowrap text-[var(--color-text)]">
+                          {r.priorityExpiryDate ? (
                             <span className={cn(expiryPast && 'font-medium text-[var(--color-danger)]')}>
                               {formatDate(r.priorityExpiryDate)}
                               {expiryPast ? ' · vencido' : ''}
                             </span>
                           ) : (
                             <span className="text-[var(--color-text-muted)]">—</span>
-                          )
-                        ) : (
+                          )}
+                        </td>
+                      ) : hideDateColumn ? null : (
+                        <td className="px-4 py-3 align-middle whitespace-nowrap text-[var(--color-text)]">
                           <div className="leading-snug">
                             <p>{formatDate(r.date)}</p>
                             {returnDate && (
                               <p className="text-xs text-[var(--color-text-muted)]">até {returnDate}</p>
                             )}
                           </div>
-                        )}
-                      </td>
+                        </td>
+                      )}
                       <td className="px-4 py-3 align-middle text-[var(--color-text-muted)]">
                         {destinationsSummary(stops)}
                       </td>
@@ -611,12 +693,12 @@ export function Routes() {
                       </td>
                       <td className="px-4 py-3 align-middle">
                         {plate ? (
-                          <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
                             <PlateBadge plate={plate} color="blue" />
                             {driverName && (
-                              <p className="mt-1 max-w-[9rem] truncate text-xs text-[var(--color-text-muted)]">
+                              <span className="hidden max-w-[7rem] truncate text-xs text-[var(--color-text-muted)] xl:inline">
                                 {driverName}
-                              </p>
+                              </span>
                             )}
                           </div>
                         ) : (
@@ -632,31 +714,9 @@ export function Routes() {
                               </Button>
                             </Link>
                           )}
-                          {isAdmin && r.status === 'RASCUNHO' && (
-                            <Button size="sm" variant="outline" onClick={() => setSendId(r.id)}>
-                              Disponibilizar
-                            </Button>
-                          )}
-                          {isAdmin && canReleaseToPlates(r) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setReleaseId(r.id)}
-                            >
-                              <Undo2 className="h-3.5 w-3.5" />
-                              Definir placa
-                            </Button>
-                          )}
-                          {isAdmin &&
-                            r.status === 'EM_ANDAMENTO' &&
-                            routeDisplayTrip(r)?.status !== 'RETORNOU' && (
-                            <Button size="sm" variant="ghost" onClick={() => openReassign(r)}>
-                              Trocar placa
-                            </Button>
-                          )}
                           <button
                             type="button"
-                            title="Detalhes"
+                            title="Ver detalhes e ações"
                             onClick={() => setDetailRoute(r)}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                           >
