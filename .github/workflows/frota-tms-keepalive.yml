@@ -8,6 +8,11 @@ on:
     # A cada 5 minutos (máximo frequência útil no cron do GitHub)
     - cron: '*/5 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'frota-tms/**'
+      - '.github/workflows/frota-tms-keepalive.yml'
 
 concurrency:
   group: frota-tms-keepalive
