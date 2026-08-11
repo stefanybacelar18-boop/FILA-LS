@@ -1294,6 +1294,127 @@ export function createRoutesRouter(io: Server) {
     }
   });
 
+  /**
+   * Admin: libera o roteiro de volta para "Definir placa" quando o carregamento não ocorreu.
+   * Cancela a viagem aberta, libera a placa e mantém o roteiro na fila da Operação.
+   */
+  router.post('/:id/release-to-plates', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const routeId = paramId(req);
+    const reason =
+      typeof req.body?.reason === 'string' && req.body.reason.trim().length >= 3
+        ? req.body.reason.trim()
+        : 'Carregamento não realizado — retorno para definir placa';
+
+    const route = await prisma.route.findUnique({
+      where: { id: routeId },
+      include: {
+        trips: {
+          where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          include: { vehicle: true },
+        },
+        vehicles: { include: { vehicle: true } },
+      },
+    });
+    if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
+    if (route.status !== RouteStatus.EM_ANDAMENTO) {
+      return res.status(400).json({
+        error: 'Só roteiros em andamento podem voltar para definir placa',
+      });
+    }
+    if (route.trips.length > 1) {
+      return res.status(400).json({
+        error: 'Roteiro com mais de uma viagem aberta — ajuste manual necessário',
+      });
+    }
+
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        for (const trip of route.trips) {
+          const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+          const nextVehicleStatus = holdMaintenance
+            ? VehicleStatus.EM_MANUTENCAO
+            : VehicleStatus.DISPONIVEL;
+
+          await tx.trip.update({
+            where: { id: trip.id },
+            data: {
+              status: TripStatus.CANCELADO,
+              notes: trip.notes ? `${trip.notes}\n[${reason}]` : reason,
+            },
+          });
+
+          await tx.vehicle.update({
+            where: { id: trip.vehicleId },
+            data: { status: nextVehicleStatus },
+          });
+
+          await tx.vehicleHistory.create({
+            data: {
+              vehicleId: trip.vehicleId,
+              userId: req.user!.id,
+              tripId: trip.id,
+              action: 'LIBERAR_ROTEIRO',
+              fromStatus: trip.vehicle.status,
+              toStatus: nextVehicleStatus,
+              details: `${route.name}: ${reason}`,
+            },
+          });
+        }
+
+        for (const rv of route.vehicles) {
+          if (
+            route.trips.every((t) => t.vehicleId !== rv.vehicleId) &&
+            (rv.vehicle.status === VehicleStatus.EM_VIAGEM ||
+              rv.vehicle.status === VehicleStatus.EM_CARREGAMENTO)
+          ) {
+            const holdMaintenance = !!(rv.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+            await tx.vehicle.update({
+              where: { id: rv.vehicleId },
+              data: {
+                status: holdMaintenance ? VehicleStatus.EM_MANUTENCAO : VehicleStatus.DISPONIVEL,
+              },
+            });
+          }
+        }
+
+        await tx.routeVehicle.deleteMany({ where: { routeId } });
+
+        return tx.route.update({
+          where: { id: routeId },
+          data: {
+            status: RouteStatus.AGUARDANDO_PLACAS,
+            readyForOperation: true,
+          },
+          include: {
+            ...routeDealershipInclude,
+            dealership: true,
+            vehicles: { include: { vehicle: true } },
+            trips: {
+              orderBy: { departureAt: 'desc' },
+              take: 3,
+              include: { vehicle: { select: { plate: true } } },
+            },
+            createdBy: { select: { id: true, name: true } },
+          },
+        });
+      });
+
+      await audit('RELEASE_TO_PLATES', 'Route', {
+        userId: req.user!.id,
+        entityId: routeId,
+        details: `${route.name} · ${reason}`,
+      });
+      io.emit('fleet:changed', { action: 'release-to-plates', routeId });
+      io.emit('trips:changed', { action: 'release-to-plates', routeId });
+      io.emit('routes:changed', { action: 'release-to-plates', id: routeId });
+      io.emit('planning:changed', { action: 'release-to-plates', id: routeId });
+      res.json(updated);
+    } catch (err) {
+      console.error('release-to-plates failed', err);
+      return res.status(500).json({ error: 'Falha ao liberar roteiro para definir placa' });
+    }
+  });
+
   router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     const routeId = paramId(req);
     const route = await prisma.route.findUnique({

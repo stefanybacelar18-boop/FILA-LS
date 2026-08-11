@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload } from 'lucide-react'
+import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload, Undo2 } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, Route, Vehicle } from '../types'
 import {
@@ -102,6 +102,13 @@ function statusTone(status: Route['status']) {
   return 'default' as const
 }
 
+function canReleaseToPlates(r: Route): boolean {
+  if (r.status !== 'EM_ANDAMENTO') return false
+  const openTrip = r.trips?.some((t) => t.status === 'EM_ANDAMENTO' || t.status === 'ATRASADO')
+  const hasPlate = (r.vehicles?.length ?? 0) > 0
+  return openTrip || hasPlate
+}
+
 type Tab = 'pendentes' | 'prioridades' | 'todos'
 
 export function Routes() {
@@ -125,6 +132,7 @@ export function Routes() {
   const [reassignRoute, setReassignRoute] = useState<Route | null>(null)
   const [reassignVehicleId, setReassignVehicleId] = useState('')
   const [reassignDriverId, setReassignDriverId] = useState('')
+  const [releaseId, setReleaseId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const location = useLocation()
   const [okMsg, setOkMsg] = useState('')
@@ -390,6 +398,31 @@ export function Routes() {
     },
   })
 
+  const releaseMutation = useMutation({
+    mutationFn: async (id: string) => api.post(`/routes/${id}/release-to-plates`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['routes'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-available'] })
+      void qc.invalidateQueries({ queryKey: ['trips'] })
+      void qc.invalidateQueries({ queryKey: ['returns'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+      void qc.invalidateQueries({ queryKey: ['plates-board'] })
+      void qc.invalidateQueries({ queryKey: ['planning-alerts'] })
+      setReleaseId(null)
+      setDetailRoute(null)
+      setError('')
+      setOkMsg('Roteiro liberado — disponível em Definir placa.')
+    },
+    onError: (err: unknown) => {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível liberar o roteiro.',
+      )
+      setReleaseId(null)
+    },
+  })
+
   const detailStops = detailRoute ? dealershipStops(detailRoute) : []
   const detailPlate = detailRoute?.vehicles?.[0]?.vehicle?.plate
   const detailAwaiting =
@@ -604,6 +637,16 @@ export function Routes() {
                               Disponibilizar
                             </Button>
                           )}
+                          {isAdmin && canReleaseToPlates(r) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setReleaseId(r.id)}
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                              Definir placa
+                            </Button>
+                          )}
                           {isAdmin &&
                             r.status === 'EM_ANDAMENTO' &&
                             routeDisplayTrip(r)?.status !== 'RETORNOU' && (
@@ -656,6 +699,18 @@ export function Routes() {
                 >
                   <Send className="h-3.5 w-3.5" />
                   Disponibilizar
+                </Button>
+              )}
+              {isAdmin && detailRoute && canReleaseToPlates(detailRoute) && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setReleaseId(detailRoute.id)
+                    setDetailRoute(null)
+                  }}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  Voltar p/ definir placa
                 </Button>
               )}
               {isAdmin &&
@@ -824,6 +879,17 @@ export function Routes() {
         confirmLabel="Cancelar roteiro"
         danger
         loading={cancelMutation.isPending}
+      />
+
+      <ConfirmModal
+        open={!!releaseId}
+        onClose={() => setReleaseId(null)}
+        onConfirm={() => releaseId && releaseMutation.mutate(releaseId)}
+        title="Voltar para definir placa?"
+        message="A viagem aberta será cancelada, a placa liberada e o roteiro volta para a fila em Definir placa — para atribuir um novo veículo quando o carregamento não ocorrer."
+        confirmLabel="Liberar roteiro"
+        danger
+        loading={releaseMutation.isPending}
       />
 
       <ConfirmModal
