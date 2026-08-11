@@ -6,6 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
@@ -42,6 +44,7 @@
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.15.29",
-    "@types/pdfkit": "^0.17.6"
+    "@types/pdfkit": "^0.17.6",
+    "vitest": "^3.2.4"
   }
 }
