@@ -29,7 +29,6 @@ import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
-import { requireLslDriverPin } from './lib/driver-pin';
 
 const app = express();
 const server = http.createServer(app);
@@ -149,12 +148,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = Number(process.env.PORT) || 4000;
-try {
-  requireLslDriverPin();
-} catch (err) {
-  console.error((err as Error).message);
-  process.exit(1);
-}
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
   void ensureBootstrapUsers(prisma).catch((err) =>
