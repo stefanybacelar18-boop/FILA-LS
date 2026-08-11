@@ -23,11 +23,11 @@ services:
       ./scripts/prepare-postgres-schema.sh api/prisma/schema.prisma
       npm exec --prefix api -- prisma generate --schema api/prisma/schema.prisma
       npm run build --prefix api
+      chmod +x scripts/apply-database-schema.sh
+      ./scripts/apply-database-schema.sh
       mkdir -p api/public && cp -r web/dist/. api/public/
     startCommand: |
       set -e
-      chmod +x scripts/apply-database-schema.sh
-      ./scripts/apply-database-schema.sh
       cd api
       if [ "${SEED_ON_START:-false}" = "true" ]; then
         echo "SEED_ON_START=true — bootstrap de dados (uma vez)..."

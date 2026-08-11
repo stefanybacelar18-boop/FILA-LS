@@ -1,45 +1,40 @@
 # Monitoramento — FrotaTMS
 
-Ferramentas opcionais para saber quando o sistema cai ou quando há erros em produção. **Nenhuma delas é obrigatória** — o app funciona normalmente sem configurar.
+Ferramentas para manter o site rápido e detectar problemas. **Nada aqui é obrigatório** — o app funciona sem configurar.
 
 ---
 
-## 1. UptimeRobot (disponibilidade)
+## 1. Keep-alive automático (já ativo)
 
-Monitora se o site está no ar. Plano gratuito: até 50 monitores, ping a cada 5 minutos.
+Workflow **FrotaTMS Keep Alive** (`.github/workflows/frota-tms-keepalive.yml`):
 
-### Configuração
+- Ping em `https://frota-tms.onrender.com/api/health` **a cada 5 minutos**
+- Acorda o Render Free antes de alguém abrir o site
+- **Grátis** — usa o GitHub, sem criar conta no UptimeRobot
 
-1. Crie conta em [uptimerobot.com](https://uptimerobot.com)
-2. **Add New Monitor**
-   - **Monitor Type:** HTTP(s)
-   - **Friendly Name:** FrotaTMS
-   - **URL:** `https://frota-tms.onrender.com/api/health`
-   - **Monitoring Interval:** 5 minutes
-3. **Alert Contacts:** adicione e-mail (ou Telegram/WhatsApp no plano pago)
-4. Salve
+Após o merge, confira em **Actions → FrotaTMS Keep Alive**. O primeiro ping pode levar alguns minutos para o cron iniciar.
 
-### O que esperar
-
-Resposta saudável (`200`):
-
-```json
-{
-  "ok": true,
-  "service": "frota-tms-api",
-  "db": "up",
-  "uptimeSec": 3600,
-  "commit": "abc1234"
-}
-```
-
-Se `ok: false` ou status `503`, o banco está inacessível — o monitor deve alertar.
-
-> **Render free:** o serviço pode “dormir” após inatividade. O primeiro acesso demora ~30s; o UptimeRobot ajuda a manter acordado ou avisa quando cai.
+URL customizada (opcional): variável de repositório `FROTA_TMS_HEALTH_URL`.
 
 ---
 
-## 2. Sentry (erros em produção)
+## 2. UptimeRobot (opcional — alertas por e-mail)
+
+Complementa o keep-alive com **notificação** se o site cair.
+
+1. Conta em [uptimerobot.com](https://uptimerobot.com)
+2. **Add New Monitor** → HTTP(s) → `https://frota-tms.onrender.com/api/health`
+3. Intervalo: 5 minutos + seu e-mail
+
+---
+
+## 3. Tela de carregamento
+
+Enquanto o React inicia, o site mostra “Carregando FrotaTMS…” em vez de tela preta vazia.
+
+---
+
+## 4. Sentry (erros em produção)
 
 Captura exceções na API e no front com stack trace. Plano gratuito costuma bastar para este volume.
 
@@ -77,18 +72,16 @@ Após deploy, force um erro (ex.: rota inexistente na API) ou abra o Sentry → 
 
 ---
 
-## 3. Checklist rápido
+## 5. Checklist rápido
 
-- [ ] UptimeRobot apontando para `/api/health`
-- [ ] E-mail de alerta configurado
-- [ ] `SENTRY_DSN` no Render
-- [ ] `VITE_SENTRY_DSN` no Render + redeploy
+- [x] Keep-alive GitHub (a cada 5 min) — automático após deploy
+- [ ] UptimeRobot (opcional, para e-mail se cair)
+- [ ] `SENTRY_DSN` no Render (opcional)
+- [ ] `VITE_SENTRY_DSN` no Render + redeploy (opcional)
 - [ ] Senhas de demo trocadas em produção
 
 ---
 
-## 4. Próximas melhorias (futuro)
+## 6. Plano pago Render
 
-- Backup automático do Postgres (cron no Render ou GitHub Actions)
-- Playwright smoke tests no CI
-- `prisma migrate deploy` em produção (em vez de `db push`)
+Se ainda houver espera ocasional, o **Starter (~US$ 7/mês)** elimina o “sleep” do Free. O keep-alive resolve na maioria dos casos sem pagar.
