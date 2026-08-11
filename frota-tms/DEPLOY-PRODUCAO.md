@@ -122,15 +122,27 @@ Ver **[docs/MONITORAMENTO.md](./docs/MONITORAMENTO.md)** — UptimeRobot + Sentr
 
 ---
 
+## Backup e migrations
+
+Produção passa a usar **`prisma migrate deploy`** (em vez de `db push`).  
+Backup diário automático via GitHub Actions — ver **[docs/BACKUP-E-MIGRATIONS.md](./docs/BACKUP-E-MIGRATIONS.md)**.
+
+---
+
 ## Checklist pós-deploy
 
 - [ ] `/api/health` → `ok` + `db: up`  
 - [ ] Login funciona  
 - [ ] Trocar senha do admin (e operação)  
 - [ ] Seed **não** roda a cada restart  
+<<<<<<< HEAD
 - [ ] Backup agendado (`scripts/backup.sh` ou snapshot do Postgres)  
 - [ ] UptimeRobot em `/api/health` (opcional)  
 - [ ] Sentry configurado no Render (opcional)  
+=======
+- [ ] Secret `FROTA_TMS_DATABASE_URL` no GitHub (backup diário)  
+- [ ] Backup agendado (`scripts/backup.sh` ou GitHub Actions)  
+>>>>>>> 0121047 (chore: migrate deploy em produção e backup diário automático)
 - [ ] Confirmar que o **Vercel do FilaDock** continua no ar e **não** aponta para `frota-tms`  
 - [ ] URL do FrotaTMS é **outro** host (Docker / onrender / railway)
 

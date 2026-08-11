@@ -1,0 +1,40 @@
+name: FrotaTMS DB Backup
+
+on:
+  schedule:
+    # Diário às 06:00 UTC (03:00 Bahia)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frota-tms
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.FROTA_TMS_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Configure o secret FROTA_TMS_DATABASE_URL no repositório (Settings → Secrets)."
+            exit 1
+          fi
+          chmod +x scripts/backup.sh
+          ./scripts/backup.sh
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frota-tms-db-${{ github.run_id }}
+          path: frota-tms/backups/*.sql.gz
+          retention-days: 30
+          if-no-files-found: error

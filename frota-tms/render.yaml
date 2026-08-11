@@ -26,8 +26,9 @@ services:
       mkdir -p api/public && cp -r web/dist/. api/public/
     startCommand: |
       set -e
+      chmod +x scripts/apply-database-schema.sh
+      ./scripts/apply-database-schema.sh
       cd api
-      npm exec -- prisma db push
       if [ "${SEED_ON_START:-false}" = "true" ]; then
         echo "SEED_ON_START=true — bootstrap de dados (uma vez)..."
         FORCE_SEED=true npm exec -- tsx prisma/seed.ts
