@@ -136,13 +136,13 @@ export function createRoutesRouter(io: Server) {
       where.status = { not: RouteStatus.CANCELADO };
     }
     if (date) {
-      const d = new Date(String(date));
-      if (Number.isNaN(d.getTime())) {
+      const datePart = String(date).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
         return res.status(400).json({ error: 'Data inválida' });
       }
-      const next = new Date(d);
-      next.setDate(next.getDate() + 1);
-      where.date = { gte: d, lt: next };
+      const dayStart = new Date(`${datePart}T00:00:00.000Z`);
+      const dayEnd = new Date(`${datePart}T23:59:59.999Z`);
+      where.date = { gte: dayStart, lte: dayEnd };
     }
     if (q) {
       where.OR = [
