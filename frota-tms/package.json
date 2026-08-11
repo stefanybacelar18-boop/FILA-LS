@@ -8,6 +8,8 @@
     "dev:api": "npm run dev --prefix api",
     "dev:web": "npm run dev --prefix web",
     "build": "npm run build --prefix api && npm run build --prefix web",
+    "test": "npm run test --prefix api",
+    "test:api": "npm run test --prefix api",
     "db:seed": "npm run db:seed --prefix api",
     "db:migrate": "npm run db:migrate --prefix api",
     "setup": "npm install --prefix api && npm install --prefix web && npm run db:push --prefix api && npm run db:seed --prefix api",

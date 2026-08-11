@@ -1,0 +1,51 @@
+name: FrotaTMS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frota-tms/**'
+      - '.github/workflows/frota-tms-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frota-tms/**'
+      - '.github/workflows/frota-tms-ci.yml'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frota-tms
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frota-tms/api/package-lock.json
+            frota-tms/web/package-lock.json
+
+      - name: Install API dependencies
+        run: npm ci --prefix api
+
+      - name: Install Web dependencies
+        run: npm ci --prefix web
+
+      - name: Test API
+        run: npm test --prefix api
+
+      - name: Build API
+        run: npm run build --prefix api
+
+      - name: Lint Web
+        run: npm run lint --prefix web
+
+      - name: Build Web
+        run: npm run build --prefix web
