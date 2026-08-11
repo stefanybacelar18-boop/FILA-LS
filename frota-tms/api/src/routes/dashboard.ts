@@ -25,7 +25,7 @@ router.get('/', async (req: AuthRequest, res) => {
     availableForRoutes,
     emViagem,
     openTrips,
-    dealershipTripCounts,
+    tripsForDealershipRanking,
     vehicleTripCounts,
     tripsInChartWindow,
     awaitingPlatesRoutes,
@@ -42,12 +42,21 @@ router.get('/', async (req: AuthRequest, res) => {
       where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
       select: { expectedReturn: true, returnedAt: true, delayReason: true },
     }),
-    prisma.trip.groupBy({
-      by: ['dealershipId'],
-      where: { departureAt: { gte: rankingSince } },
-      _count: { id: true },
-      orderBy: { _count: { id: 'desc' } },
-      take: RANKING_LIMIT,
+    prisma.trip.findMany({
+      where: {
+        departureAt: { gte: rankingSince },
+        status: { not: TripStatus.CANCELADO },
+      },
+      select: {
+        dealershipId: true,
+        route: {
+          select: {
+            dealerships: {
+              select: { dealershipId: true, motoCount: true },
+            },
+          },
+        },
+      },
     }),
     prisma.trip.groupBy({
       by: ['vehicleId'],
@@ -75,8 +84,25 @@ router.get('/', async (req: AuthRequest, res) => {
   const atrasadas = openTrips.filter((t) => isOverdue(t.expectedReturn, t.returnedAt)).length;
   const urgentRoutes = openRoutesWithExpiry.filter((r) => hasActivePriority(r)).length;
 
-  const dealershipIds = dealershipTripCounts.map((d) => d.dealershipId);
-  const dealerships = await prisma.dealership.findMany({ where: { id: { in: dealershipIds } } });
+  const motoByDealership = new Map<string, number>();
+  for (const trip of tripsForDealershipRanking) {
+    const stops = trip.route?.dealerships;
+    if (stops && stops.length > 0) {
+      for (const stop of stops) {
+        const add = stop.motoCount ?? 1;
+        motoByDealership.set(stop.dealershipId, (motoByDealership.get(stop.dealershipId) ?? 0) + add);
+      }
+    } else {
+      motoByDealership.set(trip.dealershipId, (motoByDealership.get(trip.dealershipId) ?? 0) + 1);
+    }
+  }
+
+  const topDealershipIds = [...motoByDealership.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, RANKING_LIMIT)
+    .map(([id]) => id);
+
+  const dealerships = await prisma.dealership.findMany({ where: { id: { in: topDealershipIds } } });
   const dealershipMap = Object.fromEntries(dealerships.map((d) => [d.id, d]));
 
   const vehicleIds = vehicleTripCounts.map((v) => v.vehicleId);
@@ -86,11 +112,11 @@ router.get('/', async (req: AuthRequest, res) => {
   });
   const vehicleMap = Object.fromEntries(vehicles.map((v) => [v.id, v]));
 
-  const dealershipRanking = dealershipTripCounts.map((d) => ({
-    dealershipId: d.dealershipId,
-    name: dealershipMap[d.dealershipId]?.name ?? '—',
-    city: dealershipMap[d.dealershipId]?.city ?? '',
-    trips: d._count.id,
+  const dealershipRanking = topDealershipIds.map((dealershipId) => ({
+    dealershipId,
+    name: dealershipMap[dealershipId]?.name ?? '—',
+    city: dealershipMap[dealershipId]?.city ?? '',
+    motos: motoByDealership.get(dealershipId) ?? 0,
   }));
 
   const plateRanking = vehicleTripCounts.map((v) => ({

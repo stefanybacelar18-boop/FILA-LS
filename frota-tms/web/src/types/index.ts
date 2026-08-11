@@ -263,7 +263,7 @@ export interface DashboardData {
     viagensAtrasadas: number
   }
   tripsPerDay: { date: string; count: number }[]
-  dealershipRanking: { dealershipId: string; name: string; city: string; trips: number }[]
+  dealershipRanking: { dealershipId: string; name: string; city: string; motos: number }[]
   plateRanking: {
     vehicleId: string
     plate: string
