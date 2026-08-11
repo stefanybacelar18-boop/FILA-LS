@@ -174,7 +174,9 @@ export function Users() {
           {!editing && (
             <Input
               label="E-mail"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoComplete="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
