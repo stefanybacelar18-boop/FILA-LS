@@ -1,0 +1,38 @@
+name: FrotaTMS Keep Alive
+
+# Mantém o serviço no Render Free acordado (evita cold start de ~30–60s).
+# Alternativa gratuita ao UptimeRobot — roda no GitHub sem conta extra.
+
+on:
+  schedule:
+    # A cada 5 minutos (máximo frequência útil no cron do GitHub)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: frota-tms-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Ping health (acorda Render se estiver dormindo)
+        env:
+          HEALTH_URL: ${{ vars.FROTA_TMS_HEALTH_URL || 'https://frota-tms.onrender.com/api/health' }}
+        run: |
+          echo "Ping em $HEALTH_URL"
+          # Cold start no Render Free pode levar até ~90s
+          for attempt in 1 2 3; do
+            if curl -fsS --max-time 90 "$HEALTH_URL"; then
+              echo ""
+              echo "OK — serviço respondeu (tentativa $attempt)"
+              exit 0
+            fi
+            echo "Tentativa $attempt falhou, aguardando 15s..."
+            sleep 15
+          done
+          echo "::warning::Serviço não respondeu após 3 tentativas (deploy ou indisponível)"
+          exit 0
