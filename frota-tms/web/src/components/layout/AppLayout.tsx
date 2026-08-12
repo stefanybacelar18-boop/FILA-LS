@@ -48,6 +48,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
     ],
     secondary: [
+      { to: '/historico', label: 'Histórico', icon: History },
       { to: '/frota', label: 'Frota', icon: Truck },
       { to: '/motoristas', label: 'Motoristas', icon: UserRound },
       { to: '/concessionarias', label: 'Concessionárias', icon: Building2 },
