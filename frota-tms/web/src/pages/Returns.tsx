@@ -30,6 +30,7 @@ import { formatDate, toInputDate, combineDateAndTime } from '../lib/format'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
 import { TripScheduleModal } from '../components/TripScheduleModal'
+import { UndoReturnModal } from '../components/UndoReturnModal'
 import { RouteLoadTable } from '../components/RouteLoadCard'
 import { tripRouteDestinations, tripRouteMotoTotal } from '../lib/trip-route-load'
 import { hasActivePriority } from '../lib/route-priority'
@@ -460,6 +461,8 @@ export function Returns() {
   const [confirmTrip, setConfirmTrip] = useState<Trip | null>(null)
   const [reportTrip, setReportTrip] = useState<Trip | null>(null)
   const [scheduleTrip, setScheduleTrip] = useState<Trip | null>(null)
+  const [lastReturnedTrip, setLastReturnedTrip] = useState<Trip | null>(null)
+  const [undoOpen, setUndoOpen] = useState(false)
   const [delayReason, setDelayReason] = useState('')
   const [preset, setPreset] = useState('')
   const [newExpectedReturn, setNewExpectedReturn] = useState('')
@@ -497,11 +500,20 @@ export function Returns() {
         delayReason: confirmTrip.delayReason || undefined,
       })
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: ['returns'] })
       void qc.invalidateQueries({ queryKey: ['trips'] })
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
+      void qc.invalidateQueries({ queryKey: ['history'] })
+      if (isAdmin && confirmTrip) {
+        const trip = (updated?.data ?? confirmTrip) as Trip
+        setLastReturnedTrip({
+          ...trip,
+          status: 'RETORNOU',
+          returnedAt: trip.returnedAt ?? new Date().toISOString(),
+        })
+      }
       setConfirmTrip(null)
       setError('')
     },
@@ -603,6 +615,26 @@ export function Returns() {
         title="Retornos"
         description="Confirme o retorno ou registre problema. Expanda “Ver entregas” para conferir o roteiro antes de retornar."
       />
+
+      {isAdmin && lastReturnedTrip && (
+        <div className="rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+          <p className="font-medium text-amber-900 dark:text-amber-100">
+            Retorno confirmado — {lastReturnedTrip.vehicle.plate}
+          </p>
+          <p className="mt-1 text-[var(--color-text-muted)]">
+            Clicou em retornar por engano? Você pode desfazer agora ou depois em{' '}
+            <strong>Histórico</strong>.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setUndoOpen(true)}>
+              Desfazer retorno
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setLastReturnedTrip(null)}>
+              Dispensar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && !reportTrip && (
         <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
@@ -805,6 +837,13 @@ export function Returns() {
       </Modal>
 
       <TripScheduleModal trip={scheduleTrip} onClose={() => setScheduleTrip(null)} />
+
+      <UndoReturnModal
+        trip={lastReturnedTrip}
+        open={undoOpen}
+        onClose={() => setUndoOpen(false)}
+        onSuccess={() => setLastReturnedTrip(null)}
+      />
     </div>
   )
 }
