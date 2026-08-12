@@ -6,15 +6,20 @@ Ferramentas para manter o site rápido e detectar problemas. **Nada aqui é obri
 
 ## 1. Keep-alive automático (já ativo)
 
-Workflow **FrotaTMS Keep Alive** (`.github/workflows/frota-tms-keepalive.yml`):
+Dois workflows no GitHub mantêm o Render acordado:
 
-- Ping em `https://frota-tms.onrender.com/api/health` **a cada 5 minutos**
-- Acorda o Render Free antes de alguém abrir o site
-- **Grátis** — usa o GitHub, sem criar conta no UptimeRobot
+| Workflow | Quando |
+|----------|--------|
+| **FrotaTMS Keep Alive** | :00, :15, :30, :45 de cada hora |
+| **FrotaTMS Keep Alive (offset)** | :07, :22, :37, :52 |
 
-Após o merge, confira em **Actions → FrotaTMS Keep Alive**. O primeiro ping pode levar alguns minutos para o cron iniciar.
+Cada execução faz **rajada de pings** (health + home) por ~15 minutos — cobre a limitação do cron do GitHub (que nem sempre roda a cada 5 min).
 
-URL customizada (opcional): variável de repositório `FROTA_TMS_HEALTH_URL`.
+O **app também pinga** `/api/health` a cada 4 min enquanto alguém está com a aba aberta.
+
+> **Tela preta com logo Render?** Isso é o próprio Render acordando — aparece **antes** do FrotaTMS. Aguarde ~1 min e recarregue. Com os pings acima, deve ser raro.
+
+URL customizada (opcional): variáveis `FROTA_TMS_HEALTH_URL` e `FROTA_TMS_BASE_URL` no repositório.
 
 ---
 
