@@ -17,6 +17,12 @@ import {
   plateOwner,
 } from '../data/operatorVisibility';
 import { isLslNextDayOverrideCity } from '../utils/geo';
+import {
+  evaluateUnreturnGuards,
+  tripStatusAfterUnreturn,
+  UNRETURN_ERROR_MESSAGES,
+  vehicleStatusAfterUnreturn,
+} from '../lib/trip-unreturn';
 
 import type { Server } from 'socket.io';
 
@@ -62,6 +68,10 @@ const scheduleSchema = z.object({
     .string()
     .refine((v) => !Number.isNaN(Date.parse(v)), 'Previsão de retorno inválida')
     .optional(),
+});
+
+const unreturnSchema = z.object({
+  reason: z.string().min(5, 'Informe o motivo com ao menos 5 caracteres'),
 });
 
 const tripInclude = {
@@ -503,6 +513,128 @@ export function createTripsRouter(io: Server) {
     io.emit('fleet:changed', { action: 'return', tripId: trip.id });
     io.emit('trips:changed', { action: 'return' });
     res.json(updated);
+  });
+
+  /** Admin: desfaz retorno confirmado por engano e reabre a viagem. */
+  router.post('/:id/unreturn', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const parsed = unreturnSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? 'Informe o motivo do desfazer',
+      });
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: paramId(req) },
+      include: { vehicle: true, route: true, dealership: true, logbook: true },
+    });
+    if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+
+    const [otherOpenTrip, newerTrip, returnHistory] = await Promise.all([
+      prisma.trip.findFirst({
+        where: {
+          vehicleId: trip.vehicleId,
+          id: { not: trip.id },
+          status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+        },
+        select: { id: true },
+      }),
+      prisma.trip.findFirst({
+        where: {
+          vehicleId: trip.vehicleId,
+          id: { not: trip.id },
+          status: { not: TripStatus.CANCELADO },
+          departureAt: { gt: trip.returnedAt ?? trip.departureAt },
+        },
+        select: { id: true },
+      }),
+      prisma.vehicleHistory.findFirst({
+        where: { tripId: trip.id, action: 'RETORNO' },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const block = evaluateUnreturnGuards({
+      tripStatus: trip.status,
+      logbookReturnSigned: !!trip.logbook?.returnSignedAt,
+      vehicleStatus: trip.vehicle.status,
+      hasOtherOpenTrip: !!otherOpenTrip,
+      hasNewerTripOnVehicle: !!newerTrip,
+    });
+    if (block) {
+      return res.status(400).json({ error: UNRETURN_ERROR_MESSAGES[block], code: block });
+    }
+
+    const nextTripStatus = tripStatusAfterUnreturn(trip.expectedReturn);
+    const hasDelayReport = !!(trip.delayReason && trip.delayReportedAt);
+    const nextVehicleStatus = vehicleStatusAfterUnreturn(
+      returnHistory?.fromStatus,
+      hasDelayReport,
+    );
+    const restoreUnavailable =
+      nextVehicleStatus === VehicleStatus.BLOQUEADO && hasDelayReport;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const t = await tx.trip.update({
+        where: { id: trip.id },
+        data: {
+          status: nextTripStatus,
+          returnedAt: null,
+          returnedById: null,
+          ...(restoreUnavailable
+            ? {
+                unavailableReason: trip.delayReason,
+                unavailableAt: trip.delayReportedAt,
+              }
+            : {}),
+        },
+        include: tripInclude,
+      });
+
+      await tx.vehicle.update({
+        where: { id: trip.vehicleId },
+        data: { status: nextVehicleStatus },
+      });
+
+      await tx.vehicleHistory.create({
+        data: {
+          vehicleId: trip.vehicleId,
+          userId: req.user!.id,
+          tripId: trip.id,
+          action: 'DESFAZER_RETORNO',
+          fromStatus: trip.vehicle.status,
+          toStatus: nextVehicleStatus,
+          details: `${parsed.data.reason.trim()} · retorno de ${trip.dealership.name} desfeito`,
+        },
+      });
+
+      if (trip.routeId && trip.route?.status === RouteStatus.CONCLUIDO) {
+        await tx.route.update({
+          where: { id: trip.routeId },
+          data: { status: RouteStatus.EM_ANDAMENTO },
+        });
+      }
+
+      return t;
+    });
+
+    await audit('UNDO_RETURN', 'Trip', {
+      userId: req.user!.id,
+      entityId: trip.id,
+      details: `${trip.vehicle.plate}: ${parsed.data.reason.trim().slice(0, 120)}`,
+    });
+    io.emit('fleet:changed', { action: 'unreturn', tripId: trip.id });
+    io.emit('trips:changed', { action: 'unreturn' });
+    if (trip.routeId) {
+      io.emit('routes:changed', { action: 'unreturn', routeId: trip.routeId });
+    }
+
+    res.json({
+      ...updated,
+      overdue: isOverdue(updated.expectedReturn, updated.returnedAt),
+      color: vehicleColor(updated.vehicle.status, updated.expectedReturn),
+      needsDelayReason: isOverdue(updated.expectedReturn, updated.returnedAt) && !updated.delayReason,
+    });
   });
 
   /** Admin: ajusta manualmente saída e previsão de retorno (inclusive viagens concluídas). */

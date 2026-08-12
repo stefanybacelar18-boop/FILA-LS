@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Undo2 } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Trip, User } from '../types'
 import {
@@ -10,6 +11,9 @@ import {
   Spinner,
   EmptyState,
   Badge,
+  Button,
+  Modal,
+  Textarea,
 } from '../components/ui'
 import { tripStatusLabels, vehicleTypeLabels } from '../lib/labels'
 import { formatDate, formatDateTime } from '../lib/format'
@@ -23,6 +27,9 @@ export function History() {
   const [plate, setPlate] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [undoTarget, setUndoTarget] = useState<Trip | null>(null)
+  const [undoReason, setUndoReason] = useState('')
+  const qc = useQueryClient()
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -47,6 +54,22 @@ export function History() {
       if (from) params.from = from
       if (to) params.to = to
       return (await api.get<Trip[]>('/history/trips', { params })).data
+    },
+  })
+
+  const undoMutation = useMutation({
+    mutationFn: async () => {
+      if (!undoTarget) throw new Error('Sem viagem')
+      return api.post(`/trips/${undoTarget.id}/unreturn`, { reason: undoReason.trim() })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['history'] })
+      void qc.invalidateQueries({ queryKey: ['trips'] })
+      void qc.invalidateQueries({ queryKey: ['returns'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['routes'] })
+      setUndoTarget(null)
+      setUndoReason('')
     },
   })
 
@@ -113,6 +136,7 @@ export function History() {
                   <th>Retorno</th>
                   <th>Status</th>
                   <th>Responsável</th>
+                  {isAdmin && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -140,6 +164,25 @@ export function History() {
                       </Badge>
                     </td>
                     <td>{t.assignedBy.name}</td>
+                    {isAdmin && (
+                      <td>
+                        {t.status === 'RETORNOU' ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setUndoTarget(t)
+                              setUndoReason('')
+                            }}
+                          >
+                            <Undo2 className="h-4 w-4" />
+                            Desfazer retorno
+                          </Button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -147,6 +190,68 @@ export function History() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={!!undoTarget}
+        onClose={() => {
+          setUndoTarget(null)
+          setUndoReason('')
+        }}
+        title={undoTarget ? `Desfazer retorno — ${undoTarget.vehicle.plate}` : 'Desfazer retorno'}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setUndoTarget(null)
+                setUndoReason('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => undoMutation.mutate()}
+              loading={undoMutation.isPending}
+              disabled={undoReason.trim().length < 5}
+            >
+              Confirmar desfazer
+            </Button>
+          </>
+        }
+      >
+        {undoTarget && (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              A viagem voltará para <strong>Em andamento</strong> ou <strong>Atrasado</strong>, a placa
+              retorna para <strong>Em viagem</strong> e o roteiro pode ser reaberto se tinha sido
+              concluído por este retorno.
+            </p>
+            <div className="rounded-lg bg-[var(--color-surface-muted)] px-3 py-2 text-sm">
+              <p>
+                <strong>Destino:</strong> {undoTarget.dealership.name}
+              </p>
+              <p>
+                <strong>Retorno registrado:</strong>{' '}
+                {undoTarget.returnedAt ? formatDateTime(undoTarget.returnedAt) : '—'}
+              </p>
+            </div>
+            <Textarea
+              label="Motivo do desfazer"
+              value={undoReason}
+              onChange={(e) => setUndoReason(e.target.value)}
+              placeholder="Ex.: cliquei em retornar por engano"
+              required
+            />
+            {undoMutation.isError && (
+              <p className="text-sm text-[var(--color-danger)]">
+                {(undoMutation.error as { response?: { data?: { error?: string } } })?.response?.data
+                  ?.error ?? 'Não foi possível desfazer o retorno'}
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
