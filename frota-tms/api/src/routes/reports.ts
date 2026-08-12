@@ -10,6 +10,12 @@ import { fetchLslPernoitesForPeriod } from '../lib/pernoite-service';
 import { payrollPeriodOffset } from '../utils/pernoite';
 import { filterPlatesForRole, plateOwner } from '../data/operatorVisibility';
 import { VehicleStatus } from '../types/enums';
+import {
+  buildMaintenanceCycles,
+  filterCyclesByPeriod,
+  formatCycleDate,
+  type MaintenanceHistoryEvent,
+} from '../lib/maintenance-report';
 
 const router = Router();
 router.use(authenticate);
@@ -209,6 +215,9 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
   } else if (type === 'manutencao') {
     wb.removeWorksheet(ws.id);
 
+    const historyFrom = from ? new Date(String(from)) : undefined;
+    const historyTo = to ? new Date(String(to) + 'T23:59:59') : undefined;
+
     const vehiclesRaw = await prisma.vehicle.findMany({
       where: {
         OR: [{ maintenanceHold: true }, { status: VehicleStatus.EM_MANUTENCAO }],
@@ -217,6 +226,83 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
       orderBy: [{ blockedAt: 'desc' }, { plate: 'asc' }],
     });
     const vehicles = filterPlatesForRole(req.user?.role, vehiclesRaw);
+
+    const historyRaw = await prisma.vehicleHistory.findMany({
+      where: {
+        action: { in: ['BLOQUEIO_MANUTENCAO', 'LIBERACAO_MANUTENCAO'] },
+      },
+      include: {
+        vehicle: { select: { plate: true } },
+        user: { select: { name: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }],
+      take: 3000,
+    });
+    const historyEvents: MaintenanceHistoryEvent[] = filterPlatesForRole(
+      req.user?.role,
+      historyRaw.map((h) => ({ ...h, plate: h.vehicle.plate })),
+    ).map((h) => ({
+      action: h.action,
+      createdAt: h.createdAt,
+      details: h.details,
+      plate: h.vehicle.plate,
+      userName: h.user?.name ?? null,
+    }));
+
+    const cycles = filterCyclesByPeriod(
+      buildMaintenanceCycles(
+        historyEvents,
+        vehicles.map((v) => ({
+          plate: v.plate,
+          blockCategory: v.blockCategory,
+          blockReason: v.blockReason,
+          blockedAt: v.blockedAt,
+          blockedByName: v.blockedBy?.name ?? null,
+        })),
+      ),
+      historyFrom,
+      historyTo,
+    );
+
+    const wsCycles = wb.addWorksheet('Ciclos');
+    wsCycles.columns = [
+      { header: 'Placa', key: 'plate', width: 12 },
+      { header: 'Proprietário', key: 'owner', width: 12 },
+      { header: 'Categoria', key: 'category', width: 16 },
+      { header: 'Motivo', key: 'reason', width: 36 },
+      { header: 'Entrada em manutenção', key: 'entryAt', width: 20 },
+      { header: 'Saída da manutenção', key: 'exitAt', width: 20 },
+      { header: 'Dias parado', key: 'daysStopped', width: 12 },
+      { header: 'Situação', key: 'status', width: 12 },
+      { header: 'Bloqueado por', key: 'blockedBy', width: 18 },
+      { header: 'Liberado por', key: 'releasedBy', width: 18 },
+      { header: 'Obs. liberação', key: 'releaseNotes', width: 28 },
+    ];
+    cycles.forEach((cycle) =>
+      wsCycles.addRow({
+        plate: cycle.plate,
+        owner: cycle.owner,
+        category: cycle.category,
+        reason: cycle.reason,
+        entryAt: formatCycleDate(cycle.entryAt),
+        exitAt: formatCycleDate(cycle.exitAt),
+        daysStopped: cycle.daysStopped,
+        status: cycle.status,
+        blockedBy: cycle.blockedBy,
+        releasedBy: cycle.releasedBy,
+        releaseNotes: cycle.releaseNotes,
+      }),
+    );
+    wsCycles.addRow([]);
+    wsCycles.addRow({ plate: `Total: ${cycles.length} ciclo(s)` });
+    if (historyFrom || historyTo) {
+      wsCycles.addRow({
+        plate: `Período: ${historyFrom ? format(historyFrom, 'dd/MM/yyyy') : '…'} a ${
+          historyTo ? format(historyTo, 'dd/MM/yyyy') : '…'
+        }`,
+      });
+    }
+    wsCycles.addRow({ plate: `Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}` });
 
     const wsCurrent = wb.addWorksheet('Placas bloqueadas');
     wsCurrent.columns = [
@@ -229,7 +315,8 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
       { header: 'Motorista padrão', key: 'defaultDriver', width: 22 },
       { header: 'Categoria', key: 'blockCategory', width: 16 },
       { header: 'Motivo', key: 'blockReason', width: 40 },
-      { header: 'Bloqueado em', key: 'blockedAt', width: 18 },
+      { header: 'Entrada em manutenção', key: 'blockedAt', width: 20 },
+      { header: 'Saída da manutenção', key: 'releasedAt', width: 20 },
       { header: 'Registrado por', key: 'blockedBy', width: 20 },
       { header: 'Situação', key: 'status', width: 16 },
     ];
@@ -245,6 +332,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
         blockCategory: BLOCK_CATEGORY_LABELS[v.blockCategory ?? 'MANUTENCAO'] ?? v.blockCategory ?? '—',
         blockReason: v.blockReason ?? '—',
         blockedAt: v.blockedAt ? format(v.blockedAt, 'dd/MM/yyyy HH:mm') : '—',
+        releasedAt: 'Em aberto',
         blockedBy: v.blockedBy?.name ?? '—',
         status: v.status === VehicleStatus.EM_MANUTENCAO ? 'Em manutenção' : v.status,
       }),
@@ -253,8 +341,6 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     wsCurrent.addRow({ plate: `Total: ${vehicles.length} placa(s) em manutenção/bloqueio` });
     wsCurrent.addRow({ plate: `Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}` });
 
-    const historyFrom = from ? new Date(String(from)) : undefined;
-    const historyTo = to ? new Date(String(to) + 'T23:59:59') : undefined;
     const historyWhere: Record<string, unknown> = {
       action: { in: ['BLOQUEIO_MANUTENCAO', 'LIBERACAO_MANUTENCAO'] },
     };
@@ -264,7 +350,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
       if (historyTo) (historyWhere.createdAt as Record<string, Date>).lte = historyTo;
     }
 
-    const historyRaw = await prisma.vehicleHistory.findMany({
+    const historyFilteredRaw = await prisma.vehicleHistory.findMany({
       where: historyWhere,
       include: {
         vehicle: { select: { plate: true } },
@@ -275,7 +361,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     });
     const history = filterPlatesForRole(
       req.user?.role,
-      historyRaw.map((h) => ({ ...h, plate: h.vehicle.plate })),
+      historyFilteredRaw.map((h) => ({ ...h, plate: h.vehicle.plate })),
     );
 
     const wsHistory = wb.addWorksheet('Histórico');
