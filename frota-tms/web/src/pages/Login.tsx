@@ -4,6 +4,7 @@ import { Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { Button, Input, Spinner } from '../components/ui'
+import { startRenderKeepAlive } from '../lib/render-keepalive'
 
 export function Login() {
   const navigate = useNavigate()
@@ -28,6 +29,8 @@ export function Login() {
   useEffect(() => {
     void hydrate()
   }, [hydrate])
+
+  useEffect(() => startRenderKeepAlive(), [])
 
   if (!hydrated) {
     return (

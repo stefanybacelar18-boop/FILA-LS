@@ -1,18 +1,11 @@
-name: FrotaTMS Keep Alive
+name: FrotaTMS Keep Alive (offset)
 
-# Rajada de pings para manter o Render Free acordado (GitHub cron atrasa — cada execução
-# cobre ~15 min; workflow irmão em keepalive-offset cobre o meio do intervalo).
+# Complementa o keep-alive principal (:00, :15, :30, :45) com rajadas em :07, :22, :37, :52.
 
 on:
   schedule:
-    - cron: '0,15,30,45 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'frota-tms/**'
-      - '.github/workflows/frota-tms-keepalive*.yml'
-      - 'frota-tms/scripts/render-keepalive.sh'
 
 concurrency:
   group: frota-tms-keepalive
@@ -27,11 +20,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rajada de pings (health + home)
+      - name: Rajada de pings (offset)
         env:
           HEALTH_URL: ${{ vars.FROTA_TMS_HEALTH_URL || 'https://frota-tms.onrender.com/api/health' }}
           BASE_URL: ${{ vars.FROTA_TMS_BASE_URL || 'https://frota-tms.onrender.com' }}
-          KEEPALIVE_ROUNDS: '6'
+          KEEPALIVE_ROUNDS: '5'
           KEEPALIVE_INTERVAL_SEC: '150'
         run: |
           chmod +x frota-tms/scripts/render-keepalive.sh

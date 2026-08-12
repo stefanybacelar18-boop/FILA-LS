@@ -32,6 +32,7 @@ import { MyRoute } from './pages/MyRoute'
 import { ImportChronus } from './pages/ImportChronus'
 import { LogbookDriver } from './pages/LogbookDriver'
 import { LogbookAdmin } from './pages/LogbookAdmin'
+import { startRenderKeepAlive } from './lib/render-keepalive'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,6 +79,8 @@ function HomeRedirect() {
 }
 
 export default function App() {
+  useEffect(() => startRenderKeepAlive(), [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
