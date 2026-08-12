@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { addDays, format } from 'date-fns';
+import type { Prisma } from '@prisma/client';
 import { operationalDateKey, parseOperationalDateTime } from '../utils/timezone';
 import {
   chronusPlateNotes,
@@ -8,6 +9,11 @@ import {
 } from './chronus-plate-hint';
 import { hasActivePriority } from './route-priority.js';
 import { orderStopsNearestFromPad } from './route-stop-order.js';
+import {
+  canRefreshChronusRoute,
+  chronusRouteDuplicateKey,
+  registerChronusExistingRoute,
+} from './chronus-dedup';
 
 export type ChronusRow = {
   manifesto: string;
@@ -290,12 +296,7 @@ export async function buildChronusPreview(
 
   const existingNames = new Map<string, { id: string; name: string; status: string }>();
   for (const route of options?.existingRouteNames ?? []) {
-    const day = route.date.toISOString().slice(0, 10);
-    existingNames.set(`${route.name.trim().toLowerCase()}|${day}`, {
-      id: route.id,
-      name: route.name,
-      status: route.status,
-    });
+    registerChronusExistingRoute(existingNames, route);
   }
 
   const routes: ChronusManifestPreview[] = [];
@@ -303,7 +304,7 @@ export async function buildChronusPreview(
   for (const manifesto of manifestOrder) {
     const items = byManifesto.get(manifesto)!;
     const name = buildRouteName(manifesto, routeDate);
-    const dupKey = `${name.trim().toLowerCase()}|${routeDateIso}`;
+    const dupKey = chronusRouteDuplicateKey(name, routeDateIso);
     const duplicate = existingNames.get(dupKey) ?? null;
 
     const dealerGroups = new Map<string, ChronusRow[]>();
@@ -374,7 +375,7 @@ export async function buildChronusPreview(
       unmatchedDealerCodes: destinations.filter((d) => !d.matched).map((d) => d.dealerCode),
       duplicateRouteId: duplicate?.id ?? null,
       duplicateRouteName: duplicate?.name ?? null,
-      canRefreshLoad: duplicate?.status === 'AGUARDANDO_PLACAS',
+      canRefreshLoad: duplicate ? canRefreshChronusRoute(duplicate.status) : false,
     });
   }
 
@@ -435,4 +436,64 @@ export function chronusRouteLoadData(item: ChronusManifestPreview) {
     requiredFleetOwner: item.requiredFleetOwner,
     requiredCapacityMotos: item.requiredCapacityMotos,
   };
+}
+
+/** Reaplica carga Chronus em roteiro existente (sem duplicar). */
+export async function applyChronusRouteRefresh(
+  tx: Prisma.TransactionClient,
+  routeId: string,
+  item: ChronusManifestPreview,
+) {
+  const incomingIds = item.destinations
+    .map((d) => d.dealershipId)
+    .filter((id): id is string => !!id);
+
+  if (incomingIds.length > 0) {
+    await tx.routeDealership.deleteMany({
+      where: {
+        routeId,
+        dealershipId: { notIn: incomingIds },
+      },
+    });
+  } else {
+    await tx.routeDealership.deleteMany({ where: { routeId } });
+  }
+
+  for (const dest of item.destinations) {
+    if (!dest.dealershipId) continue;
+    const loadRow = chronusDealershipLoadRow(dest.dealershipId, dest.order, dest);
+    await tx.routeDealership.upsert({
+      where: {
+        routeId_dealershipId: { routeId, dealershipId: dest.dealershipId },
+      },
+      create: {
+        routeId,
+        dealershipId: dest.dealershipId,
+        order: dest.order,
+        motoCount: dest.motoCount,
+        minExpiryDate: loadRow.minExpiryDate,
+      },
+      update: {
+        order: dest.order,
+        motoCount: dest.motoCount,
+        minExpiryDate: loadRow.minExpiryDate,
+      },
+    });
+  }
+
+  const dealers = await tx.dealership.findMany({ where: { id: { in: incomingIds } } });
+  const dealerById = new Map(dealers.map((d) => [d.id, d]));
+  const ordered = incomingIds
+    .map((id) => dealerById.get(id))
+    .filter((d): d is (typeof dealers)[number] => !!d);
+  const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
+
+  return tx.route.update({
+    where: { id: routeId },
+    data: {
+      ...chronusRouteLoadData(item),
+      dealershipId: ordered[0]?.id ?? null,
+      region: region || null,
+    },
+  });
 }

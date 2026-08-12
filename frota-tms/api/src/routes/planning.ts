@@ -22,6 +22,7 @@ import {
   chronusDestinationsByDealershipId,
   chronusDealershipLoadRow,
   chronusRouteLoadData,
+  applyChronusRouteRefresh,
   type ChronusImportPreview,
 } from '../lib/chronus-import';
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
@@ -1019,7 +1020,7 @@ export function createPlanningRouter(io: Server) {
           importDate: new Date(),
           existingRouteNames: await prisma.route.findMany({
             where: {
-              status: { notIn: [RouteStatus.CANCELADO, RouteStatus.CONCLUIDO] },
+              status: { not: RouteStatus.CANCELADO },
             },
             select: { id: true, name: true, date: true, status: true },
           }),
@@ -1116,32 +1117,9 @@ export function createPlanningRouter(io: Server) {
 
       for (const item of toRefresh) {
         const routeId = item.duplicateRouteId!;
-
-        for (const dest of item.destinations) {
-          if (!dest.dealershipId) continue;
-          const loadRow = chronusDealershipLoadRow(dest.dealershipId, dest.order, dest);
-          await tx.routeDealership.upsert({
-            where: {
-              routeId_dealershipId: { routeId, dealershipId: dest.dealershipId },
-            },
-            create: {
-              routeId,
-              dealershipId: dest.dealershipId,
-              order: dest.order,
-              motoCount: dest.motoCount,
-              minExpiryDate: loadRow.minExpiryDate,
-            },
-            update: {
-              order: dest.order,
-              motoCount: dest.motoCount,
-              minExpiryDate: loadRow.minExpiryDate,
-            },
-          });
-        }
-
-        const route = await tx.route.update({
+        await applyChronusRouteRefresh(tx, routeId, item);
+        const route = await tx.route.findUniqueOrThrow({
           where: { id: routeId },
-          data: chronusRouteLoadData(item),
           include: routeInclude,
         });
         refreshed.push(route);

@@ -133,7 +133,7 @@ export function ImportChronus() {
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       <PageHeader
         title="Importar Chronus"
-        description="Exporte Entregas do Chronus (.xls, .xlsx ou CSV), envie aqui e crie os roteiros por manifesto."
+        description="Reimportar o mesmo manifesto (ex.: 375168 12/08/2026) atualiza o roteiro existente em vez de duplicar."
         actions={
           <Link to="/roteiros">
             <Button variant="secondary" size="sm">
@@ -202,14 +202,15 @@ export function ImportChronus() {
 
           {refreshable.length > 0 && (
             <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">
-              {refreshable.length} roteiro(s) já existem e terão <strong>motos e vencimento</strong>{' '}
-              atualizados ao confirmar.
+              {refreshable.length} roteiro(s) repetido(s) terão <strong>carga atualizada</strong>{' '}
+              (motos, vencimento e paradas) sem criar duplicata.
             </p>
           )}
 
           {duplicates.length > 0 && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-              {duplicates.length} manifesto(s) já existem em andamento e não podem ser alterados.
+              {duplicates.length} manifesto(s) já estão <strong>concluídos</strong> — não serão
+              duplicados nem alterados.
             </p>
           )}
 
@@ -232,7 +233,7 @@ export function ImportChronus() {
                         <Badge tone="info">Atualizar carga</Badge>
                       )}
                       {route.duplicateRouteId && !route.canRefreshLoad && (
-                        <Badge tone="warning">Já existe</Badge>
+                        <Badge tone="warning">Já concluído</Badge>
                       )}
                       {!route.duplicateRouteId && route.unmatchedDealerCodes.length > 0 && (
                         <Badge tone="danger">Sem cadastro</Badge>
