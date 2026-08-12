@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Ban, CheckCircle2, Wrench } from 'lucide-react'
-import { api } from '../lib/api'
+import { Ban, CheckCircle2, FileSpreadsheet, Wrench } from 'lucide-react'
+import { api, downloadReport } from '../lib/api'
 import type { Vehicle } from '../types'
 import {
   PageHeader,
@@ -30,6 +30,7 @@ export function Maintenance() {
   const [blockReason, setBlockReason] = useState('')
   const [releaseTarget, setReleaseTarget] = useState<Vehicle | null>(null)
   const [releaseNotes, setReleaseNotes] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   const { data: held = [], isLoading } = useQuery({
     queryKey: ['vehicles-maintenance'],
@@ -97,6 +98,16 @@ export function Maintenance() {
     blockMutation.mutate()
   }
 
+  async function exportExcel() {
+    setExporting(true)
+    try {
+      const stamp = new Date().toISOString().slice(0, 10)
+      await downloadReport('/reports/excel/manutencao', `manutencao-placas-${stamp}.xlsx`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -104,10 +115,16 @@ export function Maintenance() {
         description="Placas fora de operação até alguém liberar como OK para carregar de novo"
         actions={
           canOperate ? (
-            <Button onClick={() => setBlockOpen(true)}>
-              <Ban className="h-4 w-4" />
-              Bloquear placa
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => void exportExcel()} loading={exporting}>
+                <FileSpreadsheet className="h-4 w-4" />
+                Exportar Excel
+              </Button>
+              <Button onClick={() => setBlockOpen(true)}>
+                <Ban className="h-4 w-4" />
+                Bloquear placa
+              </Button>
+            </div>
           ) : undefined
         }
       />

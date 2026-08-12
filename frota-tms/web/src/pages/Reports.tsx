@@ -15,6 +15,7 @@ const reportTypes = [
   { type: 'periodo', label: 'Viagens por período' },
   { type: 'concessionarias', label: 'Concessionárias' },
   { type: 'historico-placa', label: 'Histórico por placa' },
+  { type: 'manutencao', label: 'Placas em manutenção / bloqueio', operacaoOnly: true },
   { type: 'pernoites-lsl', label: 'Pernoites LSL (período folha)', adminOnly: true },
 ] as const
 
@@ -25,7 +26,12 @@ export function Reports() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const canViewPernoites = useAuthStore((s) => s.hasRole('ADMIN', 'CONSULTA'))
-  const visibleReports = reportTypes.filter((r) => !('adminOnly' in r && r.adminOnly) || canViewPernoites)
+  const canOperate = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
+  const visibleReports = reportTypes.filter((r) => {
+    if ('adminOnly' in r && r.adminOnly) return canViewPernoites
+    if ('operacaoOnly' in r && r.operacaoOnly) return canOperate
+    return true
+  })
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ['vehicles'],

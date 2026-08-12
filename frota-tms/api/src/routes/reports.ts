@@ -8,6 +8,8 @@ import { daysUntilExpiry } from '../utils/status';
 import { format } from 'date-fns';
 import { fetchLslPernoitesForPeriod } from '../lib/pernoite-service';
 import { payrollPeriodOffset } from '../utils/pernoite';
+import { filterPlatesForRole, plateOwner } from '../data/operatorVisibility';
+import { VehicleStatus } from '../types/enums';
 
 const router = Router();
 router.use(authenticate);
@@ -31,6 +33,17 @@ async function tripRows(from?: string, to?: string) {
 }
 
 const SENSITIVE_REPORT_TYPES = new Set(['pernoites-lsl']);
+const OPERATION_REPORT_TYPES = new Set(['manutencao']);
+
+const VEHICLE_TYPE_LABELS: Record<string, string> = {
+  TRUCK: 'Truck',
+  CARRETA: 'Carreta',
+};
+
+const BLOCK_CATEGORY_LABELS: Record<string, string> = {
+  MANUTENCAO: 'Manutenção',
+  OUTRO: 'Outro motivo',
+};
 
 function denySensitiveReport(req: AuthRequest, type: string): boolean {
   return (
@@ -40,9 +53,20 @@ function denySensitiveReport(req: AuthRequest, type: string): boolean {
   );
 }
 
+function denyOperationReport(req: AuthRequest, type: string): boolean {
+  return (
+    OPERATION_REPORT_TYPES.has(type) &&
+    req.user?.role !== Role.ADMIN &&
+    req.user?.role !== Role.OPERACAO
+  );
+}
+
 router.get('/excel/:type', async (req: AuthRequest, res) => {
   const type = String(req.params.type);
   if (denySensitiveReport(req, type)) {
+    return res.status(403).json({ error: 'Acesso negado a este relatório' });
+  }
+  if (denyOperationReport(req, type)) {
     return res.status(403).json({ error: 'Acesso negado a este relatório' });
   }
   const { from, to, vehicleId } = req.query;
@@ -182,6 +206,111 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     summary.getCell(1).value = `Período: ${period.label}`;
     const totalRow = wsTrips.addRow([]);
     totalRow.getCell(1).value = `Total de pernoites: ${data.totalPernoites}`;
+  } else if (type === 'manutencao') {
+    wb.removeWorksheet(ws.id);
+
+    const vehiclesRaw = await prisma.vehicle.findMany({
+      where: {
+        OR: [{ maintenanceHold: true }, { status: VehicleStatus.EM_MANUTENCAO }],
+      },
+      include: { blockedBy: { select: { name: true } } },
+      orderBy: [{ blockedAt: 'desc' }, { plate: 'asc' }],
+    });
+    const vehicles = filterPlatesForRole(req.user?.role, vehiclesRaw);
+
+    const wsCurrent = wb.addWorksheet('Placas bloqueadas');
+    wsCurrent.columns = [
+      { header: 'Placa', key: 'plate', width: 12 },
+      { header: 'Proprietário', key: 'owner', width: 12 },
+      { header: 'Tipo', key: 'type', width: 10 },
+      { header: 'Marca', key: 'brand', width: 14 },
+      { header: 'Modelo', key: 'model', width: 14 },
+      { header: 'Capacidade (motos)', key: 'capacityMotos', width: 18 },
+      { header: 'Motorista padrão', key: 'defaultDriver', width: 22 },
+      { header: 'Categoria', key: 'blockCategory', width: 16 },
+      { header: 'Motivo', key: 'blockReason', width: 40 },
+      { header: 'Bloqueado em', key: 'blockedAt', width: 18 },
+      { header: 'Registrado por', key: 'blockedBy', width: 20 },
+      { header: 'Situação', key: 'status', width: 16 },
+    ];
+    vehicles.forEach((v) =>
+      wsCurrent.addRow({
+        plate: v.plate,
+        owner: plateOwner(v.plate),
+        type: VEHICLE_TYPE_LABELS[v.type] ?? v.type,
+        brand: v.brand,
+        model: v.model,
+        capacityMotos: v.capacityMotos,
+        defaultDriver: v.defaultDriver ?? '—',
+        blockCategory: BLOCK_CATEGORY_LABELS[v.blockCategory ?? 'MANUTENCAO'] ?? v.blockCategory ?? '—',
+        blockReason: v.blockReason ?? '—',
+        blockedAt: v.blockedAt ? format(v.blockedAt, 'dd/MM/yyyy HH:mm') : '—',
+        blockedBy: v.blockedBy?.name ?? '—',
+        status: v.status === VehicleStatus.EM_MANUTENCAO ? 'Em manutenção' : v.status,
+      }),
+    );
+    wsCurrent.addRow([]);
+    wsCurrent.addRow({ plate: `Total: ${vehicles.length} placa(s) em manutenção/bloqueio` });
+    wsCurrent.addRow({ plate: `Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}` });
+
+    const historyFrom = from ? new Date(String(from)) : undefined;
+    const historyTo = to ? new Date(String(to) + 'T23:59:59') : undefined;
+    const historyWhere: Record<string, unknown> = {
+      action: { in: ['BLOQUEIO_MANUTENCAO', 'LIBERACAO_MANUTENCAO'] },
+    };
+    if (historyFrom || historyTo) {
+      historyWhere.createdAt = {};
+      if (historyFrom) (historyWhere.createdAt as Record<string, Date>).gte = historyFrom;
+      if (historyTo) (historyWhere.createdAt as Record<string, Date>).lte = historyTo;
+    }
+
+    const historyRaw = await prisma.vehicleHistory.findMany({
+      where: historyWhere,
+      include: {
+        vehicle: { select: { plate: true } },
+        user: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    const history = filterPlatesForRole(
+      req.user?.role,
+      historyRaw.map((h) => ({ ...h, plate: h.vehicle.plate })),
+    );
+
+    const wsHistory = wb.addWorksheet('Histórico');
+    wsHistory.columns = [
+      { header: 'Data/hora', key: 'createdAt', width: 18 },
+      { header: 'Placa', key: 'plate', width: 12 },
+      { header: 'Ação', key: 'action', width: 20 },
+      { header: 'De', key: 'fromStatus', width: 14 },
+      { header: 'Para', key: 'toStatus', width: 14 },
+      { header: 'Detalhes', key: 'details', width: 44 },
+      { header: 'Usuário', key: 'user', width: 20 },
+    ];
+    const ACTION_LABELS: Record<string, string> = {
+      BLOQUEIO_MANUTENCAO: 'Bloqueio',
+      LIBERACAO_MANUTENCAO: 'Liberação',
+    };
+    history.forEach((h) =>
+      wsHistory.addRow({
+        createdAt: format(h.createdAt, 'dd/MM/yyyy HH:mm'),
+        plate: h.vehicle.plate,
+        action: ACTION_LABELS[h.action] ?? h.action,
+        fromStatus: h.fromStatus ?? '—',
+        toStatus: h.toStatus ?? '—',
+        details: h.details ?? '—',
+        user: h.user?.name ?? '—',
+      }),
+    );
+    if (historyFrom || historyTo) {
+      wsHistory.addRow([]);
+      wsHistory.addRow({
+        createdAt: `Período: ${historyFrom ? format(historyFrom, 'dd/MM/yyyy') : '…'} a ${
+          historyTo ? format(historyTo, 'dd/MM/yyyy') : '…'
+        }`,
+      });
+    }
   } else if (type === 'historico-placa' && vehicleId) {
     const trips = await prisma.trip.findMany({
       where: { vehicleId: String(vehicleId) },
