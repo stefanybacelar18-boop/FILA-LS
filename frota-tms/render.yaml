@@ -26,6 +26,8 @@ services:
       chmod +x scripts/apply-database-schema.sh
       ./scripts/apply-database-schema.sh
       mkdir -p api/public && cp -r web/dist/. api/public/
+    # Não rode prisma/migrate aqui: o processo precisa escutar $PORT na hora,
+    # senão o Render Free fica na tela de alocação até o health check falhar.
     startCommand: |
       set -e
       cd api
