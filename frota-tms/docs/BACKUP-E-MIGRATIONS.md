@@ -51,10 +51,29 @@ Arquivo gerado em `frota-tms/backups/frota-tms-YYYYMMDD-HHMMSS.sql.gz`
 ### Restaurar
 
 ```bash
-gunzip -c backups/frota-tms-XXXX.sql.gz | psql "$DATABASE_URL"
+FORCE_RESTORE=true DATABASE_URL="postgresql://..." ./scripts/restore.sh backups/frota-tms-XXXX.sql.gz
 ```
 
+Ou no GitHub: **Actions → FrotaTMS Restore DB → Run workflow** (usa o secret `FROTA_TMS_DATABASE_URL`).
+
 > **Cuidado:** restaurar sobrescreve dados atuais. Faça só em ambiente de teste ou com confirmação explícita.
+
+---
+
+## Banco Free da Render expirou (sem custo)
+
+O Postgres Free **acaba em 30 dias**. Dá para voltar sem pagar, com um banco Free **novo** + o backup do GitHub.
+
+1. Baixe o dump: [Actions → FrotaTMS DB Backup](https://github.com/stefanybacelar18-boop/FILA-LS/actions/workflows/frota-tms-backup.yml) → último sucesso → **Artifacts**.
+2. Render → **New → PostgreSQL** → plano **Free** → mesma região do web `frota-tms` → Create.  
+   Se a Render bloquear (“já existe 1 Free”), **não apague** o antigo até o dump estar no seu computador. Depois Delete no banco *Expired/Suspended* e crie o Free novo.
+3. Copie a **External Database URL** do banco novo.
+4. GitHub → Settings → Secrets → `FROTA_TMS_DATABASE_URL` = essa External URL.
+5. **Actions → FrotaTMS Restore DB → Run workflow**.
+6. No serviço web `frota-tms` → Environment → `DATABASE_URL` = **Internal Database URL** do banco novo.
+7. **Manual Deploy** no web. Abra `https://frota-tms.onrender.com`.
+
+Anote no calendário: daqui a **28 dias** repetir (backup → banco Free novo → restore). Sem isso o site cai de novo.
 
 ---
 

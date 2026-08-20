@@ -23,7 +23,7 @@ O **app também pinga** `/api/health` a cada 4 min enquanto alguém está com a 
 > 1. Recarregue a página.
 > 2. No [status da Render](https://status.render.com/) veja se o plano Free está degradado (em incidente o spin-up Free pode ser desligado).
 > 3. Painel Render → serviço `frota-tms` → **Manual Deploy**.
-> 4. Confira o Postgres Free: ele **expira em 30 dias**. Se estiver Expired, faça upgrade ou crie outro banco e restaure o backup.
+> 4. Confira o Postgres Free: ele **expira em 30 dias**. Sem custo: crie um banco Free **novo** e restaure o backup ([guia](./BACKUP-E-MIGRATIONS.md#banco-free-da-render-expirou-sem-custo)). Não clique em Upgrade.
 
 `/api/health` é **liveness** (HTTP 200 quando o processo escuta, mesmo com banco acordando).  
 `/api/ready` exige o Postgres (`db: up`).

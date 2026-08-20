@@ -1,0 +1,67 @@
+name: FrotaTMS Restore DB
+
+# Restaura o último backup (ou um run específico) no Postgres do secret
+# FROTA_TMS_DATABASE_URL. Use depois de criar um banco Free NOVO no Render.
+#
+# 1. Atualize o secret com a External Database URL do banco novo
+# 2. Actions → FrotaTMS Restore DB → Run workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_run_id:
+        description: 'ID do run de backup (vazio = último sucesso)'
+        required: false
+        type: string
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Download backup artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+        run: |
+          set -euo pipefail
+          RUN_ID="$BACKUP_RUN_ID"
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list --workflow=frota-tms-backup.yml --status=success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Nenhum backup com sucesso encontrado."
+            exit 1
+          fi
+          echo "Usando backup do run $RUN_ID"
+          echo "BACKUP_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+          mkdir -p dump
+          gh run download "$RUN_ID" --name "frota-tms-db-$RUN_ID" --dir dump
+          find dump -name '*.sql.gz' -ls
+
+      - name: Restore into DATABASE_URL
+        env:
+          DATABASE_URL: ${{ secrets.FROTA_TMS_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Configure o secret FROTA_TMS_DATABASE_URL com a External URL do banco NOVO."
+            exit 1
+          fi
+          DUMP="$(find dump -name '*.sql.gz' | head -1)"
+          if [ -z "$DUMP" ]; then
+            echo "::error::Dump .sql.gz não encontrado no artefato."
+            exit 1
+          fi
+          chmod +x frota-tms/scripts/restore.sh
+          FORCE_RESTORE=true frota-tms/scripts/restore.sh "$DUMP"
