@@ -25,6 +25,7 @@ import justificationsRoutes from './routes/justifications';
 import evidencesRoutes from './routes/evidences';
 import publicDriverRoutes from './routes/publicDriver';
 import { prisma } from './lib/prisma';
+import { healthPayload, probeDatabase } from './lib/health';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
@@ -55,19 +56,24 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
+async function readHealth() {
+  const db = await probeDatabase(() => prisma.$queryRaw`SELECT 1`);
+  return healthPayload({
+    db,
+    uptimeSec: Math.floor(process.uptime()),
+    commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) || process.env.GIT_COMMIT?.slice(0, 7) || null,
+  });
+}
+
+/** Liveness: HTTP 200 assim que o processo escuta — senão o Render Free fica na tela de alocação. */
 app.get('/api/health', async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({
-      ok: true,
-      service: 'frota-tms-api',
-      db: 'up',
-      uptimeSec: Math.floor(process.uptime()),
-      commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) || process.env.GIT_COMMIT?.slice(0, 7) || null,
-    });
-  } catch {
-    res.status(503).json({ ok: false, service: 'frota-tms-api', db: 'down' });
-  }
+  res.status(200).json(await readHealth());
+});
+
+/** Readiness: 503 só se o banco não responder (monitoramento / Docker). */
+app.get('/api/ready', async (_req, res) => {
+  const body = await readHealth();
+  res.status(body.db === 'up' ? 200 : 503).json({ ...body, ok: body.db === 'up' });
 });
 
 app.use('/api/auth', authRoutes);

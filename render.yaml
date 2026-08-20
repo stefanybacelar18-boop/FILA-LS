@@ -16,20 +16,23 @@ services:
     rootDir: frota-tms
     # NODE_ENV=production faz npm omitir devDeps — por isso o build força include=dev
     # e usa o Prisma LOCAL (api/node_modules), nunca o npx global (v7+).
+    # Schema no build. Start só sobe o HTTP — prisma db push no start trava a
+    # tela "alocando recursos" do Render Free enquanto o Postgres acorda.
     buildCommand: |
       set -e
       chmod +x scripts/prepare-postgres-schema.sh
+      chmod +x scripts/apply-database-schema.sh
       npm install --prefix web --include=dev
       npm run build --prefix web
       npm install --prefix api --include=dev
       ./scripts/prepare-postgres-schema.sh api/prisma/schema.prisma
       npm exec --prefix api -- prisma generate --schema api/prisma/schema.prisma
       npm run build --prefix api
+      ./scripts/apply-database-schema.sh
       mkdir -p api/public && cp -r web/dist/. api/public/
     startCommand: |
       set -e
       cd api
-      npm exec -- prisma db push
       if [ "${SEED_ON_START:-false}" = "true" ]; then
         echo "SEED_ON_START=true — bootstrap de dados (uma vez)..."
         FORCE_SEED=true npm exec -- tsx prisma/seed.ts
