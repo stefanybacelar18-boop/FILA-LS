@@ -19,7 +19,7 @@ export function normalizePrismaDatabaseUrl(
     next = stripQueryParam(next, 'pgbouncer');
     next = stripQueryParam(next, 'connection_limit');
     if (isPostgresUrl(next) && /pooler\.supabase\.com/i.test(next)) {
-      next = appendQuery(next, 'connection_limit', '8');
+      next = appendQuery(next, 'connection_limit', '10');
     }
   }
 
@@ -35,8 +35,13 @@ export function normalizePrismaDatabaseUrl(
   return next;
 }
 
-function isPostgresUrl(url: string): boolean {
-  return /^postgres(ql)?:\/\//i.test(url);
+export function isPostgresUrl(url: string | undefined): boolean {
+  return Boolean(url && /^postgres(ql)?:\/\//i.test(url));
+}
+
+/** SQLite (dev/testes) não suporta JOIN de relações; Postgres sim. */
+export function relationLoadStrategyForUrl(url: string | undefined): 'join' | 'query' {
+  return isPostgresUrl(url) ? 'join' : 'query';
 }
 
 function hasQueryParam(url: string, key: string): boolean {

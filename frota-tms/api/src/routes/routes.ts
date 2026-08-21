@@ -23,6 +23,72 @@ import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 
+const routeListDealershipSelect = {
+  id: true,
+  name: true,
+  city: true,
+  state: true,
+  region: true,
+  distanceKm: true,
+  avgTravelDays: true,
+  allowedVehicle: true,
+} as const;
+
+const routeListInclude = {
+  dealerships: {
+    orderBy: { order: 'asc' as const },
+    select: {
+      order: true,
+      motoCount: true,
+      minExpiryDate: true,
+      dealership: { select: routeListDealershipSelect },
+    },
+  },
+  dealership: { select: routeListDealershipSelect },
+  createdBy: { select: { id: true, name: true } },
+  vehicles: {
+    select: {
+      vehicle: {
+        select: {
+          id: true,
+          plate: true,
+          type: true,
+          status: true,
+          capacityMotos: true,
+          defaultDriver: true,
+        },
+      },
+    },
+  },
+  trips: {
+    where: {
+      status: {
+        in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO, TripStatus.RETORNOU],
+      },
+    },
+    select: {
+      id: true,
+      driverName: true,
+      vehicleId: true,
+      status: true,
+      returnedAt: true,
+      createdAt: true,
+      vehicle: {
+        select: {
+          id: true,
+          plate: true,
+          capacityMotos: true,
+          defaultDriver: true,
+          type: true,
+          status: true,
+        },
+      },
+    },
+    take: 5,
+  },
+  _count: { select: { trips: true } },
+};
+
 const routeDealershipInclude = {
   dealerships: {
     include: { dealership: true },
@@ -173,45 +239,14 @@ export function createRoutesRouter(io: Server) {
       String(req.query.priority) === 'true';
     if (!narrowed) {
       const since = new Date();
-      since.setUTCDate(since.getUTCDate() - 21);
+      since.setUTCDate(since.getUTCDate() - 10);
       where.date = { gte: since };
     }
     const routes = await prisma.route.findMany({
       where,
-      include: {
-        ...routeDealershipInclude,
-        dealership: true,
-        createdBy: { select: { id: true, name: true } },
-        vehicles: { include: { vehicle: true } },
-        trips: {
-          where: {
-            status: {
-              in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO, TripStatus.RETORNOU],
-            },
-          },
-          select: {
-            id: true,
-            driverName: true,
-            vehicleId: true,
-            status: true,
-            returnedAt: true,
-            createdAt: true,
-            vehicle: {
-              select: {
-                id: true,
-                plate: true,
-                capacityMotos: true,
-                defaultDriver: true,
-                type: true,
-                status: true,
-              },
-            },
-          },
-          take: 5,
-        },
-        _count: { select: { trips: true } },
-      },
+      include: routeListInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take: narrowed ? undefined : 80,
     });
 
     const withForecast = routes.map((route) => {
@@ -311,26 +346,25 @@ export function createRoutesRouter(io: Server) {
       };
     }
 
-    const [allVehicles, reports] = await Promise.all([
+    const [allVehicles, reports, openTrips] = await Promise.all([
       prisma.vehicle.findMany({ orderBy: { plate: 'asc' } }),
       prisma.plateUnavailability.findMany({
         where: { routeId: route.id },
         include: { reportedBy: { select: { id: true, name: true } } },
+      }),
+      prisma.trip.findMany({
+        where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+        orderBy: { departureAt: 'desc' },
       }),
     ]);
     const vehicles = filterPlatesForRole(req.user?.role, allVehicles);
 
     const reportByVehicle = new Map(reports.map((r) => [r.vehicleId, r]));
 
-    const openTrips = await prisma.trip.findMany({
-      where: {
-        vehicleId: { in: vehicles.map((v) => v.id) },
-        status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
-      },
-      orderBy: { departureAt: 'desc' },
-    });
+    const vehicleIdSet = new Set(vehicles.map((v) => v.id));
     const tripByVehicle = new Map<string, (typeof openTrips)[0]>();
     for (const t of openTrips) {
+      if (!vehicleIdSet.has(t.vehicleId)) continue;
       if (!tripByVehicle.has(t.vehicleId)) tripByVehicle.set(t.vehicleId, t);
     }
 

@@ -24,6 +24,7 @@ import reportsRoutes from './routes/reports';
 import justificationsRoutes from './routes/justifications';
 import evidencesRoutes from './routes/evidences';
 import publicDriverRoutes from './routes/publicDriver';
+import { gzipJson } from './middleware/gzip-json';
 import { prisma } from './lib/prisma';
 import { healthPayload, probeDatabase } from './lib/health';
 import { ensureHotIndexes } from './lib/ensure-indexes';
@@ -55,6 +56,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '2mb' }));
+app.use(gzipJson);
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.get('/api/health', async (_req, res) => {
