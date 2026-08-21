@@ -440,7 +440,11 @@ export function chronusRouteLoadData(item: ChronusManifestPreview) {
 
 /** Reaplica carga Chronus em roteiro existente (sem duplicar). */
 export async function applyChronusRouteRefresh(
-  tx: Prisma.TransactionClient,
+  tx: {
+    routeDealership: Prisma.TransactionClient['routeDealership'];
+    dealership: Prisma.TransactionClient['dealership'];
+    route: Prisma.TransactionClient['route'];
+  },
   routeId: string,
   item: ChronusManifestPreview,
 ) {

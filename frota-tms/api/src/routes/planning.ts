@@ -1103,46 +1103,50 @@ export function createPlanningRouter(io: Server) {
 
     const firstOfDay = await isFirstRouteSentToday();
 
-    const { createdRoutes, refreshedRoutes } = await prisma.$transaction(async (tx) => {
-      const claimed = await tx.importBatch.updateMany({
-        where: { id: batch.id, status: 'PREVIEW' },
-        data: { status: 'COMMITTED' },
-      });
-      if (claimed.count !== 1) {
-        throw Object.assign(new Error('Lote já processado'), { status: 409 });
-      }
+    const claimed = await prisma.importBatch.updateMany({
+      where: { id: batch.id, status: 'PREVIEW' },
+      data: { status: 'COMMITTED' },
+    });
+    if (claimed.count !== 1) {
+      return res.status(409).json({ error: 'Lote já processado' });
+    }
 
-      const routes = [];
-      const refreshed = [];
+    const createdRoutes: { id: string; name: string; date: Date }[] = [];
+    let refreshedCount = 0;
 
+    try {
       for (const item of toRefresh) {
-        const routeId = item.duplicateRouteId!;
-        await applyChronusRouteRefresh(tx, routeId, item);
-        const route = await tx.route.findUniqueOrThrow({
-          where: { id: routeId },
-          include: routeInclude,
-        });
-        refreshed.push(route);
+        await applyChronusRouteRefresh(prisma, item.duplicateRouteId!, item);
+        refreshedCount += 1;
       }
+
+      const allDealerIds = [
+        ...new Set(
+          toCreate.flatMap((item) =>
+            item.destinations.map((d) => d.dealershipId).filter((id): id is string => !!id),
+          ),
+        ),
+      ];
+      const allDealers = await prisma.dealership.findMany({
+        where: { id: { in: allDealerIds } },
+      });
+      const dealerById = new Map(allDealers.map((d) => [d.id, d]));
 
       for (const item of toCreate) {
-        const dealerIds = item.destinations
-          .map((d) => d.dealershipId)
-          .filter((id): id is string => !!id);
         const uniqueIds: string[] = [];
         const seenDealerIds = new Set<string>();
-        for (const id of dealerIds) {
-          if (seenDealerIds.has(id)) continue;
-          seenDealerIds.add(id);
-          uniqueIds.push(id);
+        for (const dest of item.destinations) {
+          if (!dest.dealershipId || seenDealerIds.has(dest.dealershipId)) continue;
+          seenDealerIds.add(dest.dealershipId);
+          uniqueIds.push(dest.dealershipId);
         }
-        const dealers = await tx.dealership.findMany({ where: { id: { in: uniqueIds } } });
-        const dealerById = new Map(dealers.map((d) => [d.id, d]));
-        const ordered = uniqueIds.map((id) => dealerById.get(id)!);
+        const ordered = uniqueIds
+          .map((id) => dealerById.get(id))
+          .filter((d): d is (typeof allDealers)[number] => !!d);
         const region = [...new Set(ordered.map((d) => d.region))].join(' / ');
         const destByDealerId = chronusDestinationsByDealershipId(item.destinations);
 
-        const route = await tx.route.create({
+        const route = await prisma.route.create({
           data: {
             name: item.name,
             date: new Date(`${item.date}T12:00:00.000Z`),
@@ -1162,18 +1166,30 @@ export function createPlanningRouter(io: Server) {
               }),
             },
           },
-          include: routeInclude,
+          select: { id: true, name: true, date: true },
         });
-        routes.push(route);
+        createdRoutes.push(route);
       }
-
-      return { createdRoutes: routes, refreshedRoutes: refreshed };
-    });
+    } catch (err) {
+      console.error('chronus commit failed', err);
+      if (createdRoutes.length === 0 && refreshedCount === 0) {
+        await prisma.importBatch.updateMany({
+          where: { id: batch.id, status: 'COMMITTED' },
+          data: { status: 'PREVIEW' },
+        });
+      }
+      return res.status(500).json({
+        error:
+          createdRoutes.length > 0 || refreshedCount > 0
+            ? `Parou no meio: ${createdRoutes.length} criado(s) e ${refreshedCount} atualizado(s). Envie o mesmo arquivo de novo para completar o restante.`
+            : 'Não foi possível gravar os roteiros. Tente confirmar de novo em alguns segundos.',
+      });
+    }
 
     await audit('CHRONUS_IMPORT', 'ImportBatch', {
       userId: req.user!.id,
       entityId: batch.id,
-      details: `${createdRoutes.length} criados · ${refreshedRoutes.length} atualizados · ${batch.filename || 'chronus'}`,
+      details: `${createdRoutes.length} criados · ${refreshedCount} atualizados · ${batch.filename || 'chronus'}`,
     });
 
     if (firstOfDay && createdRoutes[0]) {
@@ -1188,14 +1204,12 @@ export function createPlanningRouter(io: Server) {
     io.emit('planning:changed', { action: 'chronus-import', batchId: batch.id });
     io.emit('routes:changed', {
       action: 'chronus-import',
-      count: createdRoutes.length + refreshedRoutes.length,
+      count: createdRoutes.length + refreshedCount,
     });
 
     res.json({
       created: createdRoutes.length,
-      refreshed: refreshedRoutes.length,
-      routes: createdRoutes,
-      refreshedRoutes,
+      refreshed: refreshedCount,
       skippedDuplicates: skippedDuplicates.map((r) => ({
         manifesto: r.manifesto,
         name: r.name,

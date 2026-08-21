@@ -84,7 +84,7 @@ export function ImportChronus() {
           created: number
           refreshed: number
           skippedDuplicates: { manifesto: string; name: string }[]
-        }>('/planning/import/chronus/commit', { batchId })
+        }>('/planning/import/chronus/commit', { batchId }, { timeout: 120_000 })
       ).data,
     onSuccess: async (data) => {
       await Promise.all([
