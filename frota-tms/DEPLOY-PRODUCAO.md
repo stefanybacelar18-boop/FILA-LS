@@ -12,8 +12,8 @@ Túneis (Cloudflare / localtunnel) são só para teste. Produção = Docker, Ren
 | Item | FilaDock (produção) | FrotaTMS |
 |------|---------------------|----------|
 | Pasta | raiz do repo (`src/`, `package.json`) | só `frota-tms/` |
-| Host | **Vercel** (já no ar) | **Docker / Render / Railway** |
-| Banco | Supabase | Postgres (ou SQLite em dev) |
+| Host | **Vercel** (já no ar) | **Vercel (conta nova)** / Docker / Render / Railway |
+| Banco | Supabase (projeto das filas) | **Outro** projeto Supabase (ou Postgres) |
 | Auth / env | `.env` / Vercel do FilaDock | `frota-tms/.env` ou env do serviço |
 
 Proteções no monorepo (já configuradas):
@@ -22,6 +22,14 @@ Proteções no monorepo (já configuradas):
 - `vercel.json` → `ignoreCommand` — commits **só** em `frota-tms/` **não** disparam rebuild do FilaDock
 
 **Nunca** mude Root Directory / Build Command do projeto Vercel do FilaDock para `frota-tms`.
+
+---
+
+## Opção D — Vercel + Supabase (recomendado para não expirar)
+
+Conta **nova** na Vercel e projeto **novo** no Supabase. Não usa o FilaDock.
+
+Guia completo: **[DEPLOY-VERCEL-SUPABASE.md](./DEPLOY-VERCEL-SUPABASE.md)**
 
 ---
 
@@ -48,7 +56,8 @@ docker compose up -d
 ```
 
 - App: `http://SERVIDOR:4000`  
-- Health: `http://SERVIDOR:4000/api/health` → `{ ok: true, db: "up" }`  
+- Health: `http://SERVIDOR:4000/api/health` → `{ ok: true }` (processo no ar)  
+- Ready: `http://SERVIDOR:4000/api/ready` → `{ ok: true, db: "up" }`  
 - Uploads de evidência ficam no volume `frota_uploads`  
 - Login demo só existe se o seed rodou — **troque as senhas imediatamente**
 
@@ -131,18 +140,15 @@ Backup diário automático via GitHub Actions — ver **[docs/BACKUP-E-MIGRATION
 
 ## Checklist pós-deploy
 
-- [ ] `/api/health` → `ok` + `db: up`  
+- [ ] `/api/health` → `ok: true` (processo no ar; `db` pode ser `up` ou `down`)  
+- [ ] `/api/ready` → `ok` + `db: up`  
 - [ ] Login funciona  
 - [ ] Trocar senha do admin (e operação)  
 - [ ] Seed **não** roda a cada restart  
-<<<<<<< HEAD
-- [ ] Backup agendado (`scripts/backup.sh` ou snapshot do Postgres)  
-- [ ] UptimeRobot em `/api/health` (opcional)  
-- [ ] Sentry configurado no Render (opcional)  
-=======
 - [ ] Secret `FROTA_TMS_DATABASE_URL` no GitHub (backup diário)  
 - [ ] Backup agendado (`scripts/backup.sh` ou GitHub Actions)  
->>>>>>> 0121047 (chore: migrate deploy em produção e backup diário automático)
+- [ ] UptimeRobot em `/api/health` (opcional)  
+- [ ] Sentry configurado no Render (opcional)  
 - [ ] Confirmar que o **Vercel do FilaDock** continua no ar e **não** aponta para `frota-tms`  
 - [ ] URL do FrotaTMS é **outro** host (Docker / onrender / railway)
 

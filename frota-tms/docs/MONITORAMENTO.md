@@ -18,6 +18,15 @@ Cada execução faz **rajada de pings** (health + home) por ~15 minutos — cobr
 O **app também pinga** `/api/health` a cada 4 min enquanto alguém está com a aba aberta.
 
 > **Tela preta com logo Render?** Isso é o próprio Render acordando — aparece **antes** do FrotaTMS. Aguarde ~1 min e recarregue. Com os pings acima, deve ser raro.
+>
+> Se passar de **2 minutos**, não é cold start normal:
+> 1. Recarregue a página.
+> 2. No [status da Render](https://status.render.com/) veja se o plano Free está degradado (em incidente o spin-up Free pode ser desligado).
+> 3. Painel Render → serviço `frota-tms` → **Manual Deploy**.
+> 4. Confira o Postgres Free: ele **expira em 30 dias**. Sem custo: crie um banco Free **novo** e restaure o backup ([guia](./BACKUP-E-MIGRATIONS.md#banco-free-da-render-expirou-sem-custo)). Não clique em Upgrade.
+
+`/api/health` é **liveness** (HTTP 200 quando o processo escuta, mesmo com banco acordando).  
+`/api/ready` exige o Postgres (`db: up`).
 
 URL customizada (opcional): variáveis `FROTA_TMS_HEALTH_URL` e `FROTA_TMS_BASE_URL` no repositório.
 
@@ -28,7 +37,7 @@ URL customizada (opcional): variáveis `FROTA_TMS_HEALTH_URL` e `FROTA_TMS_BASE_
 Complementa o keep-alive com **notificação** se o site cair.
 
 1. Conta em [uptimerobot.com](https://uptimerobot.com)
-2. **Add New Monitor** → HTTP(s) → `https://frota-tms.onrender.com/api/health`
+2. **Add New Monitor** → HTTP(s) → `https://frota-tms.onrender.com/api/health` (site no ar). Para exigir banco, use `/api/ready`.
 3. Intervalo: 5 minutos + seu e-mail
 
 ---

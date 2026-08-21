@@ -71,7 +71,8 @@ Backup:
 ./scripts/backup.sh
 ```
 
-Guia completo: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)
+Guia completo: [DEPLOY-PRODUCAO.md](./DEPLOY-PRODUCAO.md)  
+**Sem expirar (conta nova):** [DEPLOY-VERCEL-SUPABASE.md](./DEPLOY-VERCEL-SUPABASE.md)
 
 ## Cores das placas
 
@@ -98,7 +99,7 @@ frota-tms/          ← único lugar deste sistema (isolado do FilaDock)
 
 ## Isolamento do FilaDock
 
-- **FilaDock** = app Next.js na raiz do repo (`src/`, `package.json` raiz, etc.) — produção no **Vercel**  
-- **FrotaTMS** = pasta `frota-tms/` apenas — produção em **Docker / Render / Railway**  
+- **FilaDock** = app Next.js na raiz do repo (`src/`, `package.json` raiz, etc.) — Vercel + Supabase **das filas**  
+- **FrotaTMS** = pasta `frota-tms/` apenas — **outra** conta Vercel + **outro** projeto Supabase (ou Docker/Render)  
 - Deploys, seeds e Docker deste sistema **não** devem apontar para a raiz do FilaDock  
-- Guia: [`DEPLOY-PRODUCAO.md`](./DEPLOY-PRODUCAO.md)
+- Guia: [`DEPLOY-PRODUCAO.md`](./DEPLOY-PRODUCAO.md) · [`DEPLOY-VERCEL-SUPABASE.md`](./DEPLOY-VERCEL-SUPABASE.md)

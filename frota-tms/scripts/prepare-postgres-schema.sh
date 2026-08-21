@@ -18,6 +18,9 @@ fi
 
 echo "Ajustando Prisma provider → postgresql ($SCHEMA)"
 sed -i 's/provider = "sqlite"/provider = "postgresql"/' "$SCHEMA"
+if ! grep -q 'directUrl' "$SCHEMA"; then
+  sed -i 's/url      = env("DATABASE_URL")/url       = env("DATABASE_URL")\n  directUrl = env("DIRECT_URL")/' "$SCHEMA"
+fi
 if [ -f "$LOCK" ]; then
   sed -i 's/provider = "sqlite"/provider = "postgresql"/' "$LOCK" || true
 fi

@@ -60,7 +60,16 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     socket.on('routes:changed', onRoutes)
     socket.on('planning:changed', onPlanning)
 
+    const pollMs = import.meta.env.VITE_DISABLE_SOCKET === 'true' ? 8_000 : 20_000
+    const poll = window.setInterval(() => {
+      onFleet()
+      onTrips()
+      onRoutes()
+      onPlanning()
+    }, pollMs)
+
     return () => {
+      window.clearInterval(poll)
       socket.off('fleet:changed', onFleet)
       socket.off('trips:changed', onTrips)
       socket.off('routes:changed', onRoutes)
