@@ -16,7 +16,7 @@ export const OPERATOR_HIDDEN_PLATES = [
   'SVS9H87',
   'TKX7D86',
   'BPQ1E82',
-  'EOE1581',
+  'EOE1F81',
   'SUC6B93',
   'TME3H94',
 ] as const;
