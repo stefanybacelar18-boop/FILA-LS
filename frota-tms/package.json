@@ -17,9 +17,14 @@
     "setup": "npm install --prefix api && npm install --prefix web && npm run db:push --prefix api && npm run db:seed --prefix api",
     "backup": "bash ./scripts/backup.sh",
     "docker:up": "docker compose up --build -d",
-    "docker:bootstrap": "SEED_ON_START=true FORCE_SEED=true docker compose up --build -d"
+    "docker:bootstrap": "SEED_ON_START=true FORCE_SEED=true docker compose up --build -d",
+    "vercel-build": "bash ./scripts/vercel-build.sh"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "@types/express": "^5.0.6"
   }
 }

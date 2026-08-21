@@ -12,8 +12,8 @@ Túneis (Cloudflare / localtunnel) são só para teste. Produção = Docker, Ren
 | Item | FilaDock (produção) | FrotaTMS |
 |------|---------------------|----------|
 | Pasta | raiz do repo (`src/`, `package.json`) | só `frota-tms/` |
-| Host | **Vercel** (já no ar) | **Docker / Render / Railway** |
-| Banco | Supabase | Postgres (ou SQLite em dev) |
+| Host | **Vercel** (já no ar) | **Vercel (conta nova)** / Docker / Render / Railway |
+| Banco | Supabase (projeto das filas) | **Outro** projeto Supabase (ou Postgres) |
 | Auth / env | `.env` / Vercel do FilaDock | `frota-tms/.env` ou env do serviço |
 
 Proteções no monorepo (já configuradas):
@@ -22,6 +22,14 @@ Proteções no monorepo (já configuradas):
 - `vercel.json` → `ignoreCommand` — commits **só** em `frota-tms/` **não** disparam rebuild do FilaDock
 
 **Nunca** mude Root Directory / Build Command do projeto Vercel do FilaDock para `frota-tms`.
+
+---
+
+## Opção D — Vercel + Supabase (recomendado para não expirar)
+
+Conta **nova** na Vercel e projeto **novo** no Supabase. Não usa o FilaDock.
+
+Guia completo: **[DEPLOY-VERCEL-SUPABASE.md](./DEPLOY-VERCEL-SUPABASE.md)**
 
 ---
 

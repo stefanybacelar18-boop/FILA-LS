@@ -1,0 +1,12 @@
+{
+  "framework": "express",
+  "installCommand": "npm install && npm install --prefix api --include=dev && npm install --prefix web --include=dev",
+  "buildCommand": "bash ./scripts/vercel-build.sh",
+  "ignoreCommand": "bash -c 'git rev-parse --verify HEAD^ >/dev/null 2>&1 || exit 1; git diff --quiet HEAD^ HEAD -- .'",
+  "functions": {
+    "server.ts": {
+      "maxDuration": 30,
+      "includeFiles": "{api/prisma/**,api/node_modules/.prisma/**,api/node_modules/@prisma/client/**,public/**}"
+    }
+  }
+}

@@ -25,6 +25,13 @@ fi
 
 cd "$API_DIR"
 
+if [ -n "$URL" ]; then
+  export DATABASE_URL="$URL"
+  if [ -z "${DIRECT_URL:-}" ]; then
+    export DIRECT_URL="$URL"
+  fi
+fi
+
 is_postgres() {
   echo "${URL:-}" | grep -qiE '^postgres(ql)?://'
 }
