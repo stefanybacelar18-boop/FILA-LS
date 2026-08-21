@@ -25,6 +25,8 @@ import justificationsRoutes from './routes/justifications';
 import evidencesRoutes from './routes/evidences';
 import publicDriverRoutes from './routes/publicDriver';
 import { prisma } from './lib/prisma';
+import { healthPayload, probeDatabase } from './lib/health';
+import { ensureHotIndexes } from './lib/ensure-indexes';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
@@ -56,18 +58,14 @@ app.use(express.json({ limit: '2mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.get('/api/health', async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({
-      ok: true,
-      service: 'frota-tms-api',
-      db: 'up',
+  const db = await probeDatabase(() => prisma.$queryRaw`SELECT 1`);
+  res.status(200).json(
+    healthPayload({
+      db,
       uptimeSec: Math.floor(process.uptime()),
       commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) || process.env.GIT_COMMIT?.slice(0, 7) || null,
-    });
-  } catch {
-    res.status(503).json({ ok: false, service: 'frota-tms-api', db: 'down' });
-  }
+    }),
+  );
 });
 
 app.use('/api/auth', authRoutes);
@@ -170,32 +168,38 @@ server.listen(PORT, '0.0.0.0', () => {
     console.warn('Correções pontuais de viagem:', err?.message ?? err),
   );
 
-  // Atualiza dias de viagem (inclui regra de retorno no mesmo dia)
-  void (async () => {
-    const all = await prisma.dealership.findMany();
-    let n = 0;
-    for (const d of all) {
-      const travel = resolveTravelFromPad({
-        city: d.city,
-        distanceKm: d.distanceKm,
-        avgTravelDays: d.avgTravelDays,
-      });
-      if (
-        Math.abs(travel.distanceKm - d.distanceKm) > 0.05 ||
-        Math.abs(travel.avgTravelDays - d.avgTravelDays) > 0.05
-      ) {
-        await prisma.dealership.update({
-          where: { id: d.id },
-          data: {
-            distanceKm: travel.distanceKm,
-            avgTravelDays: travel.avgTravelDays,
-          },
+  void ensureHotIndexes(prisma)
+    .then(() => console.log('Índices de consulta conferidos'))
+    .catch((err) => console.warn('Índices:', err?.message ?? err));
+
+  // Distâncias PAD: só se pedirem — no boot compete com o tráfego no Render Free.
+  if (process.env.SYNC_PAD_ON_START === 'true') {
+    void (async () => {
+      const all = await prisma.dealership.findMany();
+      let n = 0;
+      for (const d of all) {
+        const travel = resolveTravelFromPad({
+          city: d.city,
+          distanceKm: d.distanceKm,
+          avgTravelDays: d.avgTravelDays,
         });
-        n += 1;
+        if (
+          Math.abs(travel.distanceKm - d.distanceKm) > 0.05 ||
+          Math.abs(travel.avgTravelDays - d.avgTravelDays) > 0.05
+        ) {
+          await prisma.dealership.update({
+            where: { id: d.id },
+            data: {
+              distanceKm: travel.distanceKm,
+              avgTravelDays: travel.avgTravelDays,
+            },
+          });
+          n += 1;
+        }
       }
-    }
-    if (n > 0) console.log(`Concessionárias com previsão PAD atualizada: ${n}`);
-  })().catch((err) => console.warn('Sync PAD dealerships:', err?.message ?? err));
+      if (n > 0) console.log(`Concessionárias com previsão PAD atualizada: ${n}`);
+    })().catch((err) => console.warn('Sync PAD dealerships:', err?.message ?? err));
+  }
 });
 
 export { io };

@@ -29,7 +29,6 @@ services:
     startCommand: |
       set -e
       cd api
-      npm exec -- prisma db push
       if [ "${SEED_ON_START:-false}" = "true" ]; then
         echo "SEED_ON_START=true — bootstrap de dados (uma vez)..."
         FORCE_SEED=true npm exec -- tsx prisma/seed.ts
@@ -64,10 +63,12 @@ services:
         value: ag123
       - key: BOOTSTRAP_OPS_NAME
         value: AG Operação
+      # Não amarrar no Postgres Free expirado. Defina no dashboard o Session pooler
+      # do Supabase (porta 5432), sem pgbouncer=true e sem connection_limit=1.
       - key: DATABASE_URL
-        fromDatabase:
-          name: frota-tms-db
-          property: connectionString
+        sync: false
+      - key: DIRECT_URL
+        sync: false
 
 databases:
   # Render permite só 1 Postgres free por workspace.

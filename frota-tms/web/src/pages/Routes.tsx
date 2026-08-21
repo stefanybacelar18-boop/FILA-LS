@@ -192,11 +192,19 @@ export function Routes() {
   }
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ['routes', q, filterDate],
+    queryKey: ['routes', tab, q, filterDate],
     queryFn: async () => {
       const params: Record<string, string> = {}
       if (q) params.q = q
       if (filterDate) params.date = filterDate
+      if (!filterDate && !q) {
+        if (tab === 'pendentes') {
+          params.status = 'AGUARDANDO_PLACAS'
+          params.unassigned = 'true'
+        } else if (tab === 'prioridades') {
+          params.priority = 'true'
+        }
+      }
       return (await api.get<Route[]>('/routes', { params })).data
     },
   })

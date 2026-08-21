@@ -208,7 +208,6 @@ export function createTripsRouter(io: Server) {
   }
 
   router.get('/', async (req: AuthRequest, res) => {
-    await syncLslAracajuReturns();
     await syncOverdue();
     const { status, vehicleId, dealershipId, from, to } = req.query;
     const where: Record<string, unknown> = {};
