@@ -165,6 +165,17 @@ export function createRoutesRouter(io: Server) {
         };
       }
     }
+    const narrowed =
+      Boolean(date) ||
+      Boolean(q) ||
+      Boolean(status) ||
+      String(req.query.unassigned) === 'true' ||
+      String(req.query.priority) === 'true';
+    if (!narrowed) {
+      const since = new Date();
+      since.setUTCDate(since.getUTCDate() - 21);
+      where.date = { gte: since };
+    }
     const routes = await prisma.route.findMany({
       where,
       include: {

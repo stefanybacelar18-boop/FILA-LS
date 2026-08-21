@@ -8,7 +8,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { isOverdue, vehicleColor, expectedReturnDate } from '../utils/status';
-import { addDays, differenceInCalendarDays, startOfDay } from 'date-fns';
+import { addDays, differenceInCalendarDays, startOfDay, subDays } from 'date-fns';
 import { paramId } from '../utils/params';
 import {
   filterTripsForRole,
@@ -122,6 +122,58 @@ const tripListInclude = {
   delayReportedBy: { select: { id: true, name: true } },
 };
 
+const tripReturnsInclude = {
+  vehicle: {
+    select: {
+      id: true,
+      plate: true,
+      type: true,
+      status: true,
+      capacityMotos: true,
+      defaultDriver: true,
+    },
+  },
+  dealership: { select: { id: true, name: true, city: true, state: true } },
+  route: {
+    select: {
+      id: true,
+      name: true,
+      date: true,
+      status: true,
+      notes: true,
+      hasPriority: true,
+      priorityExpiryDate: true,
+      priorityNotes: true,
+      totalMotoCount: true,
+      dealership: { select: { id: true, name: true, city: true } },
+      dealerships: {
+        orderBy: { order: 'asc' as const },
+        select: {
+          order: true,
+          motoCount: true,
+          minExpiryDate: true,
+          dealership: { select: { id: true, name: true, city: true } },
+        },
+      },
+    },
+  },
+  assignedBy: { select: { id: true, name: true } },
+  returnedBy: { select: { id: true, name: true } },
+  delayReportedBy: { select: { id: true, name: true } },
+  evidences: {
+    orderBy: { createdAt: 'desc' as const },
+    select: {
+      id: true,
+      filename: true,
+      originalName: true,
+      mimeType: true,
+      sizeBytes: true,
+      createdAt: true,
+      uploadedBy: { select: { name: true } },
+    },
+  },
+};
+
 export function createTripsRouter(io: Server) {
   const router = Router();
   router.use(authenticate);
@@ -207,8 +259,18 @@ export function createTripsRouter(io: Server) {
     }
   }
 
-  router.get('/', async (req: AuthRequest, res) => {
+  let lastTripSyncAt = 0;
+  const TRIP_SYNC_MS = 60_000;
+  async function maybeSyncTripStatuses() {
+    const now = Date.now();
+    if (now - lastTripSyncAt < TRIP_SYNC_MS) return;
+    lastTripSyncAt = now;
+    await syncLslAracajuReturns();
     await syncOverdue();
+  }
+
+  router.get('/', async (req: AuthRequest, res) => {
+    await maybeSyncTripStatuses();
     const { status, vehicleId, dealershipId, from, to } = req.query;
     const where: Record<string, unknown> = {};
     if (status) where.status = String(status);
@@ -218,6 +280,11 @@ export function createTripsRouter(io: Server) {
       where.departureAt = {};
       if (from) (where.departureAt as Record<string, Date>).gte = new Date(String(from));
       if (to) (where.departureAt as Record<string, Date>).lte = new Date(String(to));
+    } else if (!status && !vehicleId && !dealershipId) {
+      where.OR = [
+        { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+        { departureAt: { gte: subDays(new Date(), 90) } },
+      ];
     }
 
     const trips = await prisma.trip.findMany({
@@ -238,15 +305,14 @@ export function createTripsRouter(io: Server) {
   });
 
   router.get('/returns', async (req: AuthRequest, res) => {
-    await syncLslAracajuReturns();
-    await syncOverdue();
+    await maybeSyncTripStatuses();
     const today = startOfDay(new Date());
     const tomorrow = addDays(today, 1);
     const dayAfter = addDays(today, 2);
 
     const openAll = await prisma.trip.findMany({
       where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
-      include: tripInclude,
+      include: tripReturnsInclude,
       orderBy: { expectedReturn: 'asc' },
     });
     const open = filterTripsForRole(req.user?.role, openAll);

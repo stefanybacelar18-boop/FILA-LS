@@ -32,12 +32,11 @@ router.post('/login', async (req, res) => {
     name: user.name,
     role: user.role as Role,
   });
-  await audit('LOGIN', 'User', { userId: user.id, entityId: user.id, ip: req.ip });
-
   res.json({
     token,
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
   });
+  void audit('LOGIN', 'User', { userId: user.id, entityId: user.id, ip: req.ip });
 });
 
 router.get('/me', authenticate, async (req: AuthRequest, res) => {

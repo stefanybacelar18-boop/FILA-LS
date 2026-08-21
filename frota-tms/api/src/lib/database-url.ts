@@ -19,7 +19,7 @@ export function normalizePrismaDatabaseUrl(
     next = stripQueryParam(next, 'pgbouncer');
     next = stripQueryParam(next, 'connection_limit');
     if (isPostgresUrl(next) && /pooler\.supabase\.com/i.test(next)) {
-      next = appendQuery(next, 'connection_limit', '5');
+      next = appendQuery(next, 'connection_limit', '8');
     }
   }
 
