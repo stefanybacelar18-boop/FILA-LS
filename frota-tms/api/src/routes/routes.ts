@@ -154,6 +154,9 @@ export function createRoutesRouter(io: Server) {
         { dealership: { city: { contains: String(q) } } },
       ];
     }
+    if (String(req.query.unassigned) === 'true') {
+      where.vehicles = { none: {} };
+    }
     const routes = await prisma.route.findMany({
       where,
       include: {

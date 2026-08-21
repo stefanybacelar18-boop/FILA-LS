@@ -103,6 +103,25 @@ const tripInclude = {
   },
 };
 
+/** Listagem: sem evidências nem destinos aninhados — 300+ viagens cabem numa resposta leve. */
+const tripListInclude = {
+  vehicle: {
+    select: {
+      id: true,
+      plate: true,
+      type: true,
+      status: true,
+      capacityMotos: true,
+      defaultDriver: true,
+    },
+  },
+  dealership: { select: { id: true, name: true, city: true, state: true } },
+  route: { select: { id: true, name: true, date: true, status: true } },
+  assignedBy: { select: { id: true, name: true } },
+  returnedBy: { select: { id: true, name: true } },
+  delayReportedBy: { select: { id: true, name: true } },
+};
+
 export function createTripsRouter(io: Server) {
   const router = Router();
   router.use(authenticate);
@@ -123,21 +142,14 @@ export function createTripsRouter(io: Server) {
    */
   async function syncOverdue() {
     const today = startOfDay(new Date());
-    const pastDue = await prisma.trip.findMany({
+    await prisma.trip.updateMany({
       where: { status: TripStatus.EM_ANDAMENTO, expectedReturn: { lt: today } },
+      data: { status: TripStatus.ATRASADO },
     });
-    for (const t of pastDue) {
-      await prisma.trip.update({ where: { id: t.id }, data: { status: TripStatus.ATRASADO } });
-    }
-    const wronglyLate = await prisma.trip.findMany({
+    await prisma.trip.updateMany({
       where: { status: TripStatus.ATRASADO, expectedReturn: { gte: today }, returnedAt: null },
+      data: { status: TripStatus.EM_ANDAMENTO },
     });
-    for (const t of wronglyLate) {
-      await prisma.trip.update({
-        where: { id: t.id },
-        data: { status: TripStatus.EM_ANDAMENTO },
-      });
-    }
   }
 
   /**
@@ -150,13 +162,17 @@ export function createTripsRouter(io: Server) {
         status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
         returnedAt: null,
       },
-      include: {
-        vehicle: true,
-        dealership: true,
+      select: {
+        id: true,
+        departureAt: true,
+        expectedReturn: true,
+        delayReason: true,
+        vehicle: { select: { plate: true } },
+        dealership: { select: { city: true } },
         route: {
-          include: {
-            dealerships: { include: { dealership: true } },
-            dealership: true,
+          select: {
+            dealership: { select: { city: true } },
+            dealerships: { select: { dealership: { select: { city: true } } } },
           },
         },
       },
@@ -207,7 +223,7 @@ export function createTripsRouter(io: Server) {
 
     const trips = await prisma.trip.findMany({
       where,
-      include: tripInclude,
+      include: tripListInclude,
       orderBy: { departureAt: 'desc' },
     });
     const visible = filterTripsForRole(req.user?.role, trips);

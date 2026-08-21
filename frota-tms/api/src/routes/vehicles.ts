@@ -62,11 +62,9 @@ type VehicleRow = {
   blockedBy?: { id: string; name: string } | null;
 };
 
-async function enrichVehicle(v: VehicleRow) {
-  const activeTrip = await prisma.trip.findFirst({
-    where: { vehicleId: v.id, status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
-    orderBy: { departureAt: 'desc' },
-  });
+type ActiveTripLite = { id: string; expectedReturn: Date | null };
+
+function withActiveTrip(v: VehicleRow, activeTrip: ActiveTripLite | null) {
   return {
     ...v,
     owner: plateOwner(v.plate),
@@ -74,6 +72,31 @@ async function enrichVehicle(v: VehicleRow) {
     expectedReturn: activeTrip?.expectedReturn ?? null,
     activeTripId: activeTrip?.id ?? null,
   };
+}
+
+/** Uma query para a lista inteira — evita N+1 (22 placas = 22 round-trips EUA↔Brasil). */
+async function enrichVehicles(vehicles: VehicleRow[]) {
+  if (vehicles.length === 0) return [];
+  const trips = await prisma.trip.findMany({
+    where: {
+      vehicleId: { in: vehicles.map((v) => v.id) },
+      status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+    },
+    orderBy: { departureAt: 'desc' },
+    select: { id: true, vehicleId: true, expectedReturn: true },
+  });
+  const latest = new Map<string, ActiveTripLite>();
+  for (const t of trips) {
+    if (!latest.has(t.vehicleId)) {
+      latest.set(t.vehicleId, { id: t.id, expectedReturn: t.expectedReturn });
+    }
+  }
+  return vehicles.map((v) => withActiveTrip(v, latest.get(v.id) ?? null));
+}
+
+async function enrichVehicle(v: VehicleRow) {
+  const [row] = await enrichVehicles([v]);
+  return row;
 }
 
 const vehicleInclude = {
@@ -99,7 +122,7 @@ router.get('/', async (req: AuthRequest, res) => {
     orderBy: { plate: 'asc' },
   });
   const visible = filterPlatesForRole(req.user?.role, vehicles);
-  res.json(await Promise.all(visible.map(enrichVehicle)));
+  res.json(await enrichVehicles(visible));
 });
 
 router.get('/available', async (req: AuthRequest, res) => {
@@ -113,7 +136,7 @@ router.get('/available', async (req: AuthRequest, res) => {
     orderBy: { plate: 'asc' },
   });
   const visible = filterPlatesForRole(req.user?.role, vehicles);
-  res.json(await Promise.all(visible.map(enrichVehicle)));
+  res.json(await enrichVehicles(visible));
 });
 
 /** Resumo para o Admin montar roteiros físicos (qtde de placas livres) */
@@ -170,7 +193,7 @@ router.get('/maintenance', async (req: AuthRequest, res) => {
     orderBy: [{ blockedAt: 'desc' }, { plate: 'asc' }],
   });
   const visible = filterPlatesForRole(req.user?.role, vehicles);
-  res.json(await Promise.all(visible.map(enrichVehicle)));
+  res.json(await enrichVehicles(visible));
 });
 
 router.get('/:id', async (req: AuthRequest, res) => {
