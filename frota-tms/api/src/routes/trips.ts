@@ -281,16 +281,21 @@ export function createTripsRouter(io: Server) {
       if (from) (where.departureAt as Record<string, Date>).gte = new Date(String(from));
       if (to) (where.departureAt as Record<string, Date>).lte = new Date(String(to));
     } else if (!status && !vehicleId && !dealershipId) {
-      where.OR = [
-        { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
-        { departureAt: { gte: subDays(new Date(), 90) } },
-      ];
+      if (String(req.query.all) === 'true') {
+        where.OR = [
+          { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+          { departureAt: { gte: subDays(new Date(), 21) } },
+        ];
+      } else {
+        where.status = { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] };
+      }
     }
 
     const trips = await prisma.trip.findMany({
       where,
       include: tripListInclude,
       orderBy: { departureAt: 'desc' },
+      take: String(req.query.all) === 'true' && !status ? 100 : undefined,
     });
     const visible = filterTripsForRole(req.user?.role, trips);
 

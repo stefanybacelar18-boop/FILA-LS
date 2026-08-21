@@ -39,7 +39,8 @@ export function Trips() {
     queryKey: ['trips', status],
     queryFn: async () => {
       const params: Record<string, string> = {}
-      if (status) params.status = status
+      if (status === '__all__') params.all = 'true'
+      else if (status) params.status = status
       return (await api.get<Trip[]>('/trips', { params })).data
     },
   })
@@ -94,7 +95,7 @@ export function Trips() {
     <div>
       <PageHeader
         title="Viagens"
-        description="Saída = data do roteiro · Previsão automática pela distância · Informe atraso/indisponibilidade"
+        description="Abertas por padrão · Histórico recente em Todas · Informe atraso/indisponibilidade"
       />
 
       {error && (
@@ -108,8 +109,11 @@ export function Trips() {
         <Select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          options={Object.entries(tripStatusLabels).map(([value, label]) => ({ value, label }))}
-          placeholder="Todos os status"
+          options={[
+            { value: '__all__', label: 'Todas (recente)' },
+            ...Object.entries(tripStatusLabels).map(([value, label]) => ({ value, label })),
+          ]}
+          placeholder="Abertas (andamento / atraso)"
         />
       </div>
 
