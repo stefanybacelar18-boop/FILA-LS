@@ -11,7 +11,7 @@ describe('normalizePrismaDatabaseUrl', () => {
 
   it('no Render troca pooler 6543 por sessão 5432 e abre pool', () => {
     expect(normalizePrismaDatabaseUrl(TRANSACTION, { serverless: false })).toBe(
-      'postgresql://postgres.ref:eneed9DL%3DAymb%2A4@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?connection_limit=5&connect_timeout=5&pool_timeout=10',
+      'postgresql://postgres.ref:eneed9DL%3DAymb%2A4@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?connection_limit=8&connect_timeout=5&pool_timeout=10',
     );
   });
 
@@ -25,7 +25,7 @@ describe('normalizePrismaDatabaseUrl', () => {
     const session =
       'postgresql://postgres.ref:x@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?connection_limit=1';
     expect(normalizePrismaDatabaseUrl(session, { serverless: false })).toBe(
-      'postgresql://postgres.ref:x@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?connection_limit=5&connect_timeout=5&pool_timeout=10',
+      'postgresql://postgres.ref:x@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?connection_limit=8&connect_timeout=5&pool_timeout=10',
     );
   });
 });

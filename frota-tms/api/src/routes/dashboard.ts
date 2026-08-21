@@ -20,6 +20,8 @@ router.get('/', async (req: AuthRequest, res) => {
   const today = startOfDay(new Date());
   const rankingSince = subDays(today, RANKING_DAYS - 1);
   const chartSince = subDays(today, TRIPS_CHART_DAYS - 1);
+  const payrollPeriod = payrollPeriodForDate(today);
+  const showPernoites = req.user?.role === Role.ADMIN || req.user?.role === Role.CONSULTA;
 
   const [
     availableForRoutes,
@@ -30,6 +32,7 @@ router.get('/', async (req: AuthRequest, res) => {
     tripsInChartWindow,
     awaitingPlatesRoutes,
     openRoutesWithExpiry,
+    pernoiteData,
   ] = await Promise.all([
     prisma.vehicle.count({
       where: {
@@ -79,6 +82,13 @@ router.get('/', async (req: AuthRequest, res) => {
       },
       select: { hasPriority: true, priorityExpiryDate: true },
     }),
+    showPernoites
+      ? fetchLslPernoitesForPeriod(payrollPeriod)
+      : Promise.resolve({
+          ranking: [] as Awaited<ReturnType<typeof fetchLslPernoitesForPeriod>>['ranking'],
+          totalPernoites: 0,
+          totalTrips: 0,
+        }),
   ]);
 
   const atrasadas = openTrips.filter((t) => isOverdue(t.expectedReturn, t.returnedAt)).length;
@@ -134,11 +144,6 @@ router.get('/', async (req: AuthRequest, res) => {
     tripsPerDay.push({ date: key, count });
   }
 
-  const payrollPeriod = payrollPeriodForDate(today);
-  const showPernoites = req.user?.role === Role.ADMIN || req.user?.role === Role.CONSULTA;
-  const pernoiteData = showPernoites
-    ? await fetchLslPernoitesForPeriod(payrollPeriod)
-    : { ranking: [] as Awaited<ReturnType<typeof fetchLslPernoitesForPeriod>>['ranking'], totalPernoites: 0, totalTrips: 0 };
   const pernoiteRanking = pernoiteData.ranking.slice(0, RANKING_LIMIT);
 
   res.json({
