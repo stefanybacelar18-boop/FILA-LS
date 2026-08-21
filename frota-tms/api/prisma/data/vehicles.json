@@ -18,6 +18,12 @@
     "defaultDriver": "ROSENILDO"
   },
   {
+    "plate": "SVG0H96",
+    "plateDisplay": "SVG0H96",
+    "capacityMotos": 50,
+    "defaultDriver": null
+  },
+  {
     "plate": "TKX7D86",
     "plateDisplay": "TKX7D86",
     "capacityMotos": 50,
