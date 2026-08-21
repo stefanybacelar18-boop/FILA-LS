@@ -1,5 +1,3 @@
-import type { PrismaClient } from '@prisma/client';
-
 const INDEXES = [
   'CREATE INDEX IF NOT EXISTS "Trip_vehicleId_status_idx" ON "Trip" ("vehicleId", "status")',
   'CREATE INDEX IF NOT EXISTS "Trip_status_idx" ON "Trip" ("status")',
@@ -10,10 +8,12 @@ const INDEXES = [
 ];
 
 /** Aplica índices sem bloquear o listen (não usa prisma db push no start). */
-export async function ensureHotIndexes(prisma: PrismaClient): Promise<void> {
+export async function ensureHotIndexes(db: {
+  $executeRawUnsafe: (sql: string) => Promise<unknown>;
+}): Promise<void> {
   for (const sql of INDEXES) {
     try {
-      await prisma.$executeRawUnsafe(sql);
+      await db.$executeRawUnsafe(sql);
     } catch (err) {
       console.warn('Índice (ignorado):', sql, (err as Error).message);
     }

@@ -48,16 +48,54 @@ function resolveTripDriver(trip: {
   return { key: normalizeDriverName(raw), name: raw };
 }
 
-export async function fetchLslPernoitesForPeriod(period: PayrollPeriod) {
-  const trips = await prisma.trip.findMany({
-    where: {
-      departureAt: { gte: period.start, lte: period.end },
-      status: { not: TripStatus.CANCELADO },
-      vehicle: { plate: { in: [...OPERATOR_HIDDEN_PLATES] } },
-    },
-    include: tripInclude,
-    orderBy: [{ departureAt: 'desc' }],
-  });
+type PernoiteQueryTrip = {
+  id: string;
+  vehicleId: string;
+  driverName: string | null;
+  departureAt: Date;
+  expectedReturn: Date;
+  returnedAt: Date | null;
+  status: string;
+  vehicle: { id?: string; plate: string; type?: string | null; defaultDriver: string | null };
+  dealership?: { name: string; city: string };
+  route?: { name: string } | null;
+};
+
+export async function fetchLslPernoitesForPeriod(
+  period: PayrollPeriod,
+  opts: { rankingOnly?: boolean } = {},
+) {
+  const rankingOnly = opts.rankingOnly === true;
+  const trips = (
+    rankingOnly
+      ? await prisma.trip.findMany({
+          where: {
+            departureAt: { gte: period.start, lte: period.end },
+            status: { not: TripStatus.CANCELADO },
+            vehicle: { plate: { in: [...OPERATOR_HIDDEN_PLATES] } },
+          },
+          select: {
+            id: true,
+            vehicleId: true,
+            driverName: true,
+            departureAt: true,
+            expectedReturn: true,
+            returnedAt: true,
+            status: true,
+            vehicle: { select: { plate: true, defaultDriver: true } },
+          },
+          orderBy: [{ departureAt: 'desc' }],
+        })
+      : await prisma.trip.findMany({
+          where: {
+            departureAt: { gte: period.start, lte: period.end },
+            status: { not: TripStatus.CANCELADO },
+            vehicle: { plate: { in: [...OPERATOR_HIDDEN_PLATES] } },
+          },
+          include: tripInclude,
+          orderBy: [{ departureAt: 'desc' }],
+        })
+  ) as PernoiteQueryTrip[];
 
   const pernoiteTrips: PernoiteTripRow[] = [];
   const byDriver = new Map<string, PernoiteDriverRanking & { plateSet: Set<string> }>();
@@ -67,22 +105,24 @@ export async function fetchLslPernoitesForPeriod(period: PayrollPeriod) {
     if (!isPernoite(t)) continue;
 
     const driver = resolveTripDriver(t);
-    pernoiteTrips.push({
-      id: t.id,
-      vehicleId: t.vehicleId,
-      plate: t.vehicle.plate,
-      vehicleType: t.vehicle.type,
-      driverName: driver.name === UNKNOWN_DRIVER_LABEL ? null : driver.name,
-      dealershipName: t.dealership.name,
-      dealershipCity: t.dealership.city,
-      routeName: t.route?.name ?? null,
-      departureAt: t.departureAt,
-      expectedReturn: t.expectedReturn,
-      returnedAt: t.returnedAt,
-      status: t.status,
-      nights,
-      confirmed: t.returnedAt != null,
-    });
+    if (!rankingOnly) {
+      pernoiteTrips.push({
+        id: t.id,
+        vehicleId: t.vehicleId,
+        plate: t.vehicle.plate,
+        vehicleType: t.vehicle.type ?? null,
+        driverName: driver.name === UNKNOWN_DRIVER_LABEL ? null : driver.name,
+        dealershipName: t.dealership?.name ?? '—',
+        dealershipCity: t.dealership?.city ?? '',
+        routeName: t.route?.name ?? null,
+        departureAt: t.departureAt,
+        expectedReturn: t.expectedReturn,
+        returnedAt: t.returnedAt,
+        status: t.status,
+        nights,
+        confirmed: t.returnedAt != null,
+      });
+    }
 
     const existing = byDriver.get(driver.key);
     if (existing) {
@@ -117,6 +157,8 @@ export async function fetchLslPernoitesForPeriod(period: PayrollPeriod) {
     trips: pernoiteTrips,
     ranking,
     totalPernoites: ranking.reduce((sum, r) => sum + r.pernoites, 0),
-    totalTrips: pernoiteTrips.length,
+    totalTrips: rankingOnly
+      ? ranking.reduce((sum, r) => sum + r.trips, 0)
+      : pernoiteTrips.length,
   };
 }

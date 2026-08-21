@@ -269,8 +269,14 @@ export function createTripsRouter(io: Server) {
     await syncOverdue();
   }
 
+  function kickTripStatusSync() {
+    void maybeSyncTripStatuses().catch((err) =>
+      console.warn('sync viagens:', (err as Error)?.message ?? err),
+    );
+  }
+
   router.get('/', async (req: AuthRequest, res) => {
-    await maybeSyncTripStatuses();
+    kickTripStatusSync();
     const { status, vehicleId, dealershipId, from, to } = req.query;
     const where: Record<string, unknown> = {};
     if (status) where.status = String(status);
@@ -310,7 +316,7 @@ export function createTripsRouter(io: Server) {
   });
 
   router.get('/returns', async (req: AuthRequest, res) => {
-    await maybeSyncTripStatuses();
+    kickTripStatusSync();
     const today = startOfDay(new Date());
     const tomorrow = addDays(today, 1);
     const dayAfter = addDays(today, 2);

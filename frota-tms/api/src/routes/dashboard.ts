@@ -33,6 +33,8 @@ router.get('/', async (req: AuthRequest, res) => {
     awaitingPlatesRoutes,
     openRoutesWithExpiry,
     pernoiteData,
+    dealerships,
+    vehicles,
   ] = await Promise.all([
     prisma.vehicle.count({
       where: {
@@ -83,12 +85,14 @@ router.get('/', async (req: AuthRequest, res) => {
       select: { hasPriority: true, priorityExpiryDate: true },
     }),
     showPernoites
-      ? fetchLslPernoitesForPeriod(payrollPeriod)
+      ? fetchLslPernoitesForPeriod(payrollPeriod, { rankingOnly: true })
       : Promise.resolve({
           ranking: [] as Awaited<ReturnType<typeof fetchLslPernoitesForPeriod>>['ranking'],
           totalPernoites: 0,
           totalTrips: 0,
         }),
+    prisma.dealership.findMany({ select: { id: true, name: true, city: true } }),
+    prisma.vehicle.findMany({ select: { id: true, plate: true, type: true } }),
   ]);
 
   const atrasadas = openTrips.filter((t) => isOverdue(t.expectedReturn, t.returnedAt)).length;
@@ -112,14 +116,7 @@ router.get('/', async (req: AuthRequest, res) => {
     .slice(0, RANKING_LIMIT)
     .map(([id]) => id);
 
-  const dealerships = await prisma.dealership.findMany({ where: { id: { in: topDealershipIds } } });
   const dealershipMap = Object.fromEntries(dealerships.map((d) => [d.id, d]));
-
-  const vehicleIds = vehicleTripCounts.map((v) => v.vehicleId);
-  const vehicles = await prisma.vehicle.findMany({
-    where: { id: { in: vehicleIds } },
-    select: { id: true, plate: true, type: true },
-  });
   const vehicleMap = Object.fromEntries(vehicles.map((v) => [v.id, v]));
 
   const dealershipRanking = topDealershipIds.map((dealershipId) => ({
