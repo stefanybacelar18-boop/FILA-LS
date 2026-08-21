@@ -167,8 +167,13 @@ export function AssignPlates() {
 
   const { data: routes = [], isLoading: loadingRoutes, isError: routesError, error: routesErr } =
     useQuery({
-      queryKey: ['routes'],
-      queryFn: async () => (await api.get<Route[]>('/routes')).data,
+      queryKey: ['routes', 'pending-unassigned'],
+      queryFn: async () =>
+        (
+          await api.get<Route[]>('/routes', {
+            params: { status: 'AGUARDANDO_PLACAS', unassigned: 'true' },
+          })
+        ).data,
     })
 
   const pendingRoutes = useMemo(

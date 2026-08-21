@@ -135,11 +135,11 @@ router.get('/', async (req: AuthRequest, res) => {
   }
 
   const payrollPeriod = payrollPeriodForDate(today);
-  const pernoiteData = await fetchLslPernoitesForPeriod(payrollPeriod);
+  const showPernoites = req.user?.role === Role.ADMIN || req.user?.role === Role.CONSULTA;
+  const pernoiteData = showPernoites
+    ? await fetchLslPernoitesForPeriod(payrollPeriod)
+    : { ranking: [] as Awaited<ReturnType<typeof fetchLslPernoitesForPeriod>>['ranking'], totalPernoites: 0, totalTrips: 0 };
   const pernoiteRanking = pernoiteData.ranking.slice(0, RANKING_LIMIT);
-
-  const showPernoites =
-    req.user?.role === Role.ADMIN || req.user?.role === Role.CONSULTA;
 
   res.json({
     period: {

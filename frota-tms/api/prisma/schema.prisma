@@ -57,6 +57,8 @@ model Vehicle {
   history          VehicleHistory[]
   unavailabilities PlateUnavailability[]
   logbooks         TripLogbook[]
+
+  @@index([status])
 }
 
 // Motoristas cadastrados — usados na definição de placa
@@ -129,6 +131,9 @@ model Route {
   products    RouteProduct[]
   unavailabilities PlateUnavailability[]
   planningCities PlanningCity[]
+
+  @@index([status, date])
+  @@index([date])
 }
 
 model RouteDealership {
@@ -230,6 +235,10 @@ model Trip {
   returnedBy   User?      @relation("TripReturnedBy", fields: [returnedById], references: [id])
   evidences    TripEvidence[]
   logbook      TripLogbook?
+
+  @@index([vehicleId, status])
+  @@index([status])
+  @@index([departureAt])
 }
 
 // Fotos / evidencias de atraso ou problema na viagem

@@ -22,7 +22,13 @@ export function getJwtSecret(): string {
   return secret || 'dev-secret';
 }
 
+const AUTH_CACHE_MS = 30_000;
+const authCache = new Map<string, { user: AuthUser; expiresAt: number }>();
+
 export async function resolveAuthUserFromToken(token: string): Promise<AuthUser | null> {
+  const cached = authCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) return cached.user;
+
   try {
     const payload = jwt.verify(token, getJwtSecret()) as AuthUser;
     const dbUser = await prisma.user.findUnique({
@@ -30,12 +36,14 @@ export async function resolveAuthUserFromToken(token: string): Promise<AuthUser 
       select: { id: true, email: true, name: true, role: true, active: true },
     });
     if (!dbUser || !dbUser.active) return null;
-    return {
+    const user: AuthUser = {
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role as Role,
     };
+    authCache.set(token, { user, expiresAt: Date.now() + AUTH_CACHE_MS });
+    return user;
   } catch {
     return null;
   }

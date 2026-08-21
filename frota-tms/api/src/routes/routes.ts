@@ -154,6 +154,17 @@ export function createRoutesRouter(io: Server) {
         { dealership: { city: { contains: String(q) } } },
       ];
     }
+    if (String(req.query.unassigned) === 'true') {
+      where.vehicles = { none: {} };
+    }
+    if (String(req.query.priority) === 'true') {
+      where.hasPriority = true;
+      if (!status) {
+        where.status = {
+          in: [RouteStatus.AGUARDANDO_PLACAS, RouteStatus.RASCUNHO, RouteStatus.EM_ANDAMENTO],
+        };
+      }
+    }
     const routes = await prisma.route.findMany({
       where,
       include: {
