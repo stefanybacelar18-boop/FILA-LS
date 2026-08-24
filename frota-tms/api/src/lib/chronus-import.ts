@@ -1,7 +1,11 @@
 import * as XLSX from 'xlsx';
-import { addDays, format } from 'date-fns';
+import { format } from 'date-fns';
 import type { Prisma } from '@prisma/client';
-import { operationalDateKey, parseOperationalDateTime } from '../utils/timezone';
+import {
+  fridayLoadChoices,
+  parseExplicitRouteDate,
+  routeDateFromImport,
+} from './chronus-route-date';
 import {
   chronusPlateNotes,
   resolveManifestPlateHint,
@@ -57,6 +61,9 @@ export type ChronusManifestPreview = {
 export type ChronusImportPreview = {
   routeDate: string;
   routeDateLabel: string;
+  isFridayImport: boolean;
+  saturdayLoadDate: string;
+  mondayLoadDate: string;
   totalRows: number;
   rowsWithoutManifesto: number;
   manifestCount: number;
@@ -163,13 +170,7 @@ export function isExpiryCityExcluded(city: string): boolean {
   return c.includes('POMBAL') || c.startsWith('EUCLIDES');
 }
 
-export function routeDateFromImport(baseDate = new Date()): Date {
-  let d = addDays(parseOperationalDateTime(operationalDateKey(baseDate), '12:00:00'), 1);
-  while (new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bahia', weekday: 'short' }).format(d) === 'Sun') {
-    d = addDays(d, 1);
-  }
-  return d;
-}
+export { routeDateFromImport };
 
 export function formatRouteDateLabel(date: Date): string {
   return format(date, 'dd/MM/yyyy');
@@ -275,10 +276,16 @@ export async function buildChronusPreview(
   dealers: DealerRow[],
   options?: {
     importDate?: Date;
+    routeDate?: Date;
+    saturdayWork?: boolean;
     existingRouteNames?: { id: string; name: string; date: Date; status: string }[];
   },
 ): Promise<ChronusImportPreview> {
-  const routeDate = routeDateFromImport(options?.importDate ?? new Date());
+  const importDate = options?.importDate ?? new Date();
+  const friday = fridayLoadChoices(importDate);
+  const routeDate =
+    options?.routeDate ??
+    routeDateFromImport(importDate, { saturdayWork: options?.saturdayWork });
   const routeDateIso = routeDate.toISOString().slice(0, 10);
   const dealerByCode = new Map<string, DealerRow>();
   for (const d of dealers) {
@@ -382,6 +389,9 @@ export async function buildChronusPreview(
   return {
     routeDate: routeDateIso,
     routeDateLabel: formatRouteDateLabel(routeDate),
+    isFridayImport: friday.isFriday,
+    saturdayLoadDate: friday.saturday,
+    mondayLoadDate: friday.monday,
     totalRows: rows.length,
     rowsWithoutManifesto: 0,
     manifestCount: routes.length,

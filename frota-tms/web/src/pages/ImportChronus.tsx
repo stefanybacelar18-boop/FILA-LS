@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileSpreadsheet, Upload } from 'lucide-react'
 import { api } from '../lib/api'
-import { PageHeader, Button, Spinner, Badge } from '../components/ui'
+import { PageHeader, Button, Spinner, Badge, Input } from '../components/ui'
 import { cn } from '../lib/cn'
 import { RouteLoadCard } from '../components/RouteLoadCard'
 
@@ -40,6 +40,9 @@ interface ChronusPreviewResponse {
   batchId: string
   routeDate: string
   routeDateLabel: string
+  isFridayImport: boolean
+  saturdayLoadDate: string
+  mondayLoadDate: string
   totalRows: number
   rowsWithoutManifesto: number
   manifestCount: number
@@ -56,9 +59,19 @@ export function ImportChronus() {
   const [error, setError] = useState('')
 
   const previewMutation = useMutation({
-    mutationFn: async (selected: File) => {
+    mutationFn: async ({
+      selected,
+      date,
+      saturday,
+    }: {
+      selected: File
+      date?: string
+      saturday?: boolean
+    }) => {
       const form = new FormData()
       form.append('file', selected)
+      if (date) form.append('routeDate', date)
+      if (saturday) form.append('saturdayWork', 'true')
       const res = await api.post<ChronusPreviewResponse>('/planning/import/chronus/preview', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
@@ -126,7 +139,13 @@ export function ImportChronus() {
     setFile(next)
     setPreview(null)
     setError('')
-    if (next) previewMutation.mutate(next)
+    if (next) previewMutation.mutate({ selected: next })
+  }
+
+  function reloadPreview(nextDate: string, nextSaturday: boolean) {
+    if (!file) return
+    setError('')
+    previewMutation.mutate({ selected: file, date: nextDate, saturday: nextSaturday })
   }
 
   return (
@@ -150,7 +169,7 @@ export function ImportChronus() {
             <p className="text-sm font-medium">Arquivo do Chronus</p>
             <p className="text-sm text-[var(--color-text-muted)]">
               Linhas sem manifesto são ignoradas. Cada manifesto vira um roteiro com operação.
-              A ordem das concessionárias é calculada automaticamente por proximidade geográfica a partir do PAD (vizinho mais próximo).
+              Na sexta o carregamento vai para <strong>segunda</strong>, a menos que haja expediente no sábado.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -199,6 +218,49 @@ export function ImportChronus() {
             <Stat label="Novos roteiros" value={String(creatable?.length ?? 0)} />
             <Stat label="Atualizar carga" value={String(refreshable.length)} />
           </div>
+
+          {preview.isFridayImport && (
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <p className="text-sm font-medium">Sexta-feira: quando carregar?</p>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                Sem expediente no sábado, os roteiros ficam na segunda. Se o sábado tiver carga, escolha
+                sábado.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={preview.routeDate === preview.mondayLoadDate ? 'primary' : 'secondary'}
+                  size="sm"
+                  disabled={previewMutation.isPending}
+                  onClick={() => reloadPreview(preview.mondayLoadDate, false)}
+                >
+                  Segunda {preview.mondayLoadDate.slice(8, 10)}/{preview.mondayLoadDate.slice(5, 7)}
+                </Button>
+                <Button
+                  type="button"
+                  variant={preview.routeDate === preview.saturdayLoadDate ? 'primary' : 'secondary'}
+                  size="sm"
+                  disabled={previewMutation.isPending}
+                  onClick={() => reloadPreview(preview.saturdayLoadDate, true)}
+                >
+                  Sábado (tem expediente) {preview.saturdayLoadDate.slice(8, 10)}/
+                  {preview.saturdayLoadDate.slice(5, 7)}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!preview.isFridayImport && (
+            <div className="max-w-xs">
+              <Input
+                label="Data do carregamento"
+                type="date"
+                value={preview.routeDate}
+                disabled={previewMutation.isPending}
+                onChange={(e) => reloadPreview(e.target.value, false)}
+              />
+            </div>
+          )}
 
           {refreshable.length > 0 && (
             <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">

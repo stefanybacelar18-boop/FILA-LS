@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { addDays } from 'date-fns'
 import { AlertTriangle, ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Route } from '../types'
@@ -16,9 +15,14 @@ function isPastOrToday(isoDay: string): boolean {
   return isoDay <= today
 }
 
-/** Novos roteiros: padrão = amanhã (admin pode alterar). */
+/** Novos roteiros: padrão = próximo dia útil (pula sáb/dom). */
 function defaultNewRouteDate(): string {
-  return toInputDate(addDays(new Date(), 1))
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() + 1)
+  }
+  return toInputDate(d)
 }
 
 export function RouteForm() {
