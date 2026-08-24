@@ -475,7 +475,7 @@ export function Routes() {
         '/routes/export/prioridades',
         `vencimentos-prioridades-${toInputDate(new Date())}.xlsx`,
       )
-      setOkMsg('Excel de vencimentos baixado. Anexe no e-mail para alertar as concessionárias.')
+      setOkMsg('Excel baixado (placa/roteiro + resumo por concessionária). Anexe no e-mail de alerta.')
     } catch {
       setError('Não foi possível gerar o Excel de vencimentos.')
     } finally {
@@ -489,7 +489,7 @@ export function Routes() {
         title="Roteiros"
         description={
           tab === 'prioridades'
-            ? 'Prioridades abertas, ordenadas pelo vencimento. O Excel lista o vencimento de cada concessionária para enviar por e-mail.'
+            ? 'Prioridades abertas, ordenadas pelo vencimento. O Excel sai por placa/roteiro, com um resumo do menor vencimento de cada concessionária.'
             : tab === 'pendentes'
               ? 'Fila aguardando definição de placa.'
               : filterDate
