@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload, Undo2, Calendar } from 'lucide-react'
-import { api } from '../lib/api'
+import { Plus, Pencil, Ban, Send, MapPin, RefreshCw, ChevronRight, Upload, Undo2, Calendar, FileSpreadsheet } from 'lucide-react'
+import { api, downloadReport } from '../lib/api'
 import type { Driver, Route, Vehicle } from '../types'
 import {
   PageHeader,
@@ -148,6 +148,7 @@ export function Routes() {
   const [error, setError] = useState('')
   const location = useLocation()
   const [okMsg, setOkMsg] = useState('')
+  const [exportingPriorities, setExportingPriorities] = useState(false)
 
   useEffect(() => {
     return () => resetBodyScroll()
@@ -466,13 +467,29 @@ export function Routes() {
     detailRoute?.status === 'AGUARDANDO_PLACAS' &&
     (!detailRoute.vehicles || detailRoute.vehicles.length === 0)
 
+  async function exportPriorityExpiries() {
+    setError('')
+    setExportingPriorities(true)
+    try {
+      await downloadReport(
+        '/routes/export/prioridades',
+        `vencimentos-prioridades-${toInputDate(new Date())}.xlsx`,
+      )
+      setOkMsg('Excel de vencimentos baixado. Anexe no e-mail para alertar as concessionárias.')
+    } catch {
+      setError('Não foi possível gerar o Excel de vencimentos.')
+    } finally {
+      setExportingPriorities(false)
+    }
+  }
+
   return (
     <div className="page-desktop">
       <PageHeader
         title="Roteiros"
         description={
           tab === 'prioridades'
-            ? 'Prioridades abertas, ordenadas pelo vencimento.'
+            ? 'Prioridades abertas, ordenadas pelo vencimento. O Excel lista o vencimento de cada concessionária para enviar por e-mail.'
             : tab === 'pendentes'
               ? 'Fila aguardando definição de placa.'
               : filterDate
@@ -480,21 +497,36 @@ export function Routes() {
                 : 'Clique no nome para ver detalhes.'
         }
         actions={
-          isAdmin ? (
-            <div className="flex flex-wrap gap-2">
-              <Link to="/roteiros/importar-chronus">
-                <Button variant="secondary">
-                  <Upload className="h-4 w-4" />
-                  Importar Chronus
-                </Button>
-              </Link>
-              <Link to="/roteiros/novo">
-                <Button>
-                  <Plus className="h-4 w-4" />
-                  Novo roteiro
-                </Button>
-              </Link>
-            </div>
+          tab === 'prioridades' || isAdmin ? (
+          <div className="flex flex-wrap gap-2">
+            {tab === 'prioridades' && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void exportPriorityExpiries()}
+                disabled={exportingPriorities}
+              >
+                {exportingPriorities ? <Spinner size="sm" /> : <FileSpreadsheet className="h-4 w-4" />}
+                Excel vencimentos
+              </Button>
+            )}
+            {isAdmin ? (
+              <>
+                <Link to="/roteiros/importar-chronus">
+                  <Button variant="secondary">
+                    <Upload className="h-4 w-4" />
+                    Importar Chronus
+                  </Button>
+                </Link>
+                <Link to="/roteiros/novo">
+                  <Button>
+                    <Plus className="h-4 w-4" />
+                    Novo roteiro
+                  </Button>
+                </Link>
+              </>
+            ) : null}
+          </div>
           ) : undefined
         }
       />

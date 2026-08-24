@@ -22,6 +22,7 @@ import {
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
+import { buildPriorityExpiryWorkbook, priorityExpiryFilename } from '../lib/priority-expiry-export';
 
 const routeListDealershipSelect = {
   id: true,
@@ -291,6 +292,56 @@ export function createRoutesRouter(io: Server) {
 
     res.json(withForecast);
   });
+
+  /**
+   * Excel das prioridades abertas: vencimento N.F. por concessionária (para e-mail de alerta).
+   * GET /export/prioridades  — registrar antes de /:id
+   */
+  router.get(
+    '/export/prioridades',
+    authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA),
+    async (_req, res) => {
+      const routes = await prisma.route.findMany({
+        where: {
+          status: {
+            in: [RouteStatus.RASCUNHO, RouteStatus.AGUARDANDO_PLACAS, RouteStatus.EM_ANDAMENTO],
+          },
+        },
+        include: {
+          dealership: { select: { id: true, code: true, name: true, city: true, state: true } },
+          dealerships: {
+            orderBy: { order: 'asc' },
+            select: {
+              motoCount: true,
+              minExpiryDate: true,
+              dealership: { select: { id: true, code: true, name: true, city: true, state: true } },
+            },
+          },
+          vehicles: { select: { vehicle: { select: { plate: true, defaultDriver: true } } } },
+          trips: {
+            where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+            select: {
+              status: true,
+              driverName: true,
+              vehicle: { select: { plate: true, defaultDriver: true } },
+            },
+            take: 5,
+          },
+        },
+        orderBy: [{ date: 'asc' }, { name: 'asc' }],
+      });
+
+      const workbook = await buildPriorityExpiryWorkbook(routes);
+      const buf = Buffer.from(await workbook.xlsx.writeBuffer());
+      const filename = priorityExpiryFilename();
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(buf);
+    },
+  );
 
   /**
    * Painel para Definir Placas:
