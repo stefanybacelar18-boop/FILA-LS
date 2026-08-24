@@ -25,6 +25,7 @@ import {
   applyChronusRouteRefresh,
   type ChronusImportPreview,
 } from '../lib/chronus-import';
+import { parseExplicitRouteDate } from '../lib/chronus-route-date';
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 
 const chronusUpload = multer({
@@ -1016,8 +1017,16 @@ export function createPlanningRouter(io: Server) {
           select: { id: true, code: true, name: true, city: true, region: true, active: true },
         });
 
+        const saturdayWork = ['true', '1', 'on'].includes(
+          String((req.body as { saturdayWork?: string } | undefined)?.saturdayWork ?? '').toLowerCase(),
+        );
+        const explicitDate = parseExplicitRouteDate(
+          (req.body as { routeDate?: string } | undefined)?.routeDate,
+        );
         const previewBase = await buildChronusPreview(parsed.rows, dealers, {
           importDate: new Date(),
+          routeDate: explicitDate ?? undefined,
+          saturdayWork,
           existingRouteNames: await prisma.route.findMany({
             where: {
               status: { not: RouteStatus.CANCELADO },
