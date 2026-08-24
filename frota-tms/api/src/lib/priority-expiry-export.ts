@@ -74,9 +74,22 @@ export type PriorityExpiryDealerRow = {
   vencimentoLabel: string;
   situacao: string;
   situacaoTone: ExpiryTone;
+  placa: string;
+  roteiro: string;
+};
+
+export type PriorityExpiryRouteRow = {
+  placa: string;
+  motorista: string;
+  roteiro: string;
+  dataCarregamento: string;
+  statusRoteiro: string;
+  vencimento: string;
+  vencimentoLabel: string;
+  situacao: string;
+  situacaoTone: ExpiryTone;
   motos: number | null;
-  roteiros: string;
-  placas: string;
+  destinos: string;
 };
 
 export function calendarKey(value: Date | string | null | undefined): string | null {
@@ -185,6 +198,10 @@ export function buildPriorityExpiryDetailRows(
     }
   }
   rows.sort((a, b) => {
+    const plate = a.placa.localeCompare(b.placa, 'pt-BR');
+    if (plate !== 0) return plate;
+    const route = a.roteiro.localeCompare(b.roteiro, 'pt-BR');
+    if (route !== 0) return route;
     if (a.vencimento && b.vencimento && a.vencimento !== b.vencimento) {
       return a.vencimento.localeCompare(b.vencimento);
     }
@@ -193,6 +210,63 @@ export function buildPriorityExpiryDetailRows(
     return a.concessionaria.localeCompare(b.concessionaria, 'pt-BR');
   });
   return rows;
+}
+
+export function groupPriorityExpiryByPlateRoute(
+  rows: PriorityExpiryDetailRow[],
+): PriorityExpiryRouteRow[] {
+  const byRoute = new Map<string, PriorityExpiryDetailRow[]>();
+  for (const row of rows) {
+    const key = `${row.roteiro}||${row.placa}`;
+    const list = byRoute.get(key) ?? [];
+    list.push(row);
+    byRoute.set(key, list);
+  }
+  const grouped: PriorityExpiryRouteRow[] = [];
+  for (const list of byRoute.values()) {
+    const first = list[0];
+    const withDate = [...list].filter((r) => r.vencimento).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+    const earliest = withDate[0] ?? first;
+    const motos = list.reduce<number | null>((sum, r) => {
+      if (r.motos == null) return sum;
+      return (sum ?? 0) + r.motos;
+    }, null);
+    const destinos = [...list]
+      .sort((a, b) => {
+        if (a.vencimento && b.vencimento && a.vencimento !== b.vencimento) {
+          return a.vencimento.localeCompare(b.vencimento);
+        }
+        if (a.vencimento && !b.vencimento) return -1;
+        if (!a.vencimento && b.vencimento) return 1;
+        return a.concessionaria.localeCompare(b.concessionaria, 'pt-BR');
+      })
+      .map((r) => `${r.concessionaria} (${r.vencimentoLabel === '—' ? 's/ venc.' : r.vencimentoLabel})`)
+      .join(' · ');
+    grouped.push({
+      placa: first.placa,
+      motorista: first.motorista,
+      roteiro: first.roteiro,
+      dataCarregamento: first.dataCarregamento,
+      statusRoteiro: first.statusRoteiro,
+      vencimento: earliest.vencimento,
+      vencimentoLabel: earliest.vencimentoLabel,
+      situacao: earliest.situacao,
+      situacaoTone: earliest.situacaoTone,
+      motos,
+      destinos,
+    });
+  }
+  grouped.sort((a, b) => {
+    if (a.vencimento && b.vencimento && a.vencimento !== b.vencimento) {
+      return a.vencimento.localeCompare(b.vencimento);
+    }
+    if (a.vencimento && !b.vencimento) return -1;
+    if (!a.vencimento && b.vencimento) return 1;
+    const plateCmp = a.placa.localeCompare(b.placa, 'pt-BR');
+    if (plateCmp !== 0) return plateCmp;
+    return a.roteiro.localeCompare(b.roteiro, 'pt-BR');
+  });
+  return grouped;
 }
 
 export function groupPriorityExpiryByDealership(
@@ -209,12 +283,6 @@ export function groupPriorityExpiryByDealership(
     const first = list[0];
     const withDate = list.filter((r) => r.vencimento).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
     const earliest = withDate[0] ?? first;
-    const motos = list.reduce<number | null>((sum, r) => {
-      if (r.motos == null) return sum;
-      return (sum ?? 0) + r.motos;
-    }, null);
-    const roteiros = [...new Set(list.map((r) => r.roteiro))];
-    const placas = [...new Set(list.map((r) => r.placa).filter((p) => p && p !== '—'))];
     grouped.push({
       dealershipId,
       concessionaria: first.concessionaria,
@@ -225,9 +293,8 @@ export function groupPriorityExpiryByDealership(
       vencimentoLabel: earliest.vencimentoLabel,
       situacao: earliest.situacao,
       situacaoTone: earliest.situacaoTone,
-      motos,
-      roteiros: roteiros.join(', '),
-      placas: placas.join(', ') || '—',
+      placa: earliest.placa,
+      roteiro: earliest.roteiro,
     });
   }
   grouped.sort((a, b) => {
@@ -275,89 +342,82 @@ export async function buildPriorityExpiryWorkbook(
   todayKey = operationalTodayKey(),
 ): Promise<ExcelJS.Workbook> {
   const detail = buildPriorityExpiryDetailRows(routes, todayKey);
-  const grouped = groupPriorityExpiryByDealership(detail);
+  const byPlateRoute = groupPriorityExpiryByPlateRoute(detail);
+  const byDealer = groupPriorityExpiryByDealership(detail);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'FrotaTMS';
   wb.created = new Date();
 
-  const byDealer = wb.addWorksheet('Por concessionária', { views: [{ state: 'frozen', ySplit: 1 }] });
-  byDealer.columns = [
-    { header: 'Vencimento', key: 'vencimentoLabel', width: 14 },
-    { header: 'Situação', key: 'situacao', width: 16 },
-    { header: 'Concessionária', key: 'concessionaria', width: 32 },
-    { header: 'Código', key: 'codigo', width: 12 },
-    { header: 'Cidade', key: 'cidade', width: 22 },
-    { header: 'UF', key: 'uf', width: 6 },
-    { header: 'Motos', key: 'motos', width: 10 },
-    { header: 'Roteiros', key: 'roteiros', width: 36 },
-    { header: 'Placas', key: 'placas', width: 22 },
-  ];
-  if (grouped.length === 0) {
-    byDealer.addRow({
-      vencimentoLabel: '—',
-      situacao: 'Sem prioridades abertas',
-      concessionaria: 'Nenhuma concessionária com vencimento nesta lista',
-    });
-  } else {
-    for (const row of grouped) {
-      const excelRow = byDealer.addRow({
-        vencimentoLabel: row.vencimentoLabel,
-        situacao: row.situacao,
-        concessionaria: row.concessionaria,
-        codigo: row.codigo,
-        cidade: row.cidade,
-        uf: row.uf,
-        motos: row.motos ?? '',
-        roteiros: row.roteiros,
-        placas: row.placas,
-      });
-      applyTone(excelRow, row.situacaoTone, 2);
-    }
-  }
-  styleHeader(byDealer);
-
-  const byRoute = wb.addWorksheet('Por roteiro');
-  byRoute.columns = [
-    { header: 'Vencimento', key: 'vencimentoLabel', width: 14 },
-    { header: 'Situação', key: 'situacao', width: 16 },
-    { header: 'Concessionária', key: 'concessionaria', width: 32 },
-    { header: 'Código', key: 'codigo', width: 12 },
-    { header: 'Cidade', key: 'cidade', width: 22 },
-    { header: 'UF', key: 'uf', width: 6 },
-    { header: 'Motos', key: 'motos', width: 10 },
+  const plateSheet = wb.addWorksheet('Por placa e roteiro');
+  plateSheet.columns = [
+    { header: 'Placa', key: 'placa', width: 14 },
+    { header: 'Motorista', key: 'motorista', width: 28 },
     { header: 'Roteiro', key: 'roteiro', width: 28 },
     { header: 'Carga', key: 'dataCarregamento', width: 14 },
     { header: 'Status', key: 'statusRoteiro', width: 16 },
-    { header: 'Placa', key: 'placa', width: 14 },
-    { header: 'Motorista', key: 'motorista', width: 28 },
+    { header: 'Menor vencimento', key: 'vencimentoLabel', width: 18 },
+    { header: 'Situação', key: 'situacao', width: 16 },
+    { header: 'Motos', key: 'motos', width: 10 },
+    { header: 'Concessionárias (vencimento)', key: 'destinos', width: 56 },
   ];
-  if (detail.length === 0) {
-    byRoute.addRow({
+  if (byPlateRoute.length === 0) {
+    plateSheet.addRow({
+      placa: '—',
+      situacao: 'Sem prioridades abertas',
+      destinos: 'Nenhum roteiro com vencimento nesta lista',
+    });
+  } else {
+    for (const row of byPlateRoute) {
+      const excelRow = plateSheet.addRow({
+        placa: row.placa,
+        motorista: row.motorista,
+        roteiro: row.roteiro,
+        dataCarregamento: row.dataCarregamento,
+        statusRoteiro: row.statusRoteiro,
+        vencimentoLabel: row.vencimentoLabel,
+        situacao: row.situacao,
+        motos: row.motos ?? '',
+        destinos: row.destinos,
+      });
+      applyTone(excelRow, row.situacaoTone, 7);
+    }
+  }
+  styleHeader(plateSheet);
+
+  const summary = wb.addWorksheet('Resumo concessionária');
+  summary.columns = [
+    { header: 'Menor vencimento', key: 'vencimentoLabel', width: 18 },
+    { header: 'Situação', key: 'situacao', width: 16 },
+    { header: 'Concessionária', key: 'concessionaria', width: 32 },
+    { header: 'Código', key: 'codigo', width: 12 },
+    { header: 'Cidade', key: 'cidade', width: 22 },
+    { header: 'UF', key: 'uf', width: 6 },
+    { header: 'Placa', key: 'placa', width: 14 },
+    { header: 'Roteiro', key: 'roteiro', width: 28 },
+  ];
+  if (byDealer.length === 0) {
+    summary.addRow({
       vencimentoLabel: '—',
       situacao: 'Sem prioridades abertas',
       concessionaria: 'Nenhuma concessionária com vencimento nesta lista',
     });
   } else {
-    for (const row of detail) {
-      const excelRow = byRoute.addRow({
+    for (const row of byDealer) {
+      const excelRow = summary.addRow({
         vencimentoLabel: row.vencimentoLabel,
         situacao: row.situacao,
         concessionaria: row.concessionaria,
         codigo: row.codigo,
         cidade: row.cidade,
         uf: row.uf,
-        motos: row.motos ?? '',
-        roteiro: row.roteiro,
-        dataCarregamento: row.dataCarregamento,
-        statusRoteiro: row.statusRoteiro,
         placa: row.placa,
-        motorista: row.motorista,
+        roteiro: row.roteiro,
       });
       applyTone(excelRow, row.situacaoTone, 2);
     }
   }
-  styleHeader(byRoute);
+  styleHeader(summary);
 
   return wb;
 }

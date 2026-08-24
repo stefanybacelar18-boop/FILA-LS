@@ -5,6 +5,7 @@ import {
   buildPriorityExpiryWorkbook,
   expirySituation,
   groupPriorityExpiryByDealership,
+  groupPriorityExpiryByPlateRoute,
   type PriorityExpiryInputRoute,
 } from './priority-expiry-export';
 
@@ -108,36 +109,65 @@ describe('priority-expiry-export', () => {
       concessionaria: 'SERGIPANA',
       situacao: 'Vence hoje',
       vencimentoLabel: '24/08/2026',
-      motos: 7,
+      placa: 'BBB0002',
+      roteiro: 'B',
     });
-    expect(grouped[0].roteiros).toContain('A');
-    expect(grouped[0].roteiros).toContain('B');
-    expect(grouped[0].placas).toContain('AAA0001');
-    expect(grouped[0].placas).toContain('BBB0002');
   });
 
-  it('ordena pelo vencimento mais próximo', () => {
+  it('agrupa por placa/roteiro com destinos e menor vencimento', () => {
+    const detail = buildPriorityExpiryDetailRows(
+      [
+        route({
+          name: '376614 24/08/2026',
+          dealerships: [
+            { motoCount: 4, minExpiryDate: '2026-08-25', dealership: dealer('a', 'MOTO CLUBE', 'ARACAJU') },
+            { motoCount: 3, minExpiryDate: '2026-08-24', dealership: dealer('b', 'ARIBE', 'SOCORRO') },
+          ],
+          vehicles: [{ vehicle: { plate: 'EOE1F87' } }],
+          trips: [{ status: 'EM_ANDAMENTO', driverName: 'RICARDO', vehicle: { plate: 'EOE1F87' } }],
+        }),
+      ],
+      today,
+    );
+    const grouped = groupPriorityExpiryByPlateRoute(detail);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]).toMatchObject({
+      placa: 'EOE1F87',
+      motorista: 'RICARDO',
+      roteiro: '376614 24/08/2026',
+      situacao: 'Vence hoje',
+      vencimentoLabel: '24/08/2026',
+      motos: 7,
+    });
+    expect(grouped[0].destinos).toContain('ARIBE (24/08/2026)');
+    expect(grouped[0].destinos).toContain('MOTO CLUBE (25/08/2026)');
+  });
+
+  it('ordena o detalhe por placa e roteiro', () => {
     const rows = buildPriorityExpiryDetailRows(
       [
         route({
           name: 'tarde',
+          vehicles: [{ vehicle: { plate: 'BBB0002' } }],
           dealerships: [{ minExpiryDate: '2026-08-25', dealership: dealer('2', 'B', 'SSA') }],
         }),
         route({
           name: 'cedo',
+          vehicles: [{ vehicle: { plate: 'AAA0001' } }],
           dealerships: [{ minExpiryDate: '2026-08-20', dealership: dealer('1', 'A', 'SSA') }],
         }),
       ],
       today,
     );
-    expect(rows.map((r) => r.roteiro)).toEqual(['cedo', 'tarde']);
+    expect(rows.map((r) => r.placa)).toEqual(['AAA0001', 'BBB0002']);
   });
 
-  it('gera Excel com aba por concessionária e por roteiro', async () => {
+  it('gera Excel com aba por placa e roteiro e resumo de concessionária', async () => {
     const wb = await buildPriorityExpiryWorkbook(
       [
         route({
           name: '376614 24/08/2026',
+          vehicles: [{ vehicle: { plate: 'EOE1F87' } }],
           dealerships: [
             { motoCount: 4, minExpiryDate: '2026-08-24', dealership: dealer('a', 'MOTO CLUBE', 'ARACAJU') },
           ],
@@ -145,8 +175,9 @@ describe('priority-expiry-export', () => {
       ],
       today,
     );
-    expect(wb.worksheets.map((s) => s.name)).toEqual(['Por concessionária', 'Por roteiro']);
-    expect(wb.getWorksheet('Por concessionária')?.rowCount).toBe(2);
-    expect(wb.getWorksheet('Por roteiro')?.getRow(2).getCell(3).value).toBe('MOTO CLUBE');
+    expect(wb.worksheets.map((s) => s.name)).toEqual(['Por placa e roteiro', 'Resumo concessionária']);
+    expect(wb.getWorksheet('Por placa e roteiro')?.rowCount).toBe(2);
+    expect(wb.getWorksheet('Por placa e roteiro')?.getRow(2).getCell(1).value).toBe('EOE1F87');
+    expect(wb.getWorksheet('Resumo concessionária')?.getRow(2).getCell(3).value).toBe('MOTO CLUBE');
   });
 });
