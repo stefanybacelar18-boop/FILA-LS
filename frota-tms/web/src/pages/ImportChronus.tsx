@@ -250,17 +250,15 @@ export function ImportChronus() {
             </div>
           )}
 
-          {!preview.isFridayImport && (
-            <div className="max-w-xs">
-              <Input
-                label="Data do carregamento"
-                type="date"
-                value={preview.routeDate}
-                disabled={previewMutation.isPending}
-                onChange={(e) => reloadPreview(e.target.value, false)}
-              />
-            </div>
-          )}
+          <div className="max-w-xs">
+            <Input
+              label={preview.isFridayImport ? 'Outra data' : 'Data do carregamento'}
+              type="date"
+              value={preview.routeDate}
+              disabled={previewMutation.isPending}
+              onChange={(e) => reloadPreview(e.target.value, false)}
+            />
+          </div>
 
           {refreshable.length > 0 && (
             <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">

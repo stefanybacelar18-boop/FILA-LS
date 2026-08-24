@@ -45,8 +45,8 @@ export function fridayLoadChoices(importDate = new Date()): {
   }
   return {
     isFriday: operationalWeekdayShort(noon) === 'Fri',
-    saturday: saturday.toISOString().slice(0, 10),
-    monday: monday.toISOString().slice(0, 10),
+    saturday: operationalDateKey(saturday),
+    monday: operationalDateKey(monday),
   };
 }
 
