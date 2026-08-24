@@ -18,6 +18,7 @@ import {
   chronusRouteDuplicateKey,
   registerChronusExistingRoute,
 } from './chronus-dedup';
+import { buildChronusDealerIndexes, matchChronusDealership } from './chronus-dealer-match';
 
 export type ChronusRow = {
   manifesto: string;
@@ -287,10 +288,7 @@ export async function buildChronusPreview(
     options?.routeDate ??
     routeDateFromImport(importDate, { saturdayWork: options?.saturdayWork });
   const routeDateIso = routeDate.toISOString().slice(0, 10);
-  const dealerByCode = new Map<string, DealerRow>();
-  for (const d of dealers) {
-    if (d.code) dealerByCode.set(d.code.trim(), d);
-  }
+  const indexes = buildChronusDealerIndexes(dealers);
 
   const manifestOrder: string[] = [];
   const byManifesto = new Map<string, ChronusRow[]>();
@@ -328,7 +326,7 @@ export async function buildChronusPreview(
       dealerOrder.map((key, orderIndex) => {
         const group = dealerGroups.get(key)!;
         const sample = group[0];
-        const dealer = sample.dealerCode ? dealerByCode.get(sample.dealerCode) : undefined;
+        const dealer = matchChronusDealership(sample, indexes);
         const city = dealer?.city ?? sample.city;
         const expiryExcluded = isExpiryCityExcluded(city);
         const expiryDates = group

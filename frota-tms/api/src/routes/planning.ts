@@ -1040,6 +1040,22 @@ export function createPlanningRouter(io: Server) {
           rowsWithoutManifesto: parsed.skippedWithoutManifesto,
         };
 
+        const codesToFill = new Map<string, string>();
+        for (const route of preview.routes) {
+          for (const dest of route.destinations) {
+            const code = dest.dealerCode?.trim();
+            if (dest.matched && dest.dealershipId && code && !codesToFill.has(dest.dealershipId)) {
+              codesToFill.set(dest.dealershipId, code);
+            }
+          }
+        }
+        for (const [dealershipId, code] of codesToFill) {
+          await prisma.dealership.updateMany({
+            where: { id: dealershipId, code: null },
+            data: { code },
+          });
+        }
+
         const batch = await prisma.importBatch.create({
           data: {
             filename: file.originalname,
@@ -1075,7 +1091,7 @@ export function createPlanningRouter(io: Server) {
 
     const preview = JSON.parse(batch.previewJson) as ChronusImportPreview;
     const toCreate = preview.routes.filter(
-      (r) => !r.duplicateRouteId && r.destinations.some((d) => d.matched),
+      (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length === 0 && r.destinations.some((d) => d.matched),
     );
     const toRefresh = preview.routes.filter(
       (r) =>
@@ -1088,7 +1104,7 @@ export function createPlanningRouter(io: Server) {
       (r) => r.duplicateRouteId && !r.canRefreshLoad,
     );
     const skippedInvalid = preview.routes.filter(
-      (r) => !r.duplicateRouteId && !r.destinations.some((d) => d.matched),
+      (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length > 0,
     );
 
     if (toCreate.length === 0 && toRefresh.length === 0) {
@@ -1096,17 +1112,6 @@ export function createPlanningRouter(io: Server) {
         error: 'Nenhum roteiro novo ou atualizável.',
         skippedDuplicates: skippedDuplicates.length,
         skippedInvalid: skippedInvalid.length,
-      });
-    }
-
-    const blockers = toCreate.filter((r) => r.unmatchedDealerCodes.length > 0);
-    if (blockers.length > 0) {
-      return res.status(400).json({
-        error: 'Há manifestos com concessionária não cadastrada.',
-        manifestos: blockers.map((r) => ({
-          manifesto: r.manifesto,
-          codes: r.unmatchedDealerCodes,
-        })),
       });
     }
 

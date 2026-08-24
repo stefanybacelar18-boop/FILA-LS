@@ -97,6 +97,7 @@ export function ImportChronus() {
           created: number
           refreshed: number
           skippedDuplicates: { manifesto: string; name: string }[]
+          skippedInvalid?: string[]
         }>('/planning/import/chronus/commit', { batchId }, { timeout: 120_000 })
       ).data,
     onSuccess: async (data) => {
@@ -107,10 +108,16 @@ export function ImportChronus() {
       ])
       navigate('/roteiros', {
         state: {
-          importOk:
+          importOk: [
             data.refreshed > 0
               ? `${data.created} roteiro(s) criado(s) · ${data.refreshed} carga(s) atualizada(s).`
               : `${data.created} roteiro(s) criado(s) a partir do Chronus.`,
+            data.skippedInvalid?.length
+              ? `${data.skippedInvalid.length} manifesto(s) sem cadastro ignorado(s).`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
         },
       })
     },
@@ -276,7 +283,24 @@ export function ImportChronus() {
 
           {invalid.length > 0 && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
-              {invalid.length} manifesto(s) com concessionária não cadastrada — não serão criados.
+              {invalid.length} manifesto(s) com concessionária não cadastrada — esses não serão
+              criados. Os demais podem ser confirmados. Cadastre o código Chronus em Concessionárias:{' '}
+              <strong>
+                {[
+                  ...new Set(
+                    invalid.flatMap((r) =>
+                      r.destinations
+                        .filter((d) => !d.matched)
+                        .map((d) =>
+                          d.dealerCode
+                            ? `${d.dealerName} (${d.dealerCode})`
+                            : d.dealerName,
+                        ),
+                    ),
+                  ),
+                ].join(' · ')}
+              </strong>
+              .
             </p>
           )}
 
@@ -296,7 +320,12 @@ export function ImportChronus() {
                         <Badge tone="warning">Já concluído</Badge>
                       )}
                       {!route.duplicateRouteId && route.unmatchedDealerCodes.length > 0 && (
-                        <Badge tone="danger">Sem cadastro</Badge>
+                        <Badge tone="danger">
+                          Sem cadastro
+                          {route.unmatchedDealerCodes.filter(Boolean).length
+                            ? ` · cód. ${route.unmatchedDealerCodes.filter(Boolean).join(', ')}`
+                            : ''}
+                        </Badge>
                       )}
                     </div>
                   )}
