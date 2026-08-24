@@ -18,6 +18,7 @@ import {
 import { useAuthStore } from '../stores/auth'
 
 const emptyForm = {
+  code: '',
   name: '',
   city: '',
   state: '',
@@ -67,6 +68,7 @@ export function Dealerships() {
     mutationFn: async () => {
       const payload = {
         ...form,
+        code: form.code.trim() || null,
         state: form.state.toUpperCase(),
       }
       if (editing) return api.put(`/dealerships/${editing.id}`, payload)
@@ -105,6 +107,7 @@ export function Dealerships() {
   function openEdit(d: DealershipWithPad) {
     setEditing(d)
     setForm({
+      code: d.code ?? '',
       name: d.name,
       city: d.city,
       state: d.state,
@@ -258,6 +261,19 @@ export function Dealerships() {
             />
           </div>
           <Input
+            label="Código Chronus"
+            value={form.code}
+            onChange={(e) => setForm({ ...form, code: e.target.value })}
+            placeholder="Ex.: 1011103"
+          />
+          <Input
+            label="Região"
+            value={form.region}
+            onChange={(e) => setForm({ ...form, region: e.target.value })}
+            placeholder="Região 4"
+            required
+          />
+          <Input
             label="Cidade"
             value={form.city}
             onChange={(e) => setForm({ ...form, city: e.target.value })}
@@ -268,12 +284,6 @@ export function Dealerships() {
             value={form.state}
             maxLength={2}
             onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
-            required
-          />
-          <Input
-            label="Região"
-            value={form.region}
-            onChange={(e) => setForm({ ...form, region: e.target.value })}
             required
           />
           <Select
@@ -289,6 +299,7 @@ export function Dealerships() {
             ]}
           />
           <p className="sm:col-span-2 text-xs text-[var(--color-text-muted)]">
+            O código Chronus (coluna Cód. Concessionária) é o que o import usa para casar a loja.
             Distância e previsão de retorno são calculadas automaticamente: PAD → cidade da
             concessionária (ida+volta ÷ 400 km/dia).
           </p>

@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { paramId } from '../utils/params';
+import { normalizeDealershipRegion } from '../lib/chronus-dealer-match';
 import {
   PAD_LAT,
   PAD_LNG,
@@ -31,6 +32,11 @@ const schema = z.object({
     .default(AllowedVehicleType.AMBOS),
   active: z.boolean().optional(),
 });
+
+function cleanCode(value: string | null | undefined): string | null {
+  const code = value?.trim() || '';
+  return code.length > 0 ? code : null;
+}
 
 function applyPadTravel(data: {
   city: string;
@@ -164,11 +170,11 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
 
   const item = await prisma.dealership.create({
     data: {
-      code: parsed.data.code,
+      code: cleanCode(parsed.data.code),
       name: parsed.data.name,
       city: parsed.data.city,
       state: parsed.data.state.toUpperCase(),
-      region: parsed.data.region,
+      region: normalizeDealershipRegion(parsed.data.region),
       phone: parsed.data.phone,
       allowedVehicle: parsed.data.allowedVehicle,
       active: parsed.data.active ?? true,
@@ -201,11 +207,11 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const item = await prisma.dealership.update({
     where: { id: paramId(req) },
     data: {
-      ...(parsed.data.code !== undefined ? { code: parsed.data.code } : {}),
+      ...(parsed.data.code !== undefined ? { code: cleanCode(parsed.data.code) } : {}),
       ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
       ...(parsed.data.city !== undefined ? { city: parsed.data.city } : {}),
       ...(parsed.data.state !== undefined ? { state: parsed.data.state.toUpperCase() } : {}),
-      ...(parsed.data.region !== undefined ? { region: parsed.data.region } : {}),
+      ...(parsed.data.region !== undefined ? { region: normalizeDealershipRegion(parsed.data.region) } : {}),
       ...(parsed.data.phone !== undefined ? { phone: parsed.data.phone } : {}),
       ...(parsed.data.allowedVehicle !== undefined
         ? { allowedVehicle: parsed.data.allowedVehicle }
