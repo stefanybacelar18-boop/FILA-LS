@@ -23,7 +23,7 @@ const base = new PrismaClient(
 
 /**
  * No Postgres (Render↔Supabase SP) cada `include` virava várias idas ao banco (~300 ms cada).
- * `join` busca relações num SQL só. No sqlite de teste permanece `query`.
+ * `join` busca relações num SQL só. No SQLite o client rejeita o argumento — não injetar.
  * Cast para PrismaClient: o client estendido quebra o tipo de `$transaction`.
  */
 export const prisma = base.$extends({
@@ -32,7 +32,10 @@ export const prisma = base.$extends({
       async $allOperations({ operation, args, query }) {
         if (FIND_OPS.has(operation) && args && typeof args === 'object') {
           const next = args as { relationLoadStrategy?: 'join' | 'query' };
-          if (!next.relationLoadStrategy) next.relationLoadStrategy = relationLoadStrategy;
+          // SQLite rejects relationLoadStrategy (unknown argument). Only inject on Postgres.
+          if (!next.relationLoadStrategy && relationLoadStrategy === 'join') {
+            next.relationLoadStrategy = 'join';
+          }
         }
         return query(args);
       },
