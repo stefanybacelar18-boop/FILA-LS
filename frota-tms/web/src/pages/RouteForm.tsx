@@ -4,10 +4,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Dealership, Route } from '../types'
-import { PageHeader, Button, Input, Spinner, Textarea } from '../components/ui'
+import { PageHeader, Button, Input, Select, Spinner, Textarea } from '../components/ui'
 import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
+import { routeFleetRequirement, stripChronusPlateNotes } from '../lib/chronus-plate-hint'
 
 function isPastOrToday(isoDay: string): boolean {
   if (!isoDay) return false
@@ -39,6 +40,11 @@ export function RouteForm() {
   const [hasPriority, setHasPriority] = useState(false)
   const [priorityExpiryDate, setPriorityExpiryDate] = useState('')
   const [priorityNotes, setPriorityNotes] = useState('')
+  const [fleetOwner, setFleetOwner] = useState<'' | 'LSL' | 'AG'>('')
+  const [capacityMotos, setCapacityMotos] = useState('')
+  const [notes, setNotes] = useState('')
+  const [destMotoCount, setDestMotoCount] = useState<Record<string, string>>({})
+  const [destExpiry, setDestExpiry] = useState<Record<string, string>>({})
 
   const { data: dealerships = [] } = useQuery({
     queryKey: ['dealerships'],
@@ -62,6 +68,20 @@ export function RouteForm() {
     setHasPriority(!!existing.hasPriority)
     setPriorityExpiryDate(toInputDate(existing.priorityExpiryDate))
     setPriorityNotes(existing.priorityNotes ?? '')
+    const req = routeFleetRequirement(existing)
+    setFleetOwner((req.fleetOwner ?? '') as '' | 'LSL' | 'AG')
+    setCapacityMotos(req.capacityMotos != null ? String(req.capacityMotos) : '')
+    setNotes(stripChronusPlateNotes(existing.notes) ?? '')
+    const motos: Record<string, string> = {}
+    const expiries: Record<string, string> = {}
+    for (const rd of existing.dealerships ?? []) {
+      const did = rd.dealershipId || rd.dealership?.id
+      if (!did) continue
+      if (rd.motoCount != null) motos[did] = String(rd.motoCount)
+      if (rd.minExpiryDate) expiries[did] = toInputDate(rd.minExpiryDate)
+    }
+    setDestMotoCount(motos)
+    setDestExpiry(expiries)
   }, [existing])
 
   const selectedDealers = useMemo(
@@ -114,16 +134,27 @@ export function RouteForm() {
       }
       const region =
         [...new Set(selectedDealers.map((d) => d.region))].join(' / ') || null
+      const capacity = capacityMotos.trim() ? Number(capacityMotos) : null
+      if (capacityMotos.trim() && (!Number.isFinite(capacity) || (capacity ?? 0) <= 0)) {
+        throw new Error('Capacidade inválida')
+      }
       const payload = {
         name: description,
         date,
-        dealershipIds,
+        destinations: dealershipIds.map((id, order) => ({
+          dealershipId: id,
+          motoCount: destMotoCount[id]?.trim() ? Number(destMotoCount[id]) : null,
+          minExpiryDate: destExpiry[id] || null,
+          order,
+        })),
         region,
-        notes: null,
+        notes: notes.trim() || null,
         hasPriority,
         priorityNotes: hasPriority ? priorityNotes.trim() || null : null,
         priorityExpiryDate: hasPriority ? priorityExpiryDate : null,
         plannedVehicleCount: 1,
+        requiredFleetOwner: fleetOwner || null,
+        requiredCapacityMotos: capacity,
       }
       let route: Route
       const editingId = (!isNew && id) || createdIdRef.current
@@ -245,6 +276,31 @@ export function RouteForm() {
               Padrão: amanhã · saída às 06:00 · retorno pelo destino mais longe do PAD
             </p>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select
+              label="Frota da carga"
+              value={fleetOwner}
+              onChange={(e) => setFleetOwner(e.target.value as '' | 'LSL' | 'AG')}
+              disabled={!canEdit}
+              options={[
+                { value: '', label: 'Qualquer (AG ou LSL)' },
+                { value: 'AG', label: 'AG' },
+                { value: 'LSL', label: 'LSL (veículo próprio)' },
+              ]}
+            />
+            <Input
+              label="Capacidade mínima (motos)"
+              type="number"
+              min={1}
+              value={capacityMotos}
+              onChange={(e) => setCapacityMotos(e.target.value)}
+              placeholder="Ex.: 50"
+              disabled={!canEdit}
+            />
+          </div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Use LSL quando a carga Chronus veio como AG e você vai colocar placa própria.
+          </p>
         </div>
 
         <div
@@ -378,7 +434,49 @@ export function RouteForm() {
               )
             })}
           </div>
+
+          {selectedDealers.length > 0 && (
+            <div className="mt-4 space-y-3 border-t border-[var(--color-border)] pt-4">
+              <p className="text-sm font-medium">Motos e vencimento por destino</p>
+              {selectedDealers.map((d) => (
+                <div key={d.id} className="grid gap-2 sm:grid-cols-[1fr_6rem_9rem] sm:items-end">
+                  <p className="text-sm">
+                    <span className="font-medium">{d.city}</span>
+                    <span className="text-[var(--color-text-muted)]"> · {d.name}</span>
+                  </p>
+                  <Input
+                    label="Motos"
+                    type="number"
+                    min={0}
+                    value={destMotoCount[d.id] ?? ''}
+                    onChange={(e) =>
+                      setDestMotoCount((prev) => ({ ...prev, [d.id]: e.target.value }))
+                    }
+                    disabled={!canEdit}
+                  />
+                  <Input
+                    label="Venc. N.F."
+                    type="date"
+                    value={destExpiry[d.id] ?? ''}
+                    onChange={(e) =>
+                      setDestExpiry((prev) => ({ ...prev, [d.id]: e.target.value }))
+                    }
+                    disabled={!canEdit}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        <Textarea
+          label="Observações (opcional)"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Notas internas da carga"
+          disabled={!canEdit}
+        />
 
         {saveMutation.isError && (
           <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">

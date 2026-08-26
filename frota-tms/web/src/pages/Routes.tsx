@@ -24,6 +24,7 @@ import { formatDate, toInputDate } from '../lib/format'
 import { cn } from '../lib/cn'
 import { plateOwner } from '../lib/plateOwner'
 import { hasActivePriority } from '../lib/route-priority'
+import { routeFleetRequirement } from '../lib/chronus-plate-hint'
 import { resetBodyScroll } from '../lib/scroll-lock'
 
 function dealershipStops(r: Route): { name: string; city: string }[] {
@@ -904,6 +905,14 @@ export function Routes() {
                 </p>
                 <p className="mt-1 font-medium">
                   {routeDisplayTrip(detailRoute)?.driverName ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Frota da carga
+                </p>
+                <p className="mt-1 font-medium">
+                  {routeFleetRequirement(detailRoute).label ?? 'Qualquer'}
                 </p>
               </div>
             </div>

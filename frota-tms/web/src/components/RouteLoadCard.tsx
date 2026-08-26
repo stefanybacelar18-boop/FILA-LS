@@ -158,6 +158,7 @@ export function RouteLoadCard({
   requiredFleetOwner,
   requiredCapacityMotos,
   onClick,
+  actions,
   className,
 }: {
   name: string
@@ -169,6 +170,7 @@ export function RouteLoadCard({
   requiredFleetOwner?: 'LSL' | 'AG' | null
   requiredCapacityMotos?: number | null
   onClick?: () => void
+  actions?: ReactNode
   className?: string
 }) {
   const urgency = routeLoadUrgency(priorityExpiryDate, destinations)
@@ -179,22 +181,36 @@ export function RouteLoadCard({
     notes,
   })
   const legacyPlate = !fleetReq.fleetOwner && chronusPlateFromNotes(notes)
-  const Wrapper = onClick ? 'button' : 'div'
 
   return (
-    <Wrapper
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
+    <div
       className={cn(
         'group w-full rounded-2xl border bg-[var(--color-surface)] p-4 text-left transition sm:p-5',
         urgencyCardClass(urgency),
-        onClick &&
-          'hover:border-[var(--color-primary)]/25 hover:bg-[var(--color-surface-2)]/30',
+        onClick && 'hover:border-[var(--color-primary)]/25 hover:bg-[var(--color-surface-2)]/30',
         className,
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
+        <div
+          role={onClick ? 'button' : undefined}
+          tabIndex={onClick ? 0 : undefined}
+          onClick={onClick}
+          onKeyDown={
+            onClick
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onClick()
+                  }
+                }
+              : undefined
+          }
+          className={cn(
+            'min-w-0 flex-1',
+            onClick && 'cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/40',
+          )}
+        >
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold tracking-tight text-[var(--color-text)]">
@@ -262,12 +278,22 @@ export function RouteLoadCard({
           </div>
         </div>
 
-        {onClick && (
-          <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-text-muted)]/60 transition group-hover:text-[var(--color-text-muted)]" />
-        )}
+        <div className="flex shrink-0 items-start gap-1">
+          {actions}
+          {onClick && (
+            <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-text-muted)]/60 transition group-hover:text-[var(--color-text-muted)]" />
+          )}
+        </div>
       </div>
 
-      <RouteLoadTable destinations={destinations} />
-    </Wrapper>
+      <div
+        role={onClick ? 'button' : undefined}
+        tabIndex={-1}
+        onClick={onClick}
+        className={onClick ? 'cursor-pointer' : undefined}
+      >
+        <RouteLoadTable destinations={destinations} />
+      </div>
+    </div>
   )
 }
