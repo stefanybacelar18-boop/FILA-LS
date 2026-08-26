@@ -51,6 +51,16 @@ export function fleetRequirementFromNotes(notes?: string | null): ChronusPlateHi
   return parseChronusPlateHint(match[1])
 }
 
+export function stripChronusPlateNotes(notes?: string | null): string | null {
+  if (!notes) return null
+  const cleaned = notes
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*Placa Chronus:/i.test(line))
+    .join('\n')
+    .trim()
+  return cleaned || null
+}
+
 export function routeFleetRequirement(route: {
   requiredFleetOwner?: string | null
   requiredCapacityMotos?: number | null

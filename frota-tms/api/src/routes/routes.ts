@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { Role, RouteStatus, VehicleStatus, TripStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
@@ -18,8 +19,15 @@ import {
   routeFleetRequirement,
   vehicleMatchesRouteLoad,
   isRouteForLslFleet,
+  syncChronusPlateNotes,
 } from '../lib/chronus-plate-hint';
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
+import {
+  destinationRowsForWrite,
+  summarizeRouteLoad,
+  uniqueDealershipIds,
+  type RouteLoadDestinationInput,
+} from '../lib/route-load-update';
 import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 import { buildPriorityExpiryWorkbook, priorityExpiryFilename } from '../lib/priority-expiry-export';
@@ -39,7 +47,9 @@ const routeListInclude = {
   dealerships: {
     orderBy: { order: 'asc' as const },
     select: {
+      id: true,
       order: true,
+      dealershipId: true,
       motoCount: true,
       minExpiryDate: true,
       dealership: { select: routeListDealershipSelect },
@@ -177,10 +187,24 @@ export function createRoutesRouter(io: Server) {
   const router = Router();
   router.use(authenticate);
 
+  const destinationSchema = z.object({
+    dealershipId: z.string().min(1),
+    motoCount: z.number().int().nonnegative().nullable().optional(),
+    minExpiryDate: z
+      .union([
+        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de vencimento inválida'),
+        z.literal(''),
+        z.null(),
+      ])
+      .optional(),
+    order: z.number().int().nonnegative().optional(),
+  });
+
   const schema = z.object({
     name: z.string().min(2),
     date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Data inválida'),
-    dealershipIds: z.array(z.string()).min(1),
+    dealershipIds: z.array(z.string()).min(1).optional(),
+    destinations: z.array(destinationSchema).min(1).optional(),
     region: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     hasPriority: z.boolean().optional(),
@@ -192,7 +216,50 @@ export function createRoutesRouter(io: Server) {
       .optional()
       .nullable(),
     plannedVehicleCount: z.number().int().positive().optional().nullable(),
+    requiredFleetOwner: z.enum(['LSL', 'AG']).nullable().optional(),
+    requiredCapacityMotos: z.number().int().positive().nullable().optional(),
+    totalMotoCount: z.number().int().nonnegative().nullable().optional(),
   });
+
+  function normalizeDestinations(
+    destinations: z.infer<typeof destinationSchema>[],
+  ): RouteLoadDestinationInput[] | { error: string } {
+    const ids = uniqueDealershipIds(destinations.map((d) => d.dealershipId));
+    if (!Array.isArray(ids)) return ids;
+    return destinations.map((d, index) => ({
+      dealershipId: d.dealershipId,
+      motoCount: d.motoCount ?? null,
+      minExpiryDate: d.minExpiryDate ? d.minExpiryDate : null,
+      order: d.order ?? index,
+    }));
+  }
+
+  async function replaceRouteDestinations(
+    tx: Prisma.TransactionClient,
+    routeId: string,
+    destinations: RouteLoadDestinationInput[],
+  ) {
+    const rows = destinationRowsForWrite(destinations);
+    const incomingIds = rows.map((r) => r.dealershipId);
+    await tx.routeDealership.deleteMany({
+      where:
+        incomingIds.length > 0
+          ? { routeId, dealershipId: { notIn: incomingIds } }
+          : { routeId },
+    });
+    for (const row of rows) {
+      await tx.routeDealership.upsert({
+        where: { routeId_dealershipId: { routeId, dealershipId: row.dealershipId } },
+        create: { routeId, ...row },
+        update: {
+          order: row.order,
+          motoCount: row.motoCount,
+          minExpiryDate: row.minExpiryDate,
+        },
+      });
+    }
+    return rows;
+  }
 
   router.get('/', async (req, res) => {
     const { status, date, q, includeCancelled } = req.query;
@@ -669,28 +736,78 @@ export function createRoutesRouter(io: Server) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() });
 
+    let destinations: RouteLoadDestinationInput[];
+    if (parsed.data.destinations) {
+      const normalized = normalizeDestinations(parsed.data.destinations);
+      if (!Array.isArray(normalized)) {
+        return res.status(400).json({ error: normalized.error });
+      }
+      destinations = normalized;
+    } else if (parsed.data.dealershipIds?.length) {
+      destinations = parsed.data.dealershipIds.map((id, order) => ({
+        dealershipId: id,
+        order,
+        motoCount: null,
+        minExpiryDate: null,
+      }));
+    } else {
+      return res.status(400).json({ error: 'Selecione ao menos uma concessionária' });
+    }
+    const destIds = destinations.map((d) => d.dealershipId);
+
     const dealerships = await prisma.dealership.findMany({
-      where: { id: { in: parsed.data.dealershipIds }, active: true },
+      where: { id: { in: destIds }, active: true },
     });
-    if (dealerships.length !== parsed.data.dealershipIds.length) {
+    if (dealerships.length !== destIds.length) {
       return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas ou inativas' });
     }
 
-    const ordered = orderStopsNearestFromPad(
-      parsed.data.dealershipIds.map((id, order) => {
-        const dealer = dealerships.find((d) => d.id === id)!;
-        return { ...dealer, order };
-      }),
-    );
-    const hasPriority = !!parsed.data.hasPriority;
-    if (hasPriority && !parsed.data.priorityExpiryDate) {
+    const dealerById = new Map(dealerships.map((d) => [d.id, d]));
+    const keepGivenOrder = destinations.some((d) => d.motoCount != null || d.minExpiryDate);
+    const orderedDealers = keepGivenOrder
+      ? destinations.map((d) => dealerById.get(d.dealershipId)!)
+      : orderStopsNearestFromPad(
+          destIds.map((id, order) => {
+            const dealer = dealerById.get(id)!;
+            return { ...dealer, order };
+          }),
+        );
+    const destByDealer = new Map(destinations.map((d) => [d.dealershipId, d]));
+    const stopRows = orderedDealers.map((dealer, order) => {
+      const dest = destByDealer.get(dealer.id);
+      return {
+        dealershipId: dealer.id,
+        order,
+        motoCount: dest?.motoCount ?? null,
+        minExpiryDate: dest?.minExpiryDate ?? null,
+        city: dealer.city,
+        region: dealer.region,
+      };
+    });
+
+    const loadSummary = summarizeRouteLoad(stopRows);
+    const hasPriority =
+      parsed.data.hasPriority !== undefined ? !!parsed.data.hasPriority : loadSummary.hasPriority;
+    const priorityExpiryDate =
+      parsed.data.priorityExpiryDate !== undefined
+        ? parsed.data.priorityExpiryDate
+        : loadSummary.priorityExpiryDate;
+    if (hasPriority && !priorityExpiryDate) {
       return res.status(400).json({
         error: 'Informe a menor data de vencimento para roteiro prioritário',
       });
     }
 
-    const joinedRegions = [...new Set(ordered.map((d) => d.region))].join(' / ');
-    const region = parsed.data.region ?? (joinedRegions || ordered[0]?.region);
+    const requiredFleetOwner = parsed.data.requiredFleetOwner ?? null;
+    const requiredCapacityMotos = parsed.data.requiredCapacityMotos ?? null;
+    const notes = syncChronusPlateNotes(
+      parsed.data.notes?.trim() || null,
+      requiredFleetOwner,
+      requiredCapacityMotos,
+    );
+
+    const joinedRegions = [...new Set(stopRows.map((d) => d.region))].join(' / ');
+    const region = parsed.data.region ?? (joinedRegions || orderedDealers[0]?.region);
 
     // Admin monta o roteiro; só vai à Operação após "Disponibilizar"
     const route = await prisma.route.create({
@@ -698,24 +815,30 @@ export function createRoutesRouter(io: Server) {
         name: parsed.data.name.trim(),
         // Persist as noon UTC so calendar day is stable in BR/US timezones
         date: new Date(`${parsed.data.date.slice(0, 10)}T12:00:00.000Z`),
-        dealershipId: ordered[0]?.id,
+        dealershipId: orderedDealers[0]?.id,
         region,
-        notes: parsed.data.notes?.trim() || null,
+        notes,
         hasPriority,
         priorityNotes: hasPriority ? parsed.data.priorityNotes?.trim() || null : null,
-        priorityExpiryDate:
-          hasPriority && parsed.data.priorityExpiryDate
-            ? new Date(`${parsed.data.priorityExpiryDate.slice(0, 10)}T12:00:00.000Z`)
-            : null,
+        priorityExpiryDate: priorityExpiryDate
+          ? new Date(`${priorityExpiryDate.slice(0, 10)}T12:00:00.000Z`)
+          : null,
         plannedVehicleCount: 1,
+        totalMotoCount: parsed.data.totalMotoCount ?? loadSummary.totalMotoCount,
+        requiredFleetOwner,
+        requiredCapacityMotos,
         status: RouteStatus.RASCUNHO,
         readyForOperation: false,
         createdById: req.user!.id,
         dealerships: {
-          create: ordered.map((d, order) => ({
-            dealershipId: d.id,
-            order,
-          })),
+          create: destinationRowsForWrite(
+            stopRows.map((row) => ({
+              dealershipId: row.dealershipId,
+              order: row.order,
+              motoCount: row.motoCount,
+              minExpiryDate: row.minExpiryDate,
+            })),
+          ),
         },
       },
       include: {
@@ -800,13 +923,26 @@ export function createRoutesRouter(io: Server) {
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' });
 
     const routeId = paramId(req);
-    const existing = await prisma.route.findUnique({ where: { id: routeId } });
+    const existing = await prisma.route.findUnique({
+      where: { id: routeId },
+      include: { dealerships: { include: { dealership: true }, orderBy: { order: 'asc' } } },
+    });
     if (!existing) return res.status(404).json({ error: 'Roteiro não encontrado' });
     if (existing.status === RouteStatus.CANCELADO || existing.status === RouteStatus.CONCLUIDO) {
       return res.status(400).json({ error: 'Roteiro finalizado não pode ser editado' });
     }
 
-    const { dealershipIds, date, priorityExpiryDate, ...rest } = parsed.data;
+    const {
+      dealershipIds,
+      destinations: destPayload,
+      date,
+      priorityExpiryDate,
+      requiredFleetOwner,
+      requiredCapacityMotos,
+      totalMotoCount,
+      notes,
+      ...rest
+    } = parsed.data;
     const data: Record<string, unknown> = { ...rest };
     if (date) data.date = new Date(`${date.slice(0, 10)}T12:00:00.000Z`);
     if (rest.hasPriority === false) {
@@ -829,42 +965,112 @@ export function createRoutesRouter(io: Server) {
       });
     }
     if (typeof rest.name === 'string') data.name = rest.name.trim();
-    if (rest.notes !== undefined) data.notes = rest.notes?.trim() || null;
     if (rest.plannedVehicleCount !== undefined) {
       data.plannedVehicleCount = rest.plannedVehicleCount;
     }
 
-    if (dealershipIds?.length) {
-      const dealerships = await prisma.dealership.findMany({
-        where: { id: { in: dealershipIds }, active: true },
-      });
-      if (dealerships.length !== dealershipIds.length) {
-        return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas ou inativas' });
-      }
-      const ordered = orderStopsNearestFromPad(
-        dealershipIds.map((id, order) => {
-          const dealer = dealerships.find((d) => d.id === id)!;
-          return { ...dealer, order };
-        }),
+    if (requiredFleetOwner !== undefined) data.requiredFleetOwner = requiredFleetOwner;
+    if (requiredCapacityMotos !== undefined) data.requiredCapacityMotos = requiredCapacityMotos;
+    if (totalMotoCount !== undefined) data.totalMotoCount = totalMotoCount;
+
+    const nextOwner =
+      requiredFleetOwner !== undefined ? requiredFleetOwner : existing.requiredFleetOwner;
+    const nextCapacity =
+      requiredCapacityMotos !== undefined
+        ? requiredCapacityMotos
+        : existing.requiredCapacityMotos;
+    const fleetTouched = requiredFleetOwner !== undefined || requiredCapacityMotos !== undefined;
+    if (notes !== undefined || fleetTouched) {
+      data.notes = syncChronusPlateNotes(
+        notes !== undefined ? notes?.trim() || null : existing.notes,
+        (nextOwner as 'LSL' | 'AG' | null) ?? null,
+        nextCapacity ?? null,
       );
-      data.dealershipId = ordered[0]?.id;
-      if (rest.region === undefined) {
-        data.region = [...new Set(ordered.map((d) => d.region))].join(' / ') || ordered[0]?.region;
-      }
-      await prisma.$transaction(async (tx) => {
-        await tx.routeDealership.deleteMany({ where: { routeId } });
-        await tx.routeDealership.createMany({
-          data: ordered.map((d, order) => ({
-            routeId,
-            dealershipId: d.id,
-            order,
-          })),
-        });
-        await tx.route.update({ where: { id: routeId }, data });
-      });
-    } else {
-      await prisma.route.update({ where: { id: routeId }, data });
     }
+
+    let nextDestinations: RouteLoadDestinationInput[] | null = null;
+    if (destPayload?.length) {
+      const normalized = normalizeDestinations(destPayload);
+      if (!Array.isArray(normalized)) {
+        return res.status(400).json({ error: normalized.error });
+      }
+      nextDestinations = normalized;
+    } else if (dealershipIds?.length) {
+      const existingByDealer = new Map(
+        existing.dealerships.map((rd) => [
+          rd.dealershipId,
+          {
+            dealershipId: rd.dealershipId,
+            motoCount: rd.motoCount,
+            minExpiryDate: rd.minExpiryDate ? rd.minExpiryDate.toISOString().slice(0, 10) : null,
+          },
+        ]),
+      );
+      nextDestinations = dealershipIds.map((id, order) => ({
+        dealershipId: id,
+        order,
+        motoCount: existingByDealer.get(id)?.motoCount ?? null,
+        minExpiryDate: existingByDealer.get(id)?.minExpiryDate ?? null,
+      }));
+    }
+
+    if (nextDestinations) {
+      const destIds = nextDestinations.map((d) => d.dealershipId);
+      const dealerships = await prisma.dealership.findMany({
+        where: { id: { in: destIds } },
+      });
+      if (dealerships.length !== destIds.length) {
+        return res.status(400).json({ error: 'Uma ou mais concessionárias inválidas' });
+      }
+      const dealerById = new Map(dealerships.map((d) => [d.id, d]));
+      const keepGivenOrder =
+        Boolean(destPayload?.length) &&
+        nextDestinations.some((d) => d.motoCount != null || d.minExpiryDate);
+      const orderedDealers = keepGivenOrder
+        ? nextDestinations.map((d) => dealerById.get(d.dealershipId)!)
+        : orderStopsNearestFromPad(
+            destIds.map((id, order) => {
+              const dealer = dealerById.get(id)!;
+              return { ...dealer, order };
+            }),
+          );
+      const destByDealer = new Map(nextDestinations.map((d) => [d.dealershipId, d]));
+      nextDestinations = orderedDealers.map((dealer, order) => {
+        const dest = destByDealer.get(dealer.id)!;
+        return {
+          dealershipId: dealer.id,
+          order,
+          motoCount: dest.motoCount ?? null,
+          minExpiryDate: dest.minExpiryDate ?? null,
+        };
+      });
+      data.dealershipId = orderedDealers[0]?.id;
+      if (rest.region === undefined) {
+        data.region =
+          [...new Set(orderedDealers.map((d) => d.region))].join(' / ') || orderedDealers[0]?.region;
+      }
+      const loadSummary = summarizeRouteLoad(
+        nextDestinations.map((d) => ({
+          motoCount: d.motoCount,
+          minExpiryDate: d.minExpiryDate,
+          city: dealerById.get(d.dealershipId)?.city,
+        })),
+      );
+      if (totalMotoCount === undefined) data.totalMotoCount = loadSummary.totalMotoCount;
+      if (priorityExpiryDate === undefined && rest.hasPriority !== false) {
+        data.priorityExpiryDate = loadSummary.priorityExpiryDate
+          ? new Date(`${loadSummary.priorityExpiryDate}T12:00:00.000Z`)
+          : existing.priorityExpiryDate;
+        if (rest.hasPriority === undefined) data.hasPriority = loadSummary.hasPriority;
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (nextDestinations) {
+        await replaceRouteDestinations(tx, routeId, nextDestinations);
+      }
+      await tx.route.update({ where: { id: routeId }, data });
+    });
 
     const route = await prisma.route.findUnique({
       where: { id: routeId },
@@ -874,7 +1080,16 @@ export function createRoutesRouter(io: Server) {
         vehicles: { include: { vehicle: true } },
       },
     });
-    await audit('UPDATE', 'Route', { userId: req.user!.id, entityId: routeId });
+    const fromLabel = existing.requiredFleetOwner || 'livre';
+    const toLabel = (data.requiredFleetOwner as string | null | undefined) ?? fromLabel;
+    await audit('UPDATE', 'Route', {
+      userId: req.user!.id,
+      entityId: routeId,
+      details:
+        fleetTouched && fromLabel !== toLabel
+          ? `${existing.name} · frota ${fromLabel} → ${toLabel}`
+          : existing.name,
+    });
     io.emit('routes:changed', { action: 'update', id: routeId });
     res.json(route);
   });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Pencil } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Driver, PlateColor, Route, Vehicle, VehicleStatus } from '../types'
 import {
@@ -23,6 +23,7 @@ import { cn } from '../lib/cn'
 import { compareRoutesByLoadPriority } from '../lib/route-priority'
 import { isRouteForLslFleet } from '../lib/chronus-plate-hint'
 import { RouteLoadCard } from '../components/RouteLoadCard'
+import { EditLoadModal } from '../components/EditLoadModal'
 import type { RouteLoadDestination } from '../lib/route-priority'
 import { useAuthStore } from '../stores/auth'
 import { plateOwner } from '../lib/plateOwner'
@@ -159,6 +160,7 @@ export function AssignPlates() {
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
   const [showProblems, setShowProblems] = useState(false)
+  const [editRouteId, setEditRouteId] = useState<string | null>(null)
 
   const [justifyVehicle, setJustifyVehicle] = useState<PlatesBoardVehicle | null>(null)
   const [preset, setPreset] = useState('')
@@ -399,7 +401,11 @@ export function AssignPlates() {
       <div className="page-desktop max-w-5xl">
         <PageHeader
           title="Definir placa"
-          description="Menor vencimento primeiro."
+          description={
+            isAdmin
+              ? 'Menor vencimento primeiro. Para trocar AG/LSL ou ajustar destinos, use Editar carga.'
+              : 'Menor vencimento primeiro.'
+          }
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
@@ -446,11 +452,30 @@ export function AssignPlates() {
                 requiredFleetOwner={r.requiredFleetOwner}
                 requiredCapacityMotos={r.requiredCapacityMotos}
                 onClick={() => pickRoute(r.id)}
+                footer={
+                  isAdmin ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditRouteId(r.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar carga
+                    </Button>
+                  ) : undefined
+                }
               />
             ))}
             </div>
           </>
         )}
+
+        <EditLoadModal
+          routeId={editRouteId}
+          open={!!editRouteId}
+          onClose={() => setEditRouteId(null)}
+          onSaved={() => setOkMsg('Carga atualizada. A lista de placas segue a nova frota.')}
+        />
       </div>
     )
   }
@@ -493,6 +518,18 @@ export function AssignPlates() {
           totalMotoCount={selectedRoute?.totalMotoCount}
           requiredFleetOwner={selectedRoute?.requiredFleetOwner}
           requiredCapacityMotos={selectedRoute?.requiredCapacityMotos}
+          footer={
+            isAdmin ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditRouteId(routeId)}
+              >
+                <Pencil className="h-4 w-4" />
+                Editar carga
+              </Button>
+            ) : undefined
+          }
         />
         {board?.returnForecast && (
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
@@ -838,6 +875,13 @@ Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00${
           </div>
         </div>
       </Modal>
+
+      <EditLoadModal
+        routeId={editRouteId}
+        open={!!editRouteId}
+        onClose={() => setEditRouteId(null)}
+        onSaved={() => setOkMsg('Carga atualizada. A lista de placas segue a nova frota.')}
+      />
     </div>
   )
 }

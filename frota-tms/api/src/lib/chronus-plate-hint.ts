@@ -75,6 +75,39 @@ export function fleetRequirementFromNotes(notes?: string | null): ChronusPlateHi
   return parseChronusPlateHint(match[1]);
 }
 
+/** Remove a linha "Placa Chronus:" das observações (carga editada pelo Admin). */
+export function stripChronusPlateNotes(notes?: string | null): string | null {
+  if (!notes) return null;
+  const cleaned = notes
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*Placa Chronus:/i.test(line))
+    .join('\n')
+    .trim();
+  return cleaned || null;
+}
+
+/**
+ * Mantém a dica Chronus alinhada à frota/capacidade da carga.
+ * Sem os dois campos, a linha é removida para não travar AG/LSL antigo.
+ */
+export function syncChronusPlateNotes(
+  notes: string | null | undefined,
+  fleetOwner: PlateOwner | null,
+  capacityMotos: number | null,
+): string | null {
+  const rest = stripChronusPlateNotes(notes);
+  if (fleetOwner && capacityMotos != null && capacityMotos > 0) {
+    const line = chronusPlateNotes({
+      raw: `${fleetOwner}${capacityMotos}`,
+      isFictional: true,
+      fleetOwner,
+      capacityMotos,
+    });
+    return rest ? `${line}\n${rest}` : line;
+  }
+  return rest;
+}
+
 export function vehicleMatchesRouteLoad(
   vehicle: { plate: string; capacityMotos: number },
   route: {
@@ -83,11 +116,9 @@ export function vehicleMatchesRouteLoad(
     notes?: string | null;
   },
 ): boolean {
-  const owner = route.requiredFleetOwner as PlateOwner | null | undefined;
-  const capacity = route.requiredCapacityMotos;
-
-  if (owner && plateOwner(vehicle.plate) !== owner) return false;
-  if (capacity != null && vehicle.capacityMotos < capacity) return false;
+  const req = routeFleetRequirement(route);
+  if (req.fleetOwner && plateOwner(vehicle.plate) !== req.fleetOwner) return false;
+  if (req.capacityMotos != null && vehicle.capacityMotos < req.capacityMotos) return false;
   return true;
 }
 
