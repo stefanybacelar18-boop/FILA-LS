@@ -159,6 +159,7 @@ export function RouteLoadCard({
   requiredCapacityMotos,
   onClick,
   actions,
+  footer,
   className,
 }: {
   name: string
@@ -171,6 +172,7 @@ export function RouteLoadCard({
   requiredCapacityMotos?: number | null
   onClick?: () => void
   actions?: ReactNode
+  footer?: ReactNode
   className?: string
 }) {
   const urgency = routeLoadUrgency(priorityExpiryDate, destinations)
@@ -294,6 +296,16 @@ export function RouteLoadCard({
       >
         <RouteLoadTable destinations={destinations} />
       </div>
+
+      {footer && (
+        <div
+          className="mt-3 border-t border-[var(--color-border)]/60 pt-3"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {footer}
+        </div>
+      )}
     </div>
   )
 }

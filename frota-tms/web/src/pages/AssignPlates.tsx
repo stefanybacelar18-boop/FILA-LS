@@ -401,7 +401,11 @@ export function AssignPlates() {
       <div className="page-desktop max-w-5xl">
         <PageHeader
           title="Definir placa"
-          description="Menor vencimento primeiro."
+          description={
+            isAdmin
+              ? 'Menor vencimento primeiro. Para trocar AG/LSL ou ajustar destinos, use Editar carga.'
+              : 'Menor vencimento primeiro.'
+          }
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
@@ -448,17 +452,15 @@ export function AssignPlates() {
                 requiredFleetOwner={r.requiredFleetOwner}
                 requiredCapacityMotos={r.requiredCapacityMotos}
                 onClick={() => pickRoute(r.id)}
-                actions={
+                footer={
                   isAdmin ? (
                     <Button
                       type="button"
-                      size="sm"
-                      variant="ghost"
-                      title="Editar carga"
-                      aria-label={`Editar carga ${r.name}`}
+                      variant="outline"
                       onClick={() => setEditRouteId(r.id)}
                     >
                       <Pencil className="h-4 w-4" />
+                      Editar carga
                     </Button>
                   ) : undefined
                 }
@@ -516,17 +518,15 @@ export function AssignPlates() {
           totalMotoCount={selectedRoute?.totalMotoCount}
           requiredFleetOwner={selectedRoute?.requiredFleetOwner}
           requiredCapacityMotos={selectedRoute?.requiredCapacityMotos}
-          actions={
+          footer={
             isAdmin ? (
               <Button
                 type="button"
-                size="sm"
                 variant="outline"
-                title="Editar carga"
                 onClick={() => setEditRouteId(routeId)}
               >
                 <Pencil className="h-4 w-4" />
-                Editar
+                Editar carga
               </Button>
             ) : undefined
           }

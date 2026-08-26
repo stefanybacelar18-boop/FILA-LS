@@ -853,7 +853,7 @@ export function Routes() {
                 <Link to={`/roteiros/${detailRoute.id}`}>
                   <Button variant="outline">
                     <Pencil className="h-3.5 w-3.5" />
-                    Editar
+                    Editar carga
                   </Button>
                 </Link>
               )}
