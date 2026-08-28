@@ -73,17 +73,23 @@ export function FleetDetail() {
           label="Frota"
           value={vehicle.owner ?? plateOwner(vehicle.plate)}
         />
-        <Info label="Situação" value={vehicleStatusLabels[vehicle.status]} />
+        <Info label="Situação" value={vehicle.active === false ? 'Inativo' : vehicleStatusLabels[vehicle.status]} />
         <Info label="Capacidade" value={`${vehicle.capacityMotos} motos`} />
         <Info label="Motorista padrão" value={vehicle.defaultDriver ?? '—'} />
         <Info label="Viagens" value={String(trips.length)} />
       </div>
 
-      {(vehicle.maintenanceHold || vehicle.status === 'EM_MANUTENCAO') && (
+      {(vehicle.active === false || vehicle.maintenanceHold || vehicle.status === 'EM_MANUTENCAO') && (
         <div className="mb-5 rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
-          <p className="font-medium text-amber-800 dark:text-amber-200">
-            Bloqueio longo — só volta a carregar após liberação em Manutenção
-          </p>
+          {vehicle.active === false ? (
+            <p className="font-medium text-amber-800 dark:text-amber-200">
+              Veículo inativo — não entra em Definir placa. Reative em Frota se for usar de novo.
+            </p>
+          ) : (
+            <p className="font-medium text-amber-800 dark:text-amber-200">
+              Bloqueio longo — só volta a carregar após liberação em Manutenção
+            </p>
+          )}
           {vehicle.blockReason && (
             <p className="mt-1 text-[var(--color-text-muted)]">Motivo: {vehicle.blockReason}</p>
           )}

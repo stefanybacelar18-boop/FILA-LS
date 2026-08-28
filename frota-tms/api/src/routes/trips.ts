@@ -23,6 +23,7 @@ import {
   UNRETURN_ERROR_MESSAGES,
   vehicleStatusAfterUnreturn,
 } from '../lib/trip-unreturn';
+import { nextVehicleStatusAfterHold } from '../lib/vehicle-lifecycle';
 
 import type { Server } from 'socket.io';
 
@@ -531,9 +532,7 @@ export function createTripsRouter(io: Server) {
 
     const returnedAt = new Date();
     const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
-    const nextVehicleStatus = holdMaintenance
-      ? VehicleStatus.EM_MANUTENCAO
-      : VehicleStatus.DISPONIVEL;
+    const nextVehicleStatus = nextVehicleStatusAfterHold(trip.vehicle);
 
     const updated = await prisma.$transaction(async (tx) => {
       const t = await tx.trip.update({

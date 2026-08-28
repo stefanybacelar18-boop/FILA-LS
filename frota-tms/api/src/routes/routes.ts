@@ -31,6 +31,7 @@ import {
 import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 import { buildPriorityExpiryWorkbook, priorityExpiryFilename } from '../lib/priority-expiry-export';
+import { nextVehicleStatusAfterHold } from '../lib/vehicle-lifecycle';
 
 const routeListDealershipSelect = {
   id: true,
@@ -475,7 +476,9 @@ export function createRoutesRouter(io: Server) {
         orderBy: { departureAt: 'desc' },
       }),
     ]);
-    const vehicles = filterPlatesForRole(req.user?.role, allVehicles);
+    const vehicles = filterPlatesForRole(req.user?.role, allVehicles).filter(
+      (v) => (v as { active?: boolean }).active !== false,
+    );
 
     const reportByVehicle = new Map(reports.map((r) => [r.vehicleId, r]));
 
@@ -1494,10 +1497,7 @@ export function createRoutesRouter(io: Server) {
             );
           }
 
-          const oldNextStatus =
-            (oldVehicle as { maintenanceHold?: boolean }).maintenanceHold
-              ? VehicleStatus.EM_MANUTENCAO
-              : VehicleStatus.DISPONIVEL;
+          const oldNextStatus = nextVehicleStatusAfterHold(oldVehicle);
 
           await tx.vehicle.update({
             where: { id: oldVehicle.id },
@@ -1652,10 +1652,7 @@ export function createRoutesRouter(io: Server) {
     try {
       const updated = await prisma.$transaction(async (tx) => {
         for (const trip of route.trips) {
-          const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
-          const nextVehicleStatus = holdMaintenance
-            ? VehicleStatus.EM_MANUTENCAO
-            : VehicleStatus.DISPONIVEL;
+          const nextVehicleStatus = nextVehicleStatusAfterHold(trip.vehicle);
 
           await tx.trip.update({
             where: { id: trip.id },
@@ -1689,12 +1686,10 @@ export function createRoutesRouter(io: Server) {
             (rv.vehicle.status === VehicleStatus.EM_VIAGEM ||
               rv.vehicle.status === VehicleStatus.EM_CARREGAMENTO)
           ) {
-            const holdMaintenance = !!(rv.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+            const nextVehicleStatus = nextVehicleStatusAfterHold(rv.vehicle);
             await tx.vehicle.update({
               where: { id: rv.vehicleId },
-              data: {
-                status: holdMaintenance ? VehicleStatus.EM_MANUTENCAO : VehicleStatus.DISPONIVEL,
-              },
+              data: { status: nextVehicleStatus },
             });
           }
         }
@@ -1760,10 +1755,7 @@ export function createRoutesRouter(io: Server) {
     try {
       await prisma.$transaction(async (tx) => {
         for (const trip of route.trips) {
-          const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
-          const nextVehicleStatus = holdMaintenance
-            ? VehicleStatus.EM_MANUTENCAO
-            : VehicleStatus.DISPONIVEL;
+          const nextVehicleStatus = nextVehicleStatusAfterHold(trip.vehicle);
 
           await tx.trip.update({
             where: { id: trip.id },
@@ -1797,12 +1789,10 @@ export function createRoutesRouter(io: Server) {
         if (route.trips.length === 0 && route.vehicles.length > 0) {
           for (const rv of route.vehicles) {
             if (rv.vehicle.status === VehicleStatus.EM_VIAGEM || rv.vehicle.status === VehicleStatus.EM_CARREGAMENTO) {
-              const holdMaintenance = !!(rv.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
+              const nextVehicleStatus = nextVehicleStatusAfterHold(rv.vehicle);
               await tx.vehicle.update({
                 where: { id: rv.vehicleId },
-                data: {
-                  status: holdMaintenance ? VehicleStatus.EM_MANUTENCAO : VehicleStatus.DISPONIVEL,
-                },
+                data: { status: nextVehicleStatus },
               });
             }
           }

@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Ban, RotateCcw } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Vehicle, VehicleStatus, VehicleType } from '../types'
 import {
@@ -16,6 +16,7 @@ import {
   Spinner,
   EmptyState,
   ConfirmModal,
+  Badge,
 } from '../components/ui'
 import { useAuthStore } from '../stores/auth'
 import { vehicleStatusLabels, vehicleTypeLabels } from '../lib/labels'
@@ -86,7 +87,20 @@ export function Fleet() {
     mutationFn: async (id: string) => api.delete(`/vehicles/${id}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-available'] })
+      void qc.invalidateQueries({ queryKey: ['plates-board'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
       setDeleteId(null)
+    },
+  })
+
+  const activateMutation = useMutation({
+    mutationFn: async (id: string) => api.post(`/vehicles/${id}/activate`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-available'] })
+      void qc.invalidateQueries({ queryKey: ['plates-board'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
     },
   })
 
@@ -126,7 +140,7 @@ export function Fleet() {
     <div>
       <PageHeader
         title="Frota"
-        description="Cadastro e situação das placas"
+        description="Cadastro e situação das placas. Desative para tirar da operação sem apagar o histórico."
         actions={
           isAdmin ? (
             <Button onClick={openCreate}>
@@ -164,6 +178,12 @@ export function Fleet() {
           placeholder="LSL e AG"
         />
       </div>
+      {activateMutation.isError && (
+        <p className="mb-3 text-sm text-[var(--color-danger)]">
+          {(activateMutation.error as { response?: { data?: { error?: string } } })?.response?.data
+            ?.error ?? 'Não foi possível reativar o veículo'}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-16">
@@ -188,7 +208,7 @@ export function Fleet() {
             </thead>
             <tbody>
               {filtered.map((v) => (
-                <tr key={v.id}>
+                <tr key={v.id} className={v.active === false ? 'opacity-60' : undefined}>
                   <td>
                     <Link to={`/frota/${v.id}`} className="inline-flex">
                       <PlateBadge plate={v.plate} color={v.color} />
@@ -203,17 +223,38 @@ export function Fleet() {
                   </td>
                   <td>{v.capacityMotos} motos</td>
                   <td>{v.defaultDriver ?? '—'}</td>
-                  <td>{vehicleStatusLabels[v.status]}</td>
+                  <td>
+                    <div className="flex flex-col gap-1">
+                      {v.active === false ? (
+                        <Badge>Inativo</Badge>
+                      ) : (
+                        <span>{vehicleStatusLabels[v.status]}</span>
+                      )}
+                    </div>
+                  </td>
                   <td>{formatDate(v.expectedReturn)}</td>
                   {isAdmin && (
                     <td>
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(v)}>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(v)} title="Editar">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setDeleteId(v.id)}>
-                          <Trash2 className="h-4 w-4 text-[var(--color-danger)]" />
-                        </Button>
+                        {v.active === false ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            loading={activateMutation.isPending}
+                            onClick={() => activateMutation.mutate(v.id)}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Ativar
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(v.id)}>
+                            <Ban className="h-3.5 w-3.5" />
+                            Desativar
+                          </Button>
+                        )}
                       </div>
                     </td>
                   )}
@@ -312,13 +353,22 @@ export function Fleet() {
 
       <ConfirmModal
         open={!!deleteId}
-        onClose={() => setDeleteId(null)}
+        onClose={() => {
+          setDeleteId(null)
+          deleteMutation.reset()
+        }}
         onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
-        title="Excluir veículo"
-        message="Confirma a exclusão deste veículo? Esta ação não pode ser desfeita."
-        confirmLabel="Excluir"
+        title="Desativar veículo"
+        message="Este veículo deixa de aparecer em Definir placa e na frota disponível. O histórico de viagens é mantido. Você pode reativar depois."
+        confirmLabel="Desativar"
         danger
         loading={deleteMutation.isPending}
+        error={
+          deleteMutation.isError
+            ? ((deleteMutation.error as { response?: { data?: { error?: string } } })?.response
+                ?.data?.error ?? 'Não foi possível desativar o veículo')
+            : null
+        }
       />
     </div>
   )

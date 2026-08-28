@@ -220,6 +220,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
 
     const vehiclesRaw = await prisma.vehicle.findMany({
       where: {
+        active: true,
         OR: [{ maintenanceHold: true }, { status: VehicleStatus.EM_MANUTENCAO }],
       },
       include: { blockedBy: { select: { name: true } } },

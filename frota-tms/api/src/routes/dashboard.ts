@@ -38,6 +38,7 @@ router.get('/', async (req: AuthRequest, res) => {
   ] = await Promise.all([
     prisma.vehicle.count({
       where: {
+        active: true,
         status: VehicleStatus.DISPONIVEL,
         trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
       },
