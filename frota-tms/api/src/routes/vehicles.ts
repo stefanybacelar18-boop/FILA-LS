@@ -8,6 +8,10 @@ import { vehicleColor } from '../utils/status';
 import { paramId } from '../utils/params';
 import { filterPlatesForRole, isPlateHiddenFromOperator, plateOwner } from '../data/operatorVisibility';
 import { sumUsefulCapacityMotos } from '../lib/capacity';
+import {
+  vehicleActivatePatch,
+  vehicleDeactivatePatch,
+} from '../lib/vehicle-lifecycle';
 
 const router = Router();
 router.use(authenticate);
@@ -30,6 +34,7 @@ const schema = z.object({
     ])
     .optional(),
   notes: z.string().optional().nullable(),
+  active: z.boolean().optional(),
 });
 
 const blockSchema = z.object({
@@ -51,6 +56,7 @@ type VehicleRow = {
   capacityMotos: number;
   defaultDriver: string | null;
   status: string;
+  active: boolean;
   notes: string | null;
   maintenanceHold: boolean;
   blockCategory: string | null;
@@ -119,7 +125,7 @@ router.get('/', async (req: AuthRequest, res) => {
   const vehicles = await prisma.vehicle.findMany({
     where,
     include: vehicleInclude,
-    orderBy: { plate: 'asc' },
+    orderBy: [{ active: 'desc' }, { plate: 'asc' }],
   });
   const visible = filterPlatesForRole(req.user?.role, vehicles);
   res.json(await enrichVehicles(visible));
@@ -128,6 +134,7 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/available', async (req: AuthRequest, res) => {
   const vehicles = await prisma.vehicle.findMany({
     where: {
+      active: true,
       status: VehicleStatus.DISPONIVEL,
       maintenanceHold: false,
       trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
@@ -143,6 +150,7 @@ router.get('/available', async (req: AuthRequest, res) => {
 router.get('/availability-summary', async (req: AuthRequest, res) => {
   const vehicles = await prisma.vehicle.findMany({
     where: {
+      active: true,
       status: VehicleStatus.DISPONIVEL,
       maintenanceHold: false,
       trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
@@ -187,6 +195,7 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
 router.get('/maintenance', async (req: AuthRequest, res) => {
   const vehicles = await prisma.vehicle.findMany({
     where: {
+      active: true,
       OR: [{ maintenanceHold: true }, { status: VehicleStatus.EM_MANUTENCAO }],
     },
     include: vehicleInclude,
@@ -372,7 +381,19 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   if (data.plate) data.plate = String(data.plate).toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (data.defaultDriver !== undefined) data.defaultDriver = data.defaultDriver || null;
 
-  if (parsed.data.status === VehicleStatus.DISPONIVEL) {
+  if (parsed.data.active === false) {
+    const openTrip = await prisma.trip.findFirst({
+      where: { vehicleId: current.id, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+    });
+    if (openTrip || current.status === VehicleStatus.EM_VIAGEM) {
+      return res.status(400).json({
+        error: 'Veículo em viagem não pode ser desativado. Confirme o retorno primeiro.',
+      });
+    }
+    Object.assign(data, vehicleDeactivatePatch(req.user!.id));
+  } else if (parsed.data.active === true) {
+    Object.assign(data, vehicleActivatePatch());
+  } else if (parsed.data.status === VehicleStatus.DISPONIVEL) {
     data.maintenanceHold = false;
     data.blockCategory = null;
     data.blockReason = null;
@@ -383,6 +404,14 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     if (!current.blockReason) {
       data.blockCategory = current.blockCategory || 'MANUTENCAO';
       data.blockReason = current.blockReason || 'Status alterado manualmente para manutenção';
+      data.blockedAt = current.blockedAt || new Date();
+      data.blockedById = current.blockedById || req.user!.id;
+    }
+  } else if (parsed.data.status === VehicleStatus.BLOQUEADO) {
+    data.maintenanceHold = true;
+    if (!current.blockReason) {
+      data.blockCategory = current.blockCategory || 'OUTRO';
+      data.blockReason = current.blockReason || 'Bloqueado manualmente';
       data.blockedAt = current.blockedAt || new Date();
       data.blockedById = current.blockedById || req.user!.id;
     }
@@ -408,27 +437,64 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   res.json(await enrichVehicle(vehicle));
 });
 
+router.post('/:id/activate', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+  const id = paramId(req);
+  const current = await prisma.vehicle.findUnique({ where: { id } });
+  if (!current) return res.status(404).json({ error: 'Veículo não encontrado' });
+  if (current.active) {
+    return res.status(400).json({ error: 'Este veículo já está ativo na frota' });
+  }
+
+  const vehicle = await prisma.vehicle.update({
+    where: { id },
+    data: vehicleActivatePatch(),
+    include: vehicleInclude,
+  });
+  await prisma.vehicleHistory.create({
+    data: {
+      vehicleId: id,
+      userId: req.user!.id,
+      action: 'ATIVACAO',
+      fromStatus: current.status,
+      toStatus: VehicleStatus.DISPONIVEL,
+      details: 'Veículo reativado na frota',
+    },
+  });
+  await audit('ACTIVATE', 'Vehicle', { userId: req.user!.id, entityId: id, details: vehicle.plate });
+  res.json(await enrichVehicle(vehicle));
+});
+
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const id = paramId(req);
-  const active = await prisma.trip.findFirst({
-    where: { vehicleId: id, status: { in: ['EM_ANDAMENTO', 'ATRASADO'] } },
-  });
-  if (active) return res.status(400).json({ error: 'Veículo em viagem não pode ser excluído' });
+  const current = await prisma.vehicle.findUnique({ where: { id } });
+  if (!current) return res.status(404).json({ error: 'Veículo não encontrado' });
 
-  const historical = await prisma.trip.count({ where: { vehicleId: id } });
-  if (historical > 0) {
+  const activeTrip = await prisma.trip.findFirst({
+    where: { vehicleId: id, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+  });
+  if (activeTrip || current.status === VehicleStatus.EM_VIAGEM) {
     return res.status(400).json({
-      error: 'Veículo possui histórico de viagens e não pode ser excluído. Altere o status para BLOQUEADO.',
+      error: 'Veículo em viagem não pode ser desativado. Confirme o retorno primeiro.',
     });
   }
 
-  try {
-    await prisma.vehicle.delete({ where: { id } });
-  } catch {
-    return res.status(400).json({ error: 'Não foi possível excluir o veículo (vínculos existentes)' });
-  }
-  await audit('DELETE', 'Vehicle', { userId: req.user!.id, entityId: id });
-  res.status(204).send();
+  const vehicle = await prisma.vehicle.update({
+    where: { id },
+    data: vehicleDeactivatePatch(req.user!.id),
+    include: vehicleInclude,
+  });
+  await prisma.vehicleHistory.create({
+    data: {
+      vehicleId: id,
+      userId: req.user!.id,
+      action: 'DESATIVACAO',
+      fromStatus: current.status,
+      toStatus: VehicleStatus.BLOQUEADO,
+      details: 'Veículo desativado da frota (histórico mantido)',
+    },
+  });
+  await audit('DEACTIVATE', 'Vehicle', { userId: req.user!.id, entityId: id, details: vehicle.plate });
+  res.json(await enrichVehicle(vehicle));
 });
 
 export default router;

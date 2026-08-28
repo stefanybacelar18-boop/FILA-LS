@@ -76,6 +76,7 @@ interface ConfirmModalProps {
   confirmLabel?: string
   loading?: boolean
   danger?: boolean
+  error?: string | null
 }
 
 export function ConfirmModal({
@@ -87,6 +88,7 @@ export function ConfirmModal({
   confirmLabel = 'Confirmar',
   loading,
   danger,
+  error,
 }: ConfirmModalProps) {
   return (
     <Modal
@@ -106,6 +108,7 @@ export function ConfirmModal({
       }
     >
       <p className="text-[var(--color-text-muted)]">{message}</p>
+      {error ? <p className="mt-3 text-sm text-[var(--color-danger)]">{error}</p> : null}
     </Modal>
   )
 }
