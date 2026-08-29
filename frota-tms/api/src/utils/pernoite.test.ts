@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isPernoite, payrollPeriodForDate, pernoiteNights } from './pernoite';
+import {
+  defaultPernoiteNights,
+  isPernoite,
+  payrollPeriodForDate,
+  pernoiteNights,
+  pernoiteOverrideToStore,
+  resolvedPernoiteNights,
+} from './pernoite';
 import { parseOperationalDateTime } from './timezone';
 
 describe('pernoiteNights', () => {
@@ -40,6 +47,49 @@ describe('pernoiteNights', () => {
         returnedAt: parseOperationalDateTime('2026-08-02', '08:00:00'),
       }),
     ).toBe(1);
+  });
+
+  it('calendário de 2 noites (19→21) permanece 2 sem teto', () => {
+    expect(
+      pernoiteNights({
+        departureAt: parseOperationalDateTime('2026-08-19', '06:00:00'),
+        expectedReturn: parseOperationalDateTime('2026-08-21', '12:00:00'),
+        returnedAt: parseOperationalDateTime('2026-08-21', '08:00:00'),
+      }),
+    ).toBe(2);
+  });
+});
+
+describe('resolvedPernoiteNights', () => {
+  const spanTwoNights = {
+    departureAt: parseOperationalDateTime('2026-08-19', '06:00:00'),
+    expectedReturn: parseOperationalDateTime('2026-08-21', '12:00:00'),
+    returnedAt: parseOperationalDateTime('2026-08-21', '08:00:00'),
+  };
+
+  it('limita a 1 pernoite por roteiro quando não há ajuste manual', () => {
+    expect(defaultPernoiteNights(spanTwoNights)).toBe(1);
+    expect(resolvedPernoiteNights(spanTwoNights)).toBe(1);
+    expect(isPernoite(spanTwoNights)).toBe(true);
+  });
+
+  it('respeita override do admin (2 ou 3 noites)', () => {
+    expect(resolvedPernoiteNights({ ...spanTwoNights, pernoiteNightsOverride: 2 })).toBe(2);
+    expect(resolvedPernoiteNights({ ...spanTwoNights, pernoiteNightsOverride: 3 })).toBe(3);
+  });
+
+  it('não grava override quando o valor é o padrão (teto 1)', () => {
+    expect(pernoiteOverrideToStore(spanTwoNights, 1)).toBeNull();
+    expect(pernoiteOverrideToStore(spanTwoNights, 2)).toBe(2);
+  });
+
+  it('mesmo dia continua sem pernoite', () => {
+    const sameDay = {
+      departureAt: parseOperationalDateTime('2026-08-01', '06:00:00'),
+      expectedReturn: parseOperationalDateTime('2026-08-01', '18:00:00'),
+    };
+    expect(resolvedPernoiteNights(sameDay)).toBe(0);
+    expect(isPernoite(sameDay)).toBe(false);
   });
 });
 

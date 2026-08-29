@@ -317,6 +317,8 @@ export interface PernoitesData {
     returnedAt: string | null
     status: string
     nights: number
+    calendarNights: number
+    nightsOverridden: boolean
     confirmed: boolean
   }[]
 }

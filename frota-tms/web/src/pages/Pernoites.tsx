@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, FileSpreadsheet, Moon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileSpreadsheet, Moon, Pencil } from 'lucide-react'
 import { api, downloadReport } from '../lib/api'
 import type { PernoitesData } from '../types'
 import {
@@ -12,10 +12,16 @@ import {
   PlateBadge,
   Badge,
   EmptyState,
+  Modal,
 } from '../components/ui'
 import { formatDate } from '../lib/format'
 import { tripStatusLabels } from '../lib/labels'
 import { cn } from '../lib/cn'
+import { useAuthStore } from '../stores/auth'
+
+type PernoiteTrip = PernoitesData['trips'][number]
+
+const MANUAL_NIGHT_OPTIONS = [1, 2, 3] as const
 
 function RankingRow({
   rank,
@@ -60,9 +66,114 @@ function RankingRow({
   )
 }
 
+function AdjustPernoiteModal({
+  trip,
+  onClose,
+}: {
+  trip: PernoiteTrip | null
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const [nights, setNights] = useState(1)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!trip) return
+    setNights(trip.nights)
+    setError('')
+  }, [trip])
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!trip) return
+      return api.patch(`/trips/${trip.id}/pernoite`, { nights })
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['pernoites'] })
+      await qc.invalidateQueries({ queryKey: ['dashboard'] })
+      onClose()
+    },
+    onError: (err: unknown) => {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível salvar o ajuste.',
+      )
+    },
+  })
+
+  if (!trip) return null
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Ajustar pernoites"
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saveMutation.isPending}>
+            Cancelar
+          </Button>
+          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending}>
+            Salvar
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-[var(--color-text-muted)]">
+          Quase sempre o motorista volta no dia seguinte — <strong>1 pernoite</strong> por roteiro.
+          Marque 2 ou 3 só se ele realmente ficou mais noites. As datas da viagem não mudam.
+        </p>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs">
+          <p>
+            <span className="text-[var(--color-text-muted)]">Motorista:</span>{' '}
+            {trip.driverName ?? '—'}
+          </p>
+          <p>
+            <span className="text-[var(--color-text-muted)]">Placa:</span> {trip.plate}
+          </p>
+          <p>
+            <span className="text-[var(--color-text-muted)]">Datas:</span> {formatDate(trip.departureAt)}{' '}
+            → {formatDate(trip.returnedAt ?? trip.expectedReturn)}
+            {trip.calendarNights !== trip.nights && (
+              <span className="ml-1 text-[var(--color-text-muted)]">
+                (calendário sugeriria {trip.calendarNights})
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {MANUAL_NIGHT_OPTIONS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setNights(n)}
+              className={cn(
+                'rounded-[var(--radius)] border px-3 py-3 text-center transition-colors',
+                nights === n
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
+                  : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
+              )}
+            >
+              <span className="block font-display text-xl font-semibold tabular-nums">{n}</span>
+              <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
+                {n === 1 ? 'Padrão' : n === 2 ? 'Duas noites' : 'Três noites'}
+              </span>
+            </button>
+          ))}
+        </div>
+        {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+      </div>
+    </Modal>
+  )
+}
+
 export function Pernoites() {
   const [offset, setOffset] = useState(0)
   const [exporting, setExporting] = useState(false)
+  const [editing, setEditing] = useState<PernoiteTrip | null>(null)
+  const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['pernoites', offset],
@@ -133,8 +244,17 @@ export function Pernoites() {
 
       <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">
         <strong>Pernoite</strong> = viagem em que o retorno é em dia diferente da saída (não conta
-        retorno no mesmo dia). O total é agrupado por <strong>motorista</strong>, somando todas as
-        viagens no período — mesmo que tenha trocado de veículo.
+        retorno no mesmo dia). Cada roteiro conta no máximo <strong>1 pernoite</strong> (volta no
+        dia seguinte), mesmo se as datas no sistema abrangem mais dias.
+        {isAdmin ? (
+          <>
+            {' '}
+            O administrador pode clicar no número da coluna Pernoites para marcar 2 ou 3 quando isso
+            realmente acontecer.
+          </>
+        ) : null}{' '}
+        O total é agrupado por <strong>motorista</strong>, somando todas as viagens no período — mesmo
+        que tenha trocado de veículo.
       </p>
 
       <div className="mb-6 grid grid-cols-3 gap-3">
@@ -183,6 +303,13 @@ export function Pernoites() {
               <strong>Confirmado</strong> = retorno já registrado; <strong>Previsto</strong> = ainda
               em viagem ou retorno pendente.
             </li>
+            {isAdmin ? (
+              <li>
+                Se um roteiro teve 2 pernoites de verdade, clique no número em{' '}
+                <strong>Pernoites</strong> e ajuste. O selo <strong>manual</strong> aparece nesses
+                casos.
+              </li>
+            ) : null}
           </ol>
           <p className="mt-4 text-xs text-[var(--color-text-muted)]">
             Período padrão: dia 16 do mês anterior até dia 15 do mês vigente. O mesmo critério aparece
@@ -230,7 +357,33 @@ export function Pernoites() {
                       <span className="block max-w-[180px] truncate">{t.dealershipName}</span>
                       <span className="text-xs text-[var(--color-text-muted)]">{t.dealershipCity}</span>
                     </td>
-                    <td className="py-2.5 pr-3 text-center font-semibold tabular-nums">{t.nights}</td>
+                    <td className="py-2.5 pr-3 text-center">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditing(t)}
+                          title="Ajustar pernoites"
+                          className="inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 font-semibold tabular-nums hover:bg-[var(--color-surface-2)]"
+                        >
+                          {t.nights}
+                          <Pencil className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                          {t.nightsOverridden ? (
+                            <Badge tone="info" className="font-medium">
+                              manual
+                            </Badge>
+                          ) : null}
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center justify-center gap-1 font-semibold tabular-nums">
+                          {t.nights}
+                          {t.nightsOverridden ? (
+                            <Badge tone="info" className="font-medium">
+                              manual
+                            </Badge>
+                          ) : null}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2.5">
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge tone={t.confirmed ? 'success' : 'warning'}>
@@ -248,6 +401,8 @@ export function Pernoites() {
           </div>
         )}
       </Card>
+
+      <AdjustPernoiteModal trip={editing} onClose={() => setEditing(null)} />
     </div>
   )
 }

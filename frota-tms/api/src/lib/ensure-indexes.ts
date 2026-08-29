@@ -10,6 +10,7 @@ const INDEXES = [
 
 const COLUMNS = [
   'ALTER TABLE "Vehicle" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true',
+  'ALTER TABLE "Trip" ADD COLUMN IF NOT EXISTS "pernoiteNightsOverride" INTEGER',
 ];
 
 /** Aplica índices sem bloquear o listen (não usa prisma db push no start). */

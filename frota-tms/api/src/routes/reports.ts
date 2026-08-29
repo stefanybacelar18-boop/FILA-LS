@@ -190,6 +190,8 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
       { header: 'Destino', key: 'dealership', width: 24 },
       { header: 'Cidade', key: 'city', width: 16 },
       { header: 'Pernoites', key: 'nights', width: 10 },
+      { header: 'Calendário', key: 'calendarNights', width: 12 },
+      { header: 'Ajuste', key: 'ajuste', width: 10 },
       { header: 'Confirmado', key: 'confirmed', width: 12 },
       { header: 'Situação', key: 'status', width: 14 },
     ];
@@ -203,6 +205,8 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
         dealership: t.dealershipName,
         city: t.dealershipCity,
         nights: t.nights,
+        calendarNights: t.calendarNights,
+        ajuste: t.nightsOverridden ? 'Manual' : 'Padrão',
         confirmed: t.confirmed ? 'Sim' : 'Previsto',
         status: t.status,
       }),
