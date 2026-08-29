@@ -31,6 +31,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       void queryClient.invalidateQueries({ queryKey: ['returns'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['history'] })
+      void queryClient.invalidateQueries({ queryKey: ['pernoites'] })
       void queryClient.invalidateQueries({ queryKey: ['plates-board'] })
       void queryClient.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
       void queryClient.invalidateQueries({ queryKey: ['justifications'] })

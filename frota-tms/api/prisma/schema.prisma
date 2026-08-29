@@ -216,6 +216,8 @@ model Trip {
   returnedAt     DateTime?
   status         String    @default("EM_ANDAMENTO")
   notes          String?
+  // Ajuste manual de pernoites (null = teto padrão de 1 por roteiro)
+  pernoiteNightsOverride Int?
   // Justificativa quando passa da previsão (empresa terceira / operação)
   delayReason       String?
   delayReportedAt   DateTime?

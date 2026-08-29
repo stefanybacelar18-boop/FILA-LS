@@ -24,6 +24,12 @@ import {
   vehicleStatusAfterUnreturn,
 } from '../lib/trip-unreturn';
 import { nextVehicleStatusAfterHold } from '../lib/vehicle-lifecycle';
+import {
+  defaultPernoiteNights,
+  pernoiteNights,
+  pernoiteOverrideToStore,
+  resolvedPernoiteNights,
+} from '../utils/pernoite';
 
 import type { Server } from 'socket.io';
 
@@ -69,6 +75,10 @@ const scheduleSchema = z.object({
     .string()
     .refine((v) => !Number.isNaN(Date.parse(v)), 'Previsão de retorno inválida')
     .optional(),
+});
+
+const pernoiteSchema = z.object({
+  nights: z.coerce.number().int().min(0).max(3),
 });
 
 const unreturnSchema = z.object({
@@ -797,6 +807,63 @@ export function createTripsRouter(io: Server) {
       ...updated,
       overdue: isOverdue(updated.expectedReturn, updated.returnedAt),
       color: vehicleColor(updated.vehicle.status, updated.expectedReturn),
+    });
+  });
+
+  /** Admin: ajusta a quantidade de pernoites do roteiro sem mudar as datas. */
+  router.patch('/:id/pernoite', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const parsed = pernoiteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Informe 1, 2 ou 3 pernoites.',
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: paramId(req) },
+      include: { vehicle: true },
+    });
+    if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+
+    const override = pernoiteOverrideToStore(trip, parsed.data.nights);
+    const updated = await prisma.$transaction(async (tx) => {
+      const t = await tx.trip.update({
+        where: { id: trip.id },
+        data: { pernoiteNightsOverride: override },
+        include: tripInclude,
+      });
+
+      await tx.vehicleHistory.create({
+        data: {
+          vehicleId: trip.vehicleId,
+          userId: req.user!.id,
+          tripId: trip.id,
+          action: 'AJUSTE_PERNOITE',
+          fromStatus: trip.vehicle.status,
+          toStatus: trip.vehicle.status,
+          details: `Pernoites ${trip.vehicle.plate}: ${resolvedPernoiteNights(trip)} → ${resolvedPernoiteNights(
+            { ...t, pernoiteNightsOverride: override },
+          )} (${override == null ? 'padrão' : 'manual'})`,
+        },
+      });
+
+      return t;
+    });
+
+    const nights = resolvedPernoiteNights(updated);
+    await audit('TRIP_PERNOITE_ADJUST', 'Trip', {
+      userId: req.user!.id,
+      entityId: trip.id,
+      details: `${trip.vehicle.plate}: pernoites ${resolvedPernoiteNights(trip)} → ${nights}`,
+    });
+    io.emit('trips:changed', { action: 'pernoite-adjust', tripId: trip.id });
+    res.json({
+      ...updated,
+      nights,
+      calendarNights: pernoiteNights(updated),
+      nightsOverridden: updated.pernoiteNightsOverride != null,
+      defaultNights: defaultPernoiteNights(updated),
     });
   });
 

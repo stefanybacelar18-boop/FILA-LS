@@ -49,11 +49,19 @@ export function formatPayrollPeriodLabel(start: Date, end: Date): string {
   return `${startFmt} a ${endFmt}`;
 }
 
-export function pernoiteNights(trip: {
+/** Quase sempre voltam no dia seguinte: 1 pernoite por roteiro, salvo ajuste manual. */
+export const DEFAULT_PERNOITE_CAP = 1;
+export const MAX_MANUAL_PERNOITE_NIGHTS = 3;
+
+export type PernoiteTripDates = {
   departureAt: Date;
   expectedReturn: Date;
   returnedAt?: Date | null;
-}): number {
+  pernoiteNightsOverride?: number | null;
+};
+
+/** Noites de calendário entre saída e retorno (sem teto nem override). */
+export function pernoiteNights(trip: PernoiteTripDates): number {
   const depKey = operationalDateKey(trip.departureAt);
   const returnRef = trip.returnedAt ?? trip.expectedReturn;
   const retKey = operationalDateKey(returnRef);
@@ -66,10 +74,36 @@ export function pernoiteNights(trip: {
   );
 }
 
-export function isPernoite(trip: {
-  departureAt: Date;
-  expectedReturn: Date;
-  returnedAt?: Date | null;
-}): boolean {
-  return pernoiteNights(trip) > 0;
+export function clampManualPernoiteNights(nights: number): number {
+  if (!Number.isFinite(nights)) return DEFAULT_PERNOITE_CAP;
+  return Math.max(0, Math.min(MAX_MANUAL_PERNOITE_NIGHTS, Math.trunc(nights)));
+}
+
+/** Valor automático: calendário limitado a 1 pernoite por roteiro. */
+export function defaultPernoiteNights(trip: PernoiteTripDates): number {
+  return Math.min(pernoiteNights(trip), DEFAULT_PERNOITE_CAP);
+}
+
+/**
+ * Noites usadas no RH: override do admin, senão teto de 1.
+ * Não altera datas da viagem.
+ */
+export function resolvedPernoiteNights(trip: PernoiteTripDates): number {
+  if (trip.pernoiteNightsOverride != null && Number.isFinite(trip.pernoiteNightsOverride)) {
+    return clampManualPernoiteNights(trip.pernoiteNightsOverride);
+  }
+  return defaultPernoiteNights(trip);
+}
+
+/** Grava override só quando o valor difere do padrão (teto 1). */
+export function pernoiteOverrideToStore(
+  trip: PernoiteTripDates,
+  nights: number,
+): number | null {
+  const clamped = clampManualPernoiteNights(nights);
+  return clamped === defaultPernoiteNights(trip) ? null : clamped;
+}
+
+export function isPernoite(trip: PernoiteTripDates): boolean {
+  return resolvedPernoiteNights(trip) > 0;
 }

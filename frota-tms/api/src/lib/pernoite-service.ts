@@ -1,7 +1,12 @@
 import { prisma } from './prisma';
 import { OPERATOR_HIDDEN_PLATES, normalizeDriverName } from '../data/operatorVisibility';
 import { TripStatus } from '../types/enums';
-import { isPernoite, pernoiteNights, type PayrollPeriod } from '../utils/pernoite';
+import {
+  isPernoite,
+  pernoiteNights,
+  resolvedPernoiteNights,
+  type PayrollPeriod,
+} from '../utils/pernoite';
 
 const tripInclude = {
   vehicle: { select: { id: true, plate: true, type: true, defaultDriver: true } },
@@ -26,6 +31,8 @@ export type PernoiteTripRow = {
   returnedAt: Date | null;
   status: string;
   nights: number;
+  calendarNights: number;
+  nightsOverridden: boolean;
   confirmed: boolean;
 };
 
@@ -56,6 +63,7 @@ type PernoiteQueryTrip = {
   expectedReturn: Date;
   returnedAt: Date | null;
   status: string;
+  pernoiteNightsOverride?: number | null;
   vehicle: { id?: string; plate: string; type?: string | null; defaultDriver: string | null };
   dealership?: { name: string; city: string };
   route?: { name: string } | null;
@@ -82,6 +90,7 @@ export async function fetchLslPernoitesForPeriod(
             expectedReturn: true,
             returnedAt: true,
             status: true,
+            pernoiteNightsOverride: true,
             vehicle: { select: { plate: true, defaultDriver: true } },
           },
           orderBy: [{ departureAt: 'desc' }],
@@ -101,7 +110,8 @@ export async function fetchLslPernoitesForPeriod(
   const byDriver = new Map<string, PernoiteDriverRanking & { plateSet: Set<string> }>();
 
   for (const t of trips) {
-    const nights = pernoiteNights(t);
+    const calendarNights = pernoiteNights(t);
+    const nights = resolvedPernoiteNights(t);
     if (!isPernoite(t)) continue;
 
     const driver = resolveTripDriver(t);
@@ -120,6 +130,8 @@ export async function fetchLslPernoitesForPeriod(
         returnedAt: t.returnedAt,
         status: t.status,
         nights,
+        calendarNights,
+        nightsOverridden: t.pernoiteNightsOverride != null,
         confirmed: t.returnedAt != null,
       });
     }
