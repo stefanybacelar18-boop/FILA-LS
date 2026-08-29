@@ -815,7 +815,7 @@ export function createTripsRouter(io: Server) {
     const parsed = pernoiteSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
-        error: 'Informe 1, 2 ou 3 pernoites.',
+        error: 'Informe 0 (não foi pernoite), 1, 2 ou 3.',
         details: parsed.error.flatten(),
       });
     }
