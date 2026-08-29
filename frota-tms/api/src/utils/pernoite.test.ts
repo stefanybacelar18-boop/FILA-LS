@@ -83,6 +83,12 @@ describe('resolvedPernoiteNights', () => {
     expect(pernoiteOverrideToStore(spanTwoNights, 2)).toBe(2);
   });
 
+  it('permite zerar quando não foi pernoite (retorno atrasado no sistema)', () => {
+    expect(resolvedPernoiteNights({ ...spanTwoNights, pernoiteNightsOverride: 0 })).toBe(0);
+    expect(isPernoite({ ...spanTwoNights, pernoiteNightsOverride: 0 })).toBe(false);
+    expect(pernoiteOverrideToStore(spanTwoNights, 0)).toBe(0);
+  });
+
   it('mesmo dia continua sem pernoite', () => {
     const sameDay = {
       departureAt: parseOperationalDateTime('2026-08-01', '06:00:00'),

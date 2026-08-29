@@ -112,7 +112,8 @@ export async function fetchLslPernoitesForPeriod(
   for (const t of trips) {
     const calendarNights = pernoiteNights(t);
     const nights = resolvedPernoiteNights(t);
-    if (!isPernoite(t)) continue;
+    const markedNotPernoite = t.pernoiteNightsOverride === 0 && calendarNights > 0;
+    if (!isPernoite(t) && !markedNotPernoite) continue;
 
     const driver = resolveTripDriver(t);
     if (!rankingOnly) {
@@ -135,6 +136,8 @@ export async function fetchLslPernoitesForPeriod(
         confirmed: t.returnedAt != null,
       });
     }
+
+    if (nights <= 0) continue;
 
     const existing = byDriver.get(driver.key);
     if (existing) {
@@ -169,8 +172,6 @@ export async function fetchLslPernoitesForPeriod(
     trips: pernoiteTrips,
     ranking,
     totalPernoites: ranking.reduce((sum, r) => sum + r.pernoites, 0),
-    totalTrips: rankingOnly
-      ? ranking.reduce((sum, r) => sum + r.trips, 0)
-      : pernoiteTrips.length,
+    totalTrips: ranking.reduce((sum, r) => sum + r.trips, 0),
   };
 }

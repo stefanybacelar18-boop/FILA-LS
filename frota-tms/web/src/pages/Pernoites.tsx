@@ -21,7 +21,21 @@ import { useAuthStore } from '../stores/auth'
 
 type PernoiteTrip = PernoitesData['trips'][number]
 
-const MANUAL_NIGHT_OPTIONS = [1, 2, 3] as const
+const MANUAL_NIGHT_OPTIONS = [
+  { nights: 0, label: 'Não foi' },
+  { nights: 1, label: 'Padrão' },
+  { nights: 2, label: 'Duas noites' },
+  { nights: 3, label: 'Três noites' },
+] as const
+
+function PernoiteOverrideBadge({ nights, overridden }: { nights: number; overridden: boolean }) {
+  if (!overridden) return null
+  return (
+    <Badge tone={nights === 0 ? 'warning' : 'info'} className="font-medium">
+      {nights === 0 ? 'não foi' : 'manual'}
+    </Badge>
+  )
+}
 
 function RankingRow({
   rank,
@@ -123,8 +137,19 @@ function AdjustPernoiteModal({
       <div className="space-y-4">
         <p className="text-sm text-[var(--color-text-muted)]">
           Quase sempre o motorista volta no dia seguinte — <strong>1 pernoite</strong> por roteiro.
-          Marque 2 ou 3 só se ele realmente ficou mais noites. As datas da viagem não mudam.
+          Marque <strong>0</strong> se não foi pernoite (por exemplo, esqueceram de retornar a placa
+          e o sistema inflou o retorno). Marque 2 ou 3 só se ele realmente ficou mais noites. As
+          datas da viagem não mudam.
         </p>
+        {!trip.confirmed ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            Retorno da placa ainda não registrado. Se ela já voltou, registre em{' '}
+            <Link to="/retornos" className="font-medium underline">
+              Retornos
+            </Link>
+            . Marcar 0 aqui só tira do pagamento ao RH.
+          </p>
+        ) : null}
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs">
           <p>
             <span className="text-[var(--color-text-muted)]">Motorista:</span>{' '}
@@ -143,22 +168,22 @@ function AdjustPernoiteModal({
             )}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {MANUAL_NIGHT_OPTIONS.map((n) => (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {MANUAL_NIGHT_OPTIONS.map((opt) => (
             <button
-              key={n}
+              key={opt.nights}
               type="button"
-              onClick={() => setNights(n)}
+              onClick={() => setNights(opt.nights)}
               className={cn(
                 'rounded-[var(--radius)] border px-3 py-3 text-center transition-colors',
-                nights === n
+                nights === opt.nights
                   ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
                   : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
               )}
             >
-              <span className="block font-display text-xl font-semibold tabular-nums">{n}</span>
+              <span className="block font-display text-xl font-semibold tabular-nums">{opt.nights}</span>
               <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
-                {n === 1 ? 'Padrão' : n === 2 ? 'Duas noites' : 'Três noites'}
+                {opt.label}
               </span>
             </button>
           ))}
@@ -249,8 +274,9 @@ export function Pernoites() {
         {isAdmin ? (
           <>
             {' '}
-            O administrador pode clicar no número da coluna Pernoites para marcar 2 ou 3 quando isso
-            realmente acontecer.
+            O administrador pode clicar no número da coluna Pernoites para marcar <strong>0</strong>{' '}
+            (não foi pernoite — comum quando esquecem de retornar a placa), ou 2/3 quando realmente
+            ficou mais noites.
           </>
         ) : null}{' '}
         O total é agrupado por <strong>motorista</strong>, somando todas as viagens no período — mesmo
@@ -305,9 +331,9 @@ export function Pernoites() {
             </li>
             {isAdmin ? (
               <li>
-                Se um roteiro teve 2 pernoites de verdade, clique no número em{' '}
-                <strong>Pernoites</strong> e ajuste. O selo <strong>manual</strong> aparece nesses
-                casos.
+                Se não foi pernoite (placa ficou aberta no sistema) ou se teve 2 noites de verdade,
+                clique no número em <strong>Pernoites</strong> e ajuste. O selo{' '}
+                <strong>manual</strong> (ou <strong>não foi</strong>) aparece nesses casos.
               </li>
             ) : null}
           </ol>
@@ -341,7 +367,10 @@ export function Pernoites() {
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]/60">
                 {data.trips.map((t) => (
-                  <tr key={t.id} className="align-middle">
+                  <tr
+                    key={t.id}
+                    className={cn('align-middle', t.nights === 0 && 'opacity-70')}
+                  >
                     <td className="py-2.5 pr-3 font-medium">{t.driverName ?? '—'}</td>
                     <td className="py-2.5 pr-3">
                       <PlateBadge plate={t.plate} color="blue" />
@@ -367,20 +396,12 @@ export function Pernoites() {
                         >
                           {t.nights}
                           <Pencil className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                          {t.nightsOverridden ? (
-                            <Badge tone="info" className="font-medium">
-                              manual
-                            </Badge>
-                          ) : null}
+                          <PernoiteOverrideBadge nights={t.nights} overridden={t.nightsOverridden} />
                         </button>
                       ) : (
                         <span className="inline-flex items-center justify-center gap-1 font-semibold tabular-nums">
                           {t.nights}
-                          {t.nightsOverridden ? (
-                            <Badge tone="info" className="font-medium">
-                              manual
-                            </Badge>
-                          ) : null}
+                          <PernoiteOverrideBadge nights={t.nights} overridden={t.nightsOverridden} />
                         </span>
                       )}
                     </td>
