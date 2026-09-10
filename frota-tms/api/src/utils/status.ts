@@ -67,3 +67,8 @@ export function isOverdue(expectedReturn: Date, returnedAt?: Date | null): boole
   if (returnedAt) return false;
   return operationalDateKey(expectedReturn) < operationalTodayKey();
 }
+
+/** Chegada real depois do dia da previsão (justificativa / atraso). */
+export function isArrivalAfterForecast(expectedReturn: Date, arrivedAt: Date): boolean {
+  return operationalDateKey(expectedReturn) < operationalDateKey(arrivedAt);
+}

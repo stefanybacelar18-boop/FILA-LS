@@ -107,3 +107,12 @@ export function pernoiteOverrideToStore(
 export function isPernoite(trip: PernoiteTripDates): boolean {
   return resolvedPernoiteNights(trip) > 0;
 }
+
+/** Chegada operacional no fim do dia da saída + N noites (sem cobrança extra por atraso de clique). */
+export function arrivalAtForNights(departureAt: Date, nights: number): Date {
+  const n = clampManualPernoiteNights(nights);
+  const depKey = operationalDateKey(departureAt);
+  const noon = parseOperationalDateTime(depKey, '12:00:00');
+  noon.setDate(noon.getDate() + n);
+  return parseOperationalDateTime(operationalDateKey(noon), '18:00:00');
+}
