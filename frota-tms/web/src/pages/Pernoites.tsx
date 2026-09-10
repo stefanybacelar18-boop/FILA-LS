@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, FileSpreadsheet, Moon, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileSpreadsheet, MapPinned, Moon, Pencil } from 'lucide-react'
 import { api, downloadReport } from '../lib/api'
 import type { PernoitesData } from '../types'
 import {
@@ -17,6 +17,8 @@ import {
 } from '../components/ui'
 import { combineDateAndTime, formatDate, toInputDate } from '../lib/format'
 import { addCalendarDaysYmd, calendarNightsBetween, chargedPernoiteNights } from '../lib/pernoite'
+import { hasActivePriority } from '../lib/route-priority'
+import { RouteLoadTable } from '../components/RouteLoadCard'
 import { tripStatusLabels } from '../lib/labels'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
@@ -36,6 +38,72 @@ function PernoiteOverrideBadge({ nights, overridden }: { nights: number; overrid
     <Badge tone={nights === 0 ? 'warning' : 'info'} className="font-medium">
       {nights === 0 ? 'não foi' : 'manual'}
     </Badge>
+  )
+}
+
+function RouteStopsModal({
+  trip,
+  onClose,
+}: {
+  trip: PernoiteTrip | null
+  onClose: () => void
+}) {
+  if (!trip) return null
+  const dests = trip.destinations ?? []
+  const motoTotal =
+    trip.totalMotoCount != null
+      ? trip.totalMotoCount
+      : dests.reduce((sum, d) => sum + (d.motoCount ?? 0), 0) || null
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={trip.routeName ? `Roteiro · ${trip.routeName}` : 'Roteiro de entrega'}
+      size="lg"
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          Fechar
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs">
+          <p>
+            <span className="text-[var(--color-text-muted)]">Motorista:</span> {trip.driverName ?? '—'}
+          </p>
+          <p>
+            <span className="text-[var(--color-text-muted)]">Placa:</span> {trip.plate}
+          </p>
+          <p>
+            <span className="text-[var(--color-text-muted)]">Saída:</span> {formatDate(trip.departureAt)}
+            {' · '}
+            <span className="text-[var(--color-text-muted)]">Retorno:</span>{' '}
+            {formatDate(trip.returnedAt ?? trip.expectedReturn)}
+          </p>
+          <p>
+            {dests.length} parada{dests.length !== 1 ? 's' : ''}
+            {motoTotal ? ` · ${motoTotal} motos` : ''}
+          </p>
+        </div>
+        {hasActivePriority(trip) && trip.priorityExpiryDate ? (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Prioridade · vencimento {formatDate(trip.priorityExpiryDate)}
+            {trip.priorityNotes ? ` — ${trip.priorityNotes}` : ''}
+          </p>
+        ) : null}
+        {trip.routeNotes ? (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            <span className="font-medium text-[var(--color-text)]">Obs. roteiro:</span> {trip.routeNotes}
+          </p>
+        ) : null}
+        {dests.length === 0 ? (
+          <EmptyState title="Sem paradas" description="Não há destinos cadastrados neste roteiro." />
+        ) : (
+          <RouteLoadTable destinations={dests} className="mt-0 border-t-0 pt-0" />
+        )}
+      </div>
+    </Modal>
   )
 }
 
@@ -272,6 +340,7 @@ export function Pernoites() {
   const [offset, setOffset] = useState(0)
   const [exporting, setExporting] = useState(false)
   const [editing, setEditing] = useState<PernoiteTrip | null>(null)
+  const [viewingRoute, setViewingRoute] = useState<PernoiteTrip | null>(null)
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
 
   const { data, isLoading, error } = useQuery({
@@ -400,6 +469,10 @@ export function Pernoites() {
             <li>Localize o <strong>nome do motorista</strong> no ranking ao lado.</li>
             <li>Compare o total — a tabela abaixo lista cada viagem, com a placa usada.</li>
             <li>
+              Clique no <strong>destino</strong> para ver o roteiro de entrega (paradas, motos e
+              vencimento).
+            </li>
+            <li>
               <strong>Confirmado</strong> = retorno já registrado; <strong>Previsto</strong> = ainda
               em viagem ou retorno pendente.
             </li>
@@ -458,8 +531,23 @@ export function Pernoites() {
                       )}
                     </td>
                     <td className="py-2.5 pr-3">
-                      <span className="block max-w-[180px] truncate">{t.dealershipName}</span>
-                      <span className="text-xs text-[var(--color-text-muted)]">{t.dealershipCity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setViewingRoute(t)}
+                        title="Ver roteiro de entrega"
+                        className="max-w-[220px] rounded-md px-1 py-0.5 text-left hover:bg-[var(--color-surface-2)]"
+                      >
+                        <span className="flex items-center gap-1 font-medium text-[var(--color-primary)]">
+                          <MapPinned className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{t.dealershipName}</span>
+                        </span>
+                        <span className="block truncate text-xs text-[var(--color-text-muted)]">
+                          {t.dealershipCity}
+                          {(t.destinations?.length ?? 0) > 1
+                            ? ` · ${t.destinations.length} paradas`
+                            : ''}
+                        </span>
+                      </button>
                     </td>
                     <td className="py-2.5 pr-3 text-center">
                       {isAdmin ? (
@@ -499,6 +587,7 @@ export function Pernoites() {
       </Card>
 
       <AdjustPernoiteModal trip={editing} onClose={() => setEditing(null)} />
+      <RouteStopsModal trip={viewingRoute} onClose={() => setViewingRoute(null)} />
     </div>
   )
 }

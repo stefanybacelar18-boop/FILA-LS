@@ -311,7 +311,20 @@ export interface PernoitesData {
     driverName: string | null
     dealershipName: string
     dealershipCity: string
+    routeId: string | null
     routeName: string | null
+    routeNotes: string | null
+    hasPriority: boolean
+    priorityExpiryDate: string | null
+    priorityNotes: string | null
+    totalMotoCount: number | null
+    destinations: {
+      city: string
+      dealershipName: string
+      motoCount: number | null
+      minExpiryDate: string | null
+      order: number
+    }[]
     departureAt: string
     expectedReturn: string
     returnedAt: string | null
