@@ -27,6 +27,7 @@ import {
 } from '../components/ui'
 import { delayReasonPresets } from '../lib/labels'
 import { formatDate, toInputDate, combineDateAndTime } from '../lib/format'
+import { addCalendarDaysYmd, calendarNightsBetween, chargedPernoiteNights } from '../lib/pernoite'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
 import { TripScheduleModal } from '../components/TripScheduleModal'
@@ -459,6 +460,7 @@ export function Returns() {
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const canViewLoad = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
   const [confirmTrip, setConfirmTrip] = useState<Trip | null>(null)
+  const [arrivalDate, setArrivalDate] = useState('')
   const [reportTrip, setReportTrip] = useState<Trip | null>(null)
   const [scheduleTrip, setScheduleTrip] = useState<Trip | null>(null)
   const [lastReturnedTrip, setLastReturnedTrip] = useState<Trip | null>(null)
@@ -498,6 +500,9 @@ export function Returns() {
       }
       return api.post(`/trips/${confirmTrip.id}/return`, {
         delayReason: confirmTrip.delayReason || undefined,
+        returnedAt: arrivalDate
+          ? combineDateAndTime(arrivalDate, '18:00').toISOString()
+          : undefined,
       })
     },
     onSuccess: (updated) => {
@@ -506,6 +511,7 @@ export function Returns() {
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       void qc.invalidateQueries({ queryKey: ['history'] })
+      void qc.invalidateQueries({ queryKey: ['pernoites'] })
       if (isAdmin && confirmTrip) {
         const trip = (updated?.data ?? confirmTrip) as Trip
         setLastReturnedTrip({
@@ -607,6 +613,12 @@ export function Returns() {
   const openReturn = (t: Trip) => {
     setError('')
     setConfirmTrip(t)
+    const dep = toInputDate(t.departureAt)
+    const exp = toInputDate(t.expectedReturn)
+    const today = toInputDate(new Date())
+    if (exp && today > exp && exp >= dep) setArrivalDate(exp)
+    else if (today && today < dep) setArrivalDate(dep)
+    else setArrivalDate(today)
   }
 
   return (
@@ -722,7 +734,12 @@ export function Returns() {
             </Button>
             <Button
               loading={returnMutation.isPending}
-              disabled={!!confirmTrip?.overdue && !confirmTrip?.delayReason}
+              disabled={
+                !!confirmTrip &&
+                !!arrivalDate &&
+                toInputDate(confirmTrip.expectedReturn) < arrivalDate &&
+                !confirmTrip.delayReason
+              }
               onClick={() => returnMutation.mutate()}
             >
               Confirmar retorno
@@ -735,10 +752,74 @@ export function Returns() {
             Confirma o retorno da placa <strong>{confirmTrip?.vehicle.plate}</strong>? O veículo
             volta a ficar disponível.
           </p>
-          {confirmTrip?.overdue && !confirmTrip?.delayReason && (
+          {confirmTrip ? (
+            <>
+              <p className="text-xs text-[var(--color-text-muted)]">
+                Se a placa já tinha voltado e só estão registrando agora, informe a{' '}
+                <strong>chegada real</strong> para não cobrar pernoite a mais.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setArrivalDate(toInputDate(confirmTrip.departureAt))
+                  }
+                  className={cn(
+                    'rounded-[var(--radius)] border px-3 py-2 text-sm',
+                    arrivalDate === toInputDate(confirmTrip.departureAt)
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
+                      : 'border-[var(--color-border)]',
+                  )}
+                >
+                  Mesmo dia da saída
+                  <span className="mt-0.5 block text-[10px] uppercase text-[var(--color-text-muted)]">
+                    0 pernoites
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setArrivalDate(addCalendarDaysYmd(toInputDate(confirmTrip.departureAt), 1))
+                  }
+                  className={cn(
+                    'rounded-[var(--radius)] border px-3 py-2 text-sm',
+                    arrivalDate ===
+                    addCalendarDaysYmd(toInputDate(confirmTrip.departureAt), 1)
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]'
+                      : 'border-[var(--color-border)]',
+                  )}
+                >
+                  Dia seguinte
+                  <span className="mt-0.5 block text-[10px] uppercase text-[var(--color-text-muted)]">
+                    1 pernoite
+                  </span>
+                </button>
+              </div>
+              <Input
+                label="Chegada real"
+                type="date"
+                value={arrivalDate}
+                min={toInputDate(confirmTrip.departureAt)}
+                onChange={(e) => setArrivalDate(e.target.value)}
+              />
+              {arrivalDate ? (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Para o RH: {chargedPernoiteNights(
+                    calendarNightsBetween(toInputDate(confirmTrip.departureAt), arrivalDate),
+                  )}{' '}
+                  pernoite(s).
+                </p>
+              ) : null}
+            </>
+          ) : null}
+          {confirmTrip &&
+            arrivalDate &&
+            toInputDate(confirmTrip.expectedReturn) < arrivalDate &&
+            !confirmTrip.delayReason && (
               <p className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-                Esta viagem está em atraso. Use <strong>Problema</strong> para registrar
-                a justificativa antes de confirmar.
+                Essa chegada é depois da previsão. Use <strong>Problema</strong> para registrar a
+                justificativa antes de confirmar, ou escolha o dia em que o veículo realmente
+                chegou.
               </p>
             )}
           {confirmTrip?.delayReason && (

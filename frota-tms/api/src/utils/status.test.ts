@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VehicleStatus } from '../types/enums';
-import { isOverdue, priorityColor, vehicleColor } from './status';
+import { isArrivalAfterForecast, isOverdue, priorityColor, vehicleColor } from './status';
 import { parseOperationalDateTime } from './timezone';
 
 describe('vehicleColor', () => {
@@ -73,5 +73,17 @@ describe('isOverdue', () => {
     const returnedAt = parseOperationalDateTime('2026-08-12', '08:00:00');
     expect(isOverdue(today)).toBe(false);
     expect(isOverdue(parseOperationalDateTime('2026-08-09', '12:00:00'), returnedAt)).toBe(false);
+  });
+});
+
+describe('isArrivalAfterForecast', () => {
+  it('é atraso só quando a chegada real é depois do dia previsto', () => {
+    const expected = parseOperationalDateTime('2026-09-10', '12:00:00');
+    expect(isArrivalAfterForecast(expected, parseOperationalDateTime('2026-09-10', '18:00:00'))).toBe(
+      false,
+    );
+    expect(isArrivalAfterForecast(expected, parseOperationalDateTime('2026-09-11', '08:00:00'))).toBe(
+      true,
+    );
   });
 });

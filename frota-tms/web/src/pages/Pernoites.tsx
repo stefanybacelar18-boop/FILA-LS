@@ -13,8 +13,10 @@ import {
   Badge,
   EmptyState,
   Modal,
+  Input,
 } from '../components/ui'
-import { formatDate } from '../lib/format'
+import { combineDateAndTime, formatDate, toInputDate } from '../lib/format'
+import { addCalendarDaysYmd, calendarNightsBetween, chargedPernoiteNights } from '../lib/pernoite'
 import { tripStatusLabels } from '../lib/labels'
 import { cn } from '../lib/cn'
 import { useAuthStore } from '../stores/auth'
@@ -88,29 +90,48 @@ function AdjustPernoiteModal({
   onClose: () => void
 }) {
   const qc = useQueryClient()
+  const [arrivalDate, setArrivalDate] = useState('')
   const [nights, setNights] = useState(1)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!trip) return
+    setArrivalDate(toInputDate(trip.returnedAt ?? trip.expectedReturn))
     setNights(trip.nights)
     setError('')
   }, [trip])
 
+  const departureYmd = trip ? toInputDate(trip.departureAt) : ''
+  const calendarNights = trip ? calendarNightsBetween(departureYmd, arrivalDate) : 0
+  const charged = chargedPernoiteNights(calendarNights)
+
+  function applyShortcut(n: 0 | 1) {
+    if (!departureYmd) return
+    setArrivalDate(addCalendarDaysYmd(departureYmd, n))
+    setNights(n)
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!trip) return
-      return api.patch(`/trips/${trip.id}/pernoite`, { nights })
+      if (!trip || !arrivalDate) return
+      const returnedAt = combineDateAndTime(arrivalDate, '18:00').toISOString()
+      await api.patch(`/trips/${trip.id}/arrival`, {
+        returnedAt,
+        nights,
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['pernoites'] })
       await qc.invalidateQueries({ queryKey: ['dashboard'] })
+      await qc.invalidateQueries({ queryKey: ['returns'] })
+      await qc.invalidateQueries({ queryKey: ['trips'] })
+      await qc.invalidateQueries({ queryKey: ['vehicles'] })
       onClose()
     },
     onError: (err: unknown) => {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'Não foi possível salvar o ajuste.',
+          'Não foi possível salvar a chegada real.',
       )
     },
   })
@@ -121,14 +142,18 @@ function AdjustPernoiteModal({
     <Modal
       open
       onClose={onClose}
-      title="Ajustar pernoites"
+      title="Ajustar chegada real"
       size="sm"
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saveMutation.isPending}>
             Cancelar
           </Button>
-          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending}>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            loading={saveMutation.isPending}
+            disabled={!arrivalDate}
+          >
             Salvar
           </Button>
         </>
@@ -136,18 +161,14 @@ function AdjustPernoiteModal({
     >
       <div className="space-y-4">
         <p className="text-sm text-[var(--color-text-muted)]">
-          Quase sempre o motorista volta no dia seguinte — <strong>1 pernoite</strong> por roteiro.
-          Marque <strong>0</strong> se não foi pernoite (por exemplo, esqueceram de retornar a placa
-          e o sistema inflou o retorno). Marque 2 ou 3 só se ele realmente ficou mais noites. As
-          datas da viagem não mudam.
+          Se esqueceram de retornar a placa, o sistema usa o dia do clique e pode cobrar pernoite a
+          mais. Informe o dia em que o veículo <strong>realmente chegou</strong>. O RH usa essa data
+          — sem cobrança extra.
         </p>
         {!trip.confirmed ? (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-            Retorno da placa ainda não registrado. Se ela já voltou, registre em{' '}
-            <Link to="/retornos" className="font-medium underline">
-              Retornos
-            </Link>
-            . Marcar 0 aqui só tira do pagamento ao RH.
+            A placa ainda está em viagem. Salvar também registra o retorno nesta data e libera o
+            veículo.
           </p>
         ) : null}
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs">
@@ -159,34 +180,87 @@ function AdjustPernoiteModal({
             <span className="text-[var(--color-text-muted)]">Placa:</span> {trip.plate}
           </p>
           <p>
-            <span className="text-[var(--color-text-muted)]">Datas:</span> {formatDate(trip.departureAt)}{' '}
-            → {formatDate(trip.returnedAt ?? trip.expectedReturn)}
-            {trip.calendarNights !== trip.nights && (
-              <span className="ml-1 text-[var(--color-text-muted)]">
-                (calendário sugeriria {trip.calendarNights})
-              </span>
-            )}
+            <span className="text-[var(--color-text-muted)]">Saída:</span> {formatDate(trip.departureAt)}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {MANUAL_NIGHT_OPTIONS.map((opt) => (
-            <button
-              key={opt.nights}
-              type="button"
-              onClick={() => setNights(opt.nights)}
-              className={cn(
-                'rounded-[var(--radius)] border px-3 py-3 text-center transition-colors',
-                nights === opt.nights
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
-                  : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
-              )}
-            >
-              <span className="block font-display text-xl font-semibold tabular-nums">{opt.nights}</span>
-              <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
-                {opt.label}
-              </span>
-            </button>
-          ))}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => applyShortcut(0)}
+            className={cn(
+              'rounded-[var(--radius)] border px-3 py-3 text-center transition-colors',
+              calendarNights === 0
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
+                : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
+            )}
+          >
+            <span className="block text-sm font-semibold">Mesmo dia</span>
+            <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
+              0 pernoites
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => applyShortcut(1)}
+            className={cn(
+              'rounded-[var(--radius)] border px-3 py-3 text-center transition-colors',
+              calendarNights === 1
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
+                : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
+            )}
+          >
+            <span className="block text-sm font-semibold">Dia seguinte</span>
+            <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
+              1 pernoite
+            </span>
+          </button>
+        </div>
+        <Input
+          label="Chegada real"
+          type="date"
+          value={arrivalDate}
+          min={departureYmd}
+          onChange={(e) => {
+            setArrivalDate(e.target.value)
+            setNights(chargedPernoiteNights(calendarNightsBetween(departureYmd, e.target.value)))
+          }}
+        />
+        <p className="text-sm">
+          Para o RH isso conta <strong>{nights} pernoite{nights === 1 ? '' : 's'}</strong>
+          {nights !== charged ? (
+            <span className="text-[var(--color-text-muted)]">
+              {' '}
+              (calendário: {charged})
+            </span>
+          ) : null}
+          .
+        </p>
+        <div>
+          <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+            Cobrar quantidade diferente (raro)
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {MANUAL_NIGHT_OPTIONS.map((opt) => (
+              <button
+                key={opt.nights}
+                type="button"
+                onClick={() => setNights(opt.nights)}
+                className={cn(
+                  'rounded-[var(--radius)] border px-2 py-2 text-center transition-colors',
+                  nights === opt.nights
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
+                    : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
+                )}
+              >
+                <span className="block font-display text-lg font-semibold tabular-nums">
+                  {opt.nights}
+                </span>
+                <span className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)]">
+                  {opt.label}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
         {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
       </div>
@@ -274,9 +348,9 @@ export function Pernoites() {
         {isAdmin ? (
           <>
             {' '}
-            O administrador pode clicar no número da coluna Pernoites para marcar <strong>0</strong>{' '}
-            (não foi pernoite — comum quando esquecem de retornar a placa), ou 2/3 quando realmente
-            ficou mais noites.
+            O administrador pode clicar no número da coluna Pernoites para informar a{' '}
+            <strong>chegada real</strong> (mesmo dia = 0, dia seguinte = 1). Use isso quando
+            esqueceram de retornar a placa e o sistema cobraria noite a mais.
           </>
         ) : null}{' '}
         O total é agrupado por <strong>motorista</strong>, somando todas as viagens no período — mesmo
@@ -331,9 +405,10 @@ export function Pernoites() {
             </li>
             {isAdmin ? (
               <li>
-                Se não foi pernoite (placa ficou aberta no sistema) ou se teve 2 noites de verdade,
-                clique no número em <strong>Pernoites</strong> e ajuste. O selo{' '}
-                <strong>manual</strong> (ou <strong>não foi</strong>) aparece nesses casos.
+                Se esqueceram de retornar a placa, clique no número em <strong>Pernoites</strong> e
+                informe a chegada real. <strong>Mesmo dia</strong> = 0 (sem cobrança extra);{' '}
+                <strong>dia seguinte</strong> = 1. O selo <strong>manual</strong> /{' '}
+                <strong>não foi</strong> aparece se a quantidade cobrada for diferente do calendário.
               </li>
             ) : null}
           </ol>
@@ -391,7 +466,7 @@ export function Pernoites() {
                         <button
                           type="button"
                           onClick={() => setEditing(t)}
-                          title="Ajustar pernoites"
+                          title="Ajustar chegada real"
                           className="inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 font-semibold tabular-nums hover:bg-[var(--color-surface-2)]"
                         >
                           {t.nights}

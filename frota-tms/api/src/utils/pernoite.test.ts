@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  arrivalAtForNights,
   defaultPernoiteNights,
   isPernoite,
   payrollPeriodForDate,
@@ -87,6 +88,29 @@ describe('resolvedPernoiteNights', () => {
     expect(resolvedPernoiteNights({ ...spanTwoNights, pernoiteNightsOverride: 0 })).toBe(0);
     expect(isPernoite({ ...spanTwoNights, pernoiteNightsOverride: 0 })).toBe(false);
     expect(pernoiteOverrideToStore(spanTwoNights, 0)).toBe(0);
+  });
+
+  it('chegada no mesmo dia da saída zera pernoite sem override', () => {
+    const departure = parseOperationalDateTime('2026-09-09', '06:00:00');
+    const sameDay = {
+      departureAt: departure,
+      expectedReturn: parseOperationalDateTime('2026-09-10', '12:00:00'),
+      returnedAt: arrivalAtForNights(departure, 0),
+    };
+    expect(pernoiteNights(sameDay)).toBe(0);
+    expect(resolvedPernoiteNights(sameDay)).toBe(0);
+    expect(isPernoite(sameDay)).toBe(false);
+  });
+
+  it('chegada no dia seguinte conta 1 pernoite', () => {
+    const departure = parseOperationalDateTime('2026-09-09', '06:00:00');
+    const nextDay = {
+      departureAt: departure,
+      expectedReturn: parseOperationalDateTime('2026-09-10', '12:00:00'),
+      returnedAt: arrivalAtForNights(departure, 1),
+    };
+    expect(pernoiteNights(nextDay)).toBe(1);
+    expect(resolvedPernoiteNights(nextDay)).toBe(1);
   });
 
   it('mesmo dia continua sem pernoite', () => {

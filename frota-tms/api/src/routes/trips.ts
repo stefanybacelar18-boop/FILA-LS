@@ -7,7 +7,8 @@ import { Role, TripStatus, VehicleStatus, RouteStatus } from '../types/enums';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
-import { isOverdue, vehicleColor, expectedReturnDate } from '../utils/status';
+import { isArrivalAfterForecast, isOverdue, vehicleColor, expectedReturnDate } from '../utils/status';
+import { operationalDateKey, operationalTodayKey } from '../utils/timezone';
 import { addDays, differenceInCalendarDays, startOfDay, subDays } from 'date-fns';
 import { paramId } from '../utils/params';
 import {
@@ -64,9 +65,14 @@ const delayReportSchema = z.object({
   unavailableReason: z.string().optional().nullable(),
 });
 
+const isoDateTime = z
+  .string()
+  .refine((v) => !Number.isNaN(Date.parse(v)), 'Data/hora inválida');
+
 const returnSchema = z.object({
   delayReason: z.string().min(5).optional(),
   notes: z.string().optional().nullable(),
+  returnedAt: isoDateTime.optional(),
 });
 
 const scheduleSchema = z.object({
@@ -79,6 +85,11 @@ const scheduleSchema = z.object({
 
 const pernoiteSchema = z.object({
   nights: z.coerce.number().int().min(0).max(3),
+});
+
+const arrivalSchema = z.object({
+  returnedAt: isoDateTime,
+  nights: z.coerce.number().int().min(0).max(3).optional(),
 });
 
 const unreturnSchema = z.object({
@@ -113,6 +124,102 @@ const tripInclude = {
     },
   },
 };
+
+function validateArrival(departureAt: Date, returnedAt: Date): string | null {
+  if (operationalDateKey(returnedAt) < operationalDateKey(departureAt)) {
+    return 'A chegada real não pode ser anterior à saída.';
+  }
+  if (operationalDateKey(returnedAt) > operationalTodayKey()) {
+    return 'A chegada real não pode ser no futuro.';
+  }
+  return null;
+}
+
+async function persistTripReturn(input: {
+  trip: {
+    id: string;
+    vehicleId: string;
+    routeId: string | null;
+    notes: string | null;
+    delayReason: string | null;
+    delayReportedAt: Date | null;
+    delayReportedById: string | null;
+    vehicle: { status: string; maintenanceHold?: boolean | null; active?: boolean | null };
+    dealership: { name: string };
+  };
+  userId: string;
+  returnedAt: Date;
+  delayReason: string;
+  notes?: string | null;
+  lateArrival: boolean;
+}) {
+  const { trip, userId, returnedAt, delayReason, lateArrival } = input;
+  const nextVehicleStatus = nextVehicleStatusAfterHold(trip.vehicle);
+
+  return prisma.$transaction(async (tx) => {
+    const t = await tx.trip.update({
+      where: { id: trip.id },
+      data: {
+        status: TripStatus.RETORNOU,
+        returnedAt,
+        returnedById: userId,
+        notes: input.notes?.trim() || trip.notes,
+        ...(lateArrival && delayReason
+          ? {
+              delayReason,
+              delayReportedAt: trip.delayReportedAt ?? returnedAt,
+              delayReportedById: trip.delayReportedById ?? userId,
+            }
+          : {}),
+        unavailableReason: null,
+        unavailableAt: null,
+        pernoiteNightsOverride: null,
+      },
+      include: tripInclude,
+    });
+    await tx.vehicle.update({
+      where: { id: trip.vehicleId },
+      data: { status: nextVehicleStatus },
+    });
+    const holdMaintenance = nextVehicleStatus === VehicleStatus.EM_MANUTENCAO;
+    await tx.vehicleHistory.create({
+      data: {
+        vehicleId: trip.vehicleId,
+        userId,
+        tripId: trip.id,
+        action: 'RETORNO',
+        fromStatus: trip.vehicle.status,
+        toStatus: nextVehicleStatus,
+        details: holdMaintenance
+          ? lateArrival
+            ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason}) — permanece em manutenção até liberação`
+            : `Retorna de ${trip.dealership.name} — permanece em manutenção até liberação`
+          : lateArrival
+            ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason})`
+            : `Retorna de ${trip.dealership.name}`,
+      },
+    });
+
+    if (trip.routeId) {
+      const remaining = await tx.trip.count({
+        where: {
+          routeId: trip.routeId,
+          status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
+        },
+      });
+      if (remaining === 0) {
+        await tx.route.updateMany({
+          where: {
+            id: trip.routeId,
+            status: { in: [RouteStatus.EM_ANDAMENTO, RouteStatus.AGUARDANDO_PLACAS] },
+          },
+          data: { status: RouteStatus.CONCLUIDO },
+        });
+      }
+    }
+    return t;
+  });
+}
 
 /** Listagem: sem evidências nem destinos aninhados — 300+ viagens cabem numa resposta leve. */
 const tripListInclude = {
@@ -529,87 +636,33 @@ export function createTripsRouter(io: Server) {
       return res.status(400).json({ error: 'Viagem já finalizada' });
     }
 
-    // Exige justificativa só se o dia da previsão já passou (não no mesmo dia)
-    const overdue = isOverdue(trip.expectedReturn, null);
+    const returnedAt = parsed.data.returnedAt ? new Date(parsed.data.returnedAt) : new Date();
+    const arrivalError = validateArrival(trip.departureAt, returnedAt);
+    if (arrivalError) return res.status(400).json({ error: arrivalError });
+
+    const lateArrival = isArrivalAfterForecast(trip.expectedReturn, returnedAt);
     const delayReason = (parsed.data.delayReason || trip.delayReason || '').trim();
-    if (overdue && delayReason.length < 5) {
+    if (lateArrival && delayReason.length < 5) {
       return res.status(400).json({
         error:
-          'Viagem fora da previsão: informe o problema (justificativa) antes de confirmar o retorno.',
+          'Chegada depois da previsão: informe o problema (justificativa) antes de confirmar o retorno.',
         code: 'DELAY_REASON_REQUIRED',
       });
     }
 
-    const returnedAt = new Date();
-    const holdMaintenance = !!(trip.vehicle as { maintenanceHold?: boolean }).maintenanceHold;
-    const nextVehicleStatus = nextVehicleStatusAfterHold(trip.vehicle);
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const t = await tx.trip.update({
-        where: { id: trip.id },
-        data: {
-          status: TripStatus.RETORNOU,
-          returnedAt,
-          returnedById: req.user!.id,
-          notes: parsed.data.notes?.trim() || trip.notes,
-          ...(overdue && delayReason
-            ? {
-                delayReason,
-                delayReportedAt: trip.delayReportedAt ?? returnedAt,
-                delayReportedById: trip.delayReportedById ?? req.user!.id,
-              }
-            : {}),
-          unavailableReason: null,
-          unavailableAt: null,
-        },
-        include: tripInclude,
-      });
-      await tx.vehicle.update({
-        where: { id: trip.vehicleId },
-        data: { status: nextVehicleStatus },
-      });
-      await tx.vehicleHistory.create({
-        data: {
-          vehicleId: trip.vehicleId,
-          userId: req.user!.id,
-          tripId: trip.id,
-          action: 'RETORNO',
-          fromStatus: trip.vehicle.status,
-          toStatus: nextVehicleStatus,
-          details: holdMaintenance
-            ? overdue
-              ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason}) — permanece em manutenção até liberação`
-              : `Retorna de ${trip.dealership.name} — permanece em manutenção até liberação`
-            : overdue
-              ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason})`
-              : `Retorna de ${trip.dealership.name}`,
-        },
-      });
-
-      if (trip.routeId) {
-        const remaining = await tx.trip.count({
-          where: {
-            routeId: trip.routeId,
-            status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
-          },
-        });
-        if (remaining === 0) {
-          await tx.route.updateMany({
-            where: {
-              id: trip.routeId,
-              status: { in: [RouteStatus.EM_ANDAMENTO, RouteStatus.AGUARDANDO_PLACAS] },
-            },
-            data: { status: RouteStatus.CONCLUIDO },
-          });
-        }
-      }
-      return t;
+    const updated = await persistTripReturn({
+      trip,
+      userId: req.user!.id,
+      returnedAt,
+      delayReason,
+      notes: parsed.data.notes,
+      lateArrival,
     });
 
     await audit('RETURN', 'Trip', {
       userId: req.user!.id,
       entityId: trip.id,
-      details: overdue ? `${trip.vehicle.plate} (c/ justificativa)` : trip.vehicle.plate,
+      details: lateArrival ? `${trip.vehicle.plate} (c/ justificativa)` : trip.vehicle.plate,
     });
     io.emit('fleet:changed', { action: 'return', tripId: trip.id });
     io.emit('trips:changed', { action: 'return' });
@@ -807,6 +860,102 @@ export function createTripsRouter(io: Server) {
       ...updated,
       overdue: isOverdue(updated.expectedReturn, updated.returnedAt),
       color: vehicleColor(updated.vehicle.status, updated.expectedReturn),
+    });
+  });
+
+  /** Admin: ajusta a chegada real (e opcionalmente as pernoites cobradas). */
+  router.patch('/:id/arrival', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const parsed = arrivalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Informe a data de chegada real.',
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: paramId(req) },
+      include: { vehicle: true, dealership: true, route: true },
+    });
+    if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (trip.status === TripStatus.CANCELADO) {
+      return res.status(400).json({ error: 'Viagem cancelada' });
+    }
+
+    const returnedAt = new Date(parsed.data.returnedAt);
+    const arrivalError = validateArrival(trip.departureAt, returnedAt);
+    if (arrivalError) return res.status(400).json({ error: arrivalError });
+
+    const lateArrival = isArrivalAfterForecast(trip.expectedReturn, returnedAt);
+    const delayReason = (trip.delayReason || '').trim();
+    const wasOpen =
+      trip.status === TripStatus.EM_ANDAMENTO || trip.status === TripStatus.ATRASADO;
+
+    if (wasOpen && lateArrival && delayReason.length < 5) {
+      return res.status(400).json({
+        error:
+          'Essa chegada é depois da previsão. Registre o problema em Retornos ou escolha o dia em que o veículo realmente chegou.',
+        code: 'DELAY_REASON_REQUIRED',
+      });
+    }
+
+    let updated;
+    if (wasOpen) {
+      updated = await persistTripReturn({
+        trip,
+        userId: req.user!.id,
+        returnedAt,
+        delayReason,
+        lateArrival,
+      });
+    } else {
+      updated = await prisma.$transaction(async (tx) => {
+        const t = await tx.trip.update({
+          where: { id: trip.id },
+          data: { returnedAt, pernoiteNightsOverride: null },
+          include: tripInclude,
+        });
+        await tx.vehicleHistory.create({
+          data: {
+            vehicleId: trip.vehicleId,
+            userId: req.user!.id,
+            tripId: trip.id,
+            action: 'AJUSTE_CHEGADA',
+            fromStatus: trip.vehicle.status,
+            toStatus: trip.vehicle.status,
+            details: `Chegada real ${trip.vehicle.plate}: ${operationalDateKey(trip.returnedAt ?? trip.expectedReturn)} → ${operationalDateKey(returnedAt)}`,
+          },
+        });
+        return t;
+      });
+    }
+
+    const override =
+      parsed.data.nights == null
+        ? null
+        : pernoiteOverrideToStore(updated, parsed.data.nights);
+    if (updated.pernoiteNightsOverride !== override) {
+      updated = await prisma.trip.update({
+        where: { id: trip.id },
+        data: { pernoiteNightsOverride: override },
+        include: tripInclude,
+      });
+    }
+
+    const nights = resolvedPernoiteNights(updated);
+    await audit('TRIP_ARRIVAL_ADJUST', 'Trip', {
+      userId: req.user!.id,
+      entityId: trip.id,
+      details: `${trip.vehicle.plate}: chegada ${operationalDateKey(returnedAt)} · ${nights} pernoite(s)`,
+    });
+    io.emit('trips:changed', { action: 'arrival-adjust', tripId: trip.id });
+    io.emit('fleet:changed', { action: 'arrival-adjust', tripId: trip.id });
+    res.json({
+      ...updated,
+      nights,
+      calendarNights: pernoiteNights(updated),
+      nightsOverridden: updated.pernoiteNightsOverride != null,
+      defaultNights: defaultPernoiteNights(updated),
     });
   });
 
