@@ -32,6 +32,11 @@ router.get('/', async (req, res) => {
       departureAt: t.departureAt.toISOString(),
       expectedReturn: t.expectedReturn.toISOString(),
       returnedAt: t.returnedAt?.toISOString() ?? null,
+      priorityExpiryDate: t.priorityExpiryDate?.toISOString() ?? null,
+      destinations: t.destinations.map((d) => ({
+        ...d,
+        minExpiryDate: d.minExpiryDate?.toISOString() ?? null,
+      })),
     })),
   });
 });
