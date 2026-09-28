@@ -75,7 +75,7 @@ async function authenticateDriver(
 
   const trip = await findOpenLslTripByPlate(plateNorm);
   if (!trip) return { error: 'Nenhuma viagem ativa para esta placa.', status: 404 as const };
-  if (plateOwner(trip.vehicle.plate) !== 'LSL') {
+  if (plateOwner(trip.vehicle.plate, trip.vehicle.owner) !== 'LSL') {
     return { error: 'Diário de bordo disponível só para frota LSL.', status: 403 as const };
   }
   return { trip };

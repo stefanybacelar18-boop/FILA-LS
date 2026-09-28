@@ -4,6 +4,7 @@ import { join } from 'path';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { Role, VehicleType, VehicleStatus, AllowedVehicleType } from '../src/types/enums';
+import { plateOwner } from '../src/data/operatorVisibility';
 import {
   CITY_COORDS,
   normalizeCityKey,
@@ -144,6 +145,7 @@ async function main() {
         capacityMotos: v.capacityMotos,
         defaultDriver: v.defaultDriver,
         status: VehicleStatus.DISPONIVEL,
+        owner: plateOwner(plate),
         notes: v.plateDisplay && v.plateDisplay !== plate ? `Placa original: ${v.plateDisplay}` : null,
       },
     });

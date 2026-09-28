@@ -163,7 +163,9 @@ export async function fetchLslPernoitesForPeriod(
           where: {
             departureAt: { gte: period.start, lte: period.end },
             status: { not: TripStatus.CANCELADO },
-            vehicle: { plate: { in: [...OPERATOR_HIDDEN_PLATES] } },
+            vehicle: {
+              OR: [{ owner: 'LSL' }, { plate: { in: [...OPERATOR_HIDDEN_PLATES] } }],
+            },
           },
           select: {
             id: true,
@@ -182,7 +184,9 @@ export async function fetchLslPernoitesForPeriod(
           where: {
             departureAt: { gte: period.start, lte: period.end },
             status: { not: TripStatus.CANCELADO },
-            vehicle: { plate: { in: [...OPERATOR_HIDDEN_PLATES] } },
+            vehicle: {
+              OR: [{ owner: 'LSL' }, { plate: { in: [...OPERATOR_HIDDEN_PLATES] } }],
+            },
           },
           include: tripInclude,
           orderBy: [{ departureAt: 'desc' }],

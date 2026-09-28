@@ -5,7 +5,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import {
   filterPlatesForRole,
   isDriverHiddenFromOperator,
-  isPlateHiddenFromOperator,
+  isVehicleHiddenFromOperator,
 } from '../data/operatorVisibility';
 
 const router = Router();
@@ -70,7 +70,7 @@ router.get('/', async (req: AuthRequest, res) => {
   const visibleTrips = trips
     .filter((t) => {
       if (role !== Role.OPERACAO) return true;
-      if (isPlateHiddenFromOperator(t.vehicle.plate)) return false;
+      if (isVehicleHiddenFromOperator(t.vehicle)) return false;
       if (t.driverName && isDriverHiddenFromOperator(t.driverName)) return false;
       return true;
     })

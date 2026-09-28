@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import {
   filterTripsForRole,
-  isPlateHiddenFromOperator,
+  isVehicleHiddenFromOperator,
 } from '../data/operatorVisibility';
 
 const router = Router();
@@ -55,7 +55,7 @@ router.get('/', authorize(Role.ADMIN, Role.OPERACAO), async (req: AuthRequest, r
 
   const visibleRouteReports =
     role === Role.OPERACAO
-      ? routeReports.filter((r) => !isPlateHiddenFromOperator(r.vehicle.plate))
+      ? routeReports.filter((r) => !isVehicleHiddenFromOperator(r.vehicle))
       : routeReports;
 
   const visibleTripDelays = filterTripsForRole(role, tripDelays);

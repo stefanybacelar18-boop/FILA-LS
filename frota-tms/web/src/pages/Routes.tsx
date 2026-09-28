@@ -244,7 +244,7 @@ export function Routes() {
     }
     return list.map((v) => ({
       value: v.id,
-      label: `${v.plate} · ${plateOwner(v.plate)}${
+      label: `${v.plate} · ${v.owner ?? plateOwner(v.plate, v.owner)}${
         currentVehicle?.id === v.id ? ' (atual)' : ''
       }`,
       description: v.capacityMotos

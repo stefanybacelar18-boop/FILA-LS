@@ -50,6 +50,7 @@ export function buildMaintenanceCycles(
   events: MaintenanceHistoryEvent[],
   openVehicles: Array<{
     plate: string;
+    owner?: string | null;
     blockCategory: string | null;
     blockReason: string | null;
     blockedAt: Date | null;
@@ -116,7 +117,7 @@ export function buildMaintenanceCycles(
     cycles.push(
       toCycleRow({
         plate: vehicle.plate,
-        owner: plateOwner(vehicle.plate),
+        owner: plateOwner(vehicle.plate, vehicle.owner),
         category,
         reason: vehicle.blockReason?.trim() || '—',
         entryAt: vehicle.blockedAt ?? new Date(),

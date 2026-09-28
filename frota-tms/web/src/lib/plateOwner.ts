@@ -1,4 +1,5 @@
-/** Placas LSL = as que a Operação (AG) não visualiza. Demais = AG. */
+/** Placas LSL = as que a Operação (AG) não visualiza. Demais = AG.
+ * Fallback quando o cadastro ainda não enviou `owner`. */
 export const LSL_PLATES = [
   'EZU2D86',
   'EOE1F87',
@@ -9,6 +10,7 @@ export const LSL_PLATES = [
   'EOE1F81',
   'SUC6B93',
   'TME3H94',
+  'UEV4A13',
 ] as const
 
 export type PlateOwner = 'LSL' | 'AG'
@@ -19,6 +21,11 @@ function normalizePlate(plate: string): string {
 
 const lslSet = new Set(LSL_PLATES.map(normalizePlate))
 
-export function plateOwner(plate: string): PlateOwner {
-  return lslSet.has(normalizePlate(plate)) ? 'LSL' : 'AG'
+export function parsePlateOwner(value: string | null | undefined): PlateOwner | null {
+  if (value === 'LSL' || value === 'AG') return value
+  return null
+}
+
+export function plateOwner(plate: string, storedOwner?: string | null): PlateOwner {
+  return parsePlateOwner(storedOwner) ?? (lslSet.has(normalizePlate(plate)) ? 'LSL' : 'AG')
 }

@@ -24,7 +24,7 @@ import {
 } from './logbook-report';
 
 const tripInclude = {
-  vehicle: { select: { id: true, plate: true, brand: true, model: true, defaultDriver: true } },
+  vehicle: { select: { id: true, plate: true, brand: true, model: true, defaultDriver: true, owner: true } },
   dealership: { select: { id: true, name: true, city: true, state: true } },
   route: {
     select: {
@@ -197,7 +197,7 @@ export function buildPrefilledTrip(trip: {
 }
 
 export async function findOpenLslTripByPlate(plateNorm: string) {
-  const vehicles = await prisma.vehicle.findMany({ select: { id: true, plate: true } });
+  const vehicles = await prisma.vehicle.findMany({ select: { id: true, plate: true, owner: true } });
   const vehicle = vehicles.find((v) => normalizePlate(v.plate) === plateNorm);
   if (!vehicle) return null;
 

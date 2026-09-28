@@ -6,7 +6,12 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { vehicleColor } from '../utils/status';
 import { paramId } from '../utils/params';
-import { filterPlatesForRole, isPlateHiddenFromOperator, plateOwner } from '../data/operatorVisibility';
+import {
+  filterPlatesForRole,
+  isVehicleHiddenFromOperator,
+  parsePlateOwner,
+  plateOwner,
+} from '../data/operatorVisibility';
 import { sumUsefulCapacityMotos } from '../lib/capacity';
 import {
   vehicleActivatePatch,
@@ -34,6 +39,7 @@ const schema = z.object({
     ])
     .optional(),
   notes: z.string().optional().nullable(),
+  owner: z.enum(['LSL', 'AG']).optional(),
   active: z.boolean().optional(),
 });
 
@@ -58,6 +64,7 @@ type VehicleRow = {
   status: string;
   active: boolean;
   notes: string | null;
+  owner?: string | null;
   maintenanceHold: boolean;
   blockCategory: string | null;
   blockReason: string | null;
@@ -73,7 +80,7 @@ type ActiveTripLite = { id: string; expectedReturn: Date | null };
 function withActiveTrip(v: VehicleRow, activeTrip: ActiveTripLite | null) {
   return {
     ...v,
-    owner: plateOwner(v.plate),
+    owner: plateOwner(v.plate, v.owner),
     color: vehicleColor(v.status as VehicleStatus, activeTrip?.expectedReturn),
     expectedReturn: activeTrip?.expectedReturn ?? null,
     activeTripId: activeTrip?.id ?? null,
@@ -155,7 +162,7 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
       maintenanceHold: false,
       trips: { none: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } } },
     },
-    select: { id: true, plate: true, capacityMotos: true, type: true },
+    select: { id: true, plate: true, capacityMotos: true, type: true, owner: true },
     orderBy: { plate: 'asc' },
   });
   const visible = filterPlatesForRole(req.user?.role, vehicles);
@@ -167,7 +174,7 @@ router.get('/availability-summary', async (req: AuthRequest, res) => {
   let agCount = 0;
   for (const v of visible) {
     const cap = Number(v.capacityMotos);
-    const owner = plateOwner(v.plate);
+    const owner = plateOwner(v.plate, v.owner);
     if (owner === 'LSL') lslCount += 1;
     else agCount += 1;
     const row = byCapacityMap.get(cap) ?? { count: 0, lsl: 0, ag: 0 };
@@ -211,7 +218,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
     include: vehicleInclude,
   });
   if (!v) return res.status(404).json({ error: 'Veículo não encontrado' });
-  if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(v.plate)) {
+  if (req.user?.role === Role.OPERACAO && isVehicleHiddenFromOperator(v)) {
     return res.status(404).json({ error: 'Veículo não encontrado' });
   }
   res.json(await enrichVehicle(v));
@@ -238,6 +245,7 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
       plate,
       defaultDriver: parsed.data.defaultDriver || null,
       status: parsed.data.status ?? VehicleStatus.DISPONIVEL,
+      owner: parsed.data.owner ?? 'AG',
     },
     include: vehicleInclude,
   });
@@ -247,7 +255,7 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
       userId: req.user!.id,
       action: 'CADASTRO',
       toStatus: vehicle.status,
-      details: 'Veículo cadastrado',
+      details: `Veículo cadastrado · frota ${vehicle.owner}`,
     },
   });
   await audit('CREATE', 'Vehicle', { userId: req.user!.id, entityId: vehicle.id, details: plate });
@@ -267,7 +275,7 @@ router.post('/:id/block', authorize(Role.ADMIN, Role.OPERACAO), async (req: Auth
   const id = paramId(req);
   const current = await prisma.vehicle.findUnique({ where: { id } });
   if (!current) return res.status(404).json({ error: 'Veículo não encontrado' });
-  if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(current.plate)) {
+  if (req.user?.role === Role.OPERACAO && isVehicleHiddenFromOperator(current)) {
     return res.status(404).json({ error: 'Veículo não encontrado' });
   }
 
@@ -321,7 +329,7 @@ router.post('/:id/release', authorize(Role.ADMIN, Role.OPERACAO), async (req: Au
   const id = paramId(req);
   const current = await prisma.vehicle.findUnique({ where: { id } });
   if (!current) return res.status(404).json({ error: 'Veículo não encontrado' });
-  if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(current.plate)) {
+  if (req.user?.role === Role.OPERACAO && isVehicleHiddenFromOperator(current)) {
     return res.status(404).json({ error: 'Veículo não encontrado' });
   }
 
@@ -380,6 +388,11 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const data: Record<string, unknown> = { ...parsed.data };
   if (data.plate) data.plate = String(data.plate).toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (data.defaultDriver !== undefined) data.defaultDriver = data.defaultDriver || null;
+  if (data.owner !== undefined) {
+    const owner = parsePlateOwner(String(data.owner));
+    if (!owner) return res.status(400).json({ error: 'Frota inválida. Use LSL ou AG.' });
+    data.owner = owner;
+  }
 
   if (parsed.data.active === false) {
     const openTrip = await prisma.trip.findFirst({
@@ -430,6 +443,16 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
         action: 'STATUS_MANUAL',
         fromStatus: current.status,
         toStatus: String(data.status),
+      },
+    });
+  }
+  if (data.owner && data.owner !== current.owner) {
+    await prisma.vehicleHistory.create({
+      data: {
+        vehicleId: vehicle.id,
+        userId: req.user!.id,
+        action: 'FROTA',
+        details: `Frota ${plateOwner(current.plate, current.owner)} → ${data.owner}`,
       },
     });
   }

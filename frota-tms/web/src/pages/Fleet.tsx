@@ -31,6 +31,7 @@ const emptyForm = {
   capacityMotos: 50,
   defaultDriver: '',
   status: 'DISPONIVEL' as VehicleStatus,
+  owner: 'AG' as 'LSL' | 'AG',
   notes: '',
 }
 
@@ -77,6 +78,9 @@ export function Fleet() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-available'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles-availability-summary'] })
+      void qc.invalidateQueries({ queryKey: ['plates-board'] })
       setOpen(false)
       setEditing(null)
       setForm(emptyForm)
@@ -126,6 +130,7 @@ export function Fleet() {
       capacityMotos: v.capacityMotos,
       defaultDriver: v.defaultDriver ?? '',
       status: v.status,
+      owner: v.owner ?? 'AG',
       notes: v.notes ?? '',
     })
     setOpen(true)
@@ -211,7 +216,7 @@ export function Fleet() {
                 <tr key={v.id} className={v.active === false ? 'opacity-60' : undefined}>
                   <td>
                     <Link to={`/frota/${v.id}`} className="inline-flex">
-                      <PlateBadge plate={v.plate} color={v.color} />
+                      <PlateBadge plate={v.plate} color={v.color} owner={v.owner} />
                     </Link>
                   </td>
                   <td>{vehicleTypeLabels[v.type]}</td>
@@ -328,6 +333,15 @@ export function Fleet() {
             value={form.defaultDriver}
             onChange={(e) => setForm({ ...form, defaultDriver: e.target.value })}
             placeholder="Opcional"
+          />
+          <Select
+            label="Frota"
+            value={form.owner}
+            onChange={(e) => setForm({ ...form, owner: e.target.value as 'LSL' | 'AG' })}
+            options={[
+              { value: 'LSL', label: 'LSL (própria — só Admin)' },
+              { value: 'AG', label: 'AG (Operação)' },
+            ]}
           />
           <Select
             label="Situação"

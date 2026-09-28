@@ -50,6 +50,16 @@ describe('vehicleMatchesRouteLoad', () => {
     expect(vehicleMatchesRouteLoad(ag, route)).toBe(true);
     expect(vehicleMatchesRouteLoad(lsl, route)).toBe(false);
   });
+
+  it('respeita owner cadastrado (UEV4A13 como LSL)', () => {
+    const route = { requiredFleetOwner: 'LSL' as const, requiredCapacityMotos: 50 };
+    expect(
+      vehicleMatchesRouteLoad({ plate: 'UEV4A13', owner: 'LSL', capacityMotos: 50 }, route),
+    ).toBe(true);
+    expect(
+      vehicleMatchesRouteLoad({ plate: 'UEV4A13', owner: 'AG', capacityMotos: 50 }, route),
+    ).toBe(false);
+  });
 });
 
 describe('routeFleetRequirement', () => {

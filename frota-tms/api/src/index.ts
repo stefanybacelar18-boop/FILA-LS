@@ -32,6 +32,7 @@ import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
+import { ensureVehicleOwners } from './lib/vehicle-owner';
 import { captureApiException, initApiMonitoring } from './lib/monitoring';
 
 initApiMonitoring();
@@ -171,6 +172,7 @@ server.listen(PORT, '0.0.0.0', () => {
   );
 
   void ensureHotIndexes(prisma)
+    .then(() => ensureVehicleOwners(prisma))
     .then(() => console.log('Índices de consulta conferidos'))
     .catch((err) => console.warn('Índices:', err?.message ?? err));
 

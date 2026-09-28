@@ -12,7 +12,7 @@ import { paramId } from '../utils/params';
 import {
   filterPlatesForRole,
   isDriverHiddenFromOperator,
-  isPlateHiddenFromOperator,
+  isVehicleHiddenFromOperator,
   plateOwner,
 } from '../data/operatorVisibility';
 import {
@@ -68,6 +68,7 @@ const routeListInclude = {
           status: true,
           capacityMotos: true,
           defaultDriver: true,
+          owner: true,
         },
       },
     },
@@ -93,6 +94,7 @@ const routeListInclude = {
           defaultDriver: true,
           type: true,
           status: true,
+          owner: true,
         },
       },
     },
@@ -329,9 +331,9 @@ export function createRoutesRouter(io: Server) {
       if (linked.length === 0) {
         return { ...routeForList, returnForecast: null };
       }
-      const assignedPlate = routeForList.vehicles?.[0]?.vehicle?.plate;
-      const owner: FleetOwner | null = assignedPlate
-        ? plateOwner(assignedPlate)
+      const assigned = routeForList.vehicles?.[0]?.vehicle;
+      const owner: FleetOwner | null = assigned
+        ? plateOwner(assigned.plate, assigned.owner)
         : /\bLSL\b/i.test(routeForList.name)
           ? 'LSL'
           : null;
@@ -612,7 +614,7 @@ export function createRoutesRouter(io: Server) {
 
       const vehicle = await prisma.vehicle.findUnique({ where: { id: parsed.data.vehicleId } });
       if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
-      if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(vehicle.plate)) {
+      if (req.user?.role === Role.OPERACAO && isVehicleHiddenFromOperator(vehicle)) {
         return res.status(403).json({ error: 'Placa não disponível para o perfil Operação' });
       }
 
@@ -1230,7 +1232,7 @@ export function createRoutesRouter(io: Server) {
           if (!vehicle) {
             throw Object.assign(new Error(`Veículo ${vid} não encontrado`), { status: 404 });
           }
-          if (isOps && isPlateHiddenFromOperator(vehicle.plate)) {
+          if (isOps && isVehicleHiddenFromOperator(vehicle)) {
             throw Object.assign(new Error('Placa não disponível para o perfil Operação'), {
               status: 403,
             });
@@ -1245,7 +1247,7 @@ export function createRoutesRouter(io: Server) {
             );
           }
 
-          const owner = plateOwner(vehicle.plate);
+          const owner = plateOwner(vehicle.plate, vehicle.owner);
           const farthest = farthestDealershipFromPad(linked, owner);
           const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
 
@@ -1509,7 +1511,7 @@ export function createRoutesRouter(io: Server) {
             data: { routeId: route.id, vehicleId },
           });
 
-          const owner = plateOwner(newVehicle.plate);
+          const owner = plateOwner(newVehicle.plate, newVehicle.owner);
           const farthestForPlate = farthestDealershipFromPad(linked, owner);
           const nextExpected = expectedReturnDate(
             openTrip.departureAt,

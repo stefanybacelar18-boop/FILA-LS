@@ -109,7 +109,7 @@ export function syncChronusPlateNotes(
 }
 
 export function vehicleMatchesRouteLoad(
-  vehicle: { plate: string; capacityMotos: number },
+  vehicle: { plate: string; capacityMotos: number; owner?: string | null },
   route: {
     requiredFleetOwner?: string | null;
     requiredCapacityMotos?: number | null;
@@ -117,7 +117,7 @@ export function vehicleMatchesRouteLoad(
   },
 ): boolean {
   const req = routeFleetRequirement(route);
-  if (req.fleetOwner && plateOwner(vehicle.plate) !== req.fleetOwner) return false;
+  if (req.fleetOwner && plateOwner(vehicle.plate, vehicle.owner) !== req.fleetOwner) return false;
   if (req.capacityMotos != null && vehicle.capacityMotos < req.capacityMotos) return false;
   return true;
 }

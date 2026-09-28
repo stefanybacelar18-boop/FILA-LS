@@ -14,7 +14,7 @@ import { paramId } from '../utils/params';
 import {
   filterTripsForRole,
   isDriverHiddenFromOperator,
-  isPlateHiddenFromOperator,
+  isVehicleHiddenFromOperator,
   plateOwner,
 } from '../data/operatorVisibility';
 import { isLslNextDayOverrideCity } from '../utils/geo';
@@ -298,10 +298,10 @@ export function createTripsRouter(io: Server) {
 
   function denyHiddenTripForOps(
     role: string | undefined,
-    trip: { driverName?: string | null; vehicle: { plate: string } },
+    trip: { driverName?: string | null; vehicle: { plate: string; owner?: string | null } },
   ): boolean {
     if (role !== Role.OPERACAO) return false;
-    if (isPlateHiddenFromOperator(trip.vehicle.plate)) return true;
+    if (isVehicleHiddenFromOperator(trip.vehicle)) return true;
     if (trip.driverName && isDriverHiddenFromOperator(trip.driverName)) return true;
     return false;
   }
@@ -337,7 +337,7 @@ export function createTripsRouter(io: Server) {
         departureAt: true,
         expectedReturn: true,
         delayReason: true,
-        vehicle: { select: { plate: true } },
+        vehicle: { select: { plate: true, owner: true } },
         dealership: { select: { city: true } },
         route: {
           select: {
@@ -349,7 +349,7 @@ export function createTripsRouter(io: Server) {
     });
 
     for (const t of open) {
-      if (plateOwner(t.vehicle.plate) !== 'LSL') continue;
+      if (plateOwner(t.vehicle.plate, t.vehicle.owner) !== 'LSL') continue;
 
       const cities: string[] = [];
       if (t.dealership?.city) cities.push(t.dealership.city);

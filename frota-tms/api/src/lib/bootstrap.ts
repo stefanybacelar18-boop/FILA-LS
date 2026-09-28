@@ -27,6 +27,7 @@ interface DealershipSeed {
 }
 
 import { OPS_DRIVER_NAMES } from '../data/opsDrivers';
+import { plateOwner } from '../data/operatorVisibility';
 
 function dataPath(filename: string): string {
   const candidates = [
@@ -219,6 +220,7 @@ export async function bootstrapReferenceDataIfEmpty(prisma: PrismaClient): Promi
         capacityMotos: v.capacityMotos,
         defaultDriver: v.defaultDriver,
         status: VehicleStatus.DISPONIVEL,
+        owner: plateOwner(plate),
         notes: v.plateDisplay && v.plateDisplay !== plate ? `Placa original: ${v.plateDisplay}` : null,
       },
     });

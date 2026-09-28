@@ -6,7 +6,8 @@ import { paramId } from '../utils/params';
 import { vehicleColor, isOverdue } from '../utils/status';
 import {
   filterTripsForRole,
-  isPlateHiddenFromOperator,
+  isVehicleHiddenFromOperator,
+  plateOwner,
 } from '../data/operatorVisibility';
 
 const router = Router();
@@ -18,7 +19,7 @@ router.get('/vehicle/:id', async (req: AuthRequest, res) => {
     include: { blockedBy: { select: { id: true, name: true } } },
   });
   if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado' });
-  if (req.user?.role === Role.OPERACAO && isPlateHiddenFromOperator(vehicle.plate)) {
+  if (req.user?.role === Role.OPERACAO && isVehicleHiddenFromOperator(vehicle)) {
     return res.status(404).json({ error: 'Veículo não encontrado' });
   }
 
@@ -47,6 +48,7 @@ router.get('/vehicle/:id', async (req: AuthRequest, res) => {
   res.json({
     vehicle: {
       ...vehicle,
+      owner: plateOwner(vehicle.plate, vehicle.owner),
       color: vehicleColor(vehicle.status, activeTrip?.expectedReturn),
       expectedReturn: activeTrip?.expectedReturn ?? null,
       activeTripId: activeTrip?.id ?? null,

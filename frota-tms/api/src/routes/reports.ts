@@ -237,7 +237,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
         action: { in: ['BLOQUEIO_MANUTENCAO', 'LIBERACAO_MANUTENCAO'] },
       },
       include: {
-        vehicle: { select: { plate: true } },
+        vehicle: { select: { plate: true, owner: true } },
         user: { select: { name: true } },
       },
       orderBy: [{ createdAt: 'asc' }],
@@ -245,7 +245,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     });
     const historyEvents: MaintenanceHistoryEvent[] = filterPlatesForRole(
       req.user?.role,
-      historyRaw.map((h) => ({ ...h, plate: h.vehicle.plate })),
+      historyRaw.map((h) => ({ ...h, plate: h.vehicle.plate, owner: h.vehicle.owner })),
     ).map((h) => ({
       action: h.action,
       createdAt: h.createdAt,
@@ -259,6 +259,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
         historyEvents,
         vehicles.map((v) => ({
           plate: v.plate,
+          owner: v.owner,
           blockCategory: v.blockCategory,
           blockReason: v.blockReason,
           blockedAt: v.blockedAt,
@@ -328,7 +329,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     vehicles.forEach((v) =>
       wsCurrent.addRow({
         plate: v.plate,
-        owner: plateOwner(v.plate),
+        owner: plateOwner(v.plate, v.owner),
         type: VEHICLE_TYPE_LABELS[v.type] ?? v.type,
         brand: v.brand,
         model: v.model,
@@ -358,7 +359,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     const historyFilteredRaw = await prisma.vehicleHistory.findMany({
       where: historyWhere,
       include: {
-        vehicle: { select: { plate: true } },
+        vehicle: { select: { plate: true, owner: true } },
         user: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -366,7 +367,7 @@ router.get('/excel/:type', async (req: AuthRequest, res) => {
     });
     const history = filterPlatesForRole(
       req.user?.role,
-      historyFilteredRaw.map((h) => ({ ...h, plate: h.vehicle.plate })),
+      historyFilteredRaw.map((h) => ({ ...h, plate: h.vehicle.plate, owner: h.vehicle.owner })),
     );
 
     const wsHistory = wb.addWorksheet('Histórico');

@@ -4,12 +4,14 @@ const INDEXES = [
   'CREATE INDEX IF NOT EXISTS "Trip_departureAt_idx" ON "Trip" ("departureAt")',
   'CREATE INDEX IF NOT EXISTS "Vehicle_status_idx" ON "Vehicle" ("status")',
   'CREATE INDEX IF NOT EXISTS "Vehicle_active_idx" ON "Vehicle" ("active")',
+  'CREATE INDEX IF NOT EXISTS "Vehicle_owner_idx" ON "Vehicle" ("owner")',
   'CREATE INDEX IF NOT EXISTS "Route_status_date_idx" ON "Route" ("status", "date")',
   'CREATE INDEX IF NOT EXISTS "Route_date_idx" ON "Route" ("date")',
 ];
 
 const COLUMNS = [
   'ALTER TABLE "Vehicle" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true',
+  'ALTER TABLE "Vehicle" ADD COLUMN IF NOT EXISTS "owner" TEXT NOT NULL DEFAULT \'AG\'',
   'ALTER TABLE "Trip" ADD COLUMN IF NOT EXISTS "pernoiteNightsOverride" INTEGER',
 ];
 

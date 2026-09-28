@@ -65,12 +65,12 @@ router.post('/meu-roteiro', async (req, res) => {
     return res.status(400).json({ error: 'Placa inválida.' });
   }
 
-  const vehicles = await prisma.vehicle.findMany({ select: { id: true, plate: true } });
+  const vehicles = await prisma.vehicle.findMany({ select: { id: true, plate: true, owner: true } });
   const vehicle = vehicles.find((v) => normalizePlate(v.plate) === plateNorm);
   if (!vehicle) {
     return res.status(404).json({ error: 'Placa não encontrada.' });
   }
-  if (plateOwner(vehicle.plate) !== 'LSL') {
+  if (plateOwner(vehicle.plate, vehicle.owner) !== 'LSL') {
     return res.status(403).json({ error: 'Esta consulta é só para placas da frota LSL.' });
   }
 

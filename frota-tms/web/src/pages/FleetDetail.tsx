@@ -52,7 +52,7 @@ export function FleetDetail() {
         title={vehicle.plate}
         description={`${vehicle.brand} ${vehicle.model} · ${vehicleTypeLabels[vehicle.type]} · ${vehicle.year}`}
         actions={
-          <PlateBadge
+            <PlateBadge
             plate={vehicle.plate}
             color={
               vehicle.color ??
@@ -64,6 +64,7 @@ export function FleetDetail() {
                     ? 'yellow'
                     : 'green')
             }
+            owner={vehicle.owner}
           />
         }
       />
@@ -71,7 +72,7 @@ export function FleetDetail() {
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Info
           label="Frota"
-          value={vehicle.owner ?? plateOwner(vehicle.plate)}
+          value={vehicle.owner ?? plateOwner(vehicle.plate, vehicle.owner)}
         />
         <Info label="Situação" value={vehicle.active === false ? 'Inativo' : vehicleStatusLabels[vehicle.status]} />
         <Info label="Capacidade" value={`${vehicle.capacityMotos} motos`} />

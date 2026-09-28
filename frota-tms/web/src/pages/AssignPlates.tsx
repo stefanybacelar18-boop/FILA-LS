@@ -615,7 +615,7 @@ export function AssignPlates() {
                 value: v.id,
                 label: v.plate,
                 description: [
-                  `${plateOwner(v.plate)} · ${v.capacityMotos} motos`,
+                  `${v.owner ?? plateOwner(v.plate, v.owner)} · ${v.capacityMotos} motos`,
                   v.defaultDriver ? `padrão ${v.defaultDriver}` : null,
                 ]
                   .filter(Boolean)

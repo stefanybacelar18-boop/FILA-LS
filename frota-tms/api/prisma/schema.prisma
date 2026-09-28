@@ -45,6 +45,8 @@ model Vehicle {
   // false = fora da frota operacional (histórico de viagens é mantido)
   active           Boolean   @default(true)
   notes            String?
+  // Frota operacional: LSL (própria, só Admin) | AG (Operação)
+  owner            String    @default("AG")
   // Bloqueio longo (manutenção/outro): só volta a carregar após liberação explícita
   maintenanceHold  Boolean   @default(false)
   blockCategory    String?   // MANUTENCAO | OUTRO
@@ -63,6 +65,7 @@ model Vehicle {
 
   @@index([status])
   @@index([active])
+  @@index([owner])
 }
 
 // Motoristas cadastrados — usados na definição de placa
