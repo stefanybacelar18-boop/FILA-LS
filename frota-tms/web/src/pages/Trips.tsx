@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Trip } from '../types'
 import {
@@ -23,10 +24,13 @@ import { TripScheduleModal } from '../components/TripScheduleModal'
 
 export function Trips() {
   const qc = useQueryClient()
+  const location = useLocation()
+  const navigate = useNavigate()
   const canOperate = useAuthStore((s) => s.hasRole('ADMIN', 'OPERACAO'))
   const isAdmin = useAuthStore((s) => s.hasRole('ADMIN'))
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
+  const [okMsg, setOkMsg] = useState('')
   const [reportTrip, setReportTrip] = useState<Trip | null>(null)
   const [scheduleTrip, setScheduleTrip] = useState<Trip | null>(null)
   const [preset, setPreset] = useState('')
@@ -34,6 +38,14 @@ export function Trips() {
   const [markUnavailable, setMarkUnavailable] = useState(false)
   const [expectedDate, setExpectedDate] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const msg = (location.state as { importOk?: string } | null)?.importOk
+    if (msg) {
+      setOkMsg(msg)
+      navigate(location.pathname + location.search, { replace: true, state: {} })
+    }
+  }, [location, navigate])
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['trips', status],
@@ -97,6 +109,12 @@ export function Trips() {
         title="Viagens"
         description="Abertas por padrão · Histórico recente em Todas · Informe atraso/indisponibilidade"
       />
+
+      {okMsg && (
+        <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+          {okMsg}
+        </p>
+      )}
 
       {error && (
         <p className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
