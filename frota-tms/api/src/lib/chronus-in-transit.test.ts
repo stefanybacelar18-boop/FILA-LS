@@ -44,6 +44,7 @@ function row(over: Partial<ChronusRow>): ChronusRow {
     status: 'EM TRANSITO',
     sentAt: '13/10/2026',
     arrivedAt: '',
+    deliveredAt: '',
     driverName: 'JOSE DA SILVA',
     ...over,
   };
@@ -79,9 +80,17 @@ describe('chronusRowInTransitKind', () => {
     );
   });
 
-  it('ignora já entregue / com data de chegada', () => {
+  it('ignora já entregue / com Data Entrega (chegada real)', () => {
     expect(chronusRowInTransitKind(row({ status: 'ENTREGUE' }))).toBe('arrived');
-    expect(chronusRowInTransitKind(row({ arrivedAt: '13/10/2026' }))).toBe('arrived');
+    expect(chronusRowInTransitKind(row({ deliveredAt: '13/10/2026' }))).toBe('arrived');
+  });
+
+  it('mantém SAIU PARA ENTREGA em trânsito mesmo com Data Chegada prevista', () => {
+    expect(
+      chronusRowInTransitKind(
+        row({ status: 'SAIU PARA ENTREGA', arrivedAt: '08/10/2026', deliveredAt: '' }),
+      ),
+    ).toBe('in_transit');
   });
 });
 
@@ -90,8 +99,13 @@ describe('pickManifestRealPlate / driver', () => {
     expect(pickManifestRealPlate(['LSL50', 'IAK2E92', 'IAK2E92', 'NYY2218']).plate).toBe('IAK2E92');
   });
 
-  it('casa motorista ignorando acento e caixa', () => {
+  it('casa motorista ignorando acento, caixa e sufixo (ag)', () => {
     expect(matchDriverName('JOSÉ DA SILVA', [{ id: '1', name: 'Jose da Silva' }])?.id).toBe('1');
+    expect(
+      matchDriverName('SAMUEL MELO NASCIMENTO (ag)', [
+        { id: '2', name: 'SAMUEL MELO NASCIMENTO' },
+      ])?.id,
+    ).toBe('2');
   });
 });
 
@@ -153,10 +167,11 @@ describe('parseChronusFile entregas em trânsito', () => {
         line[17] = 'ARACAJU';
         line[20] = '20/10/2026';
         line[22] = '13/10/2026';
-        line[23] = '';
+        line[23] = '14/10/2026';
         line[25] = 'IAK2E92';
         line[26] = '400111';
-        line[28] = 'EM TRANSITO';
+        line[27] = '';
+        line[28] = 'SAIU PARA ENTREGA';
         line[34] = 'JOSE DA SILVA';
         return line;
       })(),
@@ -166,9 +181,10 @@ describe('parseChronusFile entregas em trânsito', () => {
     expect(parsed.rows[0]).toMatchObject({
       manifesto: '400111',
       plate: 'IAK2E92',
-      status: 'EM TRANSITO',
+      status: 'SAIU PARA ENTREGA',
       sentAt: '13/10/2026',
-      arrivedAt: '',
+      arrivedAt: '14/10/2026',
+      deliveredAt: '',
       driverName: 'JOSE DA SILVA',
     });
   });
@@ -186,8 +202,8 @@ describe('buildChronusPreview + enrich inTransit', () => {
     },
   ];
 
-  it('usa a data de envio (não o próximo dia útil da carga)', async () => {
-    const preview = await buildChronusPreview([row({})], dealers, {
+  it('usa a data de hoje, não a Data Envio da NF', async () => {
+    const preview = await buildChronusPreview([row({ sentAt: '28/09/2026' })], dealers, {
       importDate: new Date('2026-10-13T15:00:00.000Z'),
       inTransit: true,
     });
@@ -195,6 +211,7 @@ describe('buildChronusPreview + enrich inTransit', () => {
     expect(preview.isFridayImport).toBe(false);
     expect(preview.routes[0]?.date).toBe('2026-10-13');
     expect(preview.routes[0]?.name).toContain('400111');
+    expect(preview.routes[0]?.sentAt).toBe('2026-09-28');
   });
 
   it('marca manifesto elegível para abrir viagem em andamento', async () => {
