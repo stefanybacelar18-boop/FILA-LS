@@ -25,6 +25,7 @@ import {
   vehicleStatusAfterUnreturn,
 } from '../lib/trip-unreturn';
 import { nextVehicleStatusAfterHold } from '../lib/vehicle-lifecycle';
+import { closeOpenTripsAtForecast } from '../lib/close-open-trips';
 import {
   defaultPernoiteNights,
   pernoiteNights,
@@ -431,6 +432,17 @@ export function createTripsRouter(io: Server) {
         needsDelayReason: isOverdue(t.expectedReturn, t.returnedAt) && !t.delayReason,
       })),
     );
+  });
+
+  router.post('/close-open-at-forecast', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    const result = await closeOpenTripsAtForecast(prisma, {
+      userId: req.user!.id,
+      once: false,
+    });
+    io.emit('fleet:changed', { action: 'return' });
+    io.emit('trips:changed', { action: 'return' });
+    io.emit('routes:changed', { action: 'return' });
+    res.json(result);
   });
 
   router.get('/returns', async (req: AuthRequest, res) => {

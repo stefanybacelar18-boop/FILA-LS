@@ -21,6 +21,7 @@ import {
   Button,
   Badge,
   Modal,
+  ConfirmModal,
   Textarea,
   Select,
   Input,
@@ -471,6 +472,7 @@ export function Returns() {
   const [markUnavailable, setMarkUnavailable] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState('')
+  const [closeAllOpen, setCloseAllOpen] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['returns'],
@@ -527,6 +529,28 @@ export function Returns() {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
           'Não foi possível registrar o retorno.',
+      )
+    },
+  })
+
+  const closeAllMutation = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ count: number; plates: string[] }>('/trips/close-open-at-forecast')).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['returns'] })
+      void qc.invalidateQueries({ queryKey: ['trips'] })
+      void qc.invalidateQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+      void qc.invalidateQueries({ queryKey: ['history'] })
+      void qc.invalidateQueries({ queryKey: ['pernoites'] })
+      void qc.invalidateQueries({ queryKey: ['plates-board'] })
+      setCloseAllOpen(false)
+      setError('')
+    },
+    onError: (err: unknown) => {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Não foi possível dar baixa nas viagens em andamento.',
       )
     },
   })
@@ -609,6 +633,13 @@ export function Returns() {
     )
   }
 
+  const openCount =
+    data.today.length +
+    data.tomorrow.length +
+    data.in2Days.length +
+    data.later.length +
+    data.overdue.length
+
   const openProblemHandler = (t: Trip) => openProblem(t)
   const openReturn = (t: Trip) => {
     setError('')
@@ -627,6 +658,28 @@ export function Returns() {
         title="Retornos"
         description="Confirme o retorno ou registre problema. Expanda “Ver entregas” para conferir o roteiro antes de retornar."
       />
+
+      {isAdmin && openCount > 0 && (
+        <div className="rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+          <p className="font-medium text-amber-900 dark:text-amber-100">
+            {openCount} viagem{openCount === 1 ? '' : 's'} em andamento
+          </p>
+          <p className="mt-1 text-[var(--color-text-muted)]">
+            Chronus sem extração desde 07/10: dá baixa em todas na <strong>previsão de retorno</strong>{' '}
+            (não cobra pernoite extra) e libera as placas.
+          </p>
+          <Button className="mt-3" variant="secondary" onClick={() => setCloseAllOpen(true)}>
+            Dar baixa em todas na previsão
+          </Button>
+        </div>
+      )}
+
+      {isAdmin && closeAllMutation.isSuccess && closeAllMutation.data.count > 0 && (
+        <p className="rounded-[var(--radius)] border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm">
+          Baixa feita em {closeAllMutation.data.count} viagem(ns) na previsão de retorno. Placas
+          liberadas.
+        </p>
+      )}
 
       {isAdmin && lastReturnedTrip && (
         <div className="rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
@@ -924,6 +977,26 @@ export function Returns() {
         open={undoOpen}
         onClose={() => setUndoOpen(false)}
         onSuccess={() => setLastReturnedTrip(null)}
+      />
+
+      <ConfirmModal
+        open={closeAllOpen}
+        onClose={() => {
+          setCloseAllOpen(false)
+          closeAllMutation.reset()
+        }}
+        onConfirm={() => closeAllMutation.mutate()}
+        title="Dar baixa em todas na previsão"
+        message="Todas as viagens em andamento ou atrasadas serão encerradas na data prevista de retorno — não na data de hoje. As placas voltam a ficar disponíveis. Pernoite segue a previsão, sem cobrança extra por atraso de extração do Chronus."
+        confirmLabel="Confirmar baixa"
+        danger
+        loading={closeAllMutation.isPending}
+        error={
+          closeAllMutation.isError
+            ? ((closeAllMutation.error as { response?: { data?: { error?: string } } })?.response
+                ?.data?.error ?? 'Não foi possível dar baixa')
+            : null
+        }
       />
     </div>
   )

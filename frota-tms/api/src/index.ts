@@ -32,6 +32,7 @@ import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
+import { closeOpenTripsAtForecast } from './lib/close-open-trips';
 import { ensureVehicleOwners } from './lib/vehicle-owner';
 import { captureApiException, initApiMonitoring } from './lib/monitoring';
 
@@ -156,9 +157,14 @@ io.on('connection', (socket) => {
 const PORT = Number(process.env.PORT) || 4000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
-  void ensureBootstrapUsers(prisma).catch((err) =>
-    console.warn('Bootstrap de usuários:', err?.message ?? err),
-  );
+  void ensureBootstrapUsers(prisma)
+    .then(() => closeOpenTripsAtForecast(prisma, { once: true }))
+    .then((result) => {
+      if (result.count > 0) {
+        console.log(`Baixa automática na previsão: ${result.count} viagem(ns)`);
+      }
+    })
+    .catch((err) => console.warn('Bootstrap de usuários / baixa automática:', err?.message ?? err));
   void bootstrapReferenceDataIfEmpty(prisma)
     .then(() => syncDriversFromVehicles())
     .then(() => ensureOpsDrivers(prisma))
