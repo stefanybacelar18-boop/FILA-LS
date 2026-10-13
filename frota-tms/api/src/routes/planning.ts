@@ -15,7 +15,7 @@ import {
   filterPlatesForRole,
   filterTripsForRole,
 } from '../data/operatorVisibility';
-import { normalizeRouteDateInput } from '../utils/timezone';
+import { normalizeRouteDateInput, operationalTodayKey } from '../utils/timezone';
 import {
   buildChronusPreview,
   parseChronusFile,
@@ -26,6 +26,11 @@ import {
   type ChronusImportPreview,
 } from '../lib/chronus-import';
 import { parseExplicitRouteDate } from '../lib/chronus-route-date';
+import {
+  commitChronusInTransitRoutes,
+  enrichChronusInTransitPreview,
+  isChronusInTransitStartable,
+} from '../lib/chronus-in-transit';
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
 
 const chronusUpload = multer({
@@ -1020,13 +1025,19 @@ export function createPlanningRouter(io: Server) {
         const saturdayWork = ['true', '1', 'on'].includes(
           String((req.body as { saturdayWork?: string } | undefined)?.saturdayWork ?? '').toLowerCase(),
         );
+        const inTransit = ['true', '1', 'on'].includes(
+          String((req.body as { inTransit?: string } | undefined)?.inTransit ?? '').toLowerCase(),
+        );
         const explicitDate = parseExplicitRouteDate(
           (req.body as { routeDate?: string } | undefined)?.routeDate,
         );
         const previewBase = await buildChronusPreview(parsed.rows, dealers, {
           importDate: new Date(),
-          routeDate: explicitDate ?? undefined,
+          routeDate:
+            explicitDate ??
+            (inTransit ? parseExplicitRouteDate(operationalTodayKey()) ?? undefined : undefined),
           saturdayWork,
+          inTransit,
           existingRouteNames: await prisma.route.findMany({
             where: {
               status: { not: RouteStatus.CANCELADO },
@@ -1034,11 +1045,41 @@ export function createPlanningRouter(io: Server) {
             select: { id: true, name: true, date: true, status: true },
           }),
         });
-        const preview: ChronusImportPreview = {
+        let preview: ChronusImportPreview = {
           ...previewBase,
           totalRows: parsed.totalRows,
           rowsWithoutManifesto: parsed.skippedWithoutManifesto,
         };
+        if (inTransit) {
+          const [fleet, drivers, openTrips] = await Promise.all([
+            prisma.vehicle.findMany({
+              where: { active: true },
+              select: {
+                id: true,
+                plate: true,
+                status: true,
+                type: true,
+                capacityMotos: true,
+                defaultDriver: true,
+                owner: true,
+                maintenanceHold: true,
+              },
+            }),
+            prisma.driver.findMany({
+              where: { active: true, blocked: false },
+              select: { id: true, name: true },
+            }),
+            prisma.trip.findMany({
+              where: { status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
+              select: { vehicleId: true },
+            }),
+          ]);
+          preview = enrichChronusInTransitPreview(preview, parsed.rows, {
+            fleet,
+            drivers,
+            busyVehicleIds: new Set(openTrips.map((t) => t.vehicleId)),
+          });
+        }
 
         const codesToFill = new Map<string, string>();
         for (const route of preview.routes) {
@@ -1069,8 +1110,9 @@ export function createPlanningRouter(io: Server) {
         res.status(201).json({
           batchId: batch.id,
           ...preview,
-          message:
-            'Preview pronto. Revise e confirme com POST /planning/import/chronus/commit.',
+          message: inTransit
+            ? 'Preview das saídas Chronus. Confirme para abrir as viagens em trânsito.'
+            : 'Preview pronto. Revise e confirme com POST /planning/import/chronus/commit.',
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Falha ao ler o arquivo Chronus';
@@ -1090,6 +1132,57 @@ export function createPlanningRouter(io: Server) {
     }
 
     const preview = JSON.parse(batch.previewJson) as ChronusImportPreview;
+
+    if (preview.inTransit) {
+      const startable = preview.routes.filter(isChronusInTransitStartable);
+      if (startable.length === 0) {
+        return res.status(400).json({
+          error:
+            'Nenhuma saída Chronus pôde virar viagem em trânsito. Confira placa na frota, motorista cadastrado e se a carga já chegou.',
+        });
+      }
+
+      const claimedTransit = await prisma.importBatch.updateMany({
+        where: { id: batch.id, status: 'PREVIEW' },
+        data: { status: 'COMMITTED' },
+      });
+      if (claimedTransit.count !== 1) {
+        return res.status(409).json({ error: 'Lote já processado' });
+      }
+
+      const result = await commitChronusInTransitRoutes(prisma, preview, req.user!.id);
+      if (result.started === 0) {
+        await prisma.importBatch.updateMany({
+          where: { id: batch.id, status: 'COMMITTED' },
+          data: { status: 'PREVIEW' },
+        });
+        return res.status(400).json({
+          error: 'Não foi possível abrir as viagens em trânsito.',
+          skipped: result.skipped,
+        });
+      }
+
+      await audit('CHRONUS_IN_TRANSIT_IMPORT', 'ImportBatch', {
+        userId: req.user!.id,
+        entityId: batch.id,
+        details: `${result.started} em trânsito · ${result.created} novos · ${result.attached} vinculados · ${batch.filename || 'chronus'}`,
+      });
+      io.emit('planning:changed', { action: 'chronus-in-transit', batchId: batch.id });
+      io.emit('routes:changed', { action: 'chronus-in-transit', count: result.started });
+      io.emit('trips:changed', { action: 'chronus-in-transit' });
+      io.emit('fleet:changed', { action: 'chronus-in-transit' });
+
+      return res.json({
+        inTransit: true,
+        started: result.started,
+        created: result.created,
+        attached: result.attached,
+        plates: result.plates,
+        skipped: result.skipped,
+        rowsWithoutManifesto: preview.rowsWithoutManifesto,
+      });
+    }
+
     const toCreate = preview.routes.filter(
       (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length === 0 && r.destinations.some((d) => d.matched),
     );

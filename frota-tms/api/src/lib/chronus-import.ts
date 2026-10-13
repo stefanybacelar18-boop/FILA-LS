@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import type { Prisma } from '@prisma/client';
+import { operationalDateKey } from '../utils/timezone';
 import {
   fridayLoadChoices,
   parseExplicitRouteDate,
@@ -27,6 +28,10 @@ export type ChronusRow = {
   city: string;
   expiryRaw: string;
   plate: string;
+  status: string;
+  sentAt: string;
+  arrivedAt: string;
+  driverName: string;
 };
 
 export type ChronusManifestPreview = {
@@ -55,8 +60,29 @@ export type ChronusManifestPreview = {
   unmatchedDealerCodes: string[];
   duplicateRouteId: string | null;
   duplicateRouteName: string | null;
+  duplicateRouteStatus?: string | null;
   /** Roteiro duplicado aguardando placa — reimport atualiza motos/vencimento. */
   canRefreshLoad: boolean;
+  inTransitEligible?: boolean;
+  assignedPlate?: string | null;
+  vehicleId?: string | null;
+  vehicleAvailable?: boolean;
+  assignedDriverName?: string | null;
+  sentAt?: string | null;
+  chronusStatus?: string | null;
+  skipReason?:
+    | 'NO_REAL_PLATE'
+    | 'FICTIONAL_PLATE'
+    | 'NOT_DEPARTED'
+    | 'ALREADY_ARRIVED'
+    | 'PLATE_NOT_IN_FLEET'
+    | 'PLATE_UNAVAILABLE'
+    | 'DUPLICATE_PLATE'
+    | 'NO_DRIVER'
+    | 'ALREADY_IN_TRANSIT'
+    | 'ALREADY_DONE'
+    | null;
+  skipLabel?: string | null;
 };
 
 export type ChronusImportPreview = {
@@ -69,15 +95,20 @@ export type ChronusImportPreview = {
   rowsWithoutManifesto: number;
   manifestCount: number;
   routes: ChronusManifestPreview[];
+  inTransit?: boolean;
 };
 
-const HEADER_ALIASES: Record<keyof Omit<ChronusRow, never>, string[]> = {
+const HEADER_ALIASES: Record<keyof ChronusRow, string[]> = {
   manifesto: ['manifesto'],
   dealerCode: ['cód. concessionária', 'cod. concessionaria', 'codigo concessionaria', 'cód concessionária'],
   dealerName: ['concessionária', 'concessionaria'],
   city: ['cidade'],
   expiryRaw: ['vencimento n.f.', 'vencimento nf', 'vencimento n.f', 'vencimento'],
   plate: ['placa do caminhão', 'placa do caminhao', 'placa'],
+  status: ['status'],
+  sentAt: ['data envio'],
+  arrivedAt: ['data chegada'],
+  driverName: ['motorista'],
 };
 
 function normHeader(value: string): string {
@@ -110,6 +141,10 @@ const CHRONUS_ENTREGAS_LAYOUT = {
   city: 17,
   expiryRaw: 20,
   plate: 25,
+  sentAt: 22,
+  arrivedAt: 23,
+  status: 28,
+  driverName: 34,
 } as const;
 
 function isChronusEntregasExport(headers: string[]): boolean {
@@ -129,7 +164,22 @@ function resolveColumns(headers: string[]) {
   const city = pickColumn(headers, HEADER_ALIASES.city);
   const expiryRaw = pickColumn(headers, HEADER_ALIASES.expiryRaw);
   const plate = pickColumn(headers, HEADER_ALIASES.plate);
-  return { manifesto, dealerCode, dealerName, city, expiryRaw, plate };
+  const status = pickColumn(headers, HEADER_ALIASES.status);
+  const sentAt = pickColumn(headers, HEADER_ALIASES.sentAt);
+  const arrivedAt = pickColumn(headers, HEADER_ALIASES.arrivedAt);
+  const driverName = pickColumn(headers, HEADER_ALIASES.driverName);
+  return {
+    manifesto,
+    dealerCode,
+    dealerName,
+    city,
+    expiryRaw,
+    plate,
+    status,
+    sentAt,
+    arrivedAt,
+    driverName,
+  };
 }
 
 function cellToString(value: unknown): string {
@@ -253,6 +303,10 @@ export async function parseChronusFile(
       city: col.city >= 0 ? line[col.city]?.trim() ?? '' : '',
       expiryRaw: col.expiryRaw >= 0 ? line[col.expiryRaw]?.trim() ?? '' : '',
       plate: col.plate >= 0 ? line[col.plate]?.trim() ?? '' : '',
+      status: col.status >= 0 ? line[col.status]?.trim() ?? '' : '',
+      sentAt: col.sentAt >= 0 ? line[col.sentAt]?.trim() ?? '' : '',
+      arrivedAt: col.arrivedAt >= 0 ? line[col.arrivedAt]?.trim() ?? '' : '',
+      driverName: col.driverName >= 0 ? line[col.driverName]?.trim() ?? '' : '',
     });
   }
 
@@ -272,6 +326,14 @@ type DealerRow = {
   active: boolean;
 };
 
+function firstChronusSentDate(items: ChronusRow[]): Date | null {
+  for (const item of items) {
+    const parsed = parseChronusDate(item.sentAt);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 export async function buildChronusPreview(
   rows: ChronusRow[],
   dealers: DealerRow[],
@@ -279,14 +341,18 @@ export async function buildChronusPreview(
     importDate?: Date;
     routeDate?: Date;
     saturdayWork?: boolean;
+    inTransit?: boolean;
     existingRouteNames?: { id: string; name: string; date: Date; status: string }[];
   },
 ): Promise<ChronusImportPreview> {
   const importDate = options?.importDate ?? new Date();
   const friday = fridayLoadChoices(importDate);
+  const inTransit = options?.inTransit === true;
   const routeDate =
     options?.routeDate ??
-    routeDateFromImport(importDate, { saturdayWork: options?.saturdayWork });
+    (inTransit
+      ? parseExplicitRouteDate(operationalDateKey(importDate)) ?? importDate
+      : routeDateFromImport(importDate, { saturdayWork: options?.saturdayWork }));
   const routeDateIso = routeDate.toISOString().slice(0, 10);
   const indexes = buildChronusDealerIndexes(dealers);
 
@@ -308,8 +374,11 @@ export async function buildChronusPreview(
 
   for (const manifesto of manifestOrder) {
     const items = byManifesto.get(manifesto)!;
-    const name = buildRouteName(manifesto, routeDate);
-    const dupKey = chronusRouteDuplicateKey(name, routeDateIso);
+    const sentDate = inTransit ? firstChronusSentDate(items) : null;
+    const itemDate = sentDate ?? routeDate;
+    const itemDateIso = itemDate.toISOString().slice(0, 10);
+    const name = buildRouteName(manifesto, itemDate);
+    const dupKey = chronusRouteDuplicateKey(name, itemDateIso);
     const duplicate = existingNames.get(dupKey) ?? null;
 
     const dealerGroups = new Map<string, ChronusRow[]>();
@@ -368,7 +437,7 @@ export async function buildChronusPreview(
     routes.push({
       manifesto,
       name,
-      date: routeDateIso,
+      date: itemDateIso,
       motoCount: items.length,
       plateHint: plateResolved?.raw ?? (plates.length === 1 ? plates[0]! : plates.length > 1 ? plates.join(', ') : null),
       requiredFleetOwner: plateResolved?.fleetOwner ?? null,
@@ -380,21 +449,43 @@ export async function buildChronusPreview(
       unmatchedDealerCodes: destinations.filter((d) => !d.matched).map((d) => d.dealerCode),
       duplicateRouteId: duplicate?.id ?? null,
       duplicateRouteName: duplicate?.name ?? null,
+      duplicateRouteStatus: duplicate?.status ?? null,
       canRefreshLoad: duplicate ? canRefreshChronusRoute(duplicate.status) : false,
+      sentAt: sentDate ? sentDate.toISOString().slice(0, 10) : null,
+      chronusStatus: mostCommonChronusStatus(items),
     });
   }
 
   return {
     routeDate: routeDateIso,
     routeDateLabel: formatRouteDateLabel(routeDate),
-    isFridayImport: friday.isFriday,
+    isFridayImport: inTransit ? false : friday.isFriday,
     saturdayLoadDate: friday.saturday,
     mondayLoadDate: friday.monday,
     totalRows: rows.length,
     rowsWithoutManifesto: 0,
     manifestCount: routes.length,
     routes,
+    inTransit,
   };
+}
+
+function mostCommonChronusStatus(items: ChronusRow[]): string | null {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const value = item.status.trim();
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 export type ChronusDestinationInput = ChronusManifestPreview['destinations'][number];

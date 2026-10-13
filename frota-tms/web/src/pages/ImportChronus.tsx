@@ -34,6 +34,13 @@ interface ChronusRoutePreview {
   duplicateRouteId: string | null
   duplicateRouteName: string | null
   canRefreshLoad?: boolean
+  inTransitEligible?: boolean
+  assignedPlate?: string | null
+  assignedDriverName?: string | null
+  sentAt?: string | null
+  chronusStatus?: string | null
+  skipReason?: string | null
+  skipLabel?: string | null
 }
 
 interface ChronusPreviewResponse {
@@ -47,6 +54,7 @@ interface ChronusPreviewResponse {
   rowsWithoutManifesto: number
   manifestCount: number
   routes: ChronusRoutePreview[]
+  inTransit?: boolean
   message?: string
 }
 
@@ -55,6 +63,7 @@ export function ImportChronus() {
   const qc = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
+  const [inTransit, setInTransit] = useState(false)
   const [preview, setPreview] = useState<ChronusPreviewResponse | null>(null)
   const [error, setError] = useState('')
 
@@ -63,15 +72,18 @@ export function ImportChronus() {
       selected,
       date,
       saturday,
+      transit,
     }: {
       selected: File
       date?: string
       saturday?: boolean
+      transit?: boolean
     }) => {
       const form = new FormData()
       form.append('file', selected)
       if (date) form.append('routeDate', date)
       if (saturday) form.append('saturdayWork', 'true')
+      if (transit) form.append('inTransit', 'true')
       const res = await api.post<ChronusPreviewResponse>('/planning/import/chronus/preview', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
@@ -96,6 +108,11 @@ export function ImportChronus() {
         await api.post<{
           created: number
           refreshed: number
+          started?: number
+          attached?: number
+          inTransit?: boolean
+          plates?: string[]
+          skipped?: { manifesto: string; reason: string }[]
           skippedDuplicates: { manifesto: string; name: string }[]
           skippedInvalid?: string[]
         }>('/planning/import/chronus/commit', { batchId }, { timeout: 120_000 })
@@ -103,9 +120,22 @@ export function ImportChronus() {
     onSuccess: async (data) => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['routes'] }),
+        qc.invalidateQueries({ queryKey: ['trips'] }),
+        qc.invalidateQueries({ queryKey: ['returns'] }),
+        qc.invalidateQueries({ queryKey: ['vehicles'] }),
         qc.invalidateQueries({ queryKey: ['planning-board'] }),
         qc.invalidateQueries({ queryKey: ['planning-alerts'] }),
       ])
+      if (data.inTransit) {
+        navigate('/viagens', {
+          state: {
+            importOk: `${data.started ?? 0} viagem(ns) em trânsito recuperada(s)${
+              data.plates?.length ? ` · ${data.plates.join(', ')}` : ''
+            }.`,
+          },
+        })
+        return
+      }
       navigate('/roteiros', {
         state: {
           importOk: [
@@ -129,9 +159,18 @@ export function ImportChronus() {
     },
   })
 
-  const creatable = preview?.routes.filter(
-    (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length === 0,
-  )
+  const startable =
+    preview?.routes.filter(
+      (r) =>
+        r.inTransitEligible &&
+        !r.skipReason &&
+        r.unmatchedDealerCodes.length === 0,
+    ) ?? []
+  const creatable = preview?.inTransit
+    ? startable
+    : preview?.routes.filter(
+        (r) => !r.duplicateRouteId && r.unmatchedDealerCodes.length === 0,
+      )
   const refreshable =
     preview?.routes.filter(
       (r) => r.canRefreshLoad && r.duplicateRouteId && r.unmatchedDealerCodes.length === 0,
@@ -146,20 +185,36 @@ export function ImportChronus() {
     setFile(next)
     setPreview(null)
     setError('')
-    if (next) previewMutation.mutate({ selected: next })
+    if (next) previewMutation.mutate({ selected: next, transit: inTransit })
   }
 
-  function reloadPreview(nextDate: string, nextSaturday: boolean) {
+  function reloadPreview(nextDate: string, nextSaturday: boolean, transit = inTransit) {
     if (!file) return
     setError('')
-    previewMutation.mutate({ selected: file, date: nextDate, saturday: nextSaturday })
+    previewMutation.mutate({
+      selected: file,
+      date: nextDate,
+      saturday: nextSaturday,
+      transit,
+    })
+  }
+
+  function selectMode(nextTransit: boolean) {
+    setInTransit(nextTransit)
+    setPreview(null)
+    setError('')
+    if (file) previewMutation.mutate({ selected: file, transit: nextTransit })
   }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       <PageHeader
         title="Importar Chronus"
-        description="Reimportar o mesmo manifesto (ex.: 375168 12/08/2026) atualiza o roteiro existente em vez de duplicar."
+        description={
+          inTransit
+            ? 'Relatório das cargas que já saíram: abre a viagem em trânsito com a placa e o motorista, como na definição de placas.'
+            : 'Reimportar o mesmo manifesto (ex.: 375168 12/08/2026) atualiza o roteiro existente em vez de duplicar.'
+        }
         actions={
           <Link to="/roteiros">
             <Button variant="secondary" size="sm">
@@ -171,12 +226,33 @@ export function ImportChronus() {
       />
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={!inTransit ? 'primary' : 'secondary'}
+            onClick={() => selectMode(false)}
+            disabled={previewMutation.isPending}
+          >
+            Carga (aguardando placas)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={inTransit ? 'primary' : 'secondary'}
+            onClick={() => selectMode(true)}
+            disabled={previewMutation.isPending}
+          >
+            Saídas (em trânsito)
+          </Button>
+        </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium">Arquivo do Chronus</p>
             <p className="text-sm text-[var(--color-text-muted)]">
-              Linhas sem manifesto são ignoradas. Cada manifesto vira um roteiro com operação.
-              Na sexta o carregamento vai para <strong>segunda</strong>, a menos que haja expediente no sábado.
+              {inTransit
+                ? 'Use o relatório das que já saíram para entrega (não o de carga). Placa real e motorista cadastrado viram viagem em andamento hoje.'
+                : 'Linhas sem manifesto são ignoradas. Cada manifesto vira um roteiro com operação. Na sexta o carregamento vai para segunda, a menos que haja expediente no sábado.'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -219,14 +295,27 @@ export function ImportChronus() {
       {preview && (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Stat label="Data dos roteiros" value={preview.routeDateLabel} />
+            <Stat
+              label={preview.inTransit ? 'Data da saída' : 'Data dos roteiros'}
+              value={preview.routeDateLabel}
+            />
             <Stat label="Manifestos" value={String(preview.manifestCount)} />
             <Stat label="Sem manifesto (ignoradas)" value={String(preview.rowsWithoutManifesto)} />
-            <Stat label="Novos roteiros" value={String(creatable?.length ?? 0)} />
-            <Stat label="Atualizar carga" value={String(refreshable.length)} />
+            <Stat
+              label={preview.inTransit ? 'Em trânsito' : 'Novos roteiros'}
+              value={String(creatable?.length ?? 0)}
+            />
+            <Stat
+              label={preview.inTransit ? 'Ignorados' : 'Atualizar carga'}
+              value={
+                preview.inTransit
+                  ? String(preview.routes.length - startable.length)
+                  : String(refreshable.length)
+              }
+            />
           </div>
 
-          {preview.isFridayImport && (
+          {preview.isFridayImport && !preview.inTransit && (
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
               <p className="text-sm font-medium">Sexta-feira: quando carregar?</p>
               <p className="mt-1 text-sm text-[var(--color-text-muted)]">
@@ -259,7 +348,13 @@ export function ImportChronus() {
 
           <div className="max-w-xs">
             <Input
-              label={preview.isFridayImport ? 'Outra data' : 'Data do carregamento'}
+              label={
+                preview.inTransit
+                  ? 'Data de saída (se o Chronus não tiver Data Envio)'
+                  : preview.isFridayImport
+                    ? 'Outra data'
+                    : 'Data do carregamento'
+              }
               type="date"
               value={preview.routeDate}
               disabled={previewMutation.isPending}
@@ -267,7 +362,14 @@ export function ImportChronus() {
             />
           </div>
 
-          {refreshable.length > 0 && (
+          {preview.inTransit && startable.length > 0 && (
+            <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">
+              {startable.length} manifesto(s) vão abrir como <strong>viagem em andamento</strong>{' '}
+              (placa + motorista), igual à definição de placas.
+            </p>
+          )}
+
+          {refreshable.length > 0 && !preview.inTransit && (
             <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">
               {refreshable.length} roteiro(s) repetido(s) terão <strong>carga atualizada</strong>{' '}
               (motos, vencimento e paradas) sem criar duplicata.
@@ -306,34 +408,57 @@ export function ImportChronus() {
 
           <div className="space-y-4">
             {preview.routes.map((route) => {
-              const blocked =
-                (!!route.duplicateRouteId && !route.canRefreshLoad) ||
-                route.unmatchedDealerCodes.length > 0
+              const blocked = preview.inTransit
+                ? !startable.some((r) => r.manifesto === route.manifesto)
+                : (!!route.duplicateRouteId && !route.canRefreshLoad) ||
+                  route.unmatchedDealerCodes.length > 0
               return (
                 <div key={route.manifesto} className={cn(blocked && 'opacity-70')}>
-                  {(route.duplicateRouteId || route.unmatchedDealerCodes.length > 0) && (
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      {route.canRefreshLoad && route.duplicateRouteId && (
-                        <Badge tone="info">Atualizar carga</Badge>
-                      )}
-                      {route.duplicateRouteId && !route.canRefreshLoad && (
-                        <Badge tone="warning">Já concluído</Badge>
-                      )}
-                      {!route.duplicateRouteId && route.unmatchedDealerCodes.length > 0 && (
-                        <Badge tone="danger">
-                          Sem cadastro
-                          {route.unmatchedDealerCodes.filter(Boolean).length
-                            ? ` · cód. ${route.unmatchedDealerCodes.filter(Boolean).join(', ')}`
-                            : ''}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {preview.inTransit && route.inTransitEligible && (
+                      <Badge tone="info">
+                        Em trânsito
+                        {route.assignedPlate ? ` · ${route.assignedPlate}` : ''}
+                        {route.assignedDriverName ? ` · ${route.assignedDriverName}` : ''}
+                      </Badge>
+                    )}
+                    {preview.inTransit && route.skipLabel && (
+                      <Badge tone="warning">{route.skipLabel}</Badge>
+                    )}
+                    {route.canRefreshLoad && route.duplicateRouteId && !preview.inTransit && (
+                      <Badge tone="info">Atualizar carga</Badge>
+                    )}
+                    {route.duplicateRouteId && !route.canRefreshLoad && !preview.inTransit && (
+                      <Badge tone="warning">Já concluído</Badge>
+                    )}
+                    {route.unmatchedDealerCodes.length > 0 && (
+                      <Badge tone="danger">
+                        Sem cadastro
+                        {route.unmatchedDealerCodes.filter(Boolean).length
+                          ? ` · cód. ${route.unmatchedDealerCodes.filter(Boolean).join(', ')}`
+                          : ''}
+                      </Badge>
+                    )}
+                  </div>
                   <RouteLoadCard
                     name={route.name}
                     loadDate={route.date}
                     priorityExpiryDate={route.priorityExpiryDate}
-                    notes={route.plateHint ? `Placa Chronus: ${route.plateHint}` : null}
+                    notes={
+                      preview.inTransit
+                        ? [
+                            route.assignedPlate ? `Placa: ${route.assignedPlate}` : null,
+                            route.assignedDriverName
+                              ? `Motorista: ${route.assignedDriverName}`
+                              : null,
+                            route.chronusStatus ? `Status Chronus: ${route.chronusStatus}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || null
+                        : route.plateHint
+                          ? `Placa Chronus: ${route.plateHint}`
+                          : null
+                    }
                     requiredFleetOwner={route.requiredFleetOwner}
                     requiredCapacityMotos={route.requiredCapacityMotos}
                     destinations={route.destinations.map((d) => ({
@@ -361,17 +486,23 @@ export function ImportChronus() {
               }
             >
               {commitMutation.isPending ? <Spinner size="sm" /> : null}
-              Confirmar
-              {(creatable?.length ?? 0) + refreshable.length > 0
-                ? ` (${[
-                    creatable?.length ? `${creatable.length} novo${creatable.length === 1 ? '' : 's'}` : '',
-                    refreshable.length
-                      ? `${refreshable.length} atualização${refreshable.length === 1 ? '' : 'ões'}`
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')})`
-                : ''}
+              {preview.inTransit ? 'Recuperar viagens em andamento' : 'Confirmar'}
+              {preview.inTransit
+                ? startable.length > 0
+                  ? ` (${startable.length})`
+                  : ''
+                : (creatable?.length ?? 0) + refreshable.length > 0
+                  ? ` (${[
+                      creatable?.length
+                        ? `${creatable.length} novo${creatable.length === 1 ? '' : 's'}`
+                        : '',
+                      refreshable.length
+                        ? `${refreshable.length} atualização${refreshable.length === 1 ? '' : 'ões'}`
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')})`
+                  : ''}
             </Button>
           </div>
         </div>
