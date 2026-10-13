@@ -67,9 +67,14 @@ export function matchDriverName(
   raw: string | null | undefined,
   drivers: CatalogDriver[],
 ): CatalogDriver | null {
-  const key = normalizePersonName(raw ?? '');
-  if (!key) return null;
-  return drivers.find((d) => normalizePersonName(d.name) === key) ?? null;
+  const candidates = [raw ?? '', (raw ?? '').replace(/\([^)]*\)/g, ' ')];
+  for (const candidate of candidates) {
+    const key = normalizePersonName(candidate);
+    if (!key) continue;
+    const hit = drivers.find((d) => normalizePersonName(d.name) === key);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 export function mostCommonNonEmpty(values: string[]): string | null {
@@ -129,15 +134,20 @@ function normStatus(value: string): string {
 
 /** Uma linha ainda está na rua (saiu e não chegou). */
 export function chronusRowInTransitKind(
-  row: Pick<ChronusRow, 'plate' | 'status' | 'sentAt' | 'arrivedAt'>,
+  row: Pick<ChronusRow, 'plate' | 'status' | 'sentAt' | 'arrivedAt' | 'deliveredAt'>,
 ): 'in_transit' | 'not_departed' | 'arrived' | 'fictional' | 'no_plate' {
   const plate = row.plate.trim();
   if (!plate) return 'no_plate';
   if (parseChronusPlateHint(plate)?.isFictional) return 'fictional';
 
   const status = normStatus(row.status);
-  const arrived = !!row.arrivedAt.trim();
+  const delivered = !!row.deliveredAt?.trim();
   const sent = !!row.sentAt.trim();
+  const departedStatus =
+    status.includes('saiu') ||
+    status.includes('transito') ||
+    status.includes('em rota') ||
+    status.includes('em entrega');
 
   if (
     status.includes('entregue') ||
@@ -146,7 +156,9 @@ export function chronusRowInTransitKind(
   ) {
     return 'arrived';
   }
-  if (arrived) return 'arrived';
+  if (delivered) return 'arrived';
+  if (departedStatus) return 'in_transit';
+  // Data Chegada no Chronus é previsão — só conta entrega real (Data Entrega).
   if (status.includes('estoque') && !sent) return 'not_departed';
   return 'in_transit';
 }

@@ -31,6 +31,8 @@ export type ChronusRow = {
   status: string;
   sentAt: string;
   arrivedAt: string;
+  /** Data Entrega (chegada real). Data Chegada do Chronus é previsão. */
+  deliveredAt: string;
   driverName: string;
 };
 
@@ -108,6 +110,7 @@ const HEADER_ALIASES: Record<keyof ChronusRow, string[]> = {
   status: ['status'],
   sentAt: ['data envio'],
   arrivedAt: ['data chegada'],
+  deliveredAt: ['data entrega'],
   driverName: ['motorista'],
 };
 
@@ -143,6 +146,7 @@ const CHRONUS_ENTREGAS_LAYOUT = {
   plate: 25,
   sentAt: 22,
   arrivedAt: 23,
+  deliveredAt: 27,
   status: 28,
   driverName: 34,
 } as const;
@@ -167,6 +171,7 @@ function resolveColumns(headers: string[]) {
   const status = pickColumn(headers, HEADER_ALIASES.status);
   const sentAt = pickColumn(headers, HEADER_ALIASES.sentAt);
   const arrivedAt = pickColumn(headers, HEADER_ALIASES.arrivedAt);
+  const deliveredAt = pickColumn(headers, HEADER_ALIASES.deliveredAt);
   const driverName = pickColumn(headers, HEADER_ALIASES.driverName);
   return {
     manifesto,
@@ -178,6 +183,7 @@ function resolveColumns(headers: string[]) {
     status,
     sentAt,
     arrivedAt,
+    deliveredAt,
     driverName,
   };
 }
@@ -306,6 +312,7 @@ export async function parseChronusFile(
       status: col.status >= 0 ? line[col.status]?.trim() ?? '' : '',
       sentAt: col.sentAt >= 0 ? line[col.sentAt]?.trim() ?? '' : '',
       arrivedAt: col.arrivedAt >= 0 ? line[col.arrivedAt]?.trim() ?? '' : '',
+      deliveredAt: col.deliveredAt >= 0 ? line[col.deliveredAt]?.trim() ?? '' : '',
       driverName: col.driverName >= 0 ? line[col.driverName]?.trim() ?? '' : '',
     });
   }
@@ -374,8 +381,8 @@ export async function buildChronusPreview(
 
   for (const manifesto of manifestOrder) {
     const items = byManifesto.get(manifesto)!;
-    const sentDate = inTransit ? firstChronusSentDate(items) : null;
-    const itemDate = sentDate ?? routeDate;
+    const sentDate = firstChronusSentDate(items);
+    const itemDate = routeDate;
     const itemDateIso = itemDate.toISOString().slice(0, 10);
     const name = buildRouteName(manifesto, itemDate);
     const dupKey = chronusRouteDuplicateKey(name, itemDateIso);
