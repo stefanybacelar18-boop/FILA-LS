@@ -16,8 +16,9 @@ import { hasActivePriority } from './route-priority.js';
 import { orderStopsNearestFromPad } from './route-stop-order.js';
 import {
   canRefreshChronusRoute,
-  chronusRouteDuplicateKey,
+  chronusManifestoKey,
   registerChronusExistingRoute,
+  type ChronusExistingRouteMatch,
 } from './chronus-dedup';
 import { buildChronusDealerIndexes, matchChronusDealership } from './chronus-dealer-match';
 
@@ -62,6 +63,7 @@ export type ChronusManifestPreview = {
   unmatchedDealerCodes: string[];
   duplicateRouteId: string | null;
   duplicateRouteName: string | null;
+  duplicateRouteDate?: string | null;
   duplicateRouteStatus?: string | null;
   /** Roteiro duplicado aguardando placa — reimport atualiza motos/vencimento. */
   canRefreshLoad: boolean;
@@ -372,9 +374,9 @@ export async function buildChronusPreview(
     byManifesto.set(row.manifesto, list);
   }
 
-  const existingNames = new Map<string, { id: string; name: string; status: string }>();
+  const existingByManifesto = new Map<string, ChronusExistingRouteMatch>();
   for (const route of options?.existingRouteNames ?? []) {
-    registerChronusExistingRoute(existingNames, route);
+    registerChronusExistingRoute(existingByManifesto, route);
   }
 
   const routes: ChronusManifestPreview[] = [];
@@ -385,8 +387,8 @@ export async function buildChronusPreview(
     const itemDate = routeDate;
     const itemDateIso = itemDate.toISOString().slice(0, 10);
     const name = buildRouteName(manifesto, itemDate);
-    const dupKey = chronusRouteDuplicateKey(name, itemDateIso);
-    const duplicate = existingNames.get(dupKey) ?? null;
+    const dupKey = chronusManifestoKey(manifesto);
+    const duplicate = dupKey ? existingByManifesto.get(dupKey) ?? null : null;
 
     const dealerGroups = new Map<string, ChronusRow[]>();
     const dealerOrder: string[] = [];
@@ -456,6 +458,7 @@ export async function buildChronusPreview(
       unmatchedDealerCodes: destinations.filter((d) => !d.matched).map((d) => d.dealerCode),
       duplicateRouteId: duplicate?.id ?? null,
       duplicateRouteName: duplicate?.name ?? null,
+      duplicateRouteDate: duplicate?.date ?? null,
       duplicateRouteStatus: duplicate?.status ?? null,
       canRefreshLoad: duplicate ? canRefreshChronusRoute(duplicate.status) : false,
       sentAt: sentDate ? sentDate.toISOString().slice(0, 10) : null,

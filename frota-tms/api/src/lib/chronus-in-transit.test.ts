@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RouteStatus } from '../types/enums';
 import { operationalDateKey } from '../utils/timezone';
 import { buildChronusPreview, parseChronusFile, type ChronusRow } from './chronus-import';
 import {
@@ -242,5 +243,79 @@ describe('buildChronusPreview + enrich inTransit', () => {
     });
     expect(load.routeDate).not.toBe(transit.routes[0]?.date);
     expect(transit.routes[0]?.date).toBe(operationalDateKey(new Date('2026-10-13T15:00:00.000Z')));
+  });
+
+  it('reimportar o mesmo manifesto em outro dia atualiza a viagem existente', async () => {
+    const preview = await buildChronusPreview(
+      [row({ manifesto: '384094' }), row({ manifesto: '384095', dealerCode: '123' })],
+      dealers,
+      {
+        importDate: new Date('2026-10-14T15:00:00.000Z'),
+        existingRouteNames: [
+          {
+            id: 'route-384094',
+            name: '384094 13/10/2026',
+            date: new Date('2026-10-13T12:00:00.000Z'),
+            status: RouteStatus.AGUARDANDO_PLACAS,
+          },
+          {
+            id: 'route-384095',
+            name: '384095 13/10/2026',
+            date: new Date('2026-10-13T12:00:00.000Z'),
+            status: RouteStatus.EM_ANDAMENTO,
+          },
+        ],
+      },
+    );
+
+    const first = preview.routes.find((r) => r.manifesto === '384094');
+    const second = preview.routes.find((r) => r.manifesto === '384095');
+    expect(first?.date).not.toBe('2026-10-13');
+    expect(first?.duplicateRouteId).toBe('route-384094');
+    expect(first?.duplicateRouteName).toBe('384094 13/10/2026');
+    expect(first?.duplicateRouteDate).toBe('2026-10-13');
+    expect(first?.canRefreshLoad).toBe(true);
+    expect(second?.duplicateRouteId).toBe('route-384095');
+    expect(second?.canRefreshLoad).toBe(true);
+  });
+
+  it('não abre outra viagem quando o manifesto já está em andamento', async () => {
+    const preview = await buildChronusPreview([row({ manifesto: '384094' })], dealers, {
+      importDate: new Date('2026-10-14T15:00:00.000Z'),
+      inTransit: true,
+      existingRouteNames: [
+        {
+          id: 'route-384094',
+          name: '384094 13/10/2026',
+          date: new Date('2026-10-13T12:00:00.000Z'),
+          status: RouteStatus.EM_ANDAMENTO,
+        },
+      ],
+    });
+    const enriched = enrichChronusInTransitPreview(preview, [row({ manifesto: '384094' })], {
+      fleet,
+      drivers,
+      busyVehicleIds: new Set(),
+    });
+    const route = enriched.routes[0]!;
+    expect(route.duplicateRouteId).toBe('route-384094');
+    expect(route.skipReason).toBe('ALREADY_IN_TRANSIT');
+    expect(isChronusInTransitStartable(route)).toBe(false);
+  });
+
+  it('manifesto concluído não vira outra viagem', async () => {
+    const preview = await buildChronusPreview([row({ manifesto: '384094' })], dealers, {
+      importDate: new Date('2026-10-14T15:00:00.000Z'),
+      existingRouteNames: [
+        {
+          id: 'route-done',
+          name: '384094 01/10/2026',
+          date: new Date('2026-10-01T12:00:00.000Z'),
+          status: RouteStatus.CONCLUIDO,
+        },
+      ],
+    });
+    expect(preview.routes[0]?.duplicateRouteId).toBe('route-done');
+    expect(preview.routes[0]?.canRefreshLoad).toBe(false);
   });
 });
