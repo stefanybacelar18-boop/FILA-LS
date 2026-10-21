@@ -32,6 +32,14 @@ import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 import { buildPriorityExpiryWorkbook, priorityExpiryFilename } from '../lib/priority-expiry-export';
 import { nextVehicleStatusAfterHold } from '../lib/vehicle-lifecycle';
+import {
+  assessRouteCalendar,
+  assessStoredRoute,
+  calendarBlockMessage,
+  fetchStoreCalendars,
+  readCalendarOverride,
+  type RouteCalendarAssessment,
+} from '../lib/store-calendar';
 
 const routeListDealershipSelect = {
   id: true,
@@ -114,6 +122,7 @@ type DealershipRow = {
   id: string;
   name: string;
   city: string;
+  state?: string;
   distanceKm: number;
   avgTravelDays: number;
   allowedVehicle: string;
@@ -177,6 +186,27 @@ function pickRouteListTrips<T extends RouteListTrip>(trips: T[]): T[] {
 }
 
 /** Vehicle type must be allowed by EVERY stop (AMBOS = any). */
+function calendarStops(dealerships: DealershipRow[]) {
+  return dealerships.map((d) => ({
+    id: d.id,
+    name: d.name,
+    city: d.city,
+    state: d.state ?? '',
+    avgTravelDays: d.avgTravelDays,
+  }));
+}
+
+function denyClosedStore(
+  res: { status: (code: number) => { json: (body: unknown) => void } },
+  assessment: RouteCalendarAssessment,
+) {
+  return res.status(409).json({
+    error: calendarBlockMessage(assessment),
+    calendarBlocked: true,
+    calendar: assessment,
+  });
+}
+
 function vehicleAllowedAtAllStops(vehicleType: string, dealerships: DealershipRow[]): DealershipRow | null {
   for (const d of dealerships) {
     if (d.allowedVehicle !== 'AMBOS' && d.allowedVehicle !== vehicleType) {
@@ -319,6 +349,16 @@ export function createRoutesRouter(io: Server) {
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       take: narrowed ? undefined : 80,
     });
+    const storeCalendars = await fetchStoreCalendars(
+      prisma,
+      routes.flatMap((route) =>
+        route.dealerships.length > 0
+          ? route.dealerships.map((link) => link.dealership.id)
+          : route.dealership
+            ? [route.dealership.id]
+            : [],
+      ),
+    );
 
     const withForecast = routes.map((route) => {
       const routeForList = { ...route, trips: pickRouteListTrips(route.trips) };
@@ -340,8 +380,15 @@ export function createRoutesRouter(io: Server) {
       const farthest = farthestDealershipFromPad(linked, owner);
       const departureAt = routeDepartureAt(routeForList.date);
       const expectedReturn = expectedReturnDate(departureAt, farthest.padAvgTravelDays);
+      const calendar = assessRouteCalendar({
+        routeDate: routeForList.date,
+        owner,
+        stops: calendarStops(linked),
+        ...storeCalendars,
+      });
       return {
         ...routeForList,
+        calendar,
         returnForecast: {
           basis: 'PAD_DISTANCE' as const,
           pad: { lat: PAD_LAT, lng: PAD_LNG },
@@ -864,7 +911,7 @@ export function createRoutesRouter(io: Server) {
     const routeId = paramId(req);
     const route = await prisma.route.findUnique({
       where: { id: routeId },
-      include: { dealerships: true },
+      include: { dealerships: { include: { dealership: true } } },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
     if (route.status !== RouteStatus.RASCUNHO) {
@@ -882,6 +929,23 @@ export function createRoutesRouter(io: Server) {
     if (!route.plannedVehicleCount || route.plannedVehicleCount < 1) {
       // 1 placa por rota
     }
+
+    const calendar = await assessStoredRoute(prisma, {
+      routeDate: route.date,
+      owner:
+        route.requiredFleetOwner === 'LSL' || route.requiredFleetOwner === 'AG'
+          ? route.requiredFleetOwner
+          : null,
+      stops: route.dealerships.map((link) => ({
+        id: link.dealership.id,
+        name: link.dealership.name,
+        city: link.dealership.city,
+        state: link.dealership.state,
+        avgTravelDays: link.dealership.avgTravelDays,
+      })),
+    });
+    const calendarOverride = readCalendarOverride(req.body);
+    if (calendar.blocked && !calendarOverride) return denyClosedStore(res, calendar);
 
     const firstOfDay = await isFirstRouteSentToday();
 
@@ -905,7 +969,9 @@ export function createRoutesRouter(io: Server) {
     await audit('SEND_TO_OPERATION', 'Route', {
       userId: req.user!.id,
       entityId: routeId,
-      details: `${route.name} · 1 placa`,
+      details: calendarOverride
+        ? `${route.name} · 1 placa · liberado com loja em risco: ${calendarOverride}`
+        : `${route.name} · 1 placa`,
     });
 
     // 1º roteiro disponibilizado no dia → aviso no navegador/app (Admin e Operação)
@@ -1199,6 +1265,18 @@ export function createRoutesRouter(io: Server) {
       return res.status(400).json({ error: 'Roteiro sem concessionárias' });
     }
 
+    const plateVehicle = await prisma.vehicle.findUnique({
+      where: { id: uniqueVehicleIds[0] },
+      select: { plate: true, owner: true },
+    });
+    const calendar = await assessStoredRoute(prisma, {
+      routeDate: route.date,
+      owner: plateVehicle ? plateOwner(plateVehicle.plate, plateVehicle.owner) : null,
+      stops: calendarStops(linked),
+    });
+    const calendarOverride = readCalendarOverride(req.body);
+    if (calendar.blocked && !calendarOverride) return denyClosedStore(res, calendar);
+
     // Previsão pelo PAD × destino mais longe; dias dependem da frota (LSL Aracaju = dia seguinte)
     const destNames = linked.map((d) => d.name).join(', ');
     // Saída = data do roteiro às 06:00 (regra operacional)
@@ -1333,7 +1411,12 @@ export function createRoutesRouter(io: Server) {
       await audit('ASSIGN_PLATES', 'Route', {
         userId: req.user!.id,
         entityId: route.id,
-        details: `1 placa · retorno PAD→${farthest.name} (${farthest.padDistanceKm} km / ${farthest.padAvgTravelDays} dias${sample?.owner === 'LSL' ? ' · LSL' : ''})`,
+        details: [
+          `1 placa · retorno PAD→${farthest.name} (${farthest.padDistanceKm} km / ${farthest.padAvgTravelDays} dias${sample?.owner === 'LSL' ? ' · LSL' : ''})`,
+          calendarOverride ? `liberado com loja em risco: ${calendarOverride}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
       });
       io.emit('fleet:changed', { action: 'assign', routeId: route.id });
       io.emit('trips:changed', { action: 'create' });

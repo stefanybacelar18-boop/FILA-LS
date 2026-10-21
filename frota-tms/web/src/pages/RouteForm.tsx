@@ -43,6 +43,7 @@ export function RouteForm() {
   const [fleetOwner, setFleetOwner] = useState<'' | 'LSL' | 'AG'>('')
   const [capacityMotos, setCapacityMotos] = useState('')
   const [notes, setNotes] = useState('')
+  const [calendarOverride, setCalendarOverride] = useState('')
   const [destMotoCount, setDestMotoCount] = useState<Record<string, string>>({})
   const [destExpiry, setDestExpiry] = useState<Record<string, string>>({})
 
@@ -165,7 +166,11 @@ export function RouteForm() {
         route = (await api.put<Route>(`/routes/${editingId}`, payload)).data
       }
       if (disponibilizar && route.status === 'RASCUNHO') {
-        route = (await api.post<Route>(`/routes/${route.id}/send-to-operation`)).data
+        route = (
+          await api.post<Route>(`/routes/${route.id}/send-to-operation`, {
+            calendarOverrideReason: calendarOverride.trim() || undefined,
+          })
+        ).data
       }
       return route
     },
@@ -479,9 +484,17 @@ export function RouteForm() {
         />
 
         {saveMutation.isError && (
-          <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
-            {saveErrorMessage(saveMutation.error)}
-          </p>
+          <div className="space-y-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">
+            <p>{saveErrorMessage(saveMutation.error)}</p>
+            {saveErrorMessage(saveMutation.error).includes('Risco de loja fechada') && (
+              <Textarea
+                label="Justificativa para liberar mesmo assim"
+                value={calendarOverride}
+                onChange={(e) => setCalendarOverride(e.target.value)}
+                placeholder="A loja confirmou que recebe neste feriado"
+              />
+            )}
+          </div>
         )}
 
         <div className="flex flex-wrap justify-end gap-2">

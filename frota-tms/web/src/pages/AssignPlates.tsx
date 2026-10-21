@@ -161,6 +161,7 @@ export function AssignPlates() {
   const [okMsg, setOkMsg] = useState('')
   const [showProblems, setShowProblems] = useState(false)
   const [editRouteId, setEditRouteId] = useState<string | null>(null)
+  const [calendarOverride, setCalendarOverride] = useState('')
 
   const [justifyVehicle, setJustifyVehicle] = useState<PlatesBoardVehicle | null>(null)
   const [preset, setPreset] = useState('')
@@ -300,6 +301,7 @@ export function AssignPlates() {
         vehicleId: selectedId,
         vehicleIds: [selectedId],
         driverId: selectedDriverId,
+        calendarOverrideReason: calendarOverride.trim() || undefined,
       })
     },
     onSuccess: async () => {
@@ -308,6 +310,7 @@ export function AssignPlates() {
       setSelectedId(null)
       setSelectedDriverId('')
       setConfirmOpen(false)
+      setCalendarOverride('')
       setError('')
       setRouteId('')
       setSearchParams({})
@@ -441,8 +444,8 @@ export function AssignPlates() {
             </div>
             <div className="space-y-5">
             {pendingRoutes.map((r) => (
+              <div key={r.id}>
               <RouteLoadCard
-                key={r.id}
                 name={r.name}
                 loadDate={r.date}
                 destinations={routeDestinationItems(r)}
@@ -465,6 +468,12 @@ export function AssignPlates() {
                   ) : undefined
                 }
               />
+              {r.calendar?.blocked && (
+                <p className="mt-1 text-xs text-[var(--color-danger)]">
+                  Loja fechada na janela de chegada. Abra o roteiro para ver o motivo.
+                </p>
+              )}
+              </div>
             ))}
             </div>
           </>
@@ -537,6 +546,27 @@ export function AssignPlates() {
           </p>
         )}
       </div>
+
+      {selectedRoute?.calendar && selectedRoute.calendar.status !== 'APTO' && (
+        <div
+          className={
+            selectedRoute.calendar.blocked
+              ? 'mb-3 rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]'
+              : 'mb-3 rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm'
+          }
+        >
+          {selectedRoute.calendar.summary}
+          {selectedRoute.calendar.blocked && (
+            <Textarea
+              className="mt-2"
+              label="Justificativa para definir a placa mesmo assim"
+              value={calendarOverride}
+              onChange={(e) => setCalendarOverride(e.target.value)}
+              placeholder="A loja confirmou que recebe neste feriado"
+            />
+          )}
+        </div>
+      )}
 
       {error && <p className="mb-2 text-sm text-[var(--color-danger)]">{error}</p>}
       {okMsg && <p className="mb-2 text-sm text-[var(--color-success)]">{okMsg}</p>}

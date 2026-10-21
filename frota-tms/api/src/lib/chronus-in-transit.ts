@@ -13,6 +13,7 @@ import {
   type ChronusManifestPreview,
   type ChronusRow,
 } from './chronus-import';
+import { assessStoredRoute, calendarBlockMessage } from './store-calendar';
 
 export const CHRONUS_IN_TRANSIT_NOTE = 'Recuperado do Chronus (saídas em trânsito)';
 
@@ -484,6 +485,30 @@ export async function commitChronusInTransitRoutes(
           .filter((d): d is (typeof dealers)[number] => !!d);
         if (ordered.length === 0) {
           throw Object.assign(new Error('Roteiro sem concessionárias'), { status: 400 });
+        }
+
+        const transitVehicle = item.vehicleId
+          ? await tx.vehicle.findUnique({
+              where: { id: item.vehicleId },
+              select: { plate: true, owner: true },
+            })
+          : null;
+        const calendar = await assessStoredRoute(tx, {
+          routeDate: item.date,
+          owner: transitVehicle ? plateOwner(transitVehicle.plate, transitVehicle.owner) : null,
+          stops: ordered.map((dealer) => ({
+            id: dealer.id,
+            name: dealer.name,
+            city: dealer.city,
+            state: dealer.state,
+            avgTravelDays: dealer.avgTravelDays,
+          })),
+        });
+        if (calendar.blocked) {
+          throw Object.assign(
+            new Error(calendarBlockMessage(calendar) ?? 'Loja fechada na chegada'),
+            { status: 409 },
+          );
         }
 
         const region = [...new Set(ordered.map((d) => d.region))].join(' / ');

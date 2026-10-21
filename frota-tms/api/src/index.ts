@@ -27,7 +27,7 @@ import publicDriverRoutes from './routes/publicDriver';
 import { gzipJson } from './middleware/gzip-json';
 import { prisma } from './lib/prisma';
 import { healthPayload, probeDatabase } from './lib/health';
-import { ensureHotIndexes } from './lib/ensure-indexes';
+import { ensureDealershipCalendarTables, ensureHotIndexes } from './lib/ensure-indexes';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
@@ -155,7 +155,10 @@ io.on('connection', (socket) => {
 });
 
 const PORT = Number(process.env.PORT) || 4000;
-server.listen(PORT, '0.0.0.0', () => {
+
+async function start() {
+  await ensureDealershipCalendarTables(prisma);
+  server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
   void ensureBootstrapUsers(prisma)
     .then(() => closeOpenTripsAtForecast(prisma, { once: true }))
@@ -210,6 +213,12 @@ server.listen(PORT, '0.0.0.0', () => {
       if (n > 0) console.log(`Concessionárias com previsão PAD atualizada: ${n}`);
     })().catch((err) => console.warn('Sync PAD dealerships:', err?.message ?? err));
   }
+  });
+}
+
+void start().catch((err) => {
+  console.error('Falha ao subir o FrotaTMS:', err);
+  process.exit(1);
 });
 
 export { io };

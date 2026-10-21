@@ -178,6 +178,11 @@ export interface Route {
   trips?: Trip[]
   _count?: { trips: number }
   returnForecast?: ReturnForecast | null
+  calendar?: {
+    status: 'APTO' | 'ATENCAO' | 'RISCO' | 'PENDENTE'
+    blocked: boolean
+    summary: string
+  }
 }
 
 export interface TripEvidence {

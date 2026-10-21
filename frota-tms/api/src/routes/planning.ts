@@ -32,6 +32,13 @@ import {
   isChronusInTransitStartable,
 } from '../lib/chronus-in-transit';
 import { orderStopsNearestFromPad } from '../lib/route-stop-order.js';
+import {
+  assessRouteCalendar,
+  assessStoredRoute,
+  calendarBlockMessage,
+  fetchStoreCalendars,
+  readCalendarOverride,
+} from '../lib/store-calendar';
 
 const chronusUpload = multer({
   storage: multer.memoryStorage(),
@@ -579,7 +586,10 @@ export function createPlanningRouter(io: Server) {
     const routeId = paramId(req);
     const route = await prisma.route.findUnique({
       where: { id: routeId },
-      include: { dealerships: true, planningCities: true },
+      include: {
+        dealerships: { include: { dealership: true } },
+        planningCities: true,
+      },
     });
     if (!route) return res.status(404).json({ error: 'Roteiro não encontrado' });
     if (route.status !== RouteStatus.RASCUNHO) {
@@ -599,6 +609,29 @@ export function createPlanningRouter(io: Server) {
       await prisma.route.update({
         where: { id: routeId },
         data: { plannedVehicleCount: 1 },
+      });
+    }
+
+    const calendar = await assessStoredRoute(prisma, {
+      routeDate: route.date,
+      owner:
+        route.requiredFleetOwner === 'LSL' || route.requiredFleetOwner === 'AG'
+          ? route.requiredFleetOwner
+          : null,
+      stops: route.dealerships.map((link) => ({
+        id: link.dealership.id,
+        name: link.dealership.name,
+        city: link.dealership.city,
+        state: link.dealership.state,
+        avgTravelDays: link.dealership.avgTravelDays,
+      })),
+    });
+    const calendarOverride = readCalendarOverride(req.body);
+    if (calendar.blocked && !calendarOverride) {
+      return res.status(409).json({
+        error: calendarBlockMessage(calendar),
+        calendarBlocked: true,
+        calendar,
       });
     }
 
@@ -625,7 +658,9 @@ export function createPlanningRouter(io: Server) {
     await audit('SEND_TO_OPERATION', 'Route', {
       userId: req.user!.id,
       entityId: routeId,
-      details: `${route.name} · 1 placa`,
+      details: calendarOverride
+        ? `${route.name} · 1 placa · liberado com loja em risco: ${calendarOverride}`
+        : `${route.name} · 1 placa`,
     });
 
     if (firstOfDay) {
@@ -1019,7 +1054,16 @@ export function createPlanningRouter(io: Server) {
         const parsed = await parseChronusFile(file.buffer, file.originalname);
         const dealers = await prisma.dealership.findMany({
           where: { active: true },
-          select: { id: true, code: true, name: true, city: true, region: true, active: true },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true,
+            region: true,
+            active: true,
+            avgTravelDays: true,
+          },
         });
 
         const saturdayWork = ['true', '1', 'on'].includes(
@@ -1096,6 +1140,35 @@ export function createPlanningRouter(io: Server) {
             data: { code },
           });
         }
+
+        const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer]));
+        const matchedIds = preview.routes.flatMap((route) =>
+          route.destinations.map((dest) => dest.dealershipId).filter((id): id is string => !!id),
+        );
+        const storeCalendars = await fetchStoreCalendars(prisma, matchedIds);
+        preview = {
+          ...preview,
+          routes: preview.routes.map((route) => ({
+            ...route,
+            calendar: assessRouteCalendar({
+              routeDate: route.date,
+              owner: route.requiredFleetOwner,
+              stops: route.destinations
+                .filter((dest) => dest.dealershipId)
+                .map((dest) => {
+                  const dealer = dealerById.get(dest.dealershipId!);
+                  return {
+                    id: dest.dealershipId!,
+                    name: dealer?.name ?? dest.dealerName,
+                    city: dealer?.city ?? dest.city,
+                    state: dealer?.state ?? '',
+                    avgTravelDays: dealer?.avgTravelDays ?? 1,
+                  };
+                }),
+              ...storeCalendars,
+            }),
+          })),
+        };
 
         const batch = await prisma.importBatch.create({
           data: {

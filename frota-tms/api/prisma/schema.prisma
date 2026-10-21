@@ -101,6 +101,36 @@ model Dealership {
   trips      Trip[]
   routes     Route[]           @relation("RoutePrimaryDealership")
   planningCities PlanningCity[]
+  hours      DealershipHour[]
+  closures   DealershipClosure[]
+}
+
+// Expediente semanal informado pela concessionária. Sem linhas = horário desconhecido.
+model DealershipHour {
+  id           String     @id @default(cuid())
+  weekday      Int
+  closed       Boolean    @default(false)
+  openTime     String?
+  closeTime    String?
+  dealershipId String
+  dealership   Dealership @relation(fields: [dealershipId], references: [id], onDelete: Cascade)
+
+  @@unique([dealershipId, weekday])
+}
+
+// Feriado municipal, ponto facultativo da cidade ou exceção de abertura.
+model DealershipClosure {
+  id           String     @id @default(cuid())
+  date         DateTime
+  kind         String
+  openTime     String?
+  closeTime    String?
+  note         String?
+  dealershipId String
+  dealership   Dealership @relation(fields: [dealershipId], references: [id], onDelete: Cascade)
+
+  @@unique([dealershipId, date])
+  @@index([date])
 }
 
 model Route {
