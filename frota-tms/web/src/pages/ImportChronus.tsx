@@ -33,6 +33,7 @@ interface ChronusRoutePreview {
   unmatchedDealerCodes: string[]
   duplicateRouteId: string | null
   duplicateRouteName: string | null
+  duplicateRouteDate?: string | null
   canRefreshLoad?: boolean
   inTransitEligible?: boolean
   assignedPlate?: string | null
@@ -213,7 +214,7 @@ export function ImportChronus() {
         description={
           inTransit
             ? 'Relatório das cargas que já saíram: abre a viagem em trânsito com a placa e o motorista, como na definição de placas.'
-            : 'Reimportar o mesmo manifesto (ex.: 375168 12/08/2026) atualiza o roteiro existente em vez de duplicar.'
+            : 'O mesmo número de manifesto (ex.: 384094) atualiza a viagem já importada, mesmo em outro dia. Não cria duplicata.'
         }
         actions={
           <Link to="/roteiros">
@@ -252,7 +253,7 @@ export function ImportChronus() {
             <p className="text-sm text-[var(--color-text-muted)]">
               {inTransit
                 ? 'Use o relatório das que já saíram para entrega (não o de carga). Placa real e motorista cadastrado viram viagem em andamento hoje.'
-                : 'Linhas sem manifesto são ignoradas. Cada manifesto vira um roteiro com operação. Na sexta o carregamento vai para segunda, a menos que haja expediente no sábado.'}
+                : 'Linhas sem manifesto são ignoradas. Manifesto novo vira um roteiro. Se o número já existe, motos, paradas e vencimento entram na viagem importada. Na sexta o carregamento vai para segunda, a menos que haja expediente no sábado.'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -441,8 +442,8 @@ export function ImportChronus() {
                     )}
                   </div>
                   <RouteLoadCard
-                    name={route.name}
-                    loadDate={route.date}
+                    name={route.duplicateRouteName || route.name}
+                    loadDate={route.duplicateRouteDate || route.date}
                     priorityExpiryDate={route.priorityExpiryDate}
                     notes={
                       preview.inTransit
