@@ -16,6 +16,7 @@ import {
   Badge,
 } from '../components/ui'
 import { useAuthStore } from '../stores/auth'
+import { DealershipCalendarModal } from './DealershipCalendarModal'
 
 const emptyForm = {
   code: '',
@@ -40,6 +41,7 @@ export function Dealerships() {
   const [editing, setEditing] = useState<DealershipWithPad | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [calendarDealer, setCalendarDealer] = useState<{ id: string; name: string } | null>(null)
 
   const { data: meta } = useQuery({
     queryKey: ['dealerships', 'meta'],
@@ -219,6 +221,9 @@ export function Dealerships() {
                   {isAdmin && (
                     <td>
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setCalendarDealer({ id: d.id, name: d.name })}>
+                          Expediente
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => openEdit(d)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -305,6 +310,14 @@ export function Dealerships() {
           </p>
         </form>
       </Modal>
+
+      {calendarDealer && (
+        <DealershipCalendarModal
+          dealershipId={calendarDealer.id}
+          dealershipName={calendarDealer.name}
+          onClose={() => setCalendarDealer(null)}
+        />
+      )}
 
       <ConfirmModal
         open={!!deleteId}

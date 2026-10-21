@@ -16,6 +16,7 @@ import {
   Combobox,
   PlateBadge,
   Input,
+  Textarea,
 } from '../components/ui'
 import { AvailablePlatesBanner } from '../components/AvailablePlatesBanner'
 import { useAuthStore } from '../stores/auth'
@@ -142,6 +143,7 @@ export function Routes() {
   const [detailRoute, setDetailRoute] = useState<Route | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [sendId, setSendId] = useState<string | null>(null)
+  const [calendarOverride, setCalendarOverride] = useState('')
   const [reassignRoute, setReassignRoute] = useState<Route | null>(null)
   const [reassignVehicleId, setReassignVehicleId] = useState('')
   const [reassignDriverId, setReassignDriverId] = useState('')
@@ -389,19 +391,23 @@ export function Routes() {
 
   const sendMutation = useMutation({
     mutationFn: async (id: string) =>
-      (await api.post<{ firstRouteOfDay?: boolean }>(`/routes/${id}/send-to-operation`)).data,
+      (
+        await api.post<{ firstRouteOfDay?: boolean }>(`/routes/${id}/send-to-operation`, {
+          calendarOverrideReason: calendarOverride.trim() || undefined,
+        })
+      ).data,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['routes'] })
       setSendId(null)
+      setCalendarOverride('')
       setError('')
       setOkMsg('Roteiro disponibilizado para a Operação.')
     },
     onError: (err: unknown) => {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'Não foi possível disponibilizar.',
-      )
-      setSendId(null)
+      const data = (err as { response?: { data?: { error?: string; calendarBlocked?: boolean } } })
+        ?.response?.data
+      setError(data?.error ?? 'Não foi possível disponibilizar.')
+      if (!data?.calendarBlocked) setSendId(null)
     },
   })
 
@@ -756,7 +762,11 @@ export function Routes() {
                       </span>
                     </td>
                     <td>
-                      <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge tone={statusTone(r.status)}>{routeStatusLabels[r.status]}</Badge>
+                        {r.calendar?.status === 'RISCO' && <Badge tone="danger">Loja fechada</Badge>}
+                        {r.calendar?.status === 'ATENCAO' && <Badge tone="warning">Conferir abertura</Badge>}
+                      </div>
                     </td>
                     <td>
                       {plate ? (
@@ -821,6 +831,8 @@ export function Routes() {
                 <Button
                   variant="outline"
                   onClick={() => {
+                    setError('')
+                    setCalendarOverride('')
                     setSendId(detailRoute.id)
                     setDetailRoute(null)
                   }}
@@ -1030,12 +1042,27 @@ export function Routes() {
 
       <ConfirmModal
         open={!!sendId}
-        onClose={() => setSendId(null)}
+        onClose={() => {
+          setSendId(null)
+          setCalendarOverride('')
+        }}
         onConfirm={() => sendId && sendMutation.mutate(sendId)}
         title="Disponibilizar para Operação?"
-        message="A Operação verá este roteiro e escolherá 1 placa."
+        message="A Operação verá este roteiro e escolherá 1 placa. Feriado na carga ou na chegada segura o envio."
         confirmLabel="Disponibilizar"
         loading={sendMutation.isPending}
+        error={sendId ? error : null}
+        extra={
+          error.includes('Risco de loja fechada') ? (
+            <Textarea
+              className="mt-3"
+              label="Justificativa para liberar mesmo assim"
+              value={calendarOverride}
+              onChange={(e) => setCalendarOverride(e.target.value)}
+              placeholder="A loja confirmou que recebe neste feriado"
+            />
+          ) : null
+        }
       />
 
       <Modal

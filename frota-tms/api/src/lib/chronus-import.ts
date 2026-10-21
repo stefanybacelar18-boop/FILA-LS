@@ -65,6 +65,11 @@ export type ChronusManifestPreview = {
   duplicateRouteStatus?: string | null;
   /** Roteiro duplicado aguardando placa — reimport atualiza motos/vencimento. */
   canRefreshLoad: boolean;
+  calendar?: {
+    status: 'APTO' | 'ATENCAO' | 'RISCO' | 'PENDENTE';
+    blocked: boolean;
+    summary: string;
+  };
   inTransitEligible?: boolean;
   assignedPlate?: string | null;
   vehicleId?: string | null;

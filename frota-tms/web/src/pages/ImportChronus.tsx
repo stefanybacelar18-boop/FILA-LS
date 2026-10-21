@@ -41,6 +41,11 @@ interface ChronusRoutePreview {
   chronusStatus?: string | null
   skipReason?: string | null
   skipLabel?: string | null
+  calendar?: {
+    status: 'APTO' | 'ATENCAO' | 'RISCO' | 'PENDENTE'
+    blocked: boolean
+    summary: string
+  }
 }
 
 interface ChronusPreviewResponse {
@@ -425,6 +430,12 @@ export function ImportChronus() {
                     {preview.inTransit && route.skipLabel && (
                       <Badge tone="warning">{route.skipLabel}</Badge>
                     )}
+                    {route.calendar?.status === 'RISCO' && (
+                      <Badge tone="danger">Loja fechada na chegada</Badge>
+                    )}
+                    {route.calendar?.status === 'ATENCAO' && (
+                      <Badge tone="warning">Conferir se a loja abre</Badge>
+                    )}
                     {route.canRefreshLoad && route.duplicateRouteId && !preview.inTransit && (
                       <Badge tone="info">Atualizar carga</Badge>
                     )}
@@ -440,6 +451,9 @@ export function ImportChronus() {
                       </Badge>
                     )}
                   </div>
+                  {route.calendar && route.calendar.status !== 'APTO' && route.calendar.summary && (
+                    <p className="mb-2 text-xs text-[var(--color-text-muted)]">{route.calendar.summary}</p>
+                  )}
                   <RouteLoadCard
                     name={route.name}
                     loadDate={route.date}

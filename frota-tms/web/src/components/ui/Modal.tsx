@@ -77,6 +77,7 @@ interface ConfirmModalProps {
   loading?: boolean
   danger?: boolean
   error?: string | null
+  extra?: ReactNode
 }
 
 export function ConfirmModal({
@@ -89,6 +90,7 @@ export function ConfirmModal({
   loading,
   danger,
   error,
+  extra,
 }: ConfirmModalProps) {
   return (
     <Modal
@@ -108,6 +110,7 @@ export function ConfirmModal({
       }
     >
       <p className="text-[var(--color-text-muted)]">{message}</p>
+      {extra}
       {error ? <p className="mt-3 text-sm text-[var(--color-danger)]">{error}</p> : null}
     </Modal>
   )

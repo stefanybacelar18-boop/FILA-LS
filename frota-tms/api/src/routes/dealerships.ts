@@ -139,8 +139,40 @@ router.post('/recalculate-from-pad', authorize(Role.ADMIN), async (req: AuthRequ
   });
 });
 
+const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const calendarSchema = z.object({
+  hours: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        closed: z.boolean(),
+        openTime: z.string().regex(timePattern).nullable().optional(),
+        closeTime: z.string().regex(timePattern).nullable().optional(),
+      }),
+    )
+    .max(7),
+  closures: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        kind: z.enum(['FECHADO', 'ABRE', 'HORARIO_REDUZIDO']),
+        openTime: z.string().regex(timePattern).nullable().optional(),
+        closeTime: z.string().regex(timePattern).nullable().optional(),
+        note: z.string().max(120).nullable().optional(),
+      }),
+    )
+    .max(60),
+});
+
 router.get('/:id', async (req, res) => {
-  const item = await prisma.dealership.findUnique({ where: { id: paramId(req) } });
+  const item = await prisma.dealership.findUnique({
+    where: { id: paramId(req) },
+    include: {
+      hours: { orderBy: { weekday: 'asc' } },
+      closures: { orderBy: { date: 'asc' } },
+    },
+  });
   if (!item) return res.status(404).json({ error: 'Concessionária não encontrada' });
   const live = travelFromPadByCity(item.city);
   res.json({
@@ -228,6 +260,82 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     details: `${item.distanceKm} km do PAD`,
   });
   res.json({ ...item, padSource: pad.padSource });
+});
+
+router.put('/:id/calendar', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+  const parsed = calendarSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Expediente inválido. Use horário HH:mm e data AAAA-MM-DD.' });
+  }
+  const existing = await prisma.dealership.findUnique({ where: { id: paramId(req) } });
+  if (!existing) return res.status(404).json({ error: 'Concessionária não encontrada' });
+
+  const weekdays = new Set<number>();
+  for (const hour of parsed.data.hours) {
+    if (weekdays.has(hour.weekday)) {
+      return res.status(400).json({ error: 'Dia da semana repetido no expediente.' });
+    }
+    weekdays.add(hour.weekday);
+    if (!hour.closed) {
+      if (!hour.openTime || !hour.closeTime || hour.openTime >= hour.closeTime) {
+        return res.status(400).json({ error: 'Informe abertura e fechamento, com a abertura antes do fechamento.' });
+      }
+    }
+  }
+  const dates = new Set<string>();
+  for (const closure of parsed.data.closures) {
+    if (dates.has(closure.date)) {
+      return res.status(400).json({ error: 'Data de fechamento repetida.' });
+    }
+    dates.add(closure.date);
+    if (closure.kind === 'HORARIO_REDUZIDO') {
+      if (!closure.openTime || !closure.closeTime || closure.openTime >= closure.closeTime) {
+        return res.status(400).json({ error: 'Horário reduzido precisa de abertura e fechamento.' });
+      }
+    }
+  }
+
+  const saved = await prisma.$transaction(async (tx) => {
+    await tx.dealershipHour.deleteMany({ where: { dealershipId: existing.id } });
+    await tx.dealershipClosure.deleteMany({ where: { dealershipId: existing.id } });
+    if (parsed.data.hours.length > 0) {
+      await tx.dealershipHour.createMany({
+        data: parsed.data.hours.map((hour) => ({
+          dealershipId: existing.id,
+          weekday: hour.weekday,
+          closed: hour.closed,
+          openTime: hour.closed ? null : hour.openTime ?? null,
+          closeTime: hour.closed ? null : hour.closeTime ?? null,
+        })),
+      });
+    }
+    if (parsed.data.closures.length > 0) {
+      await tx.dealershipClosure.createMany({
+        data: parsed.data.closures.map((closure) => ({
+          dealershipId: existing.id,
+          date: new Date(`${closure.date}T12:00:00.000Z`),
+          kind: closure.kind,
+          openTime: closure.kind === 'HORARIO_REDUZIDO' ? closure.openTime ?? null : null,
+          closeTime: closure.kind === 'HORARIO_REDUZIDO' ? closure.closeTime ?? null : null,
+          note: closure.note?.trim() || null,
+        })),
+      });
+    }
+    return tx.dealership.findUnique({
+      where: { id: existing.id },
+      include: {
+        hours: { orderBy: { weekday: 'asc' } },
+        closures: { orderBy: { date: 'asc' } },
+      },
+    });
+  });
+
+  await audit('UPDATE_CALENDAR', 'Dealership', {
+    userId: req.user!.id,
+    entityId: existing.id,
+    details: `${existing.name} · ${parsed.data.hours.length} dias · ${parsed.data.closures.length} exceções`,
+  });
+  res.json(saved);
 });
 
 router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
