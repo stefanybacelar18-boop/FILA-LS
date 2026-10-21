@@ -13,6 +13,7 @@ import {
   resolveTravelFromPad,
   travelFromPadByCity,
 } from '../utils/geo';
+import { buildOperationCalendar, type OperationCalendarClosure } from '../lib/operation-calendar';
 
 const router = Router();
 router.use(authenticate);
@@ -163,6 +164,50 @@ const calendarSchema = z.object({
       }),
     )
     .max(60),
+});
+
+router.get('/calendar', async (req, res) => {
+  const from = String(req.query.from ?? '');
+  const to = String(req.query.to ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+    return res.status(400).json({ error: 'Informe o período com datas AAAA-MM-DD.' });
+  }
+  const span = (Date.parse(`${to}T12:00:00.000Z`) - Date.parse(`${from}T12:00:00.000Z`)) / 86_400_000;
+  if (!Number.isFinite(span) || span > 370) {
+    return res.status(400).json({ error: 'O calendário aceita no máximo um ano.' });
+  }
+
+  const rows = await prisma.dealershipClosure.findMany({
+    where: {
+      date: {
+        gte: new Date(`${from}T00:00:00.000Z`),
+        lte: new Date(`${to}T23:59:59.999Z`),
+      },
+      dealership: { active: true },
+    },
+    include: {
+      dealership: { select: { name: true, city: true, state: true } },
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  const days = buildOperationCalendar({
+    from,
+    to,
+    closures: rows.map((row) => ({
+      date: row.date.toISOString().slice(0, 10),
+      closure: {
+        name: row.dealership.name,
+        city: row.dealership.city,
+        state: row.dealership.state,
+        kind: row.kind as OperationCalendarClosure['kind'],
+        note: row.note,
+        openTime: row.openTime,
+        closeTime: row.closeTime,
+      },
+    })),
+  });
+  res.json({ from, to, days });
 });
 
 router.get('/:id', async (req, res) => {

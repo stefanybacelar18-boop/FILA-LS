@@ -27,6 +27,7 @@ import { EditLoadModal } from '../components/EditLoadModal'
 import type { RouteLoadDestination } from '../lib/route-priority'
 import { useAuthStore } from '../stores/auth'
 import { plateOwner } from '../lib/plateOwner'
+import { OperationCalendar } from '../components/OperationCalendar'
 
 interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
   expectedReturn?: string | null
@@ -412,6 +413,8 @@ export function AssignPlates() {
         />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
+
+        <OperationCalendar />
 
         {loadingRoutes ? (
           <div className="flex justify-center py-16">
