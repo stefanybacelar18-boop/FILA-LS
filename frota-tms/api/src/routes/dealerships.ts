@@ -177,23 +177,30 @@ router.get('/calendar', async (req, res) => {
     return res.status(400).json({ error: 'O calendário aceita no máximo um ano.' });
   }
 
-  const rows = await prisma.dealershipClosure.findMany({
-    where: {
-      date: {
-        gte: new Date(`${from}T00:00:00.000Z`),
-        lte: new Date(`${to}T23:59:59.999Z`),
+  const [rows, dealers] = await Promise.all([
+    prisma.dealershipClosure.findMany({
+      where: {
+        date: {
+          gte: new Date(`${from}T00:00:00.000Z`),
+          lte: new Date(`${to}T23:59:59.999Z`),
+        },
+        dealership: { active: true },
       },
-      dealership: { active: true },
-    },
-    include: {
-      dealership: { select: { name: true, city: true, state: true } },
-    },
-    orderBy: { date: 'asc' },
-  });
+      include: {
+        dealership: { select: { name: true, city: true, state: true } },
+      },
+      orderBy: { date: 'asc' },
+    }),
+    prisma.dealership.findMany({
+      where: { active: true },
+      select: { city: true, state: true },
+    }),
+  ]);
 
   const days = buildOperationCalendar({
     from,
     to,
+    cities: dealers,
     closures: rows.map((row) => ({
       date: row.date.toISOString().slice(0, 10),
       closure: {
@@ -310,7 +317,7 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
 router.put('/:id/calendar', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const parsed = calendarSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Expediente inválido. Use horário HH:mm e data AAAA-MM-DD.' });
+    return res.status(400).json({ error: 'Feriado inválido. Use data AAAA-MM-DD.' });
   }
   const existing = await prisma.dealership.findUnique({ where: { id: paramId(req) } });
   if (!existing) return res.status(404).json({ error: 'Concessionária não encontrada' });

@@ -105,7 +105,7 @@ model Dealership {
   closures   DealershipClosure[]
 }
 
-// Expediente semanal informado pela concessionária. Sem linhas = horário desconhecido.
+// Horário semanal antigo. O calendário da operação não usa mais isso: só feriado.
 model DealershipHour {
   id           String     @id @default(cuid())
   weekday      Int
@@ -118,7 +118,7 @@ model DealershipHour {
   @@unique([dealershipId, weekday])
 }
 
-// Feriado municipal, ponto facultativo da cidade ou exceção de abertura.
+// Exceção da loja: fecha num dia comum ou abre mesmo em feriado. O feriado da cidade entra sozinho.
 model DealershipClosure {
   id           String     @id @default(cuid())
   date         DateTime

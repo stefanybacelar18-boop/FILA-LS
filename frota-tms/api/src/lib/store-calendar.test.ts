@@ -68,6 +68,38 @@ describe('store-calendar', () => {
     expect(result.summary).toContain('Carnaval');
   });
 
+  it('bloqueia a loja no feriado municipal da cidade, sem horário cadastrado', () => {
+    const feira = assessRouteCalendar({
+      routeDate: '2026-09-18',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Feira',
+          city: 'FEIRA DE SANTANA',
+          state: 'BA',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    const salvador = assessRouteCalendar({
+      routeDate: '2026-09-18',
+      stops: [
+        {
+          id: 'loja-ssa',
+          name: 'Moto Salvador',
+          city: 'SALVADOR',
+          state: 'BA',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    expect(feira.blocked).toBe(true);
+    expect(feira.summary).toContain('Aniversário de Feira de Santana');
+    expect(feira.summary).not.toContain('Expediente');
+    expect(salvador.stops[0]?.status).toBe('APTO');
+    expect(salvador.blocked).toBe(false);
+  });
+
   it('fecha a loja quando o município foi lançado manualmente', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-06-24',
@@ -109,7 +141,7 @@ describe('store-calendar', () => {
     expect(result.loadReasons.join(' ')).toContain('Tiradentes');
   });
 
-  it('não trata expediente em branco como loja aberta', () => {
+  it('trata dia comum sem horário como loja aberta', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-03-10',
       stops: [
@@ -123,10 +155,11 @@ describe('store-calendar', () => {
       ],
     });
     expect(result.blocked).toBe(false);
-    expect(result.stops[0]?.status).toBe('PENDENTE');
+    expect(result.stops[0]?.status).toBe('APTO');
+    expect(result.summary).not.toContain('Expediente');
   });
 
-  it('bloqueia domingo quando o expediente semanal diz que fecha', () => {
+  it('não bloqueia domingo só porque o horário antigo fechava o dia', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-03-15',
       stops: [
@@ -140,7 +173,8 @@ describe('store-calendar', () => {
       ],
       hoursByDealership: new Map([['loja', weekdayHours()]]),
     });
-    expect(result.blocked).toBe(true);
-    expect(result.summary).toContain('domingo');
+    expect(result.blocked).toBe(false);
+    expect(result.stops[0]?.status).toBe('APTO');
+    expect(result.summary).not.toContain('domingo');
   });
 });

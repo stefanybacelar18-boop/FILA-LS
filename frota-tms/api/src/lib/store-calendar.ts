@@ -67,8 +67,6 @@ function statusFromRank(rank: number): StoreCalendarStatus {
   return 'APTO';
 }
 
-const WEEKDAY = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-
 export function formatCalendarDate(dateIso: string): string {
   const [year, month, day] = dateIso.split('-');
   if (!year || !month || !day) return dateIso;
@@ -91,33 +89,29 @@ function travelSpan(stop: CalendarStopInput, owner?: FleetOwner | null): number 
   return Math.max(0, Math.ceil(stop.avgTravelDays));
 }
 
-function weekdayOf(dateIso: string): number {
-  return new Date(`${dateIso}T12:00:00.000Z`).getUTCDay();
-}
-
 function hitLabel(hit: BrazilCalendarHit): string {
   if (hit.kind === 'PONTO_FACULTATIVO_FEDERAL') return `ponto facultativo federal (${hit.name})`;
+  if (hit.kind === 'FERIADO_MUNICIPAL') return `feriado municipal (${hit.name})`;
   if (hit.kind === 'FERIADO_ESTADUAL') return `feriado estadual (${hit.name})`;
   return `feriado nacional (${hit.name})`;
 }
 
 function isLegalClosure(kind: BrazilCalendarKind): boolean {
-  return kind === 'FERIADO_NACIONAL' || kind === 'FERIADO_ESTADUAL';
+  return kind === 'FERIADO_NACIONAL' || kind === 'FERIADO_ESTADUAL' || kind === 'FERIADO_MUNICIPAL';
 }
 
 type Raise = (status: StoreCalendarStatus, reason: string) => void;
 
 function assessDate(args: {
   date: string;
+  city: string;
   state: string;
-  hours: StoreHour[];
-  hoursConfigured: boolean;
   closure: StoreClosure | undefined;
   raise: Raise;
 }) {
-  const { date, state, hours, hoursConfigured, closure, raise } = args;
+  const { date, city, state, closure, raise } = args;
   const label = formatCalendarDate(date);
-  const hits = calendarHits(date, state);
+  const hits = calendarHits(date, state, city);
   const legal = hits.filter((hit) => isLegalClosure(hit.kind));
   const optional = hits.filter((hit) => hit.kind === 'PONTO_FACULTATIVO_FEDERAL');
 
@@ -151,19 +145,13 @@ function assessDate(args: {
       `${label}: ${optional.map(hitLabel).join(', ')}. Confirme se a loja abre.`,
     );
   }
-
-  if (!hoursConfigured) return;
-
-  const row = hours.find((hour) => hour.weekday === weekdayOf(date));
-  if (!row || row.closed) {
-    raise('RISCO', `${label}: expediente fechado na ${WEEKDAY[weekdayOf(date)] ?? 'data'}`);
-  }
 }
 
 export function assessRouteCalendar(input: {
   routeDate: Date | string;
   stops: CalendarStopInput[];
   owner?: FleetOwner | null;
+  /** Mantido para quem ainda envia o horário antigo. A decisão usa só feriado. */
   hoursByDealership?: Map<string, StoreHour[]>;
   closuresByDealership?: Map<string, StoreClosure[]>;
 }): RouteCalendarAssessment {
@@ -171,7 +159,6 @@ export function assessRouteCalendar(input: {
     typeof input.routeDate === 'string'
       ? input.routeDate.slice(0, 10)
       : input.routeDate.toISOString().slice(0, 10);
-  const hoursByDealership = input.hoursByDealership ?? new Map<string, StoreHour[]>();
   const closuresByDealership = input.closuresByDealership ?? new Map<string, StoreClosure[]>();
 
   const loadReasons: string[] = [];
@@ -190,9 +177,7 @@ export function assessRouteCalendar(input: {
   }
 
   const stops = input.stops.map((stop) => {
-    const hours = hoursByDealership.get(stop.id) ?? [];
     const closures = closuresByDealership.get(stop.id) ?? [];
-    const hoursConfigured = hours.length > 0;
     const arrivalDates = arrivalDateKeys(routeDateIso, travelSpan(stop, input.owner));
     const reasons: string[] = [];
     let rank = 0;
@@ -200,15 +185,11 @@ export function assessRouteCalendar(input: {
       reasons.push(reason);
       rank = Math.max(rank, STATUS_RANK[next]);
     };
-    if (!hoursConfigured) {
-      raise('PENDENTE', 'Expediente da loja não cadastrado. Confirme por telefone se estará aberta.');
-    }
     for (const date of arrivalDates) {
       assessDate({
         date,
+        city: stop.city,
         state: stop.state,
-        hours,
-        hoursConfigured,
         closure: closures.find((item) => item.date === date),
         raise,
       });

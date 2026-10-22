@@ -1,8 +1,11 @@
 import { addDays } from 'date-fns';
+import { MUNICIPAL_HOLIDAYS, type MunicipalHoliday } from '../data/municipal-holidays';
+import { normalizeCityKey, resolveCityAlias } from '../utils/geo';
 
 export type BrazilCalendarKind =
   | 'FERIADO_NACIONAL'
   | 'FERIADO_ESTADUAL'
+  | 'FERIADO_MUNICIPAL'
   | 'PONTO_FACULTATIVO_FEDERAL';
 
 export type BrazilCalendarHit = {
@@ -122,16 +125,40 @@ export function stateHoliday(year: number, state: string): BrazilCalendarHit | n
   return fixed(year, magna.month, magna.day, magna.name, 'FERIADO_ESTADUAL', uf);
 }
 
+function cityHolidayKey(city: string): string {
+  return resolveCityAlias(normalizeCityKey(city));
+}
+
+function municipalRows(city: string, state?: string | null): { uf: string; rows: MunicipalHoliday[] } | null {
+  const key = cityHolidayKey(city);
+  if (!key) return null;
+  const uf = (state ?? '').trim().toUpperCase();
+  const exact = uf ? MUNICIPAL_HOLIDAYS[`${uf}|${key}`] : undefined;
+  if (exact) return { uf, rows: exact };
+  const matches = Object.entries(MUNICIPAL_HOLIDAYS).filter(([entry]) => entry.endsWith(`|${key}`));
+  if (matches.length !== 1) return null;
+  const [entry, rows] = matches[0];
+  return { uf: entry.slice(0, 2), rows };
+}
+
+/** Feriados fixos da cidade da loja. A tabela é local: não há consulta externa. */
+export function municipalHolidays(year: number, city: string, state?: string | null): BrazilCalendarHit[] {
+  const found = municipalRows(city, state);
+  if (!found) return [];
+  return found.rows.map((row) => fixed(year, row.month, row.day, row.name, 'FERIADO_MUNICIPAL', found.uf));
+}
+
 function yearOf(dateIso: string): number {
   return Number(dateIso.slice(0, 4));
 }
 
-export function calendarHits(dateIso: string, state?: string | null): BrazilCalendarHit[] {
+export function calendarHits(dateIso: string, state?: string | null, city?: string | null): BrazilCalendarHit[] {
   const year = yearOf(dateIso);
   if (!Number.isInteger(year)) return [];
   const hits = [...nationalHolidays(year), ...federalOptionalDays(year)];
   const stateHit = stateHoliday(year, state ?? '');
   if (stateHit) hits.push(stateHit);
+  if (city) hits.push(...municipalHolidays(year, city, state));
   return hits.filter((hit) => hit.date === dateIso);
 }
 
