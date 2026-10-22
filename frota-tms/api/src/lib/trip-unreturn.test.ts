@@ -32,7 +32,6 @@ describe('trip-unreturn', () => {
     expect(
       evaluateUnreturnGuards({
         tripStatus: TripStatus.RETORNOU,
-        logbookReturnSigned: false,
         vehicleStatus: VehicleStatus.DISPONIVEL,
         hasOtherOpenTrip: true,
         hasNewerTripOnVehicle: false,

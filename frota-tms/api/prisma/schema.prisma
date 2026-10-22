@@ -363,7 +363,7 @@ model ImportBatch {
   cities      PlanningCity[]
 }
 
-// Diário de bordo / checklist frota LSL (FCDE-LSLT-018c-01)
+// Tabela antiga do diário de bordo. A tela saiu; os registros ficam no banco.
 model TripLogbook {
   id        String   @id @default(cuid())
   formCode  String   @default("FCDE-LSLT-018c-01")

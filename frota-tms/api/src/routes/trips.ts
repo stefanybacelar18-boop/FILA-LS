@@ -192,10 +192,10 @@ async function persistTripReturn(input: {
         fromStatus: trip.vehicle.status,
         toStatus: nextVehicleStatus,
         details: holdMaintenance
-          ? lateArrival
+          ? lateArrival && delayReason
             ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason}) — permanece em manutenção até liberação`
             : `Retorna de ${trip.dealership.name} — permanece em manutenção até liberação`
-          : lateArrival
+          : lateArrival && delayReason
             ? `Retorna de ${trip.dealership.name} (atraso: ${delayReason})`
             : `Retorna de ${trip.dealership.name}`,
       },
@@ -654,13 +654,6 @@ export function createTripsRouter(io: Server) {
 
     const lateArrival = isArrivalAfterForecast(trip.expectedReturn, returnedAt);
     const delayReason = (parsed.data.delayReason || trip.delayReason || '').trim();
-    if (lateArrival && delayReason.length < 5) {
-      return res.status(400).json({
-        error:
-          'Chegada depois da previsão: informe o problema (justificativa) antes de confirmar o retorno.',
-        code: 'DELAY_REASON_REQUIRED',
-      });
-    }
 
     const updated = await persistTripReturn({
       trip,
@@ -674,7 +667,8 @@ export function createTripsRouter(io: Server) {
     await audit('RETURN', 'Trip', {
       userId: req.user!.id,
       entityId: trip.id,
-      details: lateArrival ? `${trip.vehicle.plate} (c/ justificativa)` : trip.vehicle.plate,
+      details:
+        lateArrival && delayReason ? `${trip.vehicle.plate} (c/ justificativa)` : trip.vehicle.plate,
     });
     io.emit('fleet:changed', { action: 'return', tripId: trip.id });
     io.emit('trips:changed', { action: 'return' });
@@ -692,7 +686,7 @@ export function createTripsRouter(io: Server) {
 
     const trip = await prisma.trip.findUnique({
       where: { id: paramId(req) },
-      include: { vehicle: true, route: true, dealership: true, logbook: true },
+      include: { vehicle: true, route: true, dealership: true },
     });
     if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
 
@@ -722,7 +716,6 @@ export function createTripsRouter(io: Server) {
 
     const block = evaluateUnreturnGuards({
       tripStatus: trip.status,
-      logbookReturnSigned: !!trip.logbook?.returnSignedAt,
       vehicleStatus: trip.vehicle.status,
       hasOtherOpenTrip: !!otherOpenTrip,
       hasNewerTripOnVehicle: !!newerTrip,
@@ -902,14 +895,6 @@ export function createTripsRouter(io: Server) {
     const delayReason = (trip.delayReason || '').trim();
     const wasOpen =
       trip.status === TripStatus.EM_ANDAMENTO || trip.status === TripStatus.ATRASADO;
-
-    if (wasOpen && lateArrival && delayReason.length < 5) {
-      return res.status(400).json({
-        error:
-          'Essa chegada é depois da previsão. Registre o problema em Retornos ou escolha o dia em que o veículo realmente chegou.',
-        code: 'DELAY_REASON_REQUIRED',
-      });
-    }
 
     let updated;
     if (wasOpen) {

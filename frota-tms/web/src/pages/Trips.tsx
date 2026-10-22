@@ -194,10 +194,6 @@ export function Trips() {
                             </span>
                           )}
                         </span>
-                      ) : overdue && open ? (
-                        <span className="text-xs font-medium text-[var(--color-danger)]">
-                          Pendente de justificativa
-                        </span>
                       ) : (
                         '—'
                       )}
@@ -214,7 +210,7 @@ export function Trips() {
                           {open && (
                             <Button
                               size="sm"
-                              variant={t.needsDelayReason ? 'primary' : 'secondary'}
+                              variant="secondary"
                               onClick={() => {
                                 setError('')
                                 setReportTrip(t)

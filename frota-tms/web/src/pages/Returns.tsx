@@ -488,18 +488,6 @@ export function Returns() {
   const returnMutation = useMutation({
     mutationFn: async () => {
       if (!confirmTrip) return
-      if (
-        confirmTrip.overdue && !confirmTrip.delayReason
-      ) {
-        throw Object.assign(new Error('DELAY_REQUIRED'), {
-          response: {
-            data: {
-              error:
-                'Esta viagem está em atraso. Use “Problemas na viagem” (justificativa) antes de confirmar o retorno.',
-            },
-          },
-        })
-      }
       return api.post(`/trips/${confirmTrip.id}/return`, {
         delayReason: confirmTrip.delayReason || undefined,
         returnedAt: arrivalDate
@@ -787,12 +775,6 @@ export function Returns() {
             </Button>
             <Button
               loading={returnMutation.isPending}
-              disabled={
-                !!confirmTrip &&
-                !!arrivalDate &&
-                toInputDate(confirmTrip.expectedReturn) < arrivalDate &&
-                !confirmTrip.delayReason
-              }
               onClick={() => returnMutation.mutate()}
             >
               Confirmar retorno
@@ -865,16 +847,6 @@ export function Returns() {
               ) : null}
             </>
           ) : null}
-          {confirmTrip &&
-            arrivalDate &&
-            toInputDate(confirmTrip.expectedReturn) < arrivalDate &&
-            !confirmTrip.delayReason && (
-              <p className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-                Essa chegada é depois da previsão. Use <strong>Problema</strong> para registrar a
-                justificativa antes de confirmar, ou escolha o dia em que o veículo realmente
-                chegou.
-              </p>
-            )}
           {confirmTrip?.delayReason && (
             <p className="text-xs text-[var(--color-text-muted)]">
               Justificativa já registrada: {confirmTrip.delayReason}
