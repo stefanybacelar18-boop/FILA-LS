@@ -105,7 +105,7 @@ export function OperationCalendar() {
             {MONTHS[cursor.month]} {cursor.year}
           </h2>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Vermelho segura a carga. Amarelo só avisa.
+            Vermelho segura a carga ou a loja. Amarelo só avisa.
           </p>
         </div>
         <div className="flex gap-1">
@@ -181,12 +181,12 @@ export function OperationCalendar() {
         )}
         {!isLoading && !isError && selected && !selectedDay && (
           <p className="text-[var(--color-text-muted)]">
-            {selected.split('-').reverse().join('/')} sem feriado e sem fechamento lançado.
+            {selected.split('-').reverse().join('/')} sem feriado.
           </p>
         )}
         {!isLoading && !isError && !selected && (
           <p className="text-[var(--color-text-muted)]">
-            Toque num dia para ver o feriado nacional ou a loja lançada no expediente.
+            Toque num dia para ver o feriado nacional, estadual ou municipal das lojas.
           </p>
         )}
       </div>

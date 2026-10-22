@@ -222,7 +222,7 @@ export function Dealerships() {
                     <td>
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setCalendarDealer({ id: d.id, name: d.name })}>
-                          Expediente
+                          Feriados
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => openEdit(d)}>
                           <Pencil className="h-4 w-4" />

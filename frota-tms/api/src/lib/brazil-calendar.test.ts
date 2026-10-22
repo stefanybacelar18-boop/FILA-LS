@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarHits, easterSunday, federalOptionalDays, nationalHolidays } from './brazil-calendar';
+import { calendarHits, easterSunday, federalOptionalDays, municipalHolidays, nationalHolidays } from './brazil-calendar';
 
 describe('brazil-calendar', () => {
   it('calcula a Páscoa de 2026 em 5 de abril', () => {
@@ -29,5 +29,25 @@ describe('brazil-calendar', () => {
     expect(calendarHits('2026-07-02', 'SE')).toHaveLength(0);
     expect(calendarHits('2026-07-08', 'SE').map((hit) => hit.name)).toContain('Independência de Sergipe');
     expect(calendarHits('2026-07-08', 'BA')).toHaveLength(0);
+  });
+
+  it('carrega feriado municipal fixo pela cidade, sem repetir Corpus Christi', () => {
+    expect(municipalHolidays(2026, 'Feira de Santana', 'BA').map((hit) => hit.date)).toEqual(
+      expect.arrayContaining(['2026-06-24', '2026-07-26', '2026-09-18']),
+    );
+    expect(calendarHits('2026-09-18', 'BA', 'FEIRA DE SANTANA').map((hit) => hit.name)).toContain(
+      'Aniversário de Feira de Santana',
+    );
+    expect(calendarHits('2026-09-18', 'BA', 'Salvador')).toHaveLength(0);
+    expect(calendarHits('2026-06-04', 'BA', 'Salvador').map((hit) => hit.kind)).toEqual([
+      'PONTO_FACULTATIVO_FEDERAL',
+    ]);
+    expect(calendarHits('2026-06-13', 'BA', 'Cabaceiras do Paraguaçu').map((hit) => hit.name)).toContain(
+      'Emancipação Política',
+    );
+    expect(calendarHits('2026-03-17', 'SE', 'Aracaju').map((hit) => hit.name)).toContain(
+      'Aniversário de Aracaju',
+    );
+    expect(calendarHits('2026-06-24', 'BA', 'Lauro').map((hit) => hit.name)).toContain('São João');
   });
 });

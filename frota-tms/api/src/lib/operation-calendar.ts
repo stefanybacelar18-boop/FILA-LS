@@ -1,5 +1,7 @@
+import { normalizeCityKey, resolveCityAlias } from '../utils/geo';
 import {
   federalOptionalDays,
+  municipalHolidays,
   nationalHolidays,
   stateHoliday,
   type BrazilCalendarHit,
@@ -26,6 +28,11 @@ export type OperationCalendarDay = {
   date: string;
   tone: OperationCalendarTone;
   items: OperationCalendarItem[];
+};
+
+export type OperationCalendarCity = {
+  city: string;
+  state: string;
 };
 
 const TONE_RANK: Record<OperationCalendarTone, number> = { info: 1, warn: 2, risk: 3 };
@@ -70,6 +77,40 @@ function hitItem(hit: BrazilCalendarHit): OperationCalendarItem {
   };
 }
 
+function formatPlaces(places: string[]): string {
+  const sorted = [...places].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  if (sorted.length <= 6) return sorted.join(', ');
+  return `${sorted.slice(0, 6).join(', ')} e mais ${sorted.length - 6}`;
+}
+
+function municipalBetween(from: string, to: string, cities: OperationCalendarCity[]) {
+  const years = new Set([Number(from.slice(0, 4)), Number(to.slice(0, 4))]);
+  const seen = new Set<string>();
+  const unique = cities.filter((city) => {
+    const key = `${city.state.trim().toUpperCase()}|${resolveCityAlias(normalizeCityKey(city.city))}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const grouped = new Map<string, Map<string, string[]>>();
+  for (const year of years) {
+    if (!Number.isInteger(year)) continue;
+    for (const city of unique) {
+      const uf = city.state.trim().toUpperCase();
+      for (const hit of municipalHolidays(year, city.city, uf)) {
+        if (hit.date < from || hit.date > to) continue;
+        const byName = grouped.get(hit.date) ?? new Map<string, string[]>();
+        const place = `${city.city}/${uf}`;
+        const list = byName.get(hit.name) ?? [];
+        if (!list.includes(place)) list.push(place);
+        byName.set(hit.name, list);
+        grouped.set(hit.date, byName);
+      }
+    }
+  }
+  return grouped;
+}
+
 function closureItem(closure: OperationCalendarClosure): OperationCalendarItem {
   const place = `${closure.name} (${closure.city}/${closure.state})`;
   const note = closure.note?.trim() ? ` ${closure.note.trim()}.` : '';
@@ -88,8 +129,10 @@ export function buildOperationCalendar(args: {
   from: string;
   to: string;
   closures: { date: string; closure: OperationCalendarClosure }[];
+  cities?: OperationCalendarCity[];
 }): OperationCalendarDay[] {
   const hits = hitsBetween(args.from, args.to);
+  const municipal = municipalBetween(args.from, args.to, args.cities ?? []);
   const byDate = new Map<string, OperationCalendarClosure[]>();
   for (const row of args.closures) {
     const date = row.date.slice(0, 10);
@@ -100,9 +143,16 @@ export function buildOperationCalendar(args: {
   }
 
   const days: OperationCalendarDay[] = [];
-  for (const date of [...new Set([...hits.keys(), ...byDate.keys()])].sort()) {
+  for (const date of [...new Set([...hits.keys(), ...municipal.keys(), ...byDate.keys()])].sort()) {
+    const municipalItems = [...(municipal.get(date)?.entries() ?? [])]
+      .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+      .map(([name, places]) => ({
+        tone: 'risk' as const,
+        label: `Feriado municipal — ${name}. Segura lojas em ${formatPlaces(places)}.`,
+      }));
     const items = [
       ...(hits.get(date) ?? []).map(hitItem),
+      ...municipalItems,
       ...(byDate.get(date) ?? [])
         .sort(
           (a, b) =>

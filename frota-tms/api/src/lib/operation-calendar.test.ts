@@ -47,4 +47,23 @@ describe('operation calendar', () => {
     expect(saoJoao?.items.map((item) => item.label).join(' ')).toContain('MOTOPEL (Alagoinhas/BA)');
     expect(saoJoao?.items.map((item) => item.label).join(' ')).toContain('São João');
   });
+
+  it('mostra o feriado municipal das lojas ativas sem cadastro manual', () => {
+    const days = buildOperationCalendar({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      closures: [],
+      cities: [
+        { city: 'Feira de Santana', state: 'BA' },
+        { city: 'FEIRA DE SANTANA', state: 'BA' },
+        { city: 'Salvador', state: 'BA' },
+      ],
+    });
+    const aniversario = days.find((day) => day.date === '2026-09-18');
+    expect(aniversario?.tone).toBe('risk');
+    expect(aniversario?.items).toHaveLength(1);
+    expect(aniversario?.items[0]?.label).toContain('Aniversário de Feira de Santana');
+    expect(aniversario?.items[0]?.label).toContain('Feira de Santana/BA');
+    expect(aniversario?.items[0]?.label).not.toContain('Salvador');
+  });
 });
