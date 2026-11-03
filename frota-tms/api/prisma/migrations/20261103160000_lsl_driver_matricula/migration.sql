@@ -1,4 +1,4 @@
--- Matrícula do motorista. Não fica na placa.
-ALTER TABLE "Driver" ADD COLUMN "matricula" TEXT;
+-- Matrícula do motorista padrão. Placa AG fica sem valor.
+ALTER TABLE "Vehicle" ADD COLUMN "driverMatricula" TEXT;
 
-CREATE UNIQUE INDEX "Driver_matricula_key" ON "Driver"("matricula");
+CREATE UNIQUE INDEX "Vehicle_driverMatricula_key" ON "Vehicle"("driverMatricula");
