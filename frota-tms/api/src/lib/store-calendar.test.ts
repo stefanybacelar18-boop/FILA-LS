@@ -159,6 +159,172 @@ describe('store-calendar', () => {
     expect(result.summary).not.toContain('Expediente');
   });
 
+  it('não avisa feriado no dia anterior nem no seguinte quando a entrega é no mesmo dia', () => {
+    const before = assessRouteCalendar({
+      routeDate: '2026-04-30',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Salvador',
+          city: 'SALVADOR',
+          state: 'BA',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    const after = assessRouteCalendar({
+      routeDate: '2026-05-02',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Salvador',
+          city: 'SALVADOR',
+          state: 'BA',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    expect(before.blocked).toBe(false);
+    expect(before.status).toBe('APTO');
+    expect(before.summary).not.toContain('Dia do Trabalho');
+    expect(after.blocked).toBe(false);
+    expect(after.status).toBe('APTO');
+    expect(after.summary).not.toContain('Dia do Trabalho');
+  });
+
+  it('avisa o feriado do dia seguinte quando o roteiro é pernoite', () => {
+    const result = assessRouteCalendar({
+      routeDate: '2026-04-30',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Ilhéus',
+          city: 'ILHEUS',
+          state: 'BA',
+          avgTravelDays: 1,
+        },
+      ],
+    });
+    expect(result.blocked).toBe(true);
+    expect(result.summary).toContain('Dia do Trabalho');
+    expect(result.summary).toContain('Entrega do pernoite pode cair neste dia');
+  });
+
+  it('não avisa feriado dois dias à frente, mesmo com viagem longa', () => {
+    const result = assessRouteCalendar({
+      routeDate: '2026-04-29',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Eunápolis',
+          city: 'EUNAPOLIS',
+          state: 'BA',
+          avgTravelDays: 2,
+        },
+      ],
+    });
+    expect(result.blocked).toBe(false);
+    expect(result.summary).not.toContain('Dia do Trabalho');
+  });
+
+  it('avisa feriado municipal do dia seguinte só no pernoite daquela cidade', () => {
+    const overnight = assessRouteCalendar({
+      routeDate: '2026-04-22',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Ilhéus',
+          city: 'ILHEUS',
+          state: 'BA',
+          avgTravelDays: 1,
+        },
+      ],
+    });
+    const sameDay = assessRouteCalendar({
+      routeDate: '2026-04-22',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Salvador',
+          city: 'SALVADOR',
+          state: 'BA',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    const dayAfter = assessRouteCalendar({
+      routeDate: '2026-04-24',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Ilhéus',
+          city: 'ILHEUS',
+          state: 'BA',
+          avgTravelDays: 1,
+        },
+      ],
+    });
+    expect(overnight.blocked).toBe(true);
+    expect(overnight.summary).toContain('São Jorge');
+    expect(sameDay.blocked).toBe(false);
+    expect(sameDay.summary).not.toContain('São Jorge');
+    expect(dayAfter.blocked).toBe(false);
+    expect(dayAfter.summary).not.toContain('São Jorge');
+  });
+
+  it('trata Aracaju da LSL como pernoite e olha o feriado do dia seguinte', () => {
+    const lsl = assessRouteCalendar({
+      routeDate: '2026-04-30',
+      owner: 'LSL',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Aracaju',
+          city: 'ARACAJU',
+          state: 'SE',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    const ag = assessRouteCalendar({
+      routeDate: '2026-04-30',
+      owner: 'AG',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Aracaju',
+          city: 'ARACAJU',
+          state: 'SE',
+          avgTravelDays: 0,
+        },
+      ],
+    });
+    expect(lsl.blocked).toBe(true);
+    expect(lsl.summary).toContain('Dia do Trabalho');
+    expect(ag.blocked).toBe(false);
+    expect(ag.summary).not.toContain('Dia do Trabalho');
+  });
+
+  it('mantém o fechamento manual mesmo quando o feriado da viagem longa não avisa', () => {
+    const result = assessRouteCalendar({
+      routeDate: '2026-06-22',
+      stops: [
+        {
+          id: 'loja',
+          name: 'Moto Eunápolis',
+          city: 'EUNAPOLIS',
+          state: 'BA',
+          avgTravelDays: 2,
+        },
+      ],
+      closuresByDealership: new Map([
+        ['loja', [{ date: '2026-06-24', kind: 'FECHADO', note: 'Inventário' }]],
+      ]),
+    });
+    expect(result.blocked).toBe(true);
+    expect(result.summary).toContain('Inventário');
+  });
+
   it('não bloqueia domingo só porque o horário antigo fechava o dia', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-03-15',

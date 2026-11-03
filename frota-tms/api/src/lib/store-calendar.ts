@@ -83,6 +83,22 @@ export function arrivalDateKeys(routeDateIso: string, travelDays: number): strin
   return keys;
 }
 
+/**
+ * Feriado só vale na data da carga.
+ * O dia anterior e o seguinte não avisam.
+ * Pernoite (retorno em 1 dia ou mais) também olha o dia seguinte,
+ * porque a entrega pode cair nesse dia.
+ */
+export function holidayAlertDates(routeDateIso: string, travelDays: number): Set<string> {
+  const routeDate = routeDateIso.slice(0, 10);
+  const dates = new Set<string>([routeDate]);
+  const span = Math.max(0, Math.ceil(Number.isFinite(travelDays) ? travelDays : 0));
+  if (span < 1) return dates;
+  const start = new Date(`${routeDate}T12:00:00.000Z`);
+  dates.add(addDays(start, 1).toISOString().slice(0, 10));
+  return dates;
+}
+
 function travelSpan(stop: CalendarStopInput, owner?: FleetOwner | null): number {
   const operational = operationalReturnDays(stop.city, owner);
   if (operational != null) return operational;
@@ -107,13 +123,18 @@ function assessDate(args: {
   city: string;
   state: string;
   closure: StoreClosure | undefined;
+  /** Feriado e ponto facultativo. Fechamento manual da loja vale em qualquer data de chegada. */
+  watchCalendar: boolean;
+  nextDayDelivery: boolean;
   raise: Raise;
 }) {
-  const { date, city, state, closure, raise } = args;
+  const { date, city, state, closure, watchCalendar, nextDayDelivery, raise } = args;
   const label = formatCalendarDate(date);
-  const hits = calendarHits(date, state, city);
+  const hits = watchCalendar ? calendarHits(date, state, city) : [];
   const legal = hits.filter((hit) => isLegalClosure(hit.kind));
   const optional = hits.filter((hit) => hit.kind === 'PONTO_FACULTATIVO_FEDERAL');
+  const withOvernight = (text: string) =>
+    nextDayDelivery ? `${text} Entrega do pernoite pode cair neste dia.` : text;
 
   if (closure?.kind === 'FECHADO') {
     const note = closure.note?.trim();
@@ -123,13 +144,16 @@ function assessDate(args: {
 
   if (closure?.kind === 'ABRE') {
     if (legal.length > 0) {
-      raise('ATENCAO', `${label}: ${legal.map(hitLabel).join(', ')}. A loja informou que abre.`);
+      raise(
+        'ATENCAO',
+        withOvernight(`${label}: ${legal.map(hitLabel).join(', ')}. A loja informou que abre.`),
+      );
     }
     return;
   }
 
   if (legal.length > 0) {
-    raise('RISCO', `${label}: ${legal.map(hitLabel).join(', ')}`);
+    raise('RISCO', withOvernight(`${label}: ${legal.map(hitLabel).join(', ')}.`));
   }
 
   if (closure?.kind === 'HORARIO_REDUZIDO') {
@@ -142,7 +166,7 @@ function assessDate(args: {
   if (optional.length > 0) {
     raise(
       'ATENCAO',
-      `${label}: ${optional.map(hitLabel).join(', ')}. Confirme se a loja abre.`,
+      withOvernight(`${label}: ${optional.map(hitLabel).join(', ')}. Confirme se a loja abre.`),
     );
   }
 }
@@ -178,7 +202,9 @@ export function assessRouteCalendar(input: {
 
   const stops = input.stops.map((stop) => {
     const closures = closuresByDealership.get(stop.id) ?? [];
-    const arrivalDates = arrivalDateKeys(routeDateIso, travelSpan(stop, input.owner));
+    const span = travelSpan(stop, input.owner);
+    const arrivalDates = arrivalDateKeys(routeDateIso, span);
+    const holidayDates = holidayAlertDates(routeDateIso, span);
     const reasons: string[] = [];
     let rank = 0;
     const raise: Raise = (next, reason) => {
@@ -191,6 +217,8 @@ export function assessRouteCalendar(input: {
         city: stop.city,
         state: stop.state,
         closure: closures.find((item) => item.date === date),
+        watchCalendar: holidayDates.has(date),
+        nextDayDelivery: date !== routeDateIso && holidayDates.has(date),
         raise,
       });
     }
