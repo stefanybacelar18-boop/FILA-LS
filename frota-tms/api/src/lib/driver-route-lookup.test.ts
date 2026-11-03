@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   destinationsAsStored,
   manifestNumberFromRouteName,
-  matchDriverByName,
+  matchLslPlateByMatricula,
+  matriculaForPlateSave,
   nextWorkDateKey,
+  normalizeMatricula,
   tripBelongsToDriver,
 } from './driver-route-lookup';
 
@@ -11,37 +13,44 @@ function bahiaNoon(isoDay: string): Date {
   return new Date(`${isoDay}T15:00:00.000Z`);
 }
 
-describe('matchDriverByName', () => {
-  const drivers = [
-    { id: '1', name: 'Ricardo de Jesus', active: true },
-    { id: '2', name: 'JOÃO SILVA', active: true },
-    { id: '3', name: 'Joao Silva', active: false },
-    { id: '4', name: 'ANA SOUZA', active: true },
-    { id: '5', name: 'Ana Souza', active: true },
+describe('matrícula da placa LSL', () => {
+  const plates = [
+    { plate: 'EZU2D86', owner: 'LSL', driverMatricula: '150', defaultDriver: 'Ricardo de Jesus' },
+    { plate: 'ABC1D23', owner: 'AG', driverMatricula: '150', defaultDriver: 'Outro Motorista' },
+    { plate: 'TST1002', owner: 'LSL', driverMatricula: '151', defaultDriver: null },
+    { plate: 'TST1003', owner: 'LSL', driverMatricula: '152', defaultDriver: 'Ana Souza' },
+    { plate: 'TST1004', owner: 'LSL', driverMatricula: '152', defaultDriver: 'JOÃO SILVA' },
   ];
 
-  it('aceita o nome cadastrado ignorando acento e maiúsculas', () => {
-    const match = matchDriverByName('  ricardo   de jesus ', drivers);
-    expect(match.ok).toBe(true);
-    if (match.ok) expect(match.driver.id).toBe('1');
+  it('normaliza espaços e letras', () => {
+    expect(normalizeMatricula(' 15-0 ')).toBe('150');
+    expect(normalizeMatricula('')).toBeNull();
   });
 
-  it('prefere o cadastro ativo quando o inativo só difere no acento', () => {
-    const match = matchDriverByName('João Silva', drivers);
-    expect(match.ok).toBe(true);
-    if (match.ok) expect(match.driver.id).toBe('2');
+  it('acha o motorista padrão da placa LSL e ignora a mesma matrícula na AG', () => {
+    const match = matchLslPlateByMatricula('150', plates);
+    expect(match).toEqual({ ok: true, driverName: 'Ricardo de Jesus', plate: 'EZU2D86' });
   });
 
-  it('não escolhe um motorista quando dois ativos coincidem', () => {
-    expect(matchDriverByName('ana souza', drivers)).toEqual({ ok: false, reason: 'ambiguous' });
+  it('recusa matrícula sem motorista ou ligada a dois motoristas', () => {
+    expect(matchLslPlateByMatricula('151', plates)).toEqual({ ok: false, reason: 'no_driver' });
+    expect(matchLslPlateByMatricula('152', plates)).toEqual({ ok: false, reason: 'ambiguous' });
+    expect(matchLslPlateByMatricula('999', plates)).toEqual({ ok: false, reason: 'not_found' });
   });
 
-  it('não encontra nome parcial nem motorista só inativo', () => {
-    expect(matchDriverByName('Ricardo', drivers).ok).toBe(false);
-    expect(matchDriverByName('Motorista Fantasma', drivers)).toEqual({
-      ok: false,
-      reason: 'not_found',
-    });
+  it('exige matrícula só na placa LSL e apaga na AG', () => {
+    expect(
+      matriculaForPlateSave({ owner: 'LSL', driverMatricula: '150', defaultDriver: 'Ricardo' }),
+    ).toEqual({ ok: true, driverMatricula: '150' });
+    expect(matriculaForPlateSave({ owner: 'LSL', driverMatricula: '', defaultDriver: 'Ricardo' }).ok).toBe(
+      false,
+    );
+    expect(
+      matriculaForPlateSave({ owner: 'LSL', driverMatricula: '150', defaultDriver: '  ' }).ok,
+    ).toBe(false);
+    expect(
+      matriculaForPlateSave({ owner: 'AG', driverMatricula: '150', defaultDriver: 'Ricardo' }),
+    ).toEqual({ ok: true, driverMatricula: null });
   });
 });
 

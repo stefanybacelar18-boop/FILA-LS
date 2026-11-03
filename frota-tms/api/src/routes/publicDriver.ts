@@ -8,7 +8,7 @@ import {
   NO_DELIVERY_ORDER_NOTE,
   destinationsAsStored,
   manifestNumberFromRouteName,
-  matchDriverByName,
+  matchLslPlateByMatricula,
   nextWorkDateKey,
   tripBelongsToDriver,
   type StoredStop,
@@ -18,7 +18,7 @@ import { TripStatus } from '../types/enums';
 const router = Router();
 
 const bodySchema = z.object({
-  driverName: z.string().trim().min(2).max(120),
+  matricula: z.string().trim().min(1).max(32),
   pin: z.string().min(4).max(32),
 });
 
@@ -52,10 +52,9 @@ function dateKey(value: Date | string): string {
 
 /**
  * Consulta pública da frota LSL.
- * O motorista informa o nome cadastrado e a senha compartilhada.
- * A viagem já liga motorista (driverName), placa e roteiro. Não há tabela nova.
- * Só entram viagens desse motorista no próximo dia de trabalho.
- * POST { driverName, pin }
+ * O motorista informa a matrícula da placa LSL e a senha compartilhada.
+ * A matrícula aponta para o motorista padrão. A viagem liga esse nome ao roteiro.
+ * POST { matricula, pin }
  */
 router.post('/meu-roteiro', async (req, res) => {
   const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
@@ -67,7 +66,7 @@ router.post('/meu-roteiro', async (req, res) => {
 
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Informe seu nome e a senha.' });
+    return res.status(400).json({ error: 'Informe a matrícula e a senha.' });
   }
 
   const expectedPin = requireLslDriverPin();
@@ -75,15 +74,18 @@ router.post('/meu-roteiro', async (req, res) => {
     return res.status(403).json({ error: 'Senha incorreta.' });
   }
 
-  const drivers = await prisma.driver.findMany({
-    select: { id: true, name: true, active: true },
+  const plates = await prisma.vehicle.findMany({
+    where: { driverMatricula: { not: null } },
+    select: { plate: true, owner: true, driverMatricula: true, defaultDriver: true },
   });
-  const matched = matchDriverByName(parsed.data.driverName, drivers);
+  const matched = matchLslPlateByMatricula(parsed.data.matricula, plates);
   if (!matched.ok) {
     const error =
       matched.reason === 'ambiguous'
-        ? 'Há mais de um motorista com esse nome. Procure a operação.'
-        : 'Motorista não encontrado. Use o nome cadastrado no FrotaTMS.';
+        ? 'Essa matrícula está em mais de um motorista. Procure a operação.'
+        : matched.reason === 'no_driver'
+          ? 'A matrícula está na placa LSL sem motorista padrão. Procure a operação.'
+          : 'Matrícula não encontrada. Use a matrícula cadastrada na placa LSL.';
     return res.status(404).json({ error });
   }
 
@@ -120,7 +122,7 @@ router.post('/meu-roteiro', async (req, res) => {
             plate: trip.vehicle.plate,
             owner: trip.vehicle.owner,
           },
-          matched.driver.name,
+          matched.driverName,
         ),
     )
     .map((trip) => {
@@ -166,7 +168,7 @@ router.post('/meu-roteiro', async (req, res) => {
 
   return res.json({
     found: routes.length > 0,
-    driverName: matched.driver.name,
+    driverName: matched.driverName,
     workDate,
     orderWarning: DELIVERY_ORDER_WARNING,
     message:

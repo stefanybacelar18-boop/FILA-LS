@@ -5,7 +5,7 @@ import { useThemeStore } from '../stores/theme'
 import { Button, Input } from '../components/ui'
 import { formatDate } from '../lib/format'
 
-const NAME_KEY = 'frotatms-meu-roteiro-motorista'
+const MATRICULA_KEY = 'frotatms-meu-roteiro-matricula'
 
 const ORDER_WARNING =
   'A sequência de entrega deve ser seguida conforme a ordem dos clientes no Manifesto de Carga. O FrotaTMS não realiza a otimização automática da rota.'
@@ -56,16 +56,16 @@ function deliveryLabel(count: number) {
 }
 
 /**
- * Meu roteiro — consulta pelo nome do motorista, no celular.
+ * Meu roteiro — consulta pela matrícula da placa LSL, no celular.
  * A senha compartilhada da frota LSL continua sendo a autorização.
  */
 export function MyRoute() {
   usePublicMobileShell()
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggle)
-  const [driverName, setDriverName] = useState(() => {
+  const [matricula, setMatricula] = useState(() => {
     try {
-      return localStorage.getItem(NAME_KEY) ?? ''
+      return localStorage.getItem(MATRICULA_KEY) ?? ''
     } catch {
       return ''
     }
@@ -84,9 +84,9 @@ export function MyRoute() {
     setResult(null)
     setSelectedId(null)
     setLoading(true)
-    const nameClean = driverName.trim().replace(/\s+/g, ' ')
+    const matriculaClean = matricula.trim()
     try {
-      localStorage.setItem(NAME_KEY, nameClean)
+      localStorage.setItem(MATRICULA_KEY, matriculaClean)
     } catch {
       // ignore
     }
@@ -94,7 +94,7 @@ export function MyRoute() {
       const res = await fetch('/api/public/meu-roteiro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driverName: nameClean, pin: pin.trim() }),
+        body: JSON.stringify({ matricula: matriculaClean, pin: pin.trim() }),
       })
       const data = (await res.json().catch(() => ({}))) as Partial<LookupResult> & { error?: string }
       if (!res.ok) {
@@ -103,7 +103,7 @@ export function MyRoute() {
       }
       setResult({
         found: Boolean(data.found),
-        driverName: data.driverName || nameClean,
+        driverName: data.driverName || matriculaClean,
         workDate: data.workDate || '',
         message: data.message,
         orderWarning: data.orderWarning,
@@ -139,24 +139,24 @@ export function MyRoute() {
           {!result && (
             <form onSubmit={onSubmit} className="space-y-4">
               <Input
-                id="driver-name"
-                name="driverName"
-                label="Seu nome"
+                id="driver-matricula"
+                name="matricula"
+                label="Sua matrícula"
                 type="text"
-                inputMode="text"
-                autoComplete="name"
-                autoCapitalize="words"
+                inputMode="numeric"
+                autoComplete="username"
+                autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
                 enterKeyHint="next"
-                value={driverName}
-                onChange={(e) => setDriverName(e.target.value)}
-                placeholder="Como está no cadastro"
+                value={matricula}
+                onChange={(e) => setMatricula(e.target.value)}
+                placeholder="Matrícula da placa LSL"
                 required
                 className="h-12 max-w-full text-base"
               />
               <p className="-mt-2 text-xs text-[var(--color-text-muted)]">
-                Use o nome cadastrado. A consulta mostra só os seus roteiros.
+                Use a matrícula cadastrada na sua placa LSL. A consulta mostra só os seus roteiros.
               </p>
               <Input
                 id="driver-pin"
@@ -250,7 +250,7 @@ export function MyRoute() {
                   setError('')
                 }}
               >
-                Consultar outro nome
+                Consultar outra matrícula
               </Button>
             </div>
           )}

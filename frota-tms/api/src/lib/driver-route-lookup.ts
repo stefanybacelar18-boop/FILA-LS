@@ -14,34 +14,76 @@ export const DELIVERY_ORDER_WARNING =
 export const NO_DELIVERY_ORDER_NOTE =
   'Sem ordem de entrega definida no FrotaTMS. A lista abaixo não é uma sequência. Siga a ordem dos clientes no Manifesto de Carga.';
 
-export type DriverIdentity = {
-  id: string;
-  name: string;
-  active: boolean;
-};
-
-export type DriverMatch =
-  | { ok: true; driver: DriverIdentity }
-  | { ok: false; reason: 'empty' | 'not_found' | 'ambiguous' };
-
 /** Próximo dia de carregamento: dia seguinte, pulando sábado e domingo. */
 export function nextWorkDateKey(now = new Date()): string {
   return operationalDateKey(routeDateFromImport(now));
 }
 
+/** Matrícula da placa LSL: sem espaço, só letras e números. */
+export function normalizeMatricula(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const cleaned = value.normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (cleaned.length < 1 || cleaned.length > 20) return null;
+  return cleaned;
+}
+
+export type LslPlateMatricula = {
+  plate: string;
+  owner: string | null;
+  driverMatricula: string | null;
+  defaultDriver: string | null;
+};
+
+export type MatriculaMatch =
+  | { ok: true; driverName: string; plate: string }
+  | { ok: false; reason: 'empty' | 'not_found' | 'ambiguous' | 'no_driver' };
+
 /**
- * O cadastro não tem código. O nome único do motorista é a identificação.
- * A comparação ignora acento, maiúsculas e espaços repetidos.
- * Mais de um cadastro ativo com o mesmo nome não libera a consulta.
+ * A matrícula fica na placa LSL e aponta para o motorista padrão.
+ * A consulta segue esse nome em qualquer placa do dia.
  */
-export function matchDriverByName(input: string, drivers: DriverIdentity[]): DriverMatch {
-  const folded = normalizeDriverName(input);
-  if (folded.length < 2) return { ok: false, reason: 'empty' };
-  const hits = drivers.filter((driver) => normalizeDriverName(driver.name) === folded);
-  const active = hits.filter((driver) => driver.active);
-  if (active.length === 1) return { ok: true, driver: active[0]! };
-  if (active.length > 1) return { ok: false, reason: 'ambiguous' };
-  return { ok: false, reason: 'not_found' };
+export function matchLslPlateByMatricula(input: string, plates: LslPlateMatricula[]): MatriculaMatch {
+  const matricula = normalizeMatricula(input);
+  if (!matricula) return { ok: false, reason: 'empty' };
+  const hits = plates.filter(
+    (plate) =>
+      plateOwner(plate.plate, plate.owner) === 'LSL' &&
+      normalizeMatricula(plate.driverMatricula) === matricula,
+  );
+  if (hits.length === 0) return { ok: false, reason: 'not_found' };
+  const names = [
+    ...new Set(
+      hits
+        .map((plate) => plate.defaultDriver?.trim())
+        .filter((name): name is string => !!name)
+        .map((name) => normalizeDriverName(name)),
+    ),
+  ];
+  if (names.length === 0) return { ok: false, reason: 'no_driver' };
+  if (names.length > 1) return { ok: false, reason: 'ambiguous' };
+  const driverName = hits.find((plate) => plate.defaultDriver?.trim())!.defaultDriver!.trim();
+  return { ok: true, driverName, plate: hits[0]!.plate };
+}
+
+export type PlateMatriculaSave =
+  | { ok: true; driverMatricula: string | null }
+  | { ok: false; error: string };
+
+/** Placa AG não guarda matrícula. Placa LSL exige matrícula e motorista padrão. */
+export function matriculaForPlateSave(input: {
+  owner: 'LSL' | 'AG';
+  driverMatricula: string | null | undefined;
+  defaultDriver: string | null | undefined;
+}): PlateMatriculaSave {
+  if (input.owner !== 'LSL') return { ok: true, driverMatricula: null };
+  const driverMatricula = normalizeMatricula(input.driverMatricula);
+  if (!driverMatricula) {
+    return { ok: false, error: 'Informe a matrícula do motorista na placa LSL.' };
+  }
+  if (!input.defaultDriver?.trim()) {
+    return { ok: false, error: 'Informe o motorista padrão junto com a matrícula da placa LSL.' };
+  }
+  return { ok: true, driverMatricula };
 }
 
 export function sameDriver(tripDriverName: string | null | undefined, driverName: string): boolean {
