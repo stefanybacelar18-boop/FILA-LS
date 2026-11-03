@@ -151,12 +151,12 @@ export function MyRoute() {
                 enterKeyHint="next"
                 value={matricula}
                 onChange={(e) => setMatricula(e.target.value)}
-                placeholder="Matrícula da placa LSL"
+                placeholder="Sua matrícula"
                 required
                 className="h-12 max-w-full text-base"
               />
               <p className="-mt-2 text-xs text-[var(--color-text-muted)]">
-                Use a matrícula cadastrada na sua placa LSL. A consulta mostra só os seus roteiros.
+                Use a matrícula do seu cadastro de motorista. A consulta mostra só os seus roteiros.
               </p>
               <Input
                 id="driver-pin"

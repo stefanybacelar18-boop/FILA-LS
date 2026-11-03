@@ -6,12 +6,14 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { paramId } from '../utils/params';
 import { filterDriversForRole } from '../data/operatorVisibility';
+import { normalizeMatricula } from '../lib/driver-route-lookup';
 
 const router = Router();
 router.use(authenticate);
 
 const schema = z.object({
   name: z.string().min(2),
+  matricula: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   active: z.boolean().optional(),
@@ -25,7 +27,12 @@ const blockSchema = z.object({
 router.get('/', authorize(Role.ADMIN, Role.OPERACAO, Role.CONSULTA), async (req: AuthRequest, res) => {
   const { q, active } = req.query;
   const where: Record<string, unknown> = {};
-  if (q) where.name = { contains: String(q) };
+  if (q) {
+    where.OR = [
+      { name: { contains: String(q) } },
+      { matricula: { contains: String(q).replace(/\s+/g, '').toUpperCase() } },
+    ];
+  }
   if (active === 'true') where.active = true;
   if (active === 'false') where.active = false;
 
@@ -41,14 +48,21 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' });
 
   const name = parsed.data.name.trim().replace(/\s+/g, ' ');
+  const matricula = readMatricula(parsed.data.matricula);
+  if (!matricula.ok) return res.status(400).json({ error: matricula.error });
   const exists = await prisma.driver.findFirst({
     where: { name: { equals: name } },
   });
   if (exists) return res.status(409).json({ error: 'Já existe motorista com este nome' });
+  if (matricula.matricula) {
+    const taken = await prisma.driver.findFirst({ where: { matricula: matricula.matricula } });
+    if (taken) return res.status(409).json({ error: 'Esta matrícula já é de outro motorista.' });
+  }
 
   const driver = await prisma.driver.create({
     data: {
       name,
+      matricula: matricula.matricula,
       phone: parsed.data.phone?.trim() || null,
       notes: parsed.data.notes?.trim() || null,
       active: parsed.data.active ?? true,
@@ -77,6 +91,17 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     });
     if (clash) return res.status(409).json({ error: 'Já existe motorista com este nome' });
     data.name = name;
+  }
+  if (parsed.data.matricula !== undefined) {
+    const matricula = readMatricula(parsed.data.matricula);
+    if (!matricula.ok) return res.status(400).json({ error: matricula.error });
+    if (matricula.matricula) {
+      const taken = await prisma.driver.findFirst({
+        where: { matricula: matricula.matricula, NOT: { id } },
+      });
+      if (taken) return res.status(409).json({ error: 'Esta matrícula já é de outro motorista.' });
+    }
+    data.matricula = matricula.matricula;
   }
   if (parsed.data.phone !== undefined) data.phone = parsed.data.phone?.trim() || null;
   if (parsed.data.notes !== undefined) data.notes = parsed.data.notes?.trim() || null;
@@ -155,6 +180,15 @@ router.delete('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
 });
 
 export default router;
+
+function readMatricula(
+  value: string | null | undefined,
+): { ok: true; matricula: string | null } | { ok: false; error: string } {
+  if (value == null || value.trim() === '') return { ok: true, matricula: null };
+  const matricula = normalizeMatricula(value);
+  if (!matricula) return { ok: false, error: 'Matrícula inválida. Use letras e números.' };
+  return { ok: true, matricula };
+}
 
 /** Importa nomes de motorista padrão das placas que ainda não estão cadastrados */
 export async function syncDriversFromVehicles() {

@@ -8,7 +8,7 @@ import {
   NO_DELIVERY_ORDER_NOTE,
   destinationsAsStored,
   manifestNumberFromRouteName,
-  matchLslPlateByMatricula,
+  matchDriverByMatricula,
   nextWorkDateKey,
   tripBelongsToDriver,
   type StoredStop,
@@ -52,8 +52,8 @@ function dateKey(value: Date | string): string {
 
 /**
  * Consulta pública da frota LSL.
- * O motorista informa a matrícula da placa LSL e a senha compartilhada.
- * A matrícula aponta para o motorista padrão. A viagem liga esse nome ao roteiro.
+ * O motorista informa a própria matrícula e a senha compartilhada.
+ * A matrícula fica no cadastro do motorista. A viagem liga o nome dele ao roteiro.
  * POST { matricula, pin }
  */
 router.post('/meu-roteiro', async (req, res) => {
@@ -74,18 +74,16 @@ router.post('/meu-roteiro', async (req, res) => {
     return res.status(403).json({ error: 'Senha incorreta.' });
   }
 
-  const plates = await prisma.vehicle.findMany({
-    where: { driverMatricula: { not: null } },
-    select: { plate: true, owner: true, driverMatricula: true, defaultDriver: true },
+  const drivers = await prisma.driver.findMany({
+    where: { matricula: { not: null } },
+    select: { id: true, name: true, matricula: true },
   });
-  const matched = matchLslPlateByMatricula(parsed.data.matricula, plates);
+  const matched = matchDriverByMatricula(parsed.data.matricula, drivers);
   if (!matched.ok) {
     const error =
       matched.reason === 'ambiguous'
         ? 'Essa matrícula está em mais de um motorista. Procure a operação.'
-        : matched.reason === 'no_driver'
-          ? 'A matrícula está na placa LSL sem motorista padrão. Procure a operação.'
-          : 'Matrícula não encontrada. Use a matrícula cadastrada na placa LSL.';
+        : 'Matrícula não encontrada. Use a matrícula do seu cadastro de motorista.';
     return res.status(404).json({ error });
   }
 

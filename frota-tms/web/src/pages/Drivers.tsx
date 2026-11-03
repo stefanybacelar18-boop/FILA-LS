@@ -17,7 +17,7 @@ import {
 } from '../components/ui'
 import { useAuthStore } from '../stores/auth'
 
-const emptyForm = { name: '', phone: '', notes: '', active: true }
+const emptyForm = { name: '', matricula: '', phone: '', notes: '', active: true }
 
 export function Drivers() {
   const qc = useQueryClient()
@@ -43,6 +43,7 @@ export function Drivers() {
     mutationFn: async () => {
       const payload = {
         name: form.name.trim(),
+        matricula: form.matricula.trim() || null,
         phone: form.phone.trim() || null,
         notes: form.notes.trim() || null,
         active: form.active,
@@ -95,6 +96,7 @@ export function Drivers() {
     setEditing(d)
     setForm({
       name: d.name,
+      matricula: d.matricula ?? '',
       phone: d.phone ?? '',
       notes: d.notes ?? '',
       active: d.active,
@@ -111,7 +113,7 @@ export function Drivers() {
     <div className="page-desktop max-w-3xl">
       <PageHeader
         title="Motoristas"
-        description="Cadastro usado na definição de placa. Motorista bloqueado não pode ser selecionado."
+        description="Cadastro usado na definição de placa. A matrícula é do motorista e serve para ele consultar o roteiro LSL."
         actions={
           isAdmin ? (
             <Button onClick={openCreate}>
@@ -144,6 +146,7 @@ export function Drivers() {
             <thead>
               <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/60 text-xs font-semibold tracking-wide text-[var(--color-text-muted)] uppercase">
                 <th className="px-4 py-3">Nome</th>
+                <th className="px-4 py-3">Matrícula</th>
                 <th className="px-4 py-3">Telefone</th>
                 <th className="px-4 py-3">Status</th>
                 {isAdmin && <th className="px-4 py-3 text-right">Ações</th>}
@@ -163,6 +166,7 @@ export function Drivers() {
                       </p>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{d.matricula || '—'}</td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">{d.phone || '—'}</td>
                   <td className="px-4 py-3">
                     {!d.active ? (
@@ -239,6 +243,14 @@ export function Drivers() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
             minLength={2}
+          />
+          <Input
+            label="Matrícula"
+            value={form.matricula}
+            onChange={(e) => setForm({ ...form, matricula: e.target.value })}
+            placeholder="Do motorista"
+            inputMode="numeric"
+            autoComplete="off"
           />
           <Input
             label="Telefone"

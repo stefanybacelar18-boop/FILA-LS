@@ -209,7 +209,7 @@ export function Fleet() {
                 <th>Veículo</th>
                 <th>Capacidade</th>
                 <th>Motorista</th>
-                <th>Matrícula</th>
+                <th>Matrícula do motorista</th>
                 <th>Situação</th>
                 <th>Previsão retorno</th>
                 {isAdmin && <th />}
@@ -345,7 +345,7 @@ export function Fleet() {
               label="Matrícula do motorista"
               value={form.driverMatricula}
               onChange={(e) => setForm({ ...form, driverMatricula: e.target.value })}
-              placeholder="Só placa LSL"
+              placeholder="Do motorista, não da placa"
               required
               inputMode="numeric"
               autoComplete="off"

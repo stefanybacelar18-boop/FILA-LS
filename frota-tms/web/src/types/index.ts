@@ -69,6 +69,7 @@ export interface Driver {
   blockReason?: string | null
   blockedAt?: string | null
   notes?: string | null
+  matricula?: string | null
   createdAt: string
   updatedAt?: string
 }
