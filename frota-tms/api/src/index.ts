@@ -27,7 +27,11 @@ import publicDriverRoutes from './routes/publicDriver';
 import { gzipJson } from './middleware/gzip-json';
 import { prisma } from './lib/prisma';
 import { healthPayload, probeDatabase } from './lib/health';
-import { ensureDealershipCalendarTables, ensureHotIndexes } from './lib/ensure-indexes';
+import {
+  ensureDealershipCalendarTables,
+  ensureDriverMatriculaColumn,
+  ensureHotIndexes,
+} from './lib/ensure-indexes';
 import { resolveAuthUserFromToken } from './lib/token';
 import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
@@ -158,6 +162,7 @@ const PORT = Number(process.env.PORT) || 4000;
 
 async function start() {
   await ensureDealershipCalendarTables(prisma);
+  await ensureDriverMatriculaColumn(prisma);
   server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
   void ensureBootstrapUsers(prisma)
