@@ -42,6 +42,7 @@ export interface Vehicle {
   year: number
   capacityMotos: number
   defaultDriver: string | null
+  driverMatricula?: string | null
   status: VehicleStatus
   notes: string | null
   owner?: 'LSL' | 'AG'

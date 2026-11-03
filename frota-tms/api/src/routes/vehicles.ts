@@ -17,6 +17,7 @@ import {
   vehicleActivatePatch,
   vehicleDeactivatePatch,
 } from '../lib/vehicle-lifecycle';
+import { matriculaForPlateSave } from '../lib/driver-route-lookup';
 
 const router = Router();
 router.use(authenticate);
@@ -40,6 +41,7 @@ const schema = z.object({
     .optional(),
   notes: z.string().optional().nullable(),
   owner: z.enum(['LSL', 'AG']).optional(),
+  driverMatricula: z.string().optional().nullable(),
   active: z.boolean().optional(),
 });
 
@@ -65,6 +67,7 @@ type VehicleRow = {
   active: boolean;
   notes: string | null;
   owner?: string | null;
+  driverMatricula?: string | null;
   maintenanceHold: boolean;
   blockCategory: string | null;
   blockReason: string | null;
@@ -112,6 +115,15 @@ async function enrichVehicle(v: VehicleRow) {
   return row;
 }
 
+function isMatriculaTaken(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
+
 const vehicleInclude = {
   blockedBy: { select: { id: true, name: true } },
 } as const;
@@ -127,6 +139,7 @@ router.get('/', async (req: AuthRequest, res) => {
       { model: { contains: String(q) } },
       { brand: { contains: String(q) } },
       { defaultDriver: { contains: String(q) } },
+      { driverMatricula: { contains: String(q) } },
     ];
   }
   const vehicles = await prisma.vehicle.findMany({
@@ -239,16 +252,33 @@ router.post('/', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
   const exists = await prisma.vehicle.findUnique({ where: { plate } });
   if (exists) return res.status(409).json({ error: 'Placa já cadastrada' });
 
-  const vehicle = await prisma.vehicle.create({
-    data: {
-      ...parsed.data,
-      plate,
-      defaultDriver: parsed.data.defaultDriver || null,
-      status: parsed.data.status ?? VehicleStatus.DISPONIVEL,
-      owner: parsed.data.owner ?? 'AG',
-    },
-    include: vehicleInclude,
+  const owner = parsed.data.owner ?? 'AG';
+  const matricula = matriculaForPlateSave({
+    owner,
+    driverMatricula: parsed.data.driverMatricula,
+    defaultDriver: parsed.data.defaultDriver,
   });
+  if (!matricula.ok) return res.status(400).json({ error: matricula.error });
+
+  let vehicle;
+  try {
+    vehicle = await prisma.vehicle.create({
+      data: {
+        ...parsed.data,
+        plate,
+        defaultDriver: parsed.data.defaultDriver || null,
+        driverMatricula: matricula.driverMatricula,
+        status: parsed.data.status ?? VehicleStatus.DISPONIVEL,
+        owner,
+      },
+      include: vehicleInclude,
+    });
+  } catch (error) {
+    if (isMatriculaTaken(error)) {
+      return res.status(409).json({ error: 'Esta matrícula já está em outra placa LSL.' });
+    }
+    throw error;
+  }
   await prisma.vehicleHistory.create({
     data: {
       vehicleId: vehicle.id,
@@ -394,6 +424,20 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     data.owner = owner;
   }
 
+  const nextOwner = plateOwner(
+    String(data.plate ?? current.plate),
+    (data.owner as string | undefined) ?? current.owner,
+  );
+  const matricula = matriculaForPlateSave({
+    owner: nextOwner,
+    driverMatricula:
+      parsed.data.driverMatricula !== undefined ? parsed.data.driverMatricula : current.driverMatricula,
+    defaultDriver:
+      data.defaultDriver !== undefined ? (data.defaultDriver as string | null) : current.defaultDriver,
+  });
+  if (!matricula.ok) return res.status(400).json({ error: matricula.error });
+  data.driverMatricula = matricula.driverMatricula;
+
   if (parsed.data.active === false) {
     const openTrip = await prisma.trip.findFirst({
       where: { vehicleId: current.id, status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] } },
@@ -430,11 +474,19 @@ router.put('/:id', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
     }
   }
 
-  const vehicle = await prisma.vehicle.update({
-    where: { id: paramId(req) },
-    data,
-    include: vehicleInclude,
-  });
+  let vehicle;
+  try {
+    vehicle = await prisma.vehicle.update({
+      where: { id: paramId(req) },
+      data,
+      include: vehicleInclude,
+    });
+  } catch (error) {
+    if (isMatriculaTaken(error)) {
+      return res.status(409).json({ error: 'Esta matrícula já está em outra placa LSL.' });
+    }
+    throw error;
+  }
   if (data.status && data.status !== current.status) {
     await prisma.vehicleHistory.create({
       data: {

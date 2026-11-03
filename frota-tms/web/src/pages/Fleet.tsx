@@ -30,6 +30,7 @@ const emptyForm = {
   year: 2020,
   capacityMotos: 50,
   defaultDriver: '',
+  driverMatricula: '',
   status: 'DISPONIVEL' as VehicleStatus,
   owner: 'AG' as 'LSL' | 'AG',
   notes: '',
@@ -71,6 +72,7 @@ export function Fleet() {
         year: Number(form.year),
         capacityMotos: Number(form.capacityMotos),
         defaultDriver: form.defaultDriver || null,
+        driverMatricula: form.owner === 'LSL' ? form.driverMatricula.trim() : null,
         notes: form.notes || null,
       }
       if (editing) return api.put(`/vehicles/${editing.id}`, payload)
@@ -129,6 +131,7 @@ export function Fleet() {
       year: v.year,
       capacityMotos: v.capacityMotos,
       defaultDriver: v.defaultDriver ?? '',
+      driverMatricula: v.driverMatricula ?? '',
       status: v.status,
       owner: v.owner ?? 'AG',
       notes: v.notes ?? '',
@@ -206,6 +209,7 @@ export function Fleet() {
                 <th>Veículo</th>
                 <th>Capacidade</th>
                 <th>Motorista</th>
+                <th>Matrícula</th>
                 <th>Situação</th>
                 <th>Previsão retorno</th>
                 {isAdmin && <th />}
@@ -228,6 +232,7 @@ export function Fleet() {
                   </td>
                   <td>{v.capacityMotos} motos</td>
                   <td>{v.defaultDriver ?? '—'}</td>
+                  <td>{v.owner === 'LSL' ? v.driverMatricula || '—' : '—'}</td>
                   <td>
                     <div className="flex flex-col gap-1">
                       {v.active === false ? (
@@ -332,8 +337,20 @@ export function Fleet() {
             label="Motorista padrão"
             value={form.defaultDriver}
             onChange={(e) => setForm({ ...form, defaultDriver: e.target.value })}
-            placeholder="Opcional"
+            placeholder={form.owner === 'LSL' ? 'Obrigatório na frota LSL' : 'Opcional'}
+            required={form.owner === 'LSL'}
           />
+          {form.owner === 'LSL' && (
+            <Input
+              label="Matrícula do motorista"
+              value={form.driverMatricula}
+              onChange={(e) => setForm({ ...form, driverMatricula: e.target.value })}
+              placeholder="Só placa LSL"
+              required
+              inputMode="numeric"
+              autoComplete="off"
+            />
+          )}
           <Select
             label="Frota"
             value={form.owner}

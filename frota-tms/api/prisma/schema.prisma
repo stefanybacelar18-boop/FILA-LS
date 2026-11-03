@@ -47,6 +47,8 @@ model Vehicle {
   notes            String?
   // Frota operacional: LSL (própria, só Admin) | AG (Operação)
   owner            String    @default("AG")
+  // Matrícula do motorista padrão. Só placas LSL usam na consulta do roteiro.
+  driverMatricula  String?   @unique
   // Bloqueio longo (manutenção/outro): só volta a carregar após liberação explícita
   maintenanceHold  Boolean   @default(false)
   blockCategory    String?   // MANUTENCAO | OUTRO
