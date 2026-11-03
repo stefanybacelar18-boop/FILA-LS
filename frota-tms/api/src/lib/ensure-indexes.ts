@@ -13,7 +13,43 @@ const COLUMNS = [
   'ALTER TABLE "Vehicle" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true',
   'ALTER TABLE "Vehicle" ADD COLUMN IF NOT EXISTS "owner" TEXT NOT NULL DEFAULT \'AG\'',
   'ALTER TABLE "Trip" ADD COLUMN IF NOT EXISTS "pernoiteNightsOverride" INTEGER',
+  'ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "matricula" TEXT',
+  'CREATE UNIQUE INDEX IF NOT EXISTS "Driver_matricula_key" ON "Driver"("matricula")',
 ];
+
+/**
+ * O migrate do Render roda no build, muitas vezes sem o banco de produção.
+ * A coluna precisa existir antes do listen: Frota, Motoristas e Meu roteiro leem ela.
+ */
+const DRIVER_MATRICULA_COPY = `
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'Vehicle'
+      AND column_name = 'driverMatricula'
+  ) THEN
+    UPDATE "Driver" AS d
+    SET "matricula" = sub."driverMatricula"
+    FROM (
+      SELECT DISTINCT ON (upper(regexp_replace("defaultDriver", '\\s+', ' ', 'g')))
+        "defaultDriver",
+        "driverMatricula"
+      FROM "Vehicle"
+      WHERE "driverMatricula" IS NOT NULL
+        AND "defaultDriver" IS NOT NULL
+        AND length(trim("defaultDriver")) >= 2
+      ORDER BY upper(regexp_replace("defaultDriver", '\\s+', ' ', 'g')), "updatedAt" DESC
+    ) AS sub
+    WHERE d."matricula" IS NULL
+      AND upper(regexp_replace(d."name", '\\s+', ' ', 'g')) = upper(regexp_replace(sub."defaultDriver", '\\s+', ' ', 'g'));
+
+    ALTER TABLE "Vehicle" DROP COLUMN "driverMatricula";
+  END IF;
+END $$;
+`;
 
 // Postgres de produção. A migration Prisma é SQLite (DATETIME) e o Render
 // nem sempre roda migrate deploy; estas sentenças é que criam o expediente.
@@ -54,10 +90,27 @@ async function applyStatements(db: RawDb, statements: string[], label: string): 
   }
 }
 
+function isPostgres(): boolean {
+  return /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? '');
+}
+
+/** Cria a matrícula do motorista antes do listen. Sem ela, Frota e a consulta pública respondem 500. */
+export async function ensureDriverMatriculaColumn(db: RawDb): Promise<void> {
+  if (!isPostgres()) return;
+  await applyStatements(
+    db,
+    [
+      'ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "matricula" TEXT',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "Driver_matricula_key" ON "Driver"("matricula")',
+      DRIVER_MATRICULA_COPY,
+    ],
+    'Matrícula',
+  );
+}
+
 /** Cria expediente e fechamento antes do listen, no Postgres de produção. */
 export async function ensureDealershipCalendarTables(db: RawDb): Promise<void> {
-  const url = process.env.DATABASE_URL ?? '';
-  if (!/^postgres(ql)?:\/\//i.test(url)) return;
+  if (!isPostgres()) return;
   await applyStatements(db, CALENDAR_TABLES, 'Expediente');
 }
 
