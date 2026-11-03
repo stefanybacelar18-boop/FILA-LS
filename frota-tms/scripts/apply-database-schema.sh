@@ -46,6 +46,15 @@ if is_postgres; then
   fi
 
   echo "migrate deploy falhou — verificando banco legado (criado com db push)..." >&2
+  HISTORY="$(npx prisma db execute --schema "$SCHEMA" --stdin <<'SQL' 2>/dev/null || true
+SELECT COUNT(*) AS n FROM "_prisma_migrations";
+SQL
+)"
+  if echo "$HISTORY" | grep -Eq '[1-9]'; then
+    echo "O banco já tem histórico de migrations. A falha não será marcada como aplicada." >&2
+    exit 1
+  fi
+
   LEGACY_CHECK="$(npx prisma db execute --schema "$SCHEMA" --stdin <<'SQL' 2>/dev/null || true
 SELECT 1 AS ok FROM "User" LIMIT 1;
 SQL
