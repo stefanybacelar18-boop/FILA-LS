@@ -19,7 +19,7 @@ export function nextWorkDateKey(now = new Date()): string {
   return operationalDateKey(routeDateFromImport(now));
 }
 
-/** Matrícula da placa LSL: sem espaço, só letras e números. */
+/** Matrícula do motorista: sem espaço, só letras e números. */
 export function normalizeMatricula(value: string | null | undefined): string | null {
   if (value == null) return null;
   const cleaned = value.normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -27,63 +27,95 @@ export function normalizeMatricula(value: string | null | undefined): string | n
   return cleaned;
 }
 
-export type LslPlateMatricula = {
-  plate: string;
-  owner: string | null;
-  driverMatricula: string | null;
-  defaultDriver: string | null;
+export type DriverMatriculaRow = {
+  id: string;
+  name: string;
+  matricula: string | null;
 };
 
 export type MatriculaMatch =
-  | { ok: true; driverName: string; plate: string }
-  | { ok: false; reason: 'empty' | 'not_found' | 'ambiguous' | 'no_driver' };
+  | { ok: true; driverName: string }
+  | { ok: false; reason: 'empty' | 'not_found' | 'ambiguous' };
 
-/**
- * A matrícula fica na placa LSL e aponta para o motorista padrão.
- * A consulta segue esse nome em qualquer placa do dia.
- */
-export function matchLslPlateByMatricula(input: string, plates: LslPlateMatricula[]): MatriculaMatch {
+/** A matrícula identifica o motorista. A consulta segue o nome dele em qualquer placa LSL. */
+export function matchDriverByMatricula(input: string, drivers: DriverMatriculaRow[]): MatriculaMatch {
   const matricula = normalizeMatricula(input);
   if (!matricula) return { ok: false, reason: 'empty' };
-  const hits = plates.filter(
-    (plate) =>
-      plateOwner(plate.plate, plate.owner) === 'LSL' &&
-      normalizeMatricula(plate.driverMatricula) === matricula,
-  );
+  const hits = drivers.filter((driver) => normalizeMatricula(driver.matricula) === matricula);
   if (hits.length === 0) return { ok: false, reason: 'not_found' };
-  const names = [
-    ...new Set(
-      hits
-        .map((plate) => plate.defaultDriver?.trim())
-        .filter((name): name is string => !!name)
-        .map((name) => normalizeDriverName(name)),
-    ),
-  ];
-  if (names.length === 0) return { ok: false, reason: 'no_driver' };
+  const names = [...new Set(hits.map((driver) => normalizeDriverName(driver.name)))];
   if (names.length > 1) return { ok: false, reason: 'ambiguous' };
-  const driverName = hits.find((plate) => plate.defaultDriver?.trim())!.defaultDriver!.trim();
-  return { ok: true, driverName, plate: hits[0]!.plate };
+  return { ok: true, driverName: hits[0]!.name.trim() };
 }
 
-export type PlateMatriculaSave =
-  | { ok: true; driverMatricula: string | null }
+export type LslPlateMatriculaInput =
+  | { ok: true; matricula: string | null; driverName: string | null }
   | { ok: false; error: string };
 
-/** Placa AG não guarda matrícula. Placa LSL exige matrícula e motorista padrão. */
-export function matriculaForPlateSave(input: {
+/**
+ * Placa AG não pede matrícula e não altera a do motorista.
+ * Placa LSL exige a matrícula do motorista padrão. O valor é gravado no motorista.
+ */
+export function matriculaForLslPlate(input: {
   owner: 'LSL' | 'AG';
-  driverMatricula: string | null | undefined;
+  matricula: string | null | undefined;
   defaultDriver: string | null | undefined;
-}): PlateMatriculaSave {
-  if (input.owner !== 'LSL') return { ok: true, driverMatricula: null };
-  const driverMatricula = normalizeMatricula(input.driverMatricula);
-  if (!driverMatricula) {
+}): LslPlateMatriculaInput {
+  if (input.owner !== 'LSL') return { ok: true, matricula: null, driverName: null };
+  const matricula = normalizeMatricula(input.matricula);
+  const driverName = input.defaultDriver?.trim().replace(/\s+/g, ' ') ?? '';
+  if (!matricula) {
     return { ok: false, error: 'Informe a matrícula do motorista na placa LSL.' };
   }
-  if (!input.defaultDriver?.trim()) {
-    return { ok: false, error: 'Informe o motorista padrão junto com a matrícula da placa LSL.' };
+  if (driverName.length < 2) {
+    return { ok: false, error: 'Informe o motorista padrão junto com a matrícula.' };
   }
-  return { ok: true, driverMatricula };
+  return { ok: true, matricula, driverName };
+}
+
+export type DriverMatriculaPlan =
+  | { ok: true; action: 'update'; driverId: string; matricula: string }
+  | { ok: true; action: 'create'; name: string; matricula: string }
+  | { ok: false; error: string };
+
+/** Grava a matrícula no motorista. Outro motorista não pode usar o mesmo número. */
+export function planDriverMatriculaSave(
+  driverName: string,
+  matricula: string,
+  drivers: DriverMatriculaRow[],
+): DriverMatriculaPlan {
+  const normalizedMatricula = normalizeMatricula(matricula);
+  const name = driverName.trim().replace(/\s+/g, ' ');
+  if (!normalizedMatricula || name.length < 2) {
+    return { ok: false, error: 'Informe o motorista e a matrícula.' };
+  }
+  const folded = normalizeDriverName(name);
+  const samePerson = drivers.filter((driver) => normalizeDriverName(driver.name) === folded);
+  if (samePerson.length > 1) {
+    return { ok: false, error: 'Há mais de um motorista com esse nome. Ajuste o cadastro de motoristas.' };
+  }
+  const taken = drivers.find(
+    (driver) =>
+      normalizeMatricula(driver.matricula) === normalizedMatricula &&
+      normalizeDriverName(driver.name) !== folded,
+  );
+  if (taken) return { ok: false, error: 'Esta matrícula já é de outro motorista.' };
+  if (samePerson.length === 1) {
+    return { ok: true, action: 'update', driverId: samePerson[0]!.id, matricula: normalizedMatricula };
+  }
+  return { ok: true, action: 'create', name, matricula: normalizedMatricula };
+}
+
+/** Matrícula exibida na placa LSL: é a do motorista padrão, não um dado do veículo. */
+export function matriculaOfDefaultDriver(
+  defaultDriver: string | null | undefined,
+  drivers: DriverMatriculaRow[],
+): string | null {
+  const name = defaultDriver?.trim();
+  if (!name) return null;
+  const folded = normalizeDriverName(name);
+  const hit = drivers.find((driver) => normalizeDriverName(driver.name) === folded);
+  return hit ? normalizeMatricula(hit.matricula) : null;
 }
 
 export function sameDriver(tripDriverName: string | null | undefined, driverName: string): boolean {

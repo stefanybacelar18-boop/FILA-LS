@@ -78,7 +78,7 @@ export function FleetDetail() {
         <Info label="Capacidade" value={`${vehicle.capacityMotos} motos`} />
         <Info label="Motorista padrão" value={vehicle.defaultDriver ?? '—'} />
         {(vehicle.owner ?? plateOwner(vehicle.plate, vehicle.owner)) === 'LSL' && (
-          <Info label="Matrícula" value={vehicle.driverMatricula || '—'} />
+          <Info label="Matrícula do motorista" value={vehicle.driverMatricula || '—'} />
         )}
         <Info label="Viagens" value={String(trips.length)} />
       </div>

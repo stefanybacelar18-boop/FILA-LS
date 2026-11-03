@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   destinationsAsStored,
   manifestNumberFromRouteName,
-  matchLslPlateByMatricula,
-  matriculaForPlateSave,
+  matchDriverByMatricula,
+  matriculaForLslPlate,
+  matriculaOfDefaultDriver,
   nextWorkDateKey,
   normalizeMatricula,
+  planDriverMatriculaSave,
   tripBelongsToDriver,
 } from './driver-route-lookup';
 
@@ -13,44 +15,65 @@ function bahiaNoon(isoDay: string): Date {
   return new Date(`${isoDay}T15:00:00.000Z`);
 }
 
-describe('matrícula da placa LSL', () => {
-  const plates = [
-    { plate: 'EZU2D86', owner: 'LSL', driverMatricula: '150', defaultDriver: 'Ricardo de Jesus' },
-    { plate: 'ABC1D23', owner: 'AG', driverMatricula: '150', defaultDriver: 'Outro Motorista' },
-    { plate: 'TST1002', owner: 'LSL', driverMatricula: '151', defaultDriver: null },
-    { plate: 'TST1003', owner: 'LSL', driverMatricula: '152', defaultDriver: 'Ana Souza' },
-    { plate: 'TST1004', owner: 'LSL', driverMatricula: '152', defaultDriver: 'JOÃO SILVA' },
-  ];
+const drivers = [
+  { id: 'd1', name: 'Ricardo de Jesus', matricula: '150' },
+  { id: 'd2', name: 'Ana Souza', matricula: '152' },
+  { id: 'd3', name: 'JOÃO SILVA', matricula: '152' },
+  { id: 'd4', name: 'Sem Matrícula', matricula: null },
+];
 
+describe('matrícula do motorista', () => {
   it('normaliza espaços e letras', () => {
     expect(normalizeMatricula(' 15-0 ')).toBe('150');
     expect(normalizeMatricula('')).toBeNull();
   });
 
-  it('acha o motorista padrão da placa LSL e ignora a mesma matrícula na AG', () => {
-    const match = matchLslPlateByMatricula('150', plates);
-    expect(match).toEqual({ ok: true, driverName: 'Ricardo de Jesus', plate: 'EZU2D86' });
+  it('acha o motorista pela matrícula', () => {
+    expect(matchDriverByMatricula('150', drivers)).toEqual({
+      ok: true,
+      driverName: 'Ricardo de Jesus',
+    });
+    expect(matchDriverByMatricula('999', drivers)).toEqual({ ok: false, reason: 'not_found' });
+    expect(matchDriverByMatricula('152', drivers)).toEqual({ ok: false, reason: 'ambiguous' });
   });
 
-  it('recusa matrícula sem motorista ou ligada a dois motoristas', () => {
-    expect(matchLslPlateByMatricula('151', plates)).toEqual({ ok: false, reason: 'no_driver' });
-    expect(matchLslPlateByMatricula('152', plates)).toEqual({ ok: false, reason: 'ambiguous' });
-    expect(matchLslPlateByMatricula('999', plates)).toEqual({ ok: false, reason: 'not_found' });
+  it('exige matrícula só ao salvar placa LSL', () => {
+    expect(matriculaForLslPlate({ owner: 'LSL', matricula: '150', defaultDriver: 'Ricardo' })).toEqual({
+      ok: true,
+      matricula: '150',
+      driverName: 'Ricardo',
+    });
+    expect(matriculaForLslPlate({ owner: 'LSL', matricula: '', defaultDriver: 'Ricardo' }).ok).toBe(false);
+    expect(matriculaForLslPlate({ owner: 'LSL', matricula: '150', defaultDriver: '  ' }).ok).toBe(false);
+    expect(matriculaForLslPlate({ owner: 'AG', matricula: '150', defaultDriver: 'Ricardo' })).toEqual({
+      ok: true,
+      matricula: null,
+      driverName: null,
+    });
   });
 
-  it('exige matrícula só na placa LSL e apaga na AG', () => {
-    expect(
-      matriculaForPlateSave({ owner: 'LSL', driverMatricula: '150', defaultDriver: 'Ricardo' }),
-    ).toEqual({ ok: true, driverMatricula: '150' });
-    expect(matriculaForPlateSave({ owner: 'LSL', driverMatricula: '', defaultDriver: 'Ricardo' }).ok).toBe(
-      false,
-    );
-    expect(
-      matriculaForPlateSave({ owner: 'LSL', driverMatricula: '150', defaultDriver: '  ' }).ok,
-    ).toBe(false);
-    expect(
-      matriculaForPlateSave({ owner: 'AG', driverMatricula: '150', defaultDriver: 'Ricardo' }),
-    ).toEqual({ ok: true, driverMatricula: null });
+  it('grava a matrícula no motorista e recusa número de outra pessoa', () => {
+    expect(planDriverMatriculaSave('ricardo de jesus', '150', drivers)).toEqual({
+      ok: true,
+      action: 'update',
+      driverId: 'd1',
+      matricula: '150',
+    });
+    expect(planDriverMatriculaSave('Novo Motorista', '160', drivers)).toEqual({
+      ok: true,
+      action: 'create',
+      name: 'Novo Motorista',
+      matricula: '160',
+    });
+    expect(planDriverMatriculaSave('Outro Motorista', '150', drivers)).toEqual({
+      ok: false,
+      error: 'Esta matrícula já é de outro motorista.',
+    });
+  });
+
+  it('mostra na placa LSL a matrícula do motorista padrão', () => {
+    expect(matriculaOfDefaultDriver('RICARDO DE JESUS', drivers)).toBe('150');
+    expect(matriculaOfDefaultDriver('Sem Motorista', drivers)).toBeNull();
   });
 });
 
