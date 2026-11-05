@@ -26,6 +26,7 @@ import {
   type ChronusImportPreview,
 } from '../lib/chronus-import';
 import { dealershipIdByDealerCode, replaceRouteCargo } from '../lib/cargo-lookup';
+import { ensureCargoItemTable } from '../lib/ensure-indexes';
 import { parseExplicitRouteDate } from '../lib/chronus-route-date';
 import {
   commitChronusInTransitRoutes,
@@ -1198,6 +1199,7 @@ export function createPlanningRouter(io: Server) {
   );
 
   router.post('/import/chronus/commit', authorize(Role.ADMIN), async (req: AuthRequest, res) => {
+    await ensureCargoItemTable(prisma);
     const schema = z.object({ batchId: z.string().min(1) });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Informe batchId' });

@@ -78,6 +78,27 @@ const CALENDAR_TABLES = [
   'CREATE INDEX IF NOT EXISTS "DealershipClosure_date_idx" ON "DealershipClosure"("date")',
 ];
 
+// A migration de CargoItem é SQLite (DATETIME). No Postgres de produção o
+// migrate muitas vezes não roda, e confirmar o Chronus quebra ao gravar chassi/NF.
+export const CARGO_ITEM_SQL = [
+  `CREATE TABLE IF NOT EXISTS "CargoItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "chassis" TEXT NOT NULL,
+    "invoiceNumber" TEXT NOT NULL DEFAULT '',
+    "invoiceKey" TEXT NOT NULL DEFAULT '',
+    "model" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "routeId" TEXT NOT NULL,
+    "dealershipId" TEXT,
+    CONSTRAINT "CargoItem_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Route" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CargoItem_dealershipId_fkey" FOREIGN KEY ("dealershipId") REFERENCES "Dealership" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS "CargoItem_routeId_chassis_key" ON "CargoItem"("routeId", "chassis")',
+  'CREATE INDEX IF NOT EXISTS "CargoItem_chassis_idx" ON "CargoItem"("chassis")',
+  'CREATE INDEX IF NOT EXISTS "CargoItem_invoiceKey_idx" ON "CargoItem"("invoiceKey")',
+];
+
 type RawDb = { $executeRawUnsafe: (sql: string) => Promise<unknown> };
 
 async function applyStatements(db: RawDb, statements: string[], label: string): Promise<void> {
@@ -112,6 +133,12 @@ export async function ensureDriverMatriculaColumn(db: RawDb): Promise<void> {
 export async function ensureDealershipCalendarTables(db: RawDb): Promise<void> {
   if (!isPostgres()) return;
   await applyStatements(db, CALENDAR_TABLES, 'Expediente');
+}
+
+/** Cria chassi/NF antes do listen. Sem a tabela, confirmar o Chronus responde 500. */
+export async function ensureCargoItemTable(db: RawDb): Promise<void> {
+  if (!isPostgres()) return;
+  await applyStatements(db, CARGO_ITEM_SQL, 'Carga Chronus');
 }
 
 /** Aplica índices sem bloquear o listen (não usa prisma db push no start). */
