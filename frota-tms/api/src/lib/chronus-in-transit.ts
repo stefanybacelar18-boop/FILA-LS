@@ -14,6 +14,7 @@ import {
   type ChronusRow,
 } from './chronus-import';
 import { assessStoredRoute, calendarBlockMessage } from './store-calendar';
+import { dealershipIdByDealerCode, replaceRouteCargo } from './cargo-lookup';
 
 export const CHRONUS_IN_TRANSIT_NOTE = 'Recuperado do Chronus (saídas em trânsito)';
 
@@ -560,6 +561,8 @@ export async function commitChronusInTransitRoutes(
           });
           routeId = route.id;
         }
+
+        await replaceRouteCargo(tx, routeId, item.units, dealershipIdByDealerCode(item.destinations));
 
         const started = await startChronusInTransitTrip(tx, {
           routeId,

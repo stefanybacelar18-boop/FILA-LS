@@ -25,6 +25,7 @@ import {
   applyChronusRouteRefresh,
   type ChronusImportPreview,
 } from '../lib/chronus-import';
+import { dealershipIdByDealerCode, replaceRouteCargo } from '../lib/cargo-lookup';
 import { parseExplicitRouteDate } from '../lib/chronus-route-date';
 import {
   commitChronusInTransitRoutes,
@@ -1180,9 +1181,11 @@ export function createPlanningRouter(io: Server) {
           },
         });
 
+        const { routes: routesWithCargo, ...previewMeta } = preview;
         res.status(201).json({
           batchId: batch.id,
-          ...preview,
+          ...previewMeta,
+          routes: routesWithCargo.map(({ units: _units, ...route }) => route),
           message: inTransit
             ? 'Preview das saídas Chronus. Confirme para abrir as viagens em trânsito.'
             : 'Preview pronto. Revise e confirme com POST /planning/import/chronus/commit.',
@@ -1297,6 +1300,12 @@ export function createPlanningRouter(io: Server) {
     try {
       for (const item of toRefresh) {
         await applyChronusRouteRefresh(prisma, item.duplicateRouteId!, item);
+        await replaceRouteCargo(
+          prisma,
+          item.duplicateRouteId!,
+          item.units,
+          dealershipIdByDealerCode(item.destinations),
+        );
         refreshedCount += 1;
       }
 
@@ -1348,6 +1357,12 @@ export function createPlanningRouter(io: Server) {
           },
           select: { id: true, name: true, date: true },
         });
+        await replaceRouteCargo(
+          prisma,
+          route.id,
+          item.units,
+          dealershipIdByDealerCode(item.destinations),
+        );
         createdRoutes.push(route);
       }
     } catch (err) {

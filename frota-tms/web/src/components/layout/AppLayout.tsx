@@ -19,6 +19,7 @@ import {
   Wrench,
   ClipboardList,
   LayoutDashboard,
+  FileSearch,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useAuthStore } from '../../stores/auth'
@@ -41,6 +42,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
       { to: '/roteiros', label: 'Roteiros', icon: Route },
       { to: '/definir-placas', label: 'Definir placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
+      { to: '/chassi', label: 'Chassi / NF', icon: FileSearch },
       { to: '/justificativas', label: 'Justificativas', icon: ClipboardList },
       { to: '/pernoites', label: 'Pernoites LSL', icon: Moon },
       { to: '/manutencao', label: 'Manutenção', icon: Wrench },
@@ -57,6 +59,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
     primary: [
       { to: '/definir-placas', label: 'Definir placa', icon: Tags },
       { to: '/retornos', label: 'Retornos', icon: RotateCcw },
+      { to: '/chassi', label: 'Chassi / NF', icon: FileSearch },
       { to: '/roteiros', label: 'Roteiros', icon: Route },
     ],
     secondary: [
@@ -68,6 +71,7 @@ const navByRole: Record<Role, { primary: NavItem[]; secondary: NavItem[] }> = {
   CONSULTA: {
     primary: [
       { to: '/roteiros', label: 'Roteiros', icon: Route },
+      { to: '/chassi', label: 'Chassi / NF', icon: FileSearch },
       { to: '/frota', label: 'Frota', icon: Truck },
     ],
     secondary: [{ to: '/historico', label: 'Histórico', icon: History }, { to: '/pernoites', label: 'Pernoites LSL', icon: Moon }],

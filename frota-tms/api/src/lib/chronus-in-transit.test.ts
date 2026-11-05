@@ -47,6 +47,9 @@ function row(over: Partial<ChronusRow>): ChronusRow {
     arrivedAt: '',
     deliveredAt: '',
     driverName: 'JOSE DA SILVA',
+    chassis: '',
+    invoiceNumber: '',
+    model: '',
     ...over,
   };
 }

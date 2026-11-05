@@ -101,6 +101,7 @@ model Dealership {
   trips      Trip[]
   routes     Route[]           @relation("RoutePrimaryDealership")
   planningCities PlanningCity[]
+  cargoItems CargoItem[]
   hours      DealershipHour[]
   closures   DealershipClosure[]
 }
@@ -166,6 +167,7 @@ model Route {
   vehicles    RouteVehicle[]
   trips       Trip[]
   products    RouteProduct[]
+  cargoItems  CargoItem[]
   unavailabilities PlateUnavailability[]
   planningCities PlanningCity[]
 
@@ -360,4 +362,24 @@ model ImportBatch {
   createdById String?
   createdBy   User? @relation(fields: [createdById], references: [id])
   cities      PlanningCity[]
+}
+
+// Moto da carga Chronus. A entrega é a viagem do roteiro marcada como retornada.
+model CargoItem {
+  id            String   @id @default(cuid())
+  chassis       String
+  invoiceNumber String   @default("")
+  invoiceKey    String   @default("")
+  model         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  routeId      String
+  route        Route       @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  dealershipId String?
+  dealership   Dealership? @relation(fields: [dealershipId], references: [id], onDelete: SetNull)
+
+  @@unique([routeId, chassis])
+  @@index([chassis])
+  @@index([invoiceKey])
 }
