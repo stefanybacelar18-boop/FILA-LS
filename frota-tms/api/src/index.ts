@@ -27,6 +27,7 @@ import { gzipJson } from './middleware/gzip-json';
 import { prisma } from './lib/prisma';
 import { healthPayload, probeDatabase } from './lib/health';
 import {
+  ensureCargoItemTable,
   ensureDealershipCalendarTables,
   ensureDriverMatriculaColumn,
   ensureHotIndexes,
@@ -162,6 +163,7 @@ const PORT = Number(process.env.PORT) || 4000;
 async function start() {
   await ensureDealershipCalendarTables(prisma);
   await ensureDriverMatriculaColumn(prisma);
+  await ensureCargoItemTable(prisma);
   server.listen(PORT, '0.0.0.0', () => {
   console.log(`FrotaTMS listening on http://0.0.0.0:${PORT}`);
   void ensureBootstrapUsers(prisma)
