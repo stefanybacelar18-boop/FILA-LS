@@ -107,7 +107,6 @@ export function Trips() {
     <div>
       <PageHeader
         title="Viagens"
-        description="Abertas por padrão · Histórico recente em Todas · Informe atraso/indisponibilidade"
       />
 
       {okMsg && (

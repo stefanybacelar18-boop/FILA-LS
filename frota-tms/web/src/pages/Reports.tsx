@@ -69,7 +69,6 @@ export function Reports() {
     <div>
       <PageHeader
         title="Relatórios"
-        description="Exportação em Excel e PDF para análise operacional"
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">

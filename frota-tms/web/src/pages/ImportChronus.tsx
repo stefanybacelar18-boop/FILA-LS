@@ -216,11 +216,6 @@ export function ImportChronus() {
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       <PageHeader
         title="Importar Chronus"
-        description={
-          inTransit
-            ? 'Relatório das cargas que já saíram: abre a viagem em trânsito com a placa e o motorista, como na definição de placas.'
-            : 'O mesmo número de manifesto (ex.: 384094) atualiza a viagem já importada, mesmo em outro dia. Não cria duplicata.'
-        }
         actions={
           <Link to="/roteiros">
             <Button variant="secondary" size="sm">
@@ -255,11 +250,6 @@ export function ImportChronus() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium">Arquivo do Chronus</p>
-            <p className="text-sm text-[var(--color-text-muted)]">
-              {inTransit
-                ? 'Use o relatório das que já saíram para entrega (não o de carga). Placa real e motorista cadastrado viram viagem em andamento hoje.'
-                : 'Linhas sem manifesto são ignoradas. Manifesto novo vira um roteiro. Se o número já existe, motos, paradas e vencimento entram na viagem importada. Na sexta o carregamento vai para segunda, a menos que haja expediente no sábado.'}
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <input

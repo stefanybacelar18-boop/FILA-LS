@@ -86,7 +86,6 @@ export function Users() {
     <div>
       <PageHeader
         title="Usuários"
-        description="Gestão de acesso e perfis do sistema"
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />

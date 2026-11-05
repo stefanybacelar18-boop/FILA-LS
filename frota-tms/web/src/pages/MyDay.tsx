@@ -94,7 +94,6 @@ export function MyDay() {
     <div className="ops-readable mx-auto max-w-5xl">
       <PageHeader
         title="Meu Dia"
-        description="Visão rápida do planejador"
         actions={
           <Link to="/mesa">
             <Button size="lg">Ir para a Mesa</Button>

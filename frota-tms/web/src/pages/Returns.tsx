@@ -656,7 +656,6 @@ export function Returns() {
     <div className="page-desktop max-w-4xl space-y-4">
       <PageHeader
         title="Retornos"
-        description="Confirme o retorno ou registre problema. Expanda “Ver entregas” para conferir o roteiro antes de retornar."
       />
 
       {isAdmin && openCount > 0 && (
@@ -715,7 +714,6 @@ export function Returns() {
       0 ? (
         <EmptyState
           title="Nenhuma viagem em aberto"
-          description="Quando houver placas em viagem, elas aparecem aqui por data de previsão."
         />
       ) : (
         <div className="space-y-4">
@@ -807,10 +805,6 @@ export function Returns() {
           </p>
           {confirmTrip ? (
             <>
-              <p className="text-xs text-[var(--color-text-muted)]">
-                Se a placa já tinha voltado e só estão registrando agora, informe a{' '}
-                <strong>chegada real</strong> para não cobrar pernoite a mais.
-              </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"

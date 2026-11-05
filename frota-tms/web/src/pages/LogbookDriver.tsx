@@ -250,9 +250,6 @@ export function LogbookDriver() {
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
           </div>
-          <p className="mb-6 text-sm text-[var(--color-text-muted)]">
-            Checklist digital LSL com assinatura. Use a mesma senha do Meu Roteiro.
-          </p>
           <form onSubmit={openSession} className="space-y-3">
             <Input label="Placa" value={plate} onChange={(e) => setPlate(e.target.value)} required />
             <Input

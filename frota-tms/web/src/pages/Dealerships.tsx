@@ -128,11 +128,6 @@ export function Dealerships() {
     <div>
       <PageHeader
         title="Concessionárias"
-        description={
-          meta?.pad
-            ? `Distância e tempo calculados do PAD (${meta.pad.lat}, ${meta.pad.lng}) · ${meta.pad.formula}`
-            : 'Distância e tempo calculados a partir do PAD'
-        }
         actions={
           isAdmin ? (
             <div className="flex flex-wrap gap-2">

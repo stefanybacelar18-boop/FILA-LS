@@ -10,13 +10,6 @@ import { formatDate, formatDateTime } from '../lib/format'
 import { useAuthStore } from '../stores/auth'
 import { cn } from '../lib/cn'
 
-const WORKFLOW_STEPS = [
-  { key: 'motorista', label: 'Motorista preenche' },
-  { key: 'entrega', label: 'Entrega ao coordenador' },
-  { key: 'conferencia', label: 'Conferência e assinatura' },
-  { key: 'arquivo', label: 'Arquivar PDF' },
-] as const
-
 function SignatureImg({ src, label }: { src: string | null; label: string }) {
   if (!src) return <p className="text-sm text-[var(--color-text-muted)]">{label}: —</p>
   return (
@@ -100,20 +93,10 @@ export function LogbookAdmin() {
     }
   }
 
-  const activeStep =
-    detail?.status === 'ARQUIVADO'
-      ? 3
-      : detail?.status === 'AGUARDANDO_COORDENADOR'
-        ? 2
-        : detail?.returnComplete
-          ? 1
-          : 0
-
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Diário de bordo"
-        description="Mesmo fluxo do papel: motorista preenche → coordenador confere, assina e arquiva o PDF"
         actions={
           <Button
             size="sm"
@@ -128,32 +111,6 @@ export function LogbookAdmin() {
         }
       />
 
-      <div className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <p className="mb-3 text-sm text-[var(--color-text-muted)]">
-          Substitui a entrega física do checklist. Quando o motorista conclui saída e retorno no celular, o
-          diário entra na <strong>fila do coordenador</strong> (ex.: Rodrigo) para conferência, assinatura e
-          arquivo.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {WORKFLOW_STEPS.map((step, i) => (
-            <div
-              key={step.key}
-              className={cn(
-                'flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium',
-                i <= activeStep && selectedTripId
-                  ? 'bg-[var(--color-primary-muted)] text-[var(--color-primary)]'
-                  : 'bg-[var(--color-surface-2)] text-[var(--color-text-muted)]',
-              )}
-            >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-[10px] font-bold">
-                {i + 1}
-              </span>
-              {step.label}
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-5">
         <Card
           className="lg:col-span-2"
@@ -163,11 +120,7 @@ export function LogbookAdmin() {
             <Spinner />
           ) : list.length === 0 ? (
             <EmptyState
-              description={
-                queueOnly
-                  ? 'Nenhum diário aguardando conferência. Quando o motorista concluir retorno, aparece aqui.'
-                  : 'Nenhum diário encontrado.'
-              }
+              title={queueOnly ? 'Nenhum diário aguardando conferência' : 'Nenhum diário encontrado'}
             />
           ) : (
             <div className="max-h-[36rem] space-y-1 overflow-y-auto">
@@ -212,7 +165,7 @@ export function LogbookAdmin() {
           {!selectedTripId ? (
             <EmptyState
               icon={<UserCheck className="h-8 w-8" />}
-              description="Selecione um diário da fila para conferir como no papel entregue pelo motorista."
+              title="Nenhum diário selecionado"
             />
           ) : detailLoading || !detail ? (
             <Spinner />
