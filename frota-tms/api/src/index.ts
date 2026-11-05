@@ -20,6 +20,7 @@ import historyRoutes from './routes/history';
 import searchRoutes from './routes/search';
 import reportsRoutes from './routes/reports';
 import justificationsRoutes from './routes/justifications';
+import cargoRoutes from './routes/cargo';
 import evidencesRoutes from './routes/evidences';
 import publicDriverRoutes from './routes/publicDriver';
 import { gzipJson } from './middleware/gzip-json';
@@ -88,6 +89,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/justifications', justificationsRoutes);
+app.use('/api/cargo', cargoRoutes);
 app.use('/api/evidences', evidencesRoutes);
 
 /** Evidências de atraso (fotos/PDF) — servidas apenas via /api/evidences/:id */

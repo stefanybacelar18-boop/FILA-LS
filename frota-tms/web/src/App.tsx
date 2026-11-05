@@ -30,6 +30,7 @@ import { Maintenance } from './pages/Maintenance'
 import { Justifications } from './pages/Justifications'
 import { MyRoute } from './pages/MyRoute'
 import { ImportChronus } from './pages/ImportChronus'
+import { CargoLookup } from './pages/CargoLookup'
 import { startRenderKeepAlive } from './lib/render-keepalive'
 
 const queryClient = new QueryClient({
@@ -159,6 +160,14 @@ export default function App() {
                 element={
                   <RoleGate roles={['ADMIN', 'OPERACAO']}>
                     <Justifications />
+                  </RoleGate>
+                }
+              />
+              <Route
+                path="chassi"
+                element={
+                  <RoleGate roles={['ADMIN', 'OPERACAO', 'CONSULTA']}>
+                    <CargoLookup />
                   </RoleGate>
                 }
               />

@@ -21,6 +21,7 @@ import {
   type ChronusExistingRouteMatch,
 } from './chronus-dedup';
 import { buildChronusDealerIndexes, matchChronusDealership } from './chronus-dealer-match';
+import { cargoSearchKey, invoiceKey, type ChronusCargoUnit } from './cargo-lookup';
 
 export type ChronusRow = {
   manifesto: string;
@@ -35,6 +36,9 @@ export type ChronusRow = {
   /** Data Entrega (chegada real). Data Chegada do Chronus é previsão. */
   deliveredAt: string;
   driverName: string;
+  chassis: string;
+  invoiceNumber: string;
+  model: string;
 };
 
 export type ChronusManifestPreview = {
@@ -79,6 +83,7 @@ export type ChronusManifestPreview = {
   assignedDriverName?: string | null;
   sentAt?: string | null;
   chronusStatus?: string | null;
+  units?: ChronusCargoUnit[];
   skipReason?:
     | 'NO_REAL_PLATE'
     | 'FICTIONAL_PLATE'
@@ -119,6 +124,9 @@ const HEADER_ALIASES: Record<keyof ChronusRow, string[]> = {
   arrivedAt: ['data chegada'],
   deliveredAt: ['data entrega'],
   driverName: ['motorista'],
+  chassis: ['chassi', 'chassis'],
+  invoiceNumber: ['nota fiscal', 'nf'],
+  model: ['modelo'],
 };
 
 function normHeader(value: string): string {
@@ -156,6 +164,9 @@ const CHRONUS_ENTREGAS_LAYOUT = {
   deliveredAt: 27,
   status: 28,
   driverName: 34,
+  chassis: 4,
+  model: 5,
+  invoiceNumber: 12,
 } as const;
 
 function isChronusEntregasExport(headers: string[]): boolean {
@@ -180,6 +191,9 @@ function resolveColumns(headers: string[]) {
   const arrivedAt = pickColumn(headers, HEADER_ALIASES.arrivedAt);
   const deliveredAt = pickColumn(headers, HEADER_ALIASES.deliveredAt);
   const driverName = pickColumn(headers, HEADER_ALIASES.driverName);
+  const chassis = pickColumn(headers, HEADER_ALIASES.chassis);
+  const invoiceNumber = pickColumn(headers, HEADER_ALIASES.invoiceNumber);
+  const model = pickColumn(headers, HEADER_ALIASES.model);
   return {
     manifesto,
     dealerCode,
@@ -192,6 +206,9 @@ function resolveColumns(headers: string[]) {
     arrivedAt,
     deliveredAt,
     driverName,
+    chassis,
+    invoiceNumber,
+    model,
   };
 }
 
@@ -321,6 +338,9 @@ export async function parseChronusFile(
       arrivedAt: col.arrivedAt >= 0 ? line[col.arrivedAt]?.trim() ?? '' : '',
       deliveredAt: col.deliveredAt >= 0 ? line[col.deliveredAt]?.trim() ?? '' : '',
       driverName: col.driverName >= 0 ? line[col.driverName]?.trim() ?? '' : '',
+      chassis: col.chassis >= 0 ? line[col.chassis]?.trim() ?? '' : '',
+      invoiceNumber: col.invoiceNumber >= 0 ? line[col.invoiceNumber]?.trim() ?? '' : '',
+      model: col.model >= 0 ? line[col.model]?.trim() ?? '' : '',
     });
   }
 
@@ -445,6 +465,22 @@ export async function buildChronusPreview(
         : null;
     const hasPriority = hasActivePriority({ priorityExpiryDate });
 
+    const units: ChronusCargoUnit[] = [];
+    const seenChassis = new Set<string>();
+    for (const item of items) {
+      const chassis = cargoSearchKey(item.chassis);
+      if (!chassis || seenChassis.has(chassis)) continue;
+      seenChassis.add(chassis);
+      const invoiceNumber = item.invoiceNumber.trim();
+      units.push({
+        chassis,
+        invoiceNumber,
+        invoiceKey: invoiceKey(invoiceNumber),
+        model: item.model.trim() || null,
+        dealerCode: item.dealerCode.trim(),
+      });
+    }
+
     const plates = [...new Set(items.map((i) => i.plate).filter(Boolean))];
     const plateResolved = resolveManifestPlateHint(plates);
 
@@ -468,6 +504,7 @@ export async function buildChronusPreview(
       canRefreshLoad: duplicate ? canRefreshChronusRoute(duplicate.status) : false,
       sentAt: sentDate ? sentDate.toISOString().slice(0, 10) : null,
       chronusStatus: mostCommonChronusStatus(items),
+      units,
     });
   }
 
