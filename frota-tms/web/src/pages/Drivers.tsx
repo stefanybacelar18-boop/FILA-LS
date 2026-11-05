@@ -303,9 +303,6 @@ export function Drivers() {
             blockMutation.mutate()
           }}
         >
-          <p className="text-sm text-[var(--color-text-muted)]">
-            O operador verá este motivo ao tentar usar o motorista na definição de placa.
-          </p>
           <Textarea
             label="Motivo do bloqueio *"
             value={blockReason}

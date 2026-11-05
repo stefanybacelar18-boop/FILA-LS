@@ -59,11 +59,6 @@ export function UndoReturnModal({ trip, open, onClose, onSuccess }: UndoReturnMo
     >
       {trip && (
         <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            A viagem volta para <strong>Em andamento</strong> ou <strong>Atrasado</strong>, a placa
-            retorna para <strong>Em viagem</strong> e o roteiro pode ser reaberto se tinha sido
-            concluído por este retorno.
-          </p>
           <div className="rounded-lg bg-[var(--color-surface-muted)] px-3 py-2 text-sm">
             <p>
               <strong>Destino:</strong> {trip.dealership.name}

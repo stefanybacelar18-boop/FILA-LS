@@ -212,11 +212,6 @@ export function EditLoadModal({
         </div>
       ) : (
         <div className="space-y-5">
-          <p className="text-[var(--color-text-muted)]">
-            Altere frota, capacidade, destinos, motos e vencimentos. Exemplo: carga Chronus em{' '}
-            <strong>AG</strong> pode ir para <strong>LSL</strong> para usar veículo próprio.
-          </p>
-
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
               label="Descrição *"

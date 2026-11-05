@@ -314,10 +314,6 @@ export function ImportChronus() {
           {preview.isFridayImport && !preview.inTransit && (
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
               <p className="text-sm font-medium">Sexta-feira: quando carregar?</p>
-              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                Sem expediente no sábado, os roteiros ficam na segunda. Se o sábado tiver carga, escolha
-                sábado.
-              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   type="button"

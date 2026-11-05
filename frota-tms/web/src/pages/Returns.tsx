@@ -663,10 +663,6 @@ export function Returns() {
           <p className="font-medium text-amber-900 dark:text-amber-100">
             {openCount} viagem{openCount === 1 ? '' : 's'} em andamento
           </p>
-          <p className="mt-1 text-[var(--color-text-muted)]">
-            Chronus sem extração desde 07/10: dá baixa em todas na <strong>previsão de retorno</strong>{' '}
-            (não cobra pernoite extra) e libera as placas.
-          </p>
           <Button className="mt-3" variant="secondary" onClick={() => setCloseAllOpen(true)}>
             Dar baixa em todas na previsão
           </Button>
@@ -684,10 +680,6 @@ export function Returns() {
         <div className="rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
           <p className="font-medium text-amber-900 dark:text-amber-100">
             Retorno confirmado — {lastReturnedTrip.vehicle.plate}
-          </p>
-          <p className="mt-1 text-[var(--color-text-muted)]">
-            Clicou em retornar por engano? Você pode desfazer agora ou depois em{' '}
-            <strong>Histórico</strong>.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={() => setUndoOpen(true)}>
@@ -909,10 +901,6 @@ export function Returns() {
         }
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Motivo e nova previsão. Fotos/PDF são opcionais.
-          </p>
-
           <div className="grid grid-cols-2 gap-3">
             <Select
               label="Motivo"

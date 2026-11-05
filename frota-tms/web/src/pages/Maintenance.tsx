@@ -219,9 +219,6 @@ export function Maintenance() {
         }
       >
         <form onSubmit={onBlockSubmit} className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            A placa fica indisponível para novo carregamento até alguém informar que já está OK.
-          </p>
           <Select
             label="Placa disponível"
             value={blockVehicleId}
@@ -276,9 +273,6 @@ export function Maintenance() {
         }
       >
         <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Confirma que a placa pode voltar a carregar? Ela entra novamente como disponível.
-          </p>
           {releaseTarget?.blockReason && (
             <p className="rounded-lg bg-[var(--color-surface-muted)] px-3 py-2 text-sm">
               Motivo atual: <strong>{releaseTarget.blockReason}</strong>

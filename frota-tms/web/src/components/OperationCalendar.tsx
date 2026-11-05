@@ -104,9 +104,6 @@ export function OperationCalendar() {
           <h2 className="text-sm font-semibold capitalize">
             {MONTHS[cursor.month]} {cursor.year}
           </h2>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Vermelho segura a carga ou a loja. Amarelo só avisa.
-          </p>
         </div>
         <div className="flex gap-1">
           <button

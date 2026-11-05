@@ -69,11 +69,6 @@ export function TripScheduleModal({ trip, onClose, onSuccess }: Props) {
       title={`Ajustar datas — ${trip.vehicle.plate}`}
     >
       <div className="space-y-4">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Altere o início da viagem e a previsão de retorno. Funciona para viagens em andamento e
-          já concluídas. Apenas administrador.
-        </p>
-
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs">
           <p>
             <span className="text-[var(--color-text-muted)]">Roteiro:</span> {trip.route?.name ?? '—'}

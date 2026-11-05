@@ -593,14 +593,6 @@ export function AssignPlates() {
             {returningLaterCount > 0 ? ` · ${returningLaterCount} em viagem` : ''}
           </p>
         </div>
-        {board?.loadRequirement?.label && (
-          <p className="mb-3 text-sm text-[var(--color-text-muted)]">
-            Veículo:{' '}
-            <span className="font-medium text-[var(--color-text)]">
-              {board.loadRequirement.label}
-            </span>
-          </p>
-        )}
 
         {loadingBoard ? (
           <div className="flex justify-center py-8">
@@ -633,8 +625,7 @@ export function AssignPlates() {
         ) : (
           <div className="space-y-3">
             <div>
-              <h3 className="text-sm font-semibold">Veículos disponíveis</h3>
-              <ul className="mt-3 space-y-2">
+              <ul className="space-y-2">
                 {available.map((vehicle) => {
                   const selected = selectedId === vehicle.id
                   const trips = vehicle.lastTrips ?? []
@@ -729,14 +720,6 @@ export function AssignPlates() {
                 }
               })}
             />
-
-            {selectedVehicle && (
-              <p className="text-xs text-[var(--color-text-muted)]">
-                Selecionada:{' '}
-                <PlateBadge plate={selectedVehicle.plate} color={selectedVehicle.color as PlateColor} />
-                {selectedDriver ? ` · ${selectedDriver.name}` : ''}
-              </p>
-            )}
 
             {driverBlockedWarning && (
               <p className="text-xs font-medium text-[var(--color-danger)]">{driverBlockedWarning}</p>

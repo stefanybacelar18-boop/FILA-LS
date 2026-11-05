@@ -482,7 +482,7 @@ export function Routes() {
         '/routes/export/prioridades',
         `vencimentos-prioridades-${toInputDate(new Date())}.xlsx`,
       )
-      setOkMsg('Excel baixado (placa/roteiro + resumo por concessionária). Anexe no e-mail de alerta.')
+      setOkMsg('Excel baixado.')
     } catch {
       setError('Não foi possível gerar o Excel de vencimentos.')
     } finally {
@@ -494,7 +494,6 @@ export function Routes() {
     <div className="page-desktop">
       <PageHeader
         title="Roteiros"
-        description={filterDate ? `Roteiros do dia ${formatDate(filterDate)}.` : undefined}
         actions={
           tab === 'prioridades' || isAdmin ? (
           <div className="flex flex-wrap gap-2">
@@ -584,18 +583,12 @@ export function Routes() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-[var(--color-text-muted)] sm:text-right">
-            {filterDate ? (
-              <>
-                <span className="font-semibold text-[var(--color-text)]">{visible.length}</span> roteiro(s) em{' '}
-                {formatDate(filterDate)}
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-[var(--color-text)]">{visible.length}</span> roteiro(s) exibidos
-              </>
-            )}
-          </p>
+          {filterDate ? (
+            <p className="text-xs text-[var(--color-text-muted)] sm:text-right">
+              <span className="font-semibold text-[var(--color-text)]">{visible.length}</span> em{' '}
+              {formatDate(filterDate)}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_10.5rem_auto]">
@@ -1013,7 +1006,7 @@ export function Routes() {
         onClose={() => setReleaseId(null)}
         onConfirm={() => releaseId && releaseMutation.mutate(releaseId)}
         title="Voltar para definir placa?"
-        message="A viagem aberta será cancelada, a placa liberada e o roteiro volta para a fila em Definir placa — para atribuir um novo veículo quando o carregamento não ocorrer."
+        message="A viagem aberta será cancelada e a placa liberada. O roteiro volta para Definir placa."
         confirmLabel="Liberar roteiro"
         danger
         loading={releaseMutation.isPending}
@@ -1027,7 +1020,7 @@ export function Routes() {
         }}
         onConfirm={() => sendId && sendMutation.mutate(sendId)}
         title="Disponibilizar para Operação?"
-        message="A Operação verá este roteiro e escolherá 1 placa. Feriado na carga ou na chegada segura o envio."
+        message="O roteiro entra na fila de placas."
         confirmLabel="Disponibilizar"
         loading={sendMutation.isPending}
         error={sendId ? error : null}
@@ -1078,11 +1071,6 @@ export function Routes() {
         }
       >
         <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Altere a placa e/ou o motorista do roteiro em andamento. Digite o nome e{' '}
-            <strong>escolha na lista</strong> (não basta digitar). Ao mudar a placa, o motorista
-            padrão é sugerido — você pode trocar. A placa anterior volta a ficar disponível.
-          </p>
           {currentVehicle && (
             <p className="rounded-md bg-[var(--color-surface-2)] px-3 py-2 text-sm">
               Atual: <strong>{currentVehicle.plate}</strong>
