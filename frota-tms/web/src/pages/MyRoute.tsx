@@ -343,10 +343,6 @@ export function MyRoute() {
           )}
 
           <p className="mt-auto pt-8 text-center text-sm text-[var(--color-text-muted)]">
-            <Link to="/diario-bordo" className="text-[var(--color-primary)] hover:underline">
-              Diário de bordo
-            </Link>
-            {' · '}
             <Link to="/login" className="text-[var(--color-primary)] hover:underline">
               Entrar no sistema
             </Link>

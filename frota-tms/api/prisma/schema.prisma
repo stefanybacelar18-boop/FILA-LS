@@ -29,7 +29,6 @@ model User {
   importBatches  ImportBatch[]
   tripEvidences  TripEvidence[]
   vehiclesBlocked Vehicle[]       @relation("VehicleBlockedBy")
-  logbooksCoordinated TripLogbook[] @relation("LogbookCoordinator")
 }
 
 model Vehicle {
@@ -61,7 +60,6 @@ model Vehicle {
   trips            Trip[]
   history          VehicleHistory[]
   unavailabilities PlateUnavailability[]
-  logbooks         TripLogbook[]
 
   @@index([status])
   @@index([active])
@@ -275,7 +273,6 @@ model Trip {
   returnedById String?
   returnedBy   User?      @relation("TripReturnedBy", fields: [returnedById], references: [id])
   evidences    TripEvidence[]
-  logbook      TripLogbook?
 
   @@index([vehicleId, status])
   @@index([status])
@@ -363,59 +360,4 @@ model ImportBatch {
   createdById String?
   createdBy   User? @relation(fields: [createdById], references: [id])
   cities      PlanningCity[]
-}
-
-// Diário de bordo / checklist frota LSL (FCDE-LSLT-018c-01)
-model TripLogbook {
-  id        String   @id @default(cuid())
-  formCode  String   @default("FCDE-LSLT-018c-01")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tripId    String   @unique
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  vehicleId String
-  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
-
-  driverMatricula  String?
-  helperName       String?
-  helperMatricula  String?
-
-  kmInitial Int?
-  kmFinal   Int?
-
-  fuelDieselDeparture String?
-  fuelOilDeparture    String?
-  fuelDieselReturn    String?
-  fuelOilReturn       String?
-
-  checklistDeparture String?
-  checklistReturn    String?
-
-  fuelingDepartureJson String?
-  fuelingReturnJson    String?
-
-  damageDescription      String?
-  damageMarksJson        String?
-  maintenanceDescription String?
-
-  departureSignedAt     DateTime?
-  departureSignaturePng String?
-  departureSignedIp     String?
-  departureUserAgent    String?
-
-  returnSignedAt     DateTime?
-  returnSignaturePng String?
-  returnSignedIp     String?
-  returnUserAgent    String?
-
-  coordinatorSignedAt     DateTime?
-  coordinatorSignaturePng String?
-  coordinatorUserId       String?
-  coordinatorUser         User? @relation("LogbookCoordinator", fields: [coordinatorUserId], references: [id])
-
-  reportFormCode   String  @default("RB-LSL-01B-01")
-  stopsJson        String?
-  reportExtrasJson String?
-  tripObservations String?
 }
