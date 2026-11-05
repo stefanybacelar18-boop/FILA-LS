@@ -36,7 +36,6 @@ type DriverRouteCard = {
 type LookupResult = {
   found: boolean
   driverName: string
-  workDate: string
   message?: string | null
   orderWarning?: string
   routes: DriverRouteCard[]
@@ -56,8 +55,8 @@ function deliveryLabel(count: number) {
 }
 
 /**
- * Meu roteiro — consulta pela matrícula da placa LSL, no celular.
- * A senha compartilhada da frota LSL continua sendo a autorização.
+ * Meu roteiro — consulta pela matrícula do motorista LSL, no celular.
+ * Mostra os roteiros em aberto no nome dele, até a operação marcar o retorno.
  */
 export function MyRoute() {
   usePublicMobileShell()
@@ -104,7 +103,6 @@ export function MyRoute() {
       setResult({
         found: Boolean(data.found),
         driverName: data.driverName || matriculaClean,
-        workDate: data.workDate || '',
         message: data.message,
         orderWarning: data.orderWarning,
         routes: data.routes ?? [],
@@ -156,7 +154,7 @@ export function MyRoute() {
                 className="h-12 max-w-full text-base"
               />
               <p className="-mt-2 text-xs text-[var(--color-text-muted)]">
-                Use a matrícula do seu cadastro de motorista. A consulta mostra só os seus roteiros.
+                Use a matrícula do seu cadastro de motorista. A consulta mostra os roteiros em aberto no seu nome.
               </p>
               <Input
                 id="driver-pin"
@@ -182,15 +180,13 @@ export function MyRoute() {
             <div className="min-w-0 space-y-4">
               <div>
                 <p className="text-base font-semibold break-words">{result.driverName}</p>
-                <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                  Próximo dia de trabalho
-                  {result.workDate ? `: ${formatDate(result.workDate)}` : ''}
-                </p>
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">Roteiros em aberto</p>
               </div>
 
               {result.routes.length === 0 ? (
                 <p className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-muted)]">
-                  {result.message || 'Nenhum roteiro seu neste dia de trabalho.'}
+                  {result.message ||
+                    'Nenhum roteiro em aberto no seu nome. Ele aparece quando a placa já foi definida e fica até a operação marcar o retorno.'}
                 </p>
               ) : (
                 <ul className="space-y-3">
@@ -203,6 +199,10 @@ export function MyRoute() {
                         Roteiro
                       </p>
                       <p className="mt-1 break-words text-lg font-semibold">{route.routeName}</p>
+                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                        {formatDate(route.routeDate)}
+                        {route.departureAt ? ` · saída ${route.departureAt}` : ''}
+                      </p>
                       {route.hasPriority && (
                         <p className="mt-1 text-sm font-medium text-[var(--color-danger)]">
                           Prioridade
