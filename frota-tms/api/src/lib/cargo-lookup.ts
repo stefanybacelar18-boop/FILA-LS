@@ -1,5 +1,8 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { subMonths } from 'date-fns';
 import { TripStatus } from '../types/enums';
+
+export const CARGO_HISTORY_MONTHS = 12;
 
 export type ChronusCargoUnit = {
   chassis: string;
@@ -59,6 +62,79 @@ export function cargoDelivery(trips: CargoTripSnapshot[]): CargoDelivery {
     return { situation: 'ENTREGUE', deliveredAt: latest.returnedAt, plate: latest.plate };
   }
   return { situation: 'SEM_VIAGEM', deliveredAt: null, plate: null };
+}
+
+/** Entregue conta da data do retorno. Sem viagem, da data do roteiro. Viagem aberta fica. */
+export function cargoHistoryExpired(input: {
+  routeDate: Date;
+  trips: CargoTripSnapshot[];
+  now?: Date;
+}): boolean {
+  const delivery = cargoDelivery(input.trips);
+  if (delivery.situation === 'EM_VIAGEM') return false;
+  const anchor =
+    delivery.situation === 'ENTREGUE' && delivery.deliveredAt
+      ? delivery.deliveredAt
+      : input.routeDate;
+  const cutoff = subMonths(input.now ?? new Date(), CARGO_HISTORY_MONTHS);
+  return anchor.getTime() < cutoff.getTime();
+}
+
+export async function purgeExpiredCargoHistory(
+  prisma: PrismaClient,
+  now: Date = new Date(),
+): Promise<number> {
+  const cutoff = subMonths(now, CARGO_HISTORY_MONTHS);
+  let deleted = 0;
+  let cursor: string | undefined;
+
+  for (;;) {
+    const batch = await prisma.cargoItem.findMany({
+      where: {
+        route: { date: { lt: cutoff } },
+        ...(cursor ? { id: { gt: cursor } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: 500,
+      select: {
+        id: true,
+        route: {
+          select: {
+            date: true,
+            trips: {
+              where: { status: { not: TripStatus.CANCELADO } },
+              select: { status: true, returnedAt: true, departureAt: true },
+            },
+          },
+        },
+      },
+    });
+    if (batch.length === 0) break;
+    cursor = batch[batch.length - 1]!.id;
+
+    const expiredIds = batch
+      .filter((item) =>
+        cargoHistoryExpired({
+          routeDate: item.route.date,
+          now,
+          trips: item.route.trips.map((trip) => ({
+            status: trip.status,
+            returnedAt: trip.returnedAt,
+            departureAt: trip.departureAt,
+            plate: null,
+          })),
+        }),
+      )
+      .map((item) => item.id);
+
+    if (expiredIds.length > 0) {
+      const result = await prisma.cargoItem.deleteMany({ where: { id: { in: expiredIds } } });
+      deleted += result.count;
+    }
+    if (batch.length < 500) break;
+  }
+
+  return deleted;
 }
 
 export function dealershipIdByDealerCode(

@@ -36,6 +36,7 @@ import { resolveTravelFromPad } from './utils/geo';
 import { bootstrapReferenceDataIfEmpty, ensureBootstrapUsers, ensureOpsDrivers } from './lib/bootstrap';
 import { applyOneOffTripFixes } from './lib/one-off-trip-fixes';
 import { closeOpenTripsAtForecast } from './lib/close-open-trips';
+import { purgeExpiredCargoHistory } from './lib/cargo-lookup';
 import { ensureVehicleOwners } from './lib/vehicle-owner';
 import { captureApiException, initApiMonitoring } from './lib/monitoring';
 
@@ -182,6 +183,17 @@ async function start() {
   void applyOneOffTripFixes().catch((err) =>
     console.warn('Correções pontuais de viagem:', err?.message ?? err),
   );
+
+  void purgeExpiredCargoHistory(prisma)
+    .then((removed) => {
+      if (removed > 0) console.log(`Chassi/NF com mais de 12 meses removidos: ${removed}`);
+    })
+    .catch((err) => console.warn('Limpeza de chassi/NF:', err?.message ?? err));
+  setInterval(() => {
+    void purgeExpiredCargoHistory(prisma).catch((err) =>
+      console.warn('Limpeza de chassi/NF:', err?.message ?? err),
+    );
+  }, 24 * 60 * 60 * 1000).unref();
 
   void ensureHotIndexes(prisma)
     .then(() => ensureVehicleOwners(prisma))
