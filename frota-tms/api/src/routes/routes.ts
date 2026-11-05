@@ -32,6 +32,7 @@ import { isFirstRouteSentToday } from '../services/notify';
 import { format } from 'date-fns';
 import { buildPriorityExpiryWorkbook, priorityExpiryFilename } from '../lib/priority-expiry-export';
 import { nextVehicleStatusAfterHold } from '../lib/vehicle-lifecycle';
+import { plateLastTripsByVehicle, type PlateLastTripView } from '../lib/plate-last-trips';
 import {
   assessRouteCalendar,
   assessStoredRoute,
@@ -589,6 +590,39 @@ export function createRoutesRouter(io: Server) {
       }
     }
 
+    const availableIds = available.map((vehicle) => vehicle.id);
+    const history =
+      availableIds.length === 0
+        ? []
+        : await prisma.trip.findMany({
+            where: { vehicleId: { in: availableIds }, status: { not: TripStatus.CANCELADO } },
+            orderBy: { departureAt: 'desc' },
+            select: {
+              id: true,
+              vehicleId: true,
+              driverName: true,
+              departureAt: true,
+              returnedAt: true,
+              status: true,
+              route: {
+                select: {
+                  name: true,
+                  date: true,
+                  dealerships: {
+                    orderBy: { order: 'asc' },
+                    select: { order: true, dealership: { select: { city: true, name: true } } },
+                  },
+                },
+              },
+              dealership: { select: { city: true, name: true } },
+            },
+          });
+    const lastTripsByVehicle = plateLastTripsByVehicle(history);
+    const availableWithHistory = available.map((vehicle) => ({
+      ...vehicle,
+      lastTrips: lastTripsByVehicle.get(vehicle.id) ?? ([] as PlateLastTripView[]),
+    }));
+
     const criticalPending = unavailable.filter(
       (u) => (u as { shouldBeAvailable?: boolean }).shouldBeAvailable && !u.report,
     ).length;
@@ -622,7 +656,7 @@ export function createRoutesRouter(io: Server) {
         priorityNotes: route.priorityNotes,
       },
       returnForecast,
-      available,
+      available: availableWithHistory,
       unavailable,
       summary: {
         available: available.length,
