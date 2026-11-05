@@ -692,7 +692,7 @@ export function createTripsRouter(io: Server) {
 
     const trip = await prisma.trip.findUnique({
       where: { id: paramId(req) },
-      include: { vehicle: true, route: true, dealership: true, logbook: true },
+      include: { vehicle: true, route: true, dealership: true },
     });
     if (!trip) return res.status(404).json({ error: 'Viagem não encontrada' });
 
@@ -722,7 +722,6 @@ export function createTripsRouter(io: Server) {
 
     const block = evaluateUnreturnGuards({
       tripStatus: trip.status,
-      logbookReturnSigned: !!trip.logbook?.returnSignedAt,
       vehicleStatus: trip.vehicle.status,
       hasOtherOpenTrip: !!otherOpenTrip,
       hasNewerTripOnVehicle: !!newerTrip,

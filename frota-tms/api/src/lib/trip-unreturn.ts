@@ -3,7 +3,6 @@ import { isOverdue } from '../utils/status';
 
 export type UnreturnBlockReason =
   | 'NOT_RETURNED'
-  | 'LOGBOOK_SIGNED'
   | 'OPEN_TRIP_ON_VEHICLE'
   | 'NEWER_TRIP_ON_VEHICLE'
   | 'VEHICLE_NOT_AVAILABLE';
@@ -31,13 +30,11 @@ export function canUnreturnVehicleStatus(vehicleStatus: string): boolean {
 
 export function evaluateUnreturnGuards(input: {
   tripStatus: string;
-  logbookReturnSigned: boolean;
   vehicleStatus: string;
   hasOtherOpenTrip: boolean;
   hasNewerTripOnVehicle: boolean;
 }): UnreturnBlockReason | null {
   if (input.tripStatus !== TripStatus.RETORNOU) return 'NOT_RETURNED';
-  if (input.logbookReturnSigned) return 'LOGBOOK_SIGNED';
   if (input.hasOtherOpenTrip) return 'OPEN_TRIP_ON_VEHICLE';
   if (input.hasNewerTripOnVehicle) return 'NEWER_TRIP_ON_VEHICLE';
   if (!canUnreturnVehicleStatus(input.vehicleStatus)) return 'VEHICLE_NOT_AVAILABLE';
@@ -46,8 +43,6 @@ export function evaluateUnreturnGuards(input: {
 
 export const UNRETURN_ERROR_MESSAGES: Record<UnreturnBlockReason, string> = {
   NOT_RETURNED: 'Só é possível desfazer viagens já marcadas como retornadas.',
-  LOGBOOK_SIGNED:
-    'Não é possível desfazer: o motorista já assinou o retorno no diário de bordo.',
   OPEN_TRIP_ON_VEHICLE: 'A placa já está em outra viagem aberta. Conclua ou cancele antes.',
   NEWER_TRIP_ON_VEHICLE:
     'A placa já foi usada em viagem posterior a este retorno. Não é possível desfazer.',
