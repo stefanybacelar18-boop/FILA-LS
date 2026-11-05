@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, FileSpreadsheet, MapPinned, Moon, Pencil } from 'lucide-react'
 import { api, downloadReport } from '../lib/api'
 import type { PernoitesData } from '../types'
@@ -228,11 +227,6 @@ function AdjustPernoiteModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Se esqueceram de retornar a placa, o sistema usa o dia do clique e pode cobrar pernoite a
-          mais. Informe o dia em que o veículo <strong>realmente chegou</strong>. O RH usa essa data
-          — sem cobrança extra.
-        </p>
         {!trip.confirmed ? (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
             A placa ainda está em viagem. Salvar também registra o retorno nesta data e libera o
@@ -376,7 +370,6 @@ export function Pernoites() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Pernoites LSL"
-        description="Conferência de pernoites por motorista para pagamento ao RH"
         actions={
           <Button size="sm" variant="secondary" loading={exporting} onClick={() => void exportExcel()}>
             <FileSpreadsheet className="h-4 w-4" />
@@ -443,8 +436,7 @@ export function Pernoites() {
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card title="Ranking por motorista">
+      <Card title="Ranking por motorista" className="mb-6">
           {data.ranking.length === 0 ? (
             <EmptyState title="Nenhuma pernoite" description="Não há viagens com pernoite neste período." />
           ) : (
@@ -461,40 +453,7 @@ export function Pernoites() {
               ))}
             </div>
           )}
-        </Card>
-
-        <Card title="Como conferir">
-          <ol className="list-decimal space-y-2 pl-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
-            <li>Peça ao motorista a quantidade de pernoites do período (16 a 15).</li>
-            <li>Localize o <strong>nome do motorista</strong> no ranking ao lado.</li>
-            <li>Compare o total — a tabela abaixo lista cada viagem, com a placa usada.</li>
-            <li>
-              Clique no <strong>destino</strong> para ver o roteiro de entrega (paradas, motos e
-              vencimento).
-            </li>
-            <li>
-              <strong>Confirmado</strong> = retorno já registrado; <strong>Previsto</strong> = ainda
-              em viagem ou retorno pendente.
-            </li>
-            {isAdmin ? (
-              <li>
-                Se esqueceram de retornar a placa, clique no número em <strong>Pernoites</strong> e
-                informe a chegada real. <strong>Mesmo dia</strong> = 0 (sem cobrança extra);{' '}
-                <strong>dia seguinte</strong> = 1. O selo <strong>manual</strong> /{' '}
-                <strong>não foi</strong> aparece se a quantidade cobrada for diferente do calendário.
-              </li>
-            ) : null}
-          </ol>
-          <p className="mt-4 text-xs text-[var(--color-text-muted)]">
-            Período padrão: dia 16 do mês anterior até dia 15 do mês vigente. O mesmo critério aparece
-            no{' '}
-            <Link to="/dashboard" className="text-[var(--color-primary)] hover:underline">
-              Dashboard
-            </Link>
-            .
-          </p>
-        </Card>
-      </div>
+      </Card>
 
       <Card title="Detalhamento por viagem">
         {data.trips.length === 0 ? (

@@ -494,15 +494,7 @@ export function Routes() {
     <div className="page-desktop">
       <PageHeader
         title="Roteiros"
-        description={
-          tab === 'prioridades'
-            ? 'Prioridades abertas, ordenadas pelo vencimento. O Excel sai por placa/roteiro, com um resumo do menor vencimento de cada concessionária.'
-            : tab === 'pendentes'
-              ? 'Fila aguardando definição de placa.'
-              : filterDate
-                ? `Roteiros do dia ${formatDate(filterDate)}.`
-                : 'Clique no nome para ver detalhes.'
-        }
+        description={filterDate ? `Roteiros do dia ${formatDate(filterDate)}.` : undefined}
         actions={
           tab === 'prioridades' || isAdmin ? (
           <div className="flex flex-wrap gap-2">
@@ -655,19 +647,6 @@ export function Routes() {
                 : tab === 'prioridades'
                   ? 'Nenhuma prioridade aberta'
                   : 'Nenhum roteiro'
-          }
-          description={
-            filterDate
-              ? 'Tente outra data ou limpe o filtro para ver todos.'
-              : tab === 'pendentes'
-                ? isAdmin
-                  ? 'Crie um roteiro e disponibilize para a Operação.'
-                  : 'Quando o Admin disponibilizar, aparece aqui.'
-                : tab === 'prioridades'
-                  ? 'Prioridades abertas (com ou sem placa) aparecem aqui.'
-                  : isAdmin
-                    ? 'Crie o primeiro roteiro.'
-                    : undefined
           }
           action={
             filterDate ? (

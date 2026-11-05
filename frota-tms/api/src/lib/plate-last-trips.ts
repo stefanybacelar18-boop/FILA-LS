@@ -1,7 +1,7 @@
 import { operationalDateKey } from '../utils/timezone';
 
-/** Quantas viagens anteriores aparecem em Definir placa. */
-export const LAST_TRIPS_PER_VEHICLE = 3;
+/** A definição de placa mostra só a viagem mais recente de cada veículo. */
+export const LAST_TRIPS_PER_VEHICLE = 1;
 
 export type PlateLastTripStop = {
   order: number;

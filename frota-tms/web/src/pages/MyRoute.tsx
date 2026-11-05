@@ -153,9 +153,6 @@ export function MyRoute() {
                 required
                 className="h-12 max-w-full text-base"
               />
-              <p className="-mt-2 text-xs text-[var(--color-text-muted)]">
-                Use a matrícula do seu cadastro de motorista. A consulta mostra os roteiros em aberto no seu nome.
-              </p>
               <Input
                 id="driver-pin"
                 name="pin"
@@ -186,7 +183,7 @@ export function MyRoute() {
               {result.routes.length === 0 ? (
                 <p className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text-muted)]">
                   {result.message ||
-                    'Nenhum roteiro em aberto no seu nome. Ele aparece quando a placa já foi definida e fica até a operação marcar o retorno.'}
+                    'Nenhum roteiro em aberto.'}
                 </p>
               ) : (
                 <ul className="space-y-3">

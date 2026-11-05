@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { plateLastTripsByVehicle } from './plate-last-trips';
 
 describe('plateLastTripsByVehicle', () => {
-  it('guarda as 3 viagens mais recentes de cada placa, com as cidades do roteiro', () => {
+  it('guarda só a viagem mais recente de cada placa, com as cidades do roteiro', () => {
     const grouped = plateLastTripsByVehicle([
       {
         id: 'old',
@@ -72,7 +72,7 @@ describe('plateLastTripsByVehicle', () => {
       },
     ]);
 
-    expect(grouped.get('v1')?.map((trip) => trip.id)).toEqual(['new', 'mid', 'old']);
+    expect(grouped.get('v1')?.map((trip) => trip.id)).toEqual(['new']);
     expect(grouped.get('v1')?.[0]).toMatchObject({
       routeName: '384094 04/11/2026',
       routeDate: '2026-11-04',

@@ -113,7 +113,6 @@ export function Drivers() {
     <div className="page-desktop max-w-3xl">
       <PageHeader
         title="Motoristas"
-        description="Cadastro usado na definição de placa. A matrícula é do motorista e serve para ele consultar o roteiro LSL."
         actions={
           isAdmin ? (
             <Button onClick={openCreate}>
@@ -135,7 +134,6 @@ export function Drivers() {
       ) : data.length === 0 ? (
         <EmptyState
           title="Nenhum motorista"
-          description={isAdmin ? 'Cadastre o primeiro motorista.' : undefined}
           action={
             isAdmin ? <Button onClick={openCreate}>Novo motorista</Button> : undefined
           }

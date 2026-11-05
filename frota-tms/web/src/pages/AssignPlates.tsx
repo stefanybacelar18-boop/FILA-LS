@@ -422,14 +422,7 @@ export function AssignPlates() {
   if (!routeId) {
     return (
       <div className="page-desktop max-w-5xl">
-        <PageHeader
-          title="Definir placa"
-          description={
-            isAdmin
-              ? 'Menor vencimento primeiro. Para trocar AG/LSL ou ajustar destinos, use Editar carga.'
-              : 'Menor vencimento primeiro.'
-          }
-        />
+        <PageHeader title="Definir placa" />
         {okMsg && <p className="mb-4 text-sm text-[var(--color-success)]">{okMsg}</p>}
         {error && <p className="mb-4 text-sm text-[var(--color-danger)]">{error}</p>}
 
@@ -448,22 +441,9 @@ export function AssignPlates() {
             }
           />
         ) : pendingRoutes.length === 0 ? (
-          <EmptyState
-            title="Nenhuma rota aguardando placa"
-            description="Quando o Admin disponibilizar um roteiro, ele aparece aqui."
-          />
+          <EmptyState title="Nenhuma rota aguardando placa" />
         ) : (
           <>
-            <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-danger)]" />
-                Vencido
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                Vence em 1 dia
-              </span>
-            </div>
             <div className="space-y-5">
             {pendingRoutes.map((r) => (
               <div key={r.id}>
@@ -492,7 +472,7 @@ export function AssignPlates() {
               />
               {r.calendar?.blocked && (
                 <p className="mt-1 text-xs text-[var(--color-danger)]">
-                  Loja fechada na janela de chegada. Abra o roteiro para ver o motivo.
+                  Loja fechada na chegada.
                 </p>
               )}
               </div>
@@ -637,16 +617,11 @@ export function AssignPlates() {
         ) : incompatibleTypes ? (
           <EmptyState
             title="Roteiro com tipos de veículo incompatíveis"
-            description="Há destinos que aceitam só Truck e outros só Carreta. Peça ao Admin ajustar as concessionárias."
+            description="Há destino só para truck e destino só para carreta."
           />
         ) : available.length === 0 ? (
           <EmptyState
             title="Nenhuma placa disponível agora"
-            description={
-              pendingReport.length > 0
-                ? 'Há placas que já deveriam ter voltado. Informe atraso/quebra.'
-                : 'Aguarde o retorno das viagens ou verifique a frota.'
-            }
             action={
               pendingReport.length > 0 ? (
                 <Button variant="secondary" onClick={() => setShowProblems(true)}>
@@ -659,9 +634,6 @@ export function AssignPlates() {
           <div className="space-y-3">
             <div>
               <h3 className="text-sm font-semibold">Veículos disponíveis</h3>
-              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                As últimas viagens de cada placa ajudam a escolher qual veículo segue nesta rota.
-              </p>
               <ul className="mt-3 space-y-2">
                 {available.map((vehicle) => {
                   const selected = selectedId === vehicle.id
@@ -685,33 +657,25 @@ export function AssignPlates() {
                             owner={plateOwner(vehicle.plate, vehicle.owner)}
                           />
                           <p className="text-xs text-[var(--color-text-muted)]">
-                            {vehicle.owner ?? plateOwner(vehicle.plate, vehicle.owner)} ·{' '}
                             {vehicle.capacityMotos} motos
-                            {vehicle.defaultDriver ? ` · padrão ${vehicle.defaultDriver}` : ''}
+                            {vehicle.defaultDriver ? ` · ${vehicle.defaultDriver}` : ''}
                           </p>
                         </div>
-                        <p className="mt-3 text-xs font-medium tracking-wide text-[var(--color-text-muted)] uppercase">
-                          Últimas viagens
-                        </p>
-                        {trips.length === 0 ? (
-                          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                            Nenhuma viagem anterior.
+                        {trips[0] ? (
+                          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                            <span className="font-medium text-[var(--color-text)]">
+                              {formatDate(trips[0].routeDate)}
+                            </span>
+                            {' · '}
+                            {trips[0].routeName ?? 'Sem nome de roteiro'}
+                            {trips[0].cities.length > 0 ? ` · ${trips[0].cities.join(', ')}` : ''}
+                            {trips[0].driverName ? ` · ${trips[0].driverName}` : ''}
+                            {' · '}
+                            {lastTripStatus(trips[0].status)}
+                            {trips[0].returnedAt ? ` em ${formatDate(trips[0].returnedAt)}` : ''}
                           </p>
                         ) : (
-                          <ul className="mt-1 space-y-1">
-                            {trips.map((trip) => (
-                              <li key={trip.id} className="text-sm">
-                                <span className="font-medium">{formatDate(trip.routeDate)}</span>
-                                {' · '}
-                                {trip.routeName ?? 'Sem nome de roteiro'}
-                                {trip.cities.length > 0 ? ` · ${trip.cities.join(', ')}` : ''}
-                                {trip.driverName ? ` · ${trip.driverName}` : ''}
-                                {' · '}
-                                {lastTripStatus(trip.status)}
-                                {trip.returnedAt ? ` em ${formatDate(trip.returnedAt)}` : ''}
-                              </li>
-                            ))}
-                          </ul>
+                          <p className="mt-2 text-sm text-[var(--color-text-muted)]">Sem viagem anterior</p>
                         )}
                       </button>
                     </li>
@@ -861,16 +825,11 @@ export function AssignPlates() {
       {showProblems && (
         <section className="mt-4 mb-6 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">Indisponibilidade (atraso / quebra)</h2>
+            <h2 className="text-base font-semibold">Atraso / quebra</h2>
             <Button size="sm" variant="ghost" onClick={() => setShowProblems(false)}>
               Fechar
             </Button>
           </div>
-          <p className="mb-3 text-sm text-[var(--color-text-muted)]">
-            Apenas placas que <strong>já deveriam ter retornado</strong> até{' '}
-            {selectedRoute ? formatDate(selectedRoute.date) : '—'} 06:00 (pela previsão da viagem)
-            ou estão bloqueadas/manutenção.
-          </p>
 
           {overdueOrBlocked.length === 0 ? (
             <p className="text-sm text-[var(--color-text-muted)]">Nenhuma pendência.</p>
@@ -945,11 +904,6 @@ Saída: ${selectedRoute ? formatDate(selectedRoute.date) : ''} às 06:00${
         title={`Indisponível — ${justifyVehicle?.plate ?? ''}`}
       >
         <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Esta placa deveria estar disponível para{' '}
-            <strong>{selectedRoute ? formatDate(selectedRoute.date) : ''}</strong> às 06:00. Informe
-            o motivo (atraso ou quebra) e a nova previsão.
-          </p>
           <Select
             label="Motivo"
             value={preset}

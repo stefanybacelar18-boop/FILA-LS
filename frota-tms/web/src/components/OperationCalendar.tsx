@@ -184,11 +184,6 @@ export function OperationCalendar() {
             {selected.split('-').reverse().join('/')} sem feriado.
           </p>
         )}
-        {!isLoading && !isError && !selected && (
-          <p className="text-[var(--color-text-muted)]">
-            Toque num dia para ver o feriado nacional, estadual ou municipal das lojas.
-          </p>
-        )}
       </div>
     </section>
   )

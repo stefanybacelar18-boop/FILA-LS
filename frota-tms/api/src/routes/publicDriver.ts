@@ -172,7 +172,7 @@ router.post('/meu-roteiro', async (req, res) => {
     message:
       routes.length > 0
         ? null
-        : 'Nenhum roteiro em aberto no seu nome. Ele aparece quando a placa já foi definida e fica até a operação marcar o retorno.',
+        : 'Nenhum roteiro em aberto.',
     routes,
   });
 });

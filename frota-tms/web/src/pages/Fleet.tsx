@@ -148,7 +148,6 @@ export function Fleet() {
     <div>
       <PageHeader
         title="Frota"
-        description="Cadastro e situação das placas. Desative para tirar da operação sem apagar o histórico."
         actions={
           isAdmin ? (
             <Button onClick={openCreate}>

@@ -14,7 +14,6 @@ export function Audit() {
     <div>
       <PageHeader
         title="Auditoria"
-        description="Registro de ações realizadas no sistema"
       />
 
       {isLoading ? (

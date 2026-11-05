@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ClipboardList, Paperclip, Route, MapPinned } from 'lucide-react'
+import { Paperclip, Route, MapPinned } from 'lucide-react'
 import { api, evidenceUrl } from '../lib/api'
 import {
   PageHeader,
@@ -116,7 +116,6 @@ export function Justifications() {
     <div>
       <PageHeader
         title="Justificativas"
-        description="Atrasos e indisponibilidades registrados pela Operação — Admin acompanha tudo aqui"
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -150,7 +149,6 @@ export function Justifications() {
       {empty ? (
         <EmptyState
           title="Nenhuma justificativa encontrada"
-          description="Quando a Operação registrar atraso em Retornos ou indisponibilidade em Definir placas, aparece aqui."
         />
       ) : (
         <div className="space-y-6">
@@ -267,10 +265,6 @@ export function Justifications() {
         </div>
       )}
 
-      <p className="mt-6 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
-        <ClipboardList className="h-3.5 w-3.5" />
-        Inclui justificativas de roteiros (Definir placas) e de viagens (Retornos), mesmo após o retorno.
-      </p>
     </div>
   )
 }

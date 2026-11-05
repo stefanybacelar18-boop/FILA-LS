@@ -58,11 +58,6 @@ export function History() {
     <div>
       <PageHeader
         title="Histórico"
-        description={
-          isAdmin
-            ? 'Consulta de viagens e desfazer retorno confirmado por engano (somente administrador)'
-            : 'Consulta de viagens com filtros avançados'
-        }
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

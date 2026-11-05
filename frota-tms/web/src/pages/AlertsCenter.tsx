@@ -88,7 +88,6 @@ export function AlertsCenter() {
     <div className="ops-readable mx-auto max-w-5xl space-y-4">
       <PageHeader
         title="Central de Alertas"
-        description="O que precisa de atenção agora"
         actions={
           canOps ? (
             <Link to="/definir-placas">

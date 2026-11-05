@@ -112,7 +112,6 @@ export function Maintenance() {
     <div>
       <PageHeader
         title="Manutenção / bloqueio"
-        description="Placas fora de operação até alguém liberar como OK para carregar de novo"
         actions={
           canOperate ? (
             <div className="flex flex-wrap gap-2">
@@ -140,7 +139,6 @@ export function Maintenance() {
       ) : filtered.length === 0 ? (
         <EmptyState
           title="Nenhuma placa em manutenção"
-          description="Quando Admin ou Operação bloquear uma placa, ela aparece aqui até a liberação."
         />
       ) : (
         <div className="table-wrap">

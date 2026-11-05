@@ -98,7 +98,7 @@ function DropColumn({
 }: {
   id: string
   title: string
-  subtitle: string
+  subtitle?: string
   children: React.ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
@@ -112,7 +112,7 @@ function DropColumn({
     >
       <header className="mb-4 border-b border-[var(--color-border)] pb-3">
         <h2 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">{title}</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{subtitle}</p>
+        {subtitle ? <p className="mt-1 text-sm text-[var(--color-text-muted)]">{subtitle}</p> : null}
       </header>
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto">{children}</div>
     </section>
@@ -304,7 +304,6 @@ export function PlanningBoard() {
     <div className="ops-readable mx-auto max-w-[1600px]">
       <PageHeader
         title="Mesa de Roteirização"
-        description="Como no papel: agrupe cidades → monte rotas (1 placa cada) → envie para a Operação"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button size="lg" variant="secondary" onClick={() => setAddOpen(true)}>
@@ -349,27 +348,18 @@ export function PlanningBoard() {
         <div className="grid gap-4 xl:grid-cols-3">
           <DropColumn
             id="pending"
-            title="1. Notas pendentes"
-            subtitle="Cidades agrupadas automaticamente"
+            title="Notas pendentes"
           >
             {pending.length === 0 ? (
               <EmptyState
                 title="Nenhuma nota na mesa"
-                description="Adicione cidades ou carregue o exemplo"
               />
             ) : (
               pending.map((c) => <CityChip key={c.id} city={c} noteCount={c.noteCount} draggable />)
             )}
-            <p className="mt-2 text-center text-sm text-[var(--color-text-muted)]">
-              Arraste uma cidade para “Nova rota” ou para uma rota em montagem
-            </p>
           </DropColumn>
 
-          <DropColumn
-            id="new-route"
-            title="2. Rotas em montagem"
-            subtitle="Solte aqui para criar / completar"
-          >
+          <DropColumn id="new-route" title="Rotas em montagem">
             <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-primary-muted)]/20 px-3 py-5 text-center text-base font-medium text-[var(--color-primary)]">
               + Nova rota (solte a cidade)
             </div>
@@ -394,11 +384,10 @@ export function PlanningBoard() {
 
           <DropColumn
             id="ready"
-            title="3. Rotas prontas"
-            subtitle="Enviadas ou marcadas para operação"
+            title="Rotas prontas"
           >
             {ready.length === 0 ? (
-              <EmptyState title="Nenhuma rota pronta" description="Finalize a montagem e envie" />
+              <EmptyState title="Nenhuma rota pronta" />
             ) : (
               ready.map((r) => (
                 <RouteCard

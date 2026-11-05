@@ -168,7 +168,6 @@ export function Dashboard() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Dashboard"
-        description="Visão da operação e desempenho recente"
         actions={
           isAdmin ? (
             <div className="flex flex-wrap gap-2">
@@ -246,9 +245,6 @@ export function Dashboard() {
       </div>
 
       <Card className="mb-6" title="Viagens por dia">
-        <p className="-mt-2 mb-4 text-xs text-[var(--color-text-muted)]">
-          Quantidade de viagens com saída em cada dia — últimos {period.tripsChartDays} dias.
-        </p>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -290,10 +286,6 @@ export function Dashboard() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Ranking de concessionárias">
-          <p className="-mt-2 mb-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
-            Concessionárias com maior <strong>volume de motos entregues</strong> no período — soma
-            das motos de cada destino nos roteiros (últimos {period.rankingDays} dias).
-          </p>
           {data.dealershipRanking.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
               Nenhuma entrega no período.
@@ -315,10 +307,6 @@ export function Dashboard() {
         </Card>
 
         <Card title="Ranking de placas">
-          <p className="-mt-2 mb-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
-            Veículos com mais <strong>saídas em viagem</strong> no período — cada registro de
-            viagem conta 1 ponto (últimos {period.rankingDays} dias).
-          </p>
           {data.plateRanking.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
               Nenhuma viagem no período.
@@ -358,11 +346,9 @@ export function Dashboard() {
 
       <Card className="mb-6" title="Pernoites LSL — período de folha">
         <div className="-mt-2 mb-3 flex flex-wrap items-start justify-between gap-2">
-          <p className="max-w-2xl text-xs leading-relaxed text-[var(--color-text-muted)]">
-            Viagens da frota LSL em que o retorno é em <strong>dia diferente da saída</strong> — período
-            de {period.pernoites.label}. Total:{' '}
-            <strong>{data.pernoiteSummary.totalPernoites} pernoite(s)</strong> em{' '}
-            {data.pernoiteSummary.totalTrips} viagem(ns), agrupados por motorista.
+          <p className="text-sm text-[var(--color-text-muted)]">
+            {period.pernoites.label} · {data.pernoiteSummary.totalPernoites} pernoites ·{' '}
+            {data.pernoiteSummary.totalTrips} viagens
           </p>
           <Link
             to="/pernoites"
@@ -397,13 +383,6 @@ export function Dashboard() {
           </div>
         )}
       </Card>
-
-      <p className="mt-6 text-center text-xs text-[var(--color-text-muted)]">
-        Exportações detalhadas em{' '}
-        <Link to="/relatorios" className="text-[var(--color-primary)] hover:underline">
-          Relatórios
-        </Link>
-      </p>
 
       {purgeError && (
         <p className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-[var(--color-danger)]">

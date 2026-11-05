@@ -233,7 +233,6 @@ export function RouteForm() {
 
       <PageHeader
         title={isNew ? 'Novo roteiro' : 'Editar roteiro'}
-        description="Defina a descrição, a data e as concessionárias. Prioridade por vencimento, se houver."
       />
 
       <AvailablePlatesBanner defaultOpen />
@@ -277,9 +276,6 @@ export function RouteForm() {
               required
               disabled={!canEdit}
             />
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              Padrão: amanhã · saída às 06:00 · retorno pelo destino mais longe do PAD
-            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Select
