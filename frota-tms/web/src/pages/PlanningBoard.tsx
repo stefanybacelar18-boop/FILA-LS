@@ -422,9 +422,6 @@ export function PlanningBoard() {
             onChange={(e) => setNewCount(e.target.value)}
             className="text-lg"
           />
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Cidades repetidas são somadas automaticamente (ex.: Salvador 18).
-          </p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="lg" onClick={() => setAddOpen(false)}>
               Cancelar

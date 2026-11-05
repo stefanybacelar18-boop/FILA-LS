@@ -299,9 +299,6 @@ export function RouteForm() {
               disabled={!canEdit}
             />
           </div>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Use LSL quando a carga Chronus veio como AG e você vai colocar placa própria.
-          </p>
         </div>
 
         <div
@@ -327,10 +324,6 @@ export function RouteForm() {
             />
             <span>
               <span className="text-sm font-semibold">Prioridade por vencimento</span>
-              <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
-                Marque quando houver carga com validade crítica. A Operação verá o alerta com a
-                menor data de vencimento.
-              </span>
             </span>
           </label>
 
@@ -344,19 +337,12 @@ export function RouteForm() {
                   onChange={(e) => setPriorityExpiryDate(e.target.value)}
                   required={hasPriority}
                 />
-                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  Obrigatória. Pode ser retroativa. A Operação verá esta data em destaque ao definir
-                  a placa.
-                </p>
               </div>
 
               {hasPriority && !priorityExpiryDate && (
                 <div className="flex items-start gap-2 rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-800 dark:text-red-200">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    Informe a menor data de vencimento. Sem ela, o operador não sabe qual data
-                    retroativa coletar.
-                  </span>
+                  <span>Informe a menor data de vencimento.</span>
                 </div>
               )}
 
@@ -366,9 +352,8 @@ export function RouteForm() {
                   <span>
                     Vencimento em <strong>{formatDate(priorityExpiryDate)}</strong>
                     {priorityExpiryDate < toInputDate(new Date())
-                      ? ' — já vencido (retroativo).'
-                      : ' — vence hoje.'}{' '}
-                    A Operação verá este alerta em destaque.
+                      ? ' — já vencido.'
+                      : ' — vence hoje.'}
                   </span>
                 </div>
               )}

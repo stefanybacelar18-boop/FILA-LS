@@ -72,7 +72,6 @@ export function Login() {
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Frota<span className="text-[var(--color-primary)]">TMS</span>
           </h1>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)]">Entre para continuar</p>
         </div>
 
         <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">

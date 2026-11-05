@@ -298,11 +298,6 @@ export function Dealerships() {
               { value: 'CARRETA', label: 'Carreta' },
             ]}
           />
-          <p className="sm:col-span-2 text-xs text-[var(--color-text-muted)]">
-            O código Chronus (coluna Cód. Concessionária) é o que o import usa para casar a loja.
-            Distância e previsão de retorno são calculadas automaticamente: PAD → cidade da
-            concessionária (ida+volta ÷ 400 km/dia).
-          </p>
         </form>
       </Modal>
 

@@ -101,12 +101,6 @@ export function DealershipCalendarModal({
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Feriado nacional, estadual e municipal da cidade entram sozinhos, pelo endereço da loja.
-            Não precisa lançar horário. Aqui só entra exceção: a loja fecha num dia comum, ou abre
-            mesmo em feriado.
-          </p>
-
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Exceções desta loja</p>
@@ -119,11 +113,6 @@ export function DealershipCalendarModal({
                 Adicionar data
               </Button>
             </div>
-            {closures.length === 0 && (
-              <p className="text-xs text-[var(--color-text-muted)]">
-                Ex.: a loja confirmou que recebe no São João, ou não recebe caminhão num dia comum.
-              </p>
-            )}
             {closures.map((closure, index) => (
               <div key={index} className="grid gap-2 rounded border border-[var(--color-border)] p-2 sm:grid-cols-2">
                 <Input

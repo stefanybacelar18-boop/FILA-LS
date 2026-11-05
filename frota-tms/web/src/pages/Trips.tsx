@@ -245,10 +245,6 @@ export function Trips() {
         title={`Informe — ${reportTrip?.vehicle.plate ?? ''}`}
       >
         <div className="space-y-3">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Use quando o veículo atrasar a previsão ou estiver indisponível para novo carregamento.
-            A justificativa fica registrada no histórico.
-          </p>
           <Select
             label="Motivo"
             value={preset}

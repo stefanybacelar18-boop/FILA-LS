@@ -403,22 +403,6 @@ export function Pernoites() {
         </div>
       </div>
 
-      <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">
-        <strong>Pernoite</strong> = viagem em que o retorno é em dia diferente da saída (não conta
-        retorno no mesmo dia). Cada roteiro conta no máximo <strong>1 pernoite</strong> (volta no
-        dia seguinte), mesmo se as datas no sistema abrangem mais dias.
-        {isAdmin ? (
-          <>
-            {' '}
-            O administrador pode clicar no número da coluna Pernoites para informar a{' '}
-            <strong>chegada real</strong> (mesmo dia = 0, dia seguinte = 1). Use isso quando
-            esqueceram de retornar a placa e o sistema cobraria noite a mais.
-          </>
-        ) : null}{' '}
-        O total é agrupado por <strong>motorista</strong>, somando todas as viagens no período — mesmo
-        que tenha trocado de veículo.
-      </p>
-
       <div className="mb-6 grid grid-cols-3 gap-3">
         <div className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5">
           <p className="text-xs font-medium text-[var(--color-text-muted)]">Total de pernoites</p>
