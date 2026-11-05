@@ -7,9 +7,9 @@ import {
   DELIVERY_ORDER_WARNING,
   NO_DELIVERY_ORDER_NOTE,
   destinationsAsStored,
+  isOpenDriverTripStatus,
   manifestNumberFromRouteName,
   matchDriverByMatricula,
-  nextWorkDateKey,
   tripBelongsToDriver,
   type StoredStop,
 } from '../lib/driver-route-lookup';
@@ -54,6 +54,8 @@ function dateKey(value: Date | string): string {
  * Consulta pública da frota LSL.
  * O motorista informa a própria matrícula e a senha compartilhada.
  * A matrícula fica no cadastro do motorista. A viagem liga o nome dele ao roteiro.
+ * Entram as viagens abertas desse motorista (em andamento ou atrasadas),
+ * de qualquer data, até a operação marcar o retorno.
  * POST { matricula, pin }
  */
 router.post('/meu-roteiro', async (req, res) => {
@@ -87,13 +89,11 @@ router.post('/meu-roteiro', async (req, res) => {
     return res.status(404).json({ error });
   }
 
-  const workDate = nextWorkDateKey();
   const trips = await prisma.trip.findMany({
     where: {
       status: { in: [TripStatus.EM_ANDAMENTO, TripStatus.ATRASADO] },
-      route: { date: new Date(`${workDate}T12:00:00.000Z`) },
     },
-    orderBy: { departureAt: 'asc' },
+    orderBy: { departureAt: 'desc' },
     include: {
       vehicle: { select: { plate: true, owner: true } },
       route: {
@@ -114,6 +114,7 @@ router.post('/meu-roteiro', async (req, res) => {
     .filter(
       (trip) =>
         trip.route &&
+        isOpenDriverTripStatus(trip.status) &&
         tripBelongsToDriver(
           {
             driverName: trip.driverName,
@@ -167,10 +168,11 @@ router.post('/meu-roteiro', async (req, res) => {
   return res.json({
     found: routes.length > 0,
     driverName: matched.driverName,
-    workDate,
     orderWarning: DELIVERY_ORDER_WARNING,
     message:
-      routes.length > 0 ? null : 'Nenhum roteiro seu neste dia de trabalho.',
+      routes.length > 0
+        ? null
+        : 'Nenhum roteiro em aberto no seu nome. Ele aparece quando a placa já foi definida e fica até a operação marcar o retorno.',
     routes,
   });
 });

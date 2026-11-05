@@ -19,6 +19,15 @@ export function nextWorkDateKey(now = new Date()): string {
   return operationalDateKey(routeDateFromImport(now));
 }
 
+/**
+ * A consulta pela matrícula mostra a viagem enquanto ela está aberta.
+ * Não filtra pela data do roteiro: no meio do dia o carregamento de hoje
+ * já saiu às 06:00, e o de amanhã pode ainda não ter placa.
+ */
+export function isOpenDriverTripStatus(status: string): boolean {
+  return status === 'EM_ANDAMENTO' || status === 'ATRASADO';
+}
+
 /** Matrícula do motorista: sem espaço, só letras e números. */
 export function normalizeMatricula(value: string | null | undefined): string | null {
   if (value == null) return null;

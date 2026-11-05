@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   destinationsAsStored,
   manifestNumberFromRouteName,
+  isOpenDriverTripStatus,
   matchDriverByMatricula,
   matriculaForLslPlate,
   matriculaOfDefaultDriver,
@@ -74,6 +75,14 @@ describe('matrícula do motorista', () => {
   it('mostra na placa LSL a matrícula do motorista padrão', () => {
     expect(matriculaOfDefaultDriver('RICARDO DE JESUS', drivers)).toBe('150');
     expect(matriculaOfDefaultDriver('Sem Motorista', drivers)).toBeNull();
+  });
+});
+
+describe('viagem aberta na consulta por matrícula', () => {
+  it('mostra em andamento e atrasado, e esconde a que já retornou', () => {
+    expect(isOpenDriverTripStatus('EM_ANDAMENTO')).toBe(true);
+    expect(isOpenDriverTripStatus('ATRASADO')).toBe(true);
+    expect(isOpenDriverTripStatus('RETORNOU')).toBe(false);
   });
 });
 
