@@ -40,6 +40,25 @@ interface PlatesBoardVehicle extends Omit<Vehicle, 'expectedReturn'> {
   } | null
   shouldBeAvailable?: boolean
   needsJustification?: boolean
+  lastTrips?: PlateLastTrip[]
+}
+
+interface PlateLastTrip {
+  id: string
+  routeName: string | null
+  routeDate: string
+  driverName: string | null
+  status: string
+  returnedAt: string | null
+  cities: string[]
+}
+
+function lastTripStatus(status: string) {
+  if (status === 'RETORNOU') return 'Retornou'
+  if (status === 'EM_ANDAMENTO') return 'Em andamento'
+  if (status === 'ATRASADO') return 'Atrasada'
+  if (status === 'CANCELADO') return 'Cancelada'
+  return status
 }
 
 interface PlatesBoard {
@@ -638,6 +657,69 @@ export function AssignPlates() {
           />
         ) : (
           <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Veículos disponíveis</h3>
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                As últimas viagens de cada placa ajudam a escolher qual veículo segue nesta rota.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {available.map((vehicle) => {
+                  const selected = selectedId === vehicle.id
+                  const trips = vehicle.lastTrips ?? []
+                  return (
+                    <li key={vehicle.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickPlate(vehicle)}
+                        className={cn(
+                          'w-full rounded-[var(--radius)] border px-3 py-3 text-left transition-colors',
+                          selected
+                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5'
+                            : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <PlateBadge
+                            plate={vehicle.plate}
+                            color={vehicle.color as PlateColor}
+                            owner={plateOwner(vehicle.plate, vehicle.owner)}
+                          />
+                          <p className="text-xs text-[var(--color-text-muted)]">
+                            {vehicle.owner ?? plateOwner(vehicle.plate, vehicle.owner)} ·{' '}
+                            {vehicle.capacityMotos} motos
+                            {vehicle.defaultDriver ? ` · padrão ${vehicle.defaultDriver}` : ''}
+                          </p>
+                        </div>
+                        <p className="mt-3 text-xs font-medium tracking-wide text-[var(--color-text-muted)] uppercase">
+                          Últimas viagens
+                        </p>
+                        {trips.length === 0 ? (
+                          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                            Nenhuma viagem anterior.
+                          </p>
+                        ) : (
+                          <ul className="mt-1 space-y-1">
+                            {trips.map((trip) => (
+                              <li key={trip.id} className="text-sm">
+                                <span className="font-medium">{formatDate(trip.routeDate)}</span>
+                                {' · '}
+                                {trip.routeName ?? 'Sem nome de roteiro'}
+                                {trip.cities.length > 0 ? ` · ${trip.cities.join(', ')}` : ''}
+                                {trip.driverName ? ` · ${trip.driverName}` : ''}
+                                {' · '}
+                                {lastTripStatus(trip.status)}
+                                {trip.returnedAt ? ` em ${formatDate(trip.returnedAt)}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+
             <Combobox
               label="Placa *"
               value={selectedId ?? ''}
