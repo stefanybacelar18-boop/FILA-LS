@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TripStatus } from '../types/enums';
 import { buildChronusPreview, parseChronusFile } from './chronus-import';
-import { cargoDelivery, cargoLookupFilter, cargoSearchKey, invoiceKey } from './cargo-lookup';
+import {
+  cargoDelivery,
+  cargoHistoryExpired,
+  cargoLookupFilter,
+  cargoSearchKey,
+  invoiceKey,
+} from './cargo-lookup';
 
 describe('consulta de chassi e nota', () => {
   it('normaliza chassi e nota', () => {
@@ -58,6 +64,79 @@ describe('consulta de chassi e nota', () => {
     ]);
     expect(result.situation).toBe('EM_VIAGEM');
     expect(result.plate).toBe('BPQ1E82');
+  });
+});
+
+describe('prazo de 12 meses do chassi', () => {
+  const now = new Date('2026-11-05T15:00:00.000Z');
+  const departure = new Date('2024-10-01T09:00:00.000Z');
+
+  it('apaga entrega com retorno há mais de 12 meses', () => {
+    expect(
+      cargoHistoryExpired({
+        now,
+        routeDate: new Date('2024-10-01T12:00:00.000Z'),
+        trips: [
+          {
+            status: TripStatus.RETORNOU,
+            returnedAt: new Date('2025-11-04T18:00:00.000Z'),
+            departureAt: departure,
+            plate: 'BPQ1E82',
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('mantém entrega retornada dentro de 12 meses, mesmo com roteiro antigo', () => {
+    expect(
+      cargoHistoryExpired({
+        now,
+        routeDate: new Date('2024-10-01T12:00:00.000Z'),
+        trips: [
+          {
+            status: TripStatus.RETORNOU,
+            returnedAt: new Date('2026-02-01T18:00:00.000Z'),
+            departureAt: departure,
+            plate: 'BPQ1E82',
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('não apaga chassi de viagem ainda aberta', () => {
+    expect(
+      cargoHistoryExpired({
+        now,
+        routeDate: new Date('2024-10-01T12:00:00.000Z'),
+        trips: [
+          {
+            status: TripStatus.EM_ANDAMENTO,
+            returnedAt: null,
+            departureAt: departure,
+            plate: 'BPQ1E82',
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('apaga carga sem viagem com mais de 12 meses', () => {
+    expect(
+      cargoHistoryExpired({
+        now,
+        routeDate: new Date('2025-10-01T12:00:00.000Z'),
+        trips: [],
+      }),
+    ).toBe(true);
+    expect(
+      cargoHistoryExpired({
+        now,
+        routeDate: new Date('2026-06-01T12:00:00.000Z'),
+        trips: [],
+      }),
+    ).toBe(false);
   });
 });
 
