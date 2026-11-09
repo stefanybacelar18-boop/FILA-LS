@@ -17,6 +17,12 @@ interface MinutaRow {
   eta: Date | null;
 }
 
+interface DayData {
+  minutas: number;  // quantidade de minutas
+  volume: number;   // Qtd Caixa + Qtd NPD
+  motosExp: number; // motos expedidas (FrotaTMS, só para hoje)
+}
+
 interface ProcessResult {
   descarregadasHoje: MinutaRow[];
   emTransito: MinutaRow[];
@@ -30,6 +36,7 @@ interface ProcessResult {
   voloFile: string; // base64
   relatorioFile: string; // base64
   voloAtualizado: boolean;
+  voloLinhasAtualizadas: number;
 }
 
 // ── helpers de data ────────────────────────────────────────────────────────
@@ -210,21 +217,60 @@ async function frotatmsExpedidas(today: string): Promise<{ total: number; count:
   }
 }
 
-// ── atualizar Volu — usa exceljs para preservar 100% da formatação original ─
+// ── monta mapa data → dados para preencher o Volu ─────────────────────────
+
+function buildDadosPorData(
+  minutas: MinutaRow[],
+  today: string,
+  motosExpedidas: number
+): Map<string, DayData> {
+  const map = new Map<string, DayData>();
+
+  const add = (dk: string, volume: number) => {
+    const d = map.get(dk) ?? { minutas: 0, volume: 0, motosExp: 0 };
+    d.minutas++;
+    d.volume += volume;
+    map.set(dk, d);
+  };
+
+  for (const m of minutas) {
+    const isDesc = m.status.includes("DESCARREGAD") || m.status.includes("ENTREGUE");
+    const isTrans = m.status.includes("TRANSITO") || m.status.includes("TRÂNSITO");
+
+    if (isDesc) {
+      // Data real de chegada/descarregamento
+      const dk = m.descarregamento ? dateKey(m.descarregamento)
+               : m.dataChegada    ? dateKey(m.dataChegada)
+               : null;
+      if (dk) add(dk, m.qtdMotos);
+    } else if (isTrans && m.eta) {
+      // Previsão de chegada (do Chronus ou Saída + 5d)
+      add(dateKey(m.eta), m.qtdMotos);
+    }
+  }
+
+  // Motos expedidas do FrotaTMS → só para hoje
+  if (motosExpedidas > 0) {
+    const d = map.get(today) ?? { minutas: 0, volume: 0, motosExp: 0 };
+    d.motosExp = motosExpedidas;
+    map.set(today, d);
+  }
+
+  return map;
+}
+
+// ── atualizar Volu — preenche TODAS as datas com dados do Chronus ──────────
 
 async function atualizarVolu(
   buffer: ArrayBuffer,
-  today: string,
-  minutas: number,
-  motosRec: number,
-  motosExp: number
-): Promise<{ b64: string; updated: boolean }> {
+  dadosPorData: Map<string, DayData>
+): Promise<{ b64: string; updated: boolean; rowsUpdated: number }> {
   const wb = new ExcelJS.Workbook();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await wb.xlsx.load(new Uint8Array(buffer) as any);
   const ws = wb.worksheets[0];
 
-  // 1. Detecta linha de cabeçalho lendo valores das células
+  // 1. Detecta linha de cabeçalho
   let colRodov = 0, colRecebidas = 0, colExpedidas = 0;
   let headerRowNum = 0;
 
@@ -242,12 +288,14 @@ async function atualizarVolu(
     }
   });
 
-  if (!headerRowNum) return { b64: "", updated: false };
+  if (!headerRowNum) return { b64: "", updated: false, rowsUpdated: 0 };
 
-  // 2. Encontra linha da data de hoje
-  let targetRowNum = 0;
+  // 2. Percorre todas as linhas e preenche as que têm dados no Chronus
+  let rowsUpdated = 0;
+
   ws.eachRow((row, rowNum) => {
-    if (targetRowNum || rowNum <= headerRowNum) return;
+    if (rowNum <= headerRowNum) return;
+
     const cell = row.getCell(1);
     let d: Date | null = null;
     if (cell.value instanceof Date) {
@@ -255,29 +303,29 @@ async function atualizarVolu(
     } else if (cell.type === ExcelJS.ValueType.Formula && cell.result instanceof Date) {
       d = cell.result as Date;
     }
-    if (d && dateKey(d) === today) targetRowNum = rowNum;
+    if (!d) return;
+
+    const dk = dateKey(d);
+    const data = dadosPorData.get(dk);
+    if (!data) return;
+
+    const setVal = (col: number, val: number) => {
+      if (!col) return;
+      const c = row.getCell(col);
+      if (c.type !== ExcelJS.ValueType.Formula) c.value = val;
+    };
+
+    setVal(colRodov, data.minutas);
+    setVal(colRecebidas, data.volume);
+    if (data.motosExp > 0) setVal(colExpedidas, data.motosExp);
+    row.commit();
+    rowsUpdated++;
   });
 
-  if (!targetRowNum) return { b64: "", updated: false };
-
-  // 3. Preenche apenas as células de entrada manual — não toca fórmulas
-  const targetRow = ws.getRow(targetRowNum);
-  const setVal = (col: number, val: number) => {
-    if (!col) return;
-    const cell = targetRow.getCell(col);
-    // Só sobrescreve se não for fórmula
-    if (cell.type !== ExcelJS.ValueType.Formula) {
-      cell.value = val;
-    }
-  };
-
-  setVal(colRodov, minutas);
-  setVal(colRecebidas, motosRec);
-  if (motosExp > 0) setVal(colExpedidas, motosExp);
-  targetRow.commit();
+  if (rowsUpdated === 0) return { b64: "", updated: false, rowsUpdated: 0 };
 
   const outBuf = await wb.xlsx.writeBuffer();
-  return { b64: Buffer.from(outBuf).toString("base64"), updated: true };
+  return { b64: Buffer.from(outBuf).toString("base64"), updated: true, rowsUpdated };
 }
 
 // ── gerar relatório de trânsito ────────────────────────────────────────────
@@ -379,14 +427,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 2. FrotaTMS
     const { total: motosExpedidas, count: frotatmsViagens } = await frotatmsExpedidas(today);
 
-    // 3. Atualizar Volu (opcional) — exceljs preserva 100% da formatação original
+    // 3. Atualizar Volu (opcional) — preenche todas as datas do Chronus
+    const dadosPorData = buildDadosPorData(minutas, today, motosExpedidas);
     let voloFileB64 = "";
     let voloAtualizado = false;
+    let voloLinhasAtualizadas = 0;
     if (voloFile) {
       const voloBuf = await voloFile.arrayBuffer();
-      const { b64, updated } = await atualizarVolu(voloBuf, today, totalMinutas, totalMotos, motosExpedidas);
+      const { b64, updated, rowsUpdated } = await atualizarVolu(voloBuf, dadosPorData);
       voloAtualizado = updated;
       voloFileB64 = b64;
+      voloLinhasAtualizadas = rowsUpdated;
     }
 
     // 4. Gerar relatório de trânsito
@@ -406,6 +457,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       voloFile: voloFileB64,
       relatorioFile: relB64,
       voloAtualizado,
+      voloLinhasAtualizadas,
     };
 
     return NextResponse.json(result);
