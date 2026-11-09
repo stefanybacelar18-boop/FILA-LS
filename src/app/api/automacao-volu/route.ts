@@ -359,10 +359,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Arquivo Chronus não enviado" }, { status: 400 });
     }
 
-    const today = todayKey();
     const chronusBuf = await chronusFile.arrayBuffer();
 
     // 1. Ler Chronus
+    const today = todayKey();
     const minutas = lerChronus(chronusBuf);
     const { descarregadasHoje, emTransito, atrasadas, porEta, semData } = processarMinutas(minutas, today);
 

@@ -469,7 +469,7 @@ export default function AutomacaoVoluPage() {
 
               {result.motosExpedidas === 0 && (
                 <p className="mt-3 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-                  FrotaTMS sem viagens registradas hoje. A coluna "Motos Expedidas" do Volu ficou em branco
+                  FrotaTMS sem viagens registradas hoje. A coluna &quot;Motos Expedidas&quot; do Volu ficou em branco
                   — preencha manualmente com o valor do dia.
                 </p>
               )}
