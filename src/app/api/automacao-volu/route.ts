@@ -224,9 +224,11 @@ function buildDadosPorData(
   today: string,
   motosExpedidas: number
 ): Map<string, DayData> {
-  const map = new Map<string, DayData>();
+  // Dois mapas separados: dados reais (DESCARREGADA) têm prioridade sobre previsões (EM TRÂNSITO)
+  const descMap  = new Map<string, DayData>();
+  const transMap = new Map<string, DayData>();
 
-  const add = (dk: string, volume: number) => {
+  const addTo = (map: Map<string, DayData>, dk: string, volume: number) => {
     const d = map.get(dk) ?? { minutas: 0, volume: 0, motosExp: 0 };
     d.minutas++;
     d.volume += volume;
@@ -234,29 +236,35 @@ function buildDadosPorData(
   };
 
   for (const m of minutas) {
-    const isDesc = m.status.includes("DESCARREGAD") || m.status.includes("ENTREGUE");
-    const isTrans = m.status.includes("TRANSITO") || m.status.includes("TRÂNSITO");
+    const isDesc  = m.status.includes("DESCARREGAD") || m.status.includes("ENTREGUE");
+    const isTrans = m.status.includes("TRANSITO")    || m.status.includes("TRÂNSITO");
 
     if (isDesc) {
-      // Data real de chegada/descarregamento
+      // Usa data real de descarregamento ou chegada
       const dk = m.descarregamento ? dateKey(m.descarregamento)
                : m.dataChegada    ? dateKey(m.dataChegada)
                : null;
-      if (dk) add(dk, m.qtdMotos);
+      if (dk) addTo(descMap, dk, m.qtdMotos);
     } else if (isTrans && m.eta) {
-      // Previsão de chegada (do Chronus ou Saída + 5d)
-      add(dateKey(m.eta), m.qtdMotos);
+      // Usa previsão de chegada (Chronus ou Saída + 5d)
+      addTo(transMap, dateKey(m.eta), m.qtdMotos);
     }
+  }
+
+  // Mescla: dados reais têm prioridade; previsões preenchem datas sem dado real
+  const merged = new Map<string, DayData>(descMap);
+  for (const [dk, d] of transMap) {
+    if (!merged.has(dk)) merged.set(dk, d);
   }
 
   // Motos expedidas do FrotaTMS → só para hoje
   if (motosExpedidas > 0) {
-    const d = map.get(today) ?? { minutas: 0, volume: 0, motosExp: 0 };
+    const d = merged.get(today) ?? { minutas: 0, volume: 0, motosExp: 0 };
     d.motosExp = motosExpedidas;
-    map.set(today, d);
+    merged.set(today, d);
   }
 
-  return map;
+  return merged;
 }
 
 // ── atualizar Volu — preenche TODAS as datas com dados do Chronus ──────────
