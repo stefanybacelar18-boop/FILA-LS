@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 const FROTATMS_URL = "https://frota-tms.onrender.com";
 const DIAS_TRANSITO = 5;
@@ -90,8 +91,6 @@ function lerChronus(buffer: ArrayBuffer): MinutaRow[] {
   const colSaida       = findColKey(headers, ["SaídaBelém", "SaidaBelem", "SAIDA", "Saída"]);
   const colChegada     = findColKey(headers, ["DataChegada", "DTCHEGADA", "Chegada"]);
   const colDescarga    = findColKey(headers, ["DataDescarregamento", "DTDESCARREGAMENTO", "Descarga", "Descarregamento"]);
-
-  const today = todayKey();
 
   return raw
     .map((r): MinutaRow | null => {
@@ -205,72 +204,74 @@ async function frotatmsExpedidas(today: string): Promise<{ total: number; count:
   }
 }
 
-// ── atualizar Volu ─────────────────────────────────────────────────────────
+// ── atualizar Volu — usa exceljs para preservar 100% da formatação original ─
 
-function atualizarVolu(
+async function atualizarVolu(
   buffer: ArrayBuffer,
   today: string,
   minutas: number,
   motosRec: number,
   motosExp: number
-): { wb: XLSX.WorkBook; updated: boolean } {
-  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1");
+): Promise<{ b64: string; updated: boolean }> {
+  const wb = new ExcelJS.Workbook();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await wb.xlsx.load(new Uint8Array(buffer) as any);
+  const ws = wb.worksheets[0];
 
-  // Detecta linha de cabeçalho
-  let headerRow = -1;
-  let colRodov = -1, colRecebidas = -1, colExpedidas = -1;
+  // 1. Detecta linha de cabeçalho lendo valores das células
+  let colRodov = 0, colRecebidas = 0, colExpedidas = 0;
+  let headerRowNum = 0;
 
-  for (let r = range.s.r; r <= Math.min(range.s.r + 25, range.e.r); r++) {
-    const vals = Array.from({ length: range.e.c + 1 }, (_, c) => {
-      const cell = ws[XLSX.utils.encode_cell({ r, c })];
-      return String(cell?.v ?? "").toLowerCase().trim();
-    });
-    if (vals.includes("data") && vals.some((v) => v.includes("consolidado") || v.includes("minuta"))) {
-      headerRow = r;
-      vals.forEach((v, i) => {
-        if (v.includes("rodoviár") || v === "rodoviario") colRodov = i;
-        if (v.includes("recebida"))  colRecebidas = i;
-        if (v.includes("expedida"))  colExpedidas = i;
+  ws.eachRow((row, rowNum) => {
+    if (headerRowNum) return;
+    const vals = row.values as (ExcelJS.CellValue | undefined)[];
+    const strs = vals.map((v) => String(v ?? "").toLowerCase().trim());
+    if (strs.includes("data") && strs.some((s) => s.includes("consolidado") || s.includes("minuta"))) {
+      headerRowNum = rowNum;
+      strs.forEach((s, i) => {
+        if (s.includes("rodoviár") || s === "rodoviario") colRodov = i;
+        if (s.includes("recebida")) colRecebidas = i;
+        if (s.includes("expedida")) colExpedidas = i;
       });
-      break;
     }
-  }
+  });
 
-  if (headerRow === -1) return { wb, updated: false };
+  if (!headerRowNum) return { b64: "", updated: false };
 
-  // Encontra linha da data de hoje
-  let targetRow = -1;
-  for (let r = headerRow + 1; r <= range.e.r; r++) {
-    const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-    if (!cell) continue;
+  // 2. Encontra linha da data de hoje
+  let targetRowNum = 0;
+  ws.eachRow((row, rowNum) => {
+    if (targetRowNum || rowNum <= headerRowNum) return;
+    const cell = row.getCell(1);
     let d: Date | null = null;
-    if (cell.t === "d" && cell.v instanceof Date) {
-      d = cell.v;
-    } else if (typeof cell.v === "number") {
-      const parsed = XLSX.SSF.parse_date_code(cell.v);
-      if (parsed) d = new Date(parsed.y, parsed.m - 1, parsed.d);
+    if (cell.value instanceof Date) {
+      d = cell.value;
+    } else if (cell.type === ExcelJS.ValueType.Formula && cell.result instanceof Date) {
+      d = cell.result as Date;
     }
-    if (d && dateKey(d) === today) {
-      targetRow = r;
-      break;
+    if (d && dateKey(d) === today) targetRowNum = rowNum;
+  });
+
+  if (!targetRowNum) return { b64: "", updated: false };
+
+  // 3. Preenche apenas as células de entrada manual — não toca fórmulas
+  const targetRow = ws.getRow(targetRowNum);
+  const setVal = (col: number, val: number) => {
+    if (!col) return;
+    const cell = targetRow.getCell(col);
+    // Só sobrescreve se não for fórmula
+    if (cell.type !== ExcelJS.ValueType.Formula) {
+      cell.value = val;
     }
-  }
-
-  if (targetRow === -1) return { wb, updated: false };
-
-  const writeCell = (col: number, val: number) => {
-    if (col < 0) return;
-    const addr = XLSX.utils.encode_cell({ r: targetRow, c: col });
-    ws[addr] = { t: "n", v: val };
   };
 
-  writeCell(colRodov, minutas);
-  writeCell(colRecebidas, motosRec);
-  if (motosExp > 0) writeCell(colExpedidas, motosExp);
+  setVal(colRodov, minutas);
+  setVal(colRecebidas, motosRec);
+  if (motosExp > 0) setVal(colExpedidas, motosExp);
+  targetRow.commit();
 
-  return { wb, updated: true };
+  const outBuf = await wb.xlsx.writeBuffer();
+  return { b64: Buffer.from(outBuf).toString("base64"), updated: true };
 }
 
 // ── gerar relatório de trânsito ────────────────────────────────────────────
@@ -372,15 +373,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 2. FrotaTMS
     const { total: motosExpedidas, count: frotatmsViagens } = await frotatmsExpedidas(today);
 
-    // 3. Atualizar Volu (opcional)
+    // 3. Atualizar Volu (opcional) — exceljs preserva 100% da formatação original
     let voloFileB64 = "";
     let voloAtualizado = false;
     if (voloFile) {
       const voloBuf = await voloFile.arrayBuffer();
-      const { wb: voloWb, updated } = atualizarVolu(voloBuf, today, totalMinutas, totalMotos, motosExpedidas);
+      const { b64, updated } = await atualizarVolu(voloBuf, today, totalMinutas, totalMotos, motosExpedidas);
       voloAtualizado = updated;
-      const voloOut = XLSX.write(voloWb, { type: "base64", bookType: "xlsx" });
-      voloFileB64 = voloOut;
+      voloFileB64 = b64;
     }
 
     // 4. Gerar relatório de trânsito
