@@ -91,7 +91,8 @@ function lerChronus(buffer: ArrayBuffer): MinutaRow[] {
   const colQtdNPD      = findColKey(headers, ["QtdNPD", "QtdadeNPD", "QTDNPD", "NPD"]);
   const colStatus      = findColKey(headers, ["Status", "Situação", "STATUS"]);
   const colSaida       = findColKey(headers, ["SaídaBelém", "SaidaBelem", "SAIDA", "Saída"]);
-  const colChegada     = findColKey(headers, ["DataChegada", "DTCHEGADA", "Chegada"]);
+  const colPrevisao    = findColKey(headers, ["PrevisãoChegada", "PrevisaoChegada", "Previsão", "Previsao"]);
+  const colChegada     = findColKey(headers, ["DataChegada", "DTCHEGADA", "DataChegada"]);
   const colDescarga    = findColKey(headers, ["DataDescarregamento", "DTDESCARREGAMENTO", "Descarga", "Descarregamento"]);
 
   return raw
@@ -104,12 +105,14 @@ function lerChronus(buffer: ArrayBuffer): MinutaRow[] {
       const qtdMotos = caixa + npd;
 
       const status = String(r[colStatus ?? ""] ?? "").toUpperCase();
-      const saidaBelem    = parseDate(r[colSaida ?? ""] ?? null);
-      const dataChegada   = parseDate(r[colChegada ?? ""] ?? null);
+      const saidaBelem      = parseDate(r[colSaida    ?? ""] ?? null);
+      const previsaoChronus = parseDate(r[colPrevisao ?? ""] ?? null);
+      const dataChegada     = parseDate(r[colChegada  ?? ""] ?? null);
       const descarregamento = parseDate(r[colDescarga ?? ""] ?? null);
 
-      let eta: Date | null = null;
-      if (saidaBelem) {
+      // Usa a Previsão Chegada do Chronus quando disponível; senão calcula Saída + 5 dias
+      let eta: Date | null = previsaoChronus;
+      if (!eta && saidaBelem) {
         eta = new Date(saidaBelem);
         eta.setDate(eta.getDate() + DIAS_TRANSITO);
       }
