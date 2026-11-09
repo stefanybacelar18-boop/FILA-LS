@@ -1,0 +1,13 @@
+# Arquivos gerados pelo script (não versionar)
+RELATORIO_TRANSITO_*.xlsx
+Volu_Recebimento_ATUALIZADO_*.xlsx
+
+# Exports do Chronus e arquivos de dados do usuário
+*.xls
+*chegada_carreta*
+*chronus*
+*Chronus*
+
+# Arquivos do Volu do usuário (mantém só o template)
+Volu Recebimento*.xlsx
+Volu_Recebimento_Secund*.xlsx
