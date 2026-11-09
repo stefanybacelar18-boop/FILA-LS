@@ -86,7 +86,9 @@ function lerChronus(buffer: ArrayBuffer): MinutaRow[] {
 
   const headers = Object.keys(raw[0]);
   const colMinuta      = findColKey(headers, ["Minuta", "NroMinuta", "Número"]);
-  const colQtd         = findColKey(headers, ["QtdMoto", "QtddeMotos", "QuantidadeMotos", "Qtddemoto"]);
+  // Volume = Qtd Caixa (col I) + Qtdade NPD (col J) — ignora Qtd de moto (col G)
+  const colQtdCaixa    = findColKey(headers, ["QtdCaixa", "Qtddecaixa", "QTDCaixa", "Caixa"]);
+  const colQtdNPD      = findColKey(headers, ["QtdNPD", "QtdadeNPD", "QTDNPD", "NPD"]);
   const colStatus      = findColKey(headers, ["Status", "Situação", "STATUS"]);
   const colSaida       = findColKey(headers, ["SaídaBelém", "SaidaBelem", "SAIDA", "Saída"]);
   const colChegada     = findColKey(headers, ["DataChegada", "DTCHEGADA", "Chegada"]);
@@ -97,8 +99,9 @@ function lerChronus(buffer: ArrayBuffer): MinutaRow[] {
       const minuta = String(r[colMinuta ?? ""] ?? "").trim().replace(/\.0$/, "");
       if (!minuta || minuta === "0" || minuta === "nan") return null;
 
-      const qtdRaw = r[colQtd ?? ""];
-      const qtdMotos = qtdRaw ? Math.round(Number(qtdRaw)) : 0;
+      const caixa = colQtdCaixa ? Math.round(Number(r[colQtdCaixa] ?? 0)) : 0;
+      const npd   = colQtdNPD   ? Math.round(Number(r[colQtdNPD]   ?? 0)) : 0;
+      const qtdMotos = caixa + npd;
 
       const status = String(r[colStatus ?? ""] ?? "").toUpperCase();
       const saidaBelem    = parseDate(r[colSaida ?? ""] ?? null);
