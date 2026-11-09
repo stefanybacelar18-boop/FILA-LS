@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/cadastro",
   "/_next",
   "/favicon",
+  "/automacao-volu",
 ];
 
 export function isPublicPath(pathname: string): boolean {
