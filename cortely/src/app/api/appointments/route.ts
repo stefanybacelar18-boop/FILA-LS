@@ -33,19 +33,38 @@ const createSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
-  const bundle = await getShopBundle(slug);
-  if (!bundle) {
-    return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
-  }
+  try {
+    const session = getRequestSession(req);
+    requirePermission(session, "agenda");
 
-  const appointments = await listAppointments({ barbershopId: bundle.shop.id });
-  return NextResponse.json({
-    appointments,
-    barbers: bundle.barbers,
-    services: bundle.services,
-    shop: bundle.shop,
-  });
+    const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
+    const bundle = await getShopBundle(slug);
+    if (!bundle) {
+      return NextResponse.json(
+        { error: "Barbearia não encontrada" },
+        { status: 404 },
+      );
+    }
+    if (bundle.shop.id !== session!.barbershop_id) {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+
+    const appointments = await listAppointments({
+      barbershopId: bundle.shop.id,
+    });
+    return NextResponse.json({
+      appointments,
+      barbers: bundle.barbers,
+      services: bundle.services,
+      shop: bundle.shop,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro";
+    const status = message.includes("login") || message.includes("permissão")
+      ? 401
+      : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
 }
 
 export async function POST(req: NextRequest) {

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getRequestSession, requirePermission } from "@/lib/auth";
+import {
+  getRequestSession,
+  parseClientProof,
+  requirePermission,
+  roleCan,
+} from "@/lib/auth";
 import { createPaymentIntent } from "@/lib/payments";
 import { opsStore } from "@/lib/ops-store";
+import { onlyDigits } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,7 +17,6 @@ export async function POST(req: NextRequest) {
     const action = z.string().parse(body.action);
 
     if (action === "create_intent") {
-      // cliente pode pagar sinal sem login admin
       const data = z
         .object({
           amount: z.number().positive(),
@@ -20,8 +25,25 @@ export async function POST(req: NextRequest) {
           customer_phone: z.string().optional(),
           method: z.enum(["pix", "credit", "debit"]).optional(),
           appointment_id: z.string().uuid().optional(),
+          client_token: z.string().optional(),
         })
         .parse(body);
+
+      const staffOk = Boolean(session && roleCan(session.role, "caixa"));
+      const phoneDigits = data.customer_phone
+        ? onlyDigits(data.customer_phone)
+        : "";
+      const clientOk = Boolean(
+        phoneDigits &&
+          data.client_token &&
+          parseClientProof(data.client_token, phoneDigits),
+      );
+      if (!staffOk && !clientOk) {
+        return NextResponse.json(
+          { error: "Login da equipe ou OTP do cliente necessário" },
+          { status: 401 },
+        );
+      }
 
       const intent = await createPaymentIntent({
         amount: data.amount,
@@ -31,7 +53,10 @@ export async function POST(req: NextRequest) {
         method: data.method,
       });
 
-      if (data.appointment_id && (intent.status === "paid" || intent.status === "simulated")) {
+      if (
+        data.appointment_id &&
+        (intent.status === "paid" || intent.status === "simulated")
+      ) {
         opsStore.createDeposit({
           appointment_id: data.appointment_id,
           amount: data.amount,

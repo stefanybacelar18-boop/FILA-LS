@@ -13,31 +13,48 @@ function store() {
   return globalOtp.__cortelyOtp;
 }
 
-/** OTP por WhatsApp. O código nunca é devolvido na resposta HTTP. */
+/**
+ * OTP por WhatsApp Business API.
+ * Sem token configurado: recusa o envio e nunca devolve o código nem wa.me com o código.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const action = z.string().parse(body.action);
 
     if (action === "send") {
-      const { phone } = z.object({ phone: z.string().min(10) }).parse(body);
-      const digits = onlyDigits(phone);
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      store().set(digits, { code, expires: Date.now() + 10 * 60 * 1000 });
-      const delivery = await sendWhatsAppMessage({
-        toPhone: digits,
-        message: `Seu código Cortely é ${code}. Válido por 10 minutos.`,
-      });
-      if (!process.env.WHATSAPP_API_TOKEN) {
+      if (!process.env.WHATSAPP_API_TOKEN?.trim()) {
         return NextResponse.json(
           {
             error:
-              "WhatsApp API não configurada. Não é possível enviar OTP sem WHATSAPP_API_TOKEN.",
-            whatsappUrl: delivery.url || undefined,
+              "OTP do cliente fica disponível após configurar a WhatsApp Business API.",
           },
           { status: 503 },
         );
       }
+
+      const { phone } = z.object({ phone: z.string().min(10) }).parse(body);
+      const digits = onlyDigits(phone);
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      store().set(digits, { code, expires: Date.now() + 10 * 60 * 1000 });
+
+      const delivery = await sendWhatsAppMessage({
+        toPhone: digits,
+        message: `Seu código Cortely é ${code}. Válido por 10 minutos.`,
+      });
+
+      if (!delivery.ok || delivery.mode !== "api" || !delivery.providerMessageId) {
+        store().delete(digits);
+        return NextResponse.json(
+          {
+            error:
+              delivery.error ||
+              "Não foi possível enviar o OTP pela WhatsApp API.",
+          },
+          { status: 502 },
+        );
+      }
+
       return NextResponse.json({ ok: true });
     }
 

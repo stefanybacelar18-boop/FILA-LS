@@ -40,11 +40,19 @@ export async function GET(req: NextRequest) {
     const [dashboard, loyalty, reminders, clients, blocks, staff] =
       await Promise.all([
         getDashboard(catalog.shop.id, session),
-        listLoyalty(catalog.shop.id),
-        listReminders(catalog.shop.id),
-        listClients(catalog.shop.id, q),
+        roleCan(session!.role, "fidelidade")
+          ? listLoyalty(catalog.shop.id)
+          : Promise.resolve([]),
+        roleCan(session!.role, "lembretes")
+          ? listReminders(catalog.shop.id)
+          : Promise.resolve([]),
+        roleCan(session!.role, "clientes")
+          ? listClients(catalog.shop.id, q)
+          : Promise.resolve([]),
         listScheduleBlocks({ barbershopId: catalog.shop.id }),
-        listStaff(catalog.shop.id),
+        roleCan(session!.role, "usuarios")
+          ? listStaff(catalog.shop.id)
+          : Promise.resolve([]),
       ]);
 
     return NextResponse.json({

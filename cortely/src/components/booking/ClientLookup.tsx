@@ -358,6 +358,7 @@ export function ClientLookup({ slug }: { slug: string }) {
                               customer_phone: item.client_phone,
                               method: "pix",
                               appointment_id: item.id,
+                              client_token: clientToken,
                             }),
                           });
                           const data = await res.json();

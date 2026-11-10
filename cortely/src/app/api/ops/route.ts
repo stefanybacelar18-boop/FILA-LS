@@ -10,42 +10,72 @@ export async function GET(req: NextRequest) {
     const view = req.nextUrl.searchParams.get("view") ?? "snapshot";
 
     if (view === "reports") {
+      requirePermission(session, "relatorios");
       return NextResponse.json({ reports: opsStore.reports(), session });
     }
-    if (view === "pro" && session!.role === "barber" && session!.barber_id) {
+
+    const permissions = {
+      caixa: roleCan(session!.role, "caixa"),
+      estoque: roleCan(session!.role, "estoque"),
+      financeiro: roleCan(session!.role, "financeiro"),
+      comissoes: roleCan(session!.role, "comissoes"),
+      pacotes: roleCan(session!.role, "pacotes"),
+      waitlist: roleCan(session!.role, "waitlist"),
+      marketing: roleCan(session!.role, "marketing"),
+      relatorios: roleCan(session!.role, "relatorios"),
+      unidades: roleCan(session!.role, "unidades"),
+    };
+
+    // Barbeiro: só dados do próprio portal
+    if (session!.role === "barber" && session!.barber_id) {
       const snap = opsStore.snapshot();
       const commissions = snap.commissionEntries.filter(
         (c) => c.barber_id === session!.barber_id,
       );
-      const ranking = opsStore.ranking().find((r) => r.barber_id === session!.barber_id);
+      const ranking = opsStore
+        .ranking()
+        .find((r) => r.barber_id === session!.barber_id);
       return NextResponse.json({
         session,
         commissions,
         ranking,
         goal: snap.goals.find((g) => g.barber_id === session!.barber_id) ?? null,
         cashOpen: !!opsStore.currentCash(),
+        permissions,
       });
     }
 
     const snap = opsStore.snapshot();
     return NextResponse.json({
-      ...snap,
-      currentCash: opsStore.currentCash(),
-      lowStock: opsStore.lowStock(),
-      cashflow: opsStore.cashflowSummary(),
-      ranking: opsStore.ranking(),
+      sales: permissions.caixa || permissions.relatorios ? snap.sales : [],
+      saleItems: permissions.caixa ? snap.saleItems : [],
+      salePayments: permissions.caixa ? snap.salePayments : [],
+      cashSessions: permissions.caixa ? snap.cashSessions : [],
+      cashMovements: permissions.caixa ? snap.cashMovements : [],
+      products: permissions.estoque ? snap.products : [],
+      suppliers: permissions.estoque ? snap.suppliers : [],
+      stockMovements: permissions.estoque ? snap.stockMovements : [],
+      payables: permissions.financeiro ? snap.payables : [],
+      receivables: permissions.financeiro ? snap.receivables : [],
+      commissionRules: permissions.comissoes ? snap.commissionRules : [],
+      commissionEntries: permissions.comissoes ? snap.commissionEntries : [],
+      goals: permissions.comissoes ? snap.goals : [],
+      packages: permissions.pacotes ? snap.packages : [],
+      clientPackages: permissions.pacotes ? snap.clientPackages : [],
+      subscriptionPlans: permissions.pacotes ? snap.subscriptionPlans : [],
+      clientSubscriptions: permissions.pacotes ? snap.clientSubscriptions : [],
+      waitlist: permissions.waitlist ? snap.waitlist : [],
+      campaigns: permissions.marketing ? snap.campaigns : [],
+      coupons: permissions.marketing ? snap.coupons : [],
+      reviews: permissions.marketing ? snap.reviews : [],
+      units: permissions.unidades ? snap.units : [],
+      deposits: permissions.caixa ? snap.deposits : [],
+      currentCash: permissions.caixa ? opsStore.currentCash() : null,
+      lowStock: permissions.estoque ? opsStore.lowStock() : [],
+      cashflow: permissions.financeiro ? opsStore.cashflowSummary() : null,
+      ranking: permissions.comissoes ? opsStore.ranking() : [],
       session,
-      permissions: {
-        caixa: roleCan(session!.role, "caixa"),
-        estoque: roleCan(session!.role, "estoque"),
-        financeiro: roleCan(session!.role, "financeiro"),
-        comissoes: roleCan(session!.role, "comissoes"),
-        pacotes: roleCan(session!.role, "pacotes"),
-        waitlist: roleCan(session!.role, "waitlist"),
-        marketing: roleCan(session!.role, "marketing"),
-        relatorios: roleCan(session!.role, "relatorios"),
-        unidades: roleCan(session!.role, "unidades"),
-      },
+      permissions,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ops";
