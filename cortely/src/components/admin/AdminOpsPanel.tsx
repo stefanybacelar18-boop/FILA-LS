@@ -1,0 +1,1012 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { Barber, Service, SessionUser } from "@/lib/types";
+import type {
+  Campaign,
+  CashSession,
+  ClientPackage,
+  CommissionEntry,
+  Coupon,
+  Payable,
+  Product,
+  Receivable,
+  Sale,
+  ServicePackage,
+  ShopUnit,
+  SubscriptionPlan,
+  Supplier,
+  WaitlistEntry,
+} from "@/lib/types-ops";
+import { formatBRL, formatPhoneBR } from "@/lib/utils";
+
+type OpsTab =
+  | "caixa"
+  | "estoque"
+  | "financeiro"
+  | "comissoes"
+  | "pacotes"
+  | "waitlist"
+  | "marketing"
+  | "relatorios"
+  | "unidades";
+
+type OpsPayload = {
+  products: Product[];
+  suppliers: Supplier[];
+  sales: Sale[];
+  currentCash: CashSession | null;
+  cashMovements: Array<{ id: string; type: string; amount: number; reason: string }>;
+  commissionEntries: CommissionEntry[];
+  commissionRules: Array<{
+    barber_id: string | null;
+    service_percent: number;
+    product_percent: number;
+  }>;
+  packages: ServicePackage[];
+  clientPackages: ClientPackage[];
+  subscriptionPlans: SubscriptionPlan[];
+  waitlist: WaitlistEntry[];
+  payables: Payable[];
+  receivables: Receivable[];
+  campaigns: Campaign[];
+  coupons: Coupon[];
+  reviews: Array<{ id: string; client_name: string; rating: number; comment: string | null }>;
+  deposits: Array<{ id: string; appointment_id: string; amount: number; status: string }>;
+  lowStock: Product[];
+  cashflow: {
+    gross_revenue: number;
+    cogs: number;
+    expenses: number;
+    net_profit: number;
+    open_payables: number;
+    open_receivables: number;
+    ticket_avg: number;
+  };
+  ranking: Array<{
+    barber_id: string;
+    revenue: number;
+    services: number;
+    commission: number;
+    goal: { revenue_target: number; services_target: number } | null;
+  }>;
+  units: ShopUnit[];
+  permissions: Record<OpsTab, boolean>;
+  session: SessionUser;
+};
+
+type ReportsPayload = {
+  cashflow: OpsPayload["cashflow"];
+  ranking: OpsPayload["ranking"];
+  byMethod: Record<string, number>;
+  topProducts: Array<[string, number]>;
+  topServices: Array<[string, number]>;
+  peakHours: Record<string, number>;
+  lowStock: Product[];
+  avgRating: number;
+  reviewCount: number;
+  waitlistWaiting: number;
+  units: ShopUnit[];
+  auditLog: Array<{ actor: string; action: string; detail: string; created_at: string }>;
+};
+
+export function AdminOpsPanel({
+  barbers,
+  services,
+  clients,
+}: {
+  barbers: Barber[];
+  services: Service[];
+  clients: Array<{ id: string; full_name: string; phone: string }>;
+}) {
+  const [tab, setTab] = useState<OpsTab>("caixa");
+  const [data, setData] = useState<OpsPayload | null>(null);
+  const [reports, setReports] = useState<ReportsPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [saleForm, setSaleForm] = useState({
+    kind: "service" as "service" | "product",
+    ref_id: "",
+    barber_id: "",
+    client_name: "",
+    method: "pix" as const,
+    discount: 0,
+    coupon_code: "",
+  });
+  const [productForm, setProductForm] = useState({
+    name: "",
+    price: 40,
+    cost: 20,
+    min_stock: 5,
+    stock_qty: 10,
+    category: "Geral",
+  });
+  const [payableForm, setPayableForm] = useState({
+    description: "",
+    amount: 100,
+    due_date: new Date().toISOString().slice(0, 10),
+    category: "Variável",
+  });
+  const [waitForm, setWaitForm] = useState({
+    client_name: "",
+    client_phone: "",
+    preferred_date: "",
+  });
+  const [campaignForm, setCampaignForm] = useState({
+    name: "",
+    segment: "inactive" as const,
+    message: "Sentimos sua falta! Agende pelo link Cortely.",
+  });
+
+  const reload = useCallback(async () => {
+    setError(null);
+    const res = await fetch("/api/ops");
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Falha ao carregar ops");
+      return;
+    }
+    setData(json);
+    if (!saleForm.ref_id && services[0]) {
+      setSaleForm((s) => ({ ...s, ref_id: services[0].id, barber_id: barbers[0]?.id || "" }));
+    }
+    const rep = await fetch("/api/ops?view=reports");
+    const repJson = await rep.json();
+    if (rep.ok) setReports(repJson.reports);
+  }, [barbers, services, saleForm.ref_id]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  async function action(body: Record<string, unknown>) {
+    setError(null);
+    const res = await fetch("/api/ops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Erro");
+    await reload();
+    return json;
+  }
+
+  const tabs = useMemo(() => {
+    if (!data) return [] as { id: OpsTab; label: string }[];
+    return (
+      [
+        ["caixa", "Caixa"],
+        ["estoque", "Estoque"],
+        ["financeiro", "Financeiro"],
+        ["comissoes", "Comissões"],
+        ["pacotes", "Pacotes"],
+        ["waitlist", "Fila"],
+        ["marketing", "Marketing"],
+        ["relatorios", "Relatórios"],
+        ["unidades", "Unidades"],
+      ] as const
+    )
+      .filter(([id]) => data.permissions[id])
+      .map(([id, label]) => ({ id, label }));
+  }, [data]);
+
+  if (!data) {
+    return (
+      <div className="mt-4 glass-panel rounded-2xl p-6 text-stone-400">
+        {error || "Carregando módulos operacionais…"}
+      </div>
+    );
+  }
+
+  const selectedService = services.find((s) => s.id === saleForm.ref_id);
+  const selectedProduct = data.products.find((p) => p.id === saleForm.ref_id);
+
+  return (
+    <section className="mt-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-amber-400/80">
+            Operação completa
+          </p>
+          <h2 className="font-display text-2xl text-stone-50">P1 / P2 — gestão</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((t) => (
+            <Button
+              key={t.id}
+              size="sm"
+              variant={tab === t.id ? "default" : "secondary"}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+      {error && <p className="text-sm text-rose-400">{error}</p>}
+
+      {tab === "caixa" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl text-stone-50">Caixa do dia</h3>
+            {data.currentCash ? (
+              <>
+                <Badge>Aberto</Badge>
+                <p className="text-sm text-stone-400">
+                  Abertura {formatBRL(data.currentCash.opening_amount)} ·{" "}
+                  {new Date(data.currentCash.opened_at).toLocaleString("pt-BR")}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      action({
+                        action: "cash_movement",
+                        type: "sangria",
+                        amount: 50,
+                        reason: "Troco / sangria rápida",
+                      }).catch((e) => setError(e.message))
+                    }
+                  >
+                    Sangria R$ 50
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      action({
+                        action: "cash_movement",
+                        type: "suprimento",
+                        amount: 50,
+                        reason: "Suprimento rápido",
+                      }).catch((e) => setError(e.message))
+                    }
+                  >
+                    Suprimento R$ 50
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() =>
+                      action({
+                        action: "close_cash",
+                        closing_amount: data.cashflow.gross_revenue,
+                      }).catch((e) => setError(e.message))
+                    }
+                  >
+                    Fechar caixa
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button
+                onClick={() =>
+                  action({ action: "open_cash", opening_amount: 100 }).catch((e) =>
+                    setError(e.message),
+                  )
+                }
+              >
+                Abrir caixa com R$ 100
+              </Button>
+            )}
+
+            <h4 className="pt-2 font-medium text-stone-200">Nova venda / comanda</h4>
+            <select
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+              value={saleForm.kind}
+              onChange={(e) => {
+                const kind = e.target.value as "service" | "product";
+                setSaleForm({
+                  ...saleForm,
+                  kind,
+                  ref_id:
+                    kind === "service"
+                      ? services[0]?.id || ""
+                      : data.products[0]?.id || "",
+                });
+              }}
+            >
+              <option value="service" className="bg-stone-900">
+                Serviço
+              </option>
+              <option value="product" className="bg-stone-900">
+                Produto
+              </option>
+            </select>
+            <select
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+              value={saleForm.ref_id}
+              onChange={(e) => setSaleForm({ ...saleForm, ref_id: e.target.value })}
+            >
+              {(saleForm.kind === "service" ? services : data.products).map((item) => (
+                <option key={item.id} value={item.id} className="bg-stone-900">
+                  {item.name} · {formatBRL(item.price)}
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+              value={saleForm.barber_id}
+              onChange={(e) => setSaleForm({ ...saleForm, barber_id: e.target.value })}
+            >
+              {barbers.map((b) => (
+                <option key={b.id} value={b.id} className="bg-stone-900">
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            <Input
+              placeholder="Nome do cliente (opcional)"
+              value={saleForm.client_name}
+              onChange={(e) => setSaleForm({ ...saleForm, client_name: e.target.value })}
+            />
+            <Input
+              placeholder="Cupom (ex: CORTELY10)"
+              value={saleForm.coupon_code}
+              onChange={(e) => setSaleForm({ ...saleForm, coupon_code: e.target.value })}
+            />
+            <Input
+              type="number"
+              placeholder="Desconto R$"
+              value={saleForm.discount}
+              onChange={(e) =>
+                setSaleForm({ ...saleForm, discount: Number(e.target.value) })
+              }
+            />
+            <Button
+              onClick={async () => {
+                try {
+                  const unit =
+                    saleForm.kind === "service"
+                      ? selectedService?.price ?? 0
+                      : selectedProduct?.price ?? 0;
+                  const description =
+                    saleForm.kind === "service"
+                      ? selectedService?.name ?? "Serviço"
+                      : selectedProduct?.name ?? "Produto";
+                  const discount = saleForm.discount;
+                  const coupon = saleForm.coupon_code || null;
+                  let total = unit - discount;
+                  if (coupon) {
+                    // server aplica cupom; enviamos total bruto e cupom
+                    total = unit - discount;
+                  }
+                  await action({
+                    action: "create_sale",
+                    client_name: saleForm.client_name || null,
+                    barber_id: saleForm.barber_id || null,
+                    discount,
+                    coupon_code: coupon,
+                    items: [
+                      {
+                        kind: saleForm.kind,
+                        ref_id: saleForm.ref_id,
+                        description,
+                        quantity: 1,
+                        unit_price: unit,
+                      },
+                    ],
+                    payments: [
+                      {
+                        method: saleForm.method,
+                        amount: Math.max(
+                          0,
+                          coupon ? unit - discount : total,
+                        ),
+                      },
+                    ],
+                  });
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Erro na venda");
+                }
+              }}
+            >
+              Registrar venda ({saleForm.method.toUpperCase()})
+            </Button>
+            <p className="text-xs text-stone-500">
+              Pagamento padrão PIX. Split: registre outra venda ou ajuste no código do
+              cupom (servidor recalcula o total).
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
+              Faturamento bruto {formatBRL(data.cashflow.gross_revenue)} · Ticket médio{" "}
+              {formatBRL(data.cashflow.ticket_avg)} · Lucro líquido{" "}
+              {formatBRL(data.cashflow.net_profit)}
+            </div>
+            {data.sales.slice(0, 8).map((sale) => (
+              <article
+                key={sale.id}
+                className="glass-panel flex items-center justify-between rounded-2xl p-4"
+              >
+                <div>
+                  <p className="font-medium text-stone-100">
+                    {sale.client_name || "Balcão"} · {formatBRL(sale.total)}
+                  </p>
+                  <p className="text-xs text-stone-500">
+                    {new Date(sale.created_at).toLocaleString("pt-BR")} · {sale.status}
+                  </p>
+                </div>
+                {sale.status === "paid" && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() =>
+                      action({ action: "refund_sale", id: sale.id }).catch((e) =>
+                        setError(e.message),
+                      )
+                    }
+                  >
+                    Estornar
+                  </Button>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "estoque" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl">Novo produto</h3>
+            <Input
+              placeholder="Nome"
+              value={productForm.name}
+              onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                type="number"
+                placeholder="Preço"
+                value={productForm.price}
+                onChange={(e) =>
+                  setProductForm({ ...productForm, price: Number(e.target.value) })
+                }
+              />
+              <Input
+                type="number"
+                placeholder="Custo"
+                value={productForm.cost}
+                onChange={(e) =>
+                  setProductForm({ ...productForm, cost: Number(e.target.value) })
+                }
+              />
+            </div>
+            <Button
+              onClick={() =>
+                action({ action: "upsert_product", ...productForm })
+                  .then(() =>
+                    setProductForm({
+                      name: "",
+                      price: 40,
+                      cost: 20,
+                      min_stock: 5,
+                      stock_qty: 10,
+                      category: "Geral",
+                    }),
+                  )
+                  .catch((e) => setError(e.message))
+              }
+            >
+              Salvar produto
+            </Button>
+            {data.lowStock.length > 0 && (
+              <p className="text-sm text-amber-300">
+                Alerta reposição: {data.lowStock.map((p) => p.name).join(", ")}
+              </p>
+            )}
+          </div>
+          <div className="space-y-3">
+            {data.products.map((p) => (
+              <article key={p.id} className="glass-panel rounded-2xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-stone-100">{p.name}</p>
+                    <p className="text-sm text-stone-400">
+                      Estoque {p.stock_qty} · mín {p.min_stock} · margem{" "}
+                      {p.price > 0
+                        ? `${Math.round(((p.price - p.cost) / p.price) * 100)}%`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        action({
+                          action: "adjust_stock",
+                          product_id: p.id,
+                          delta: 5,
+                          reason: "Compra / entrada",
+                        }).catch((e) => setError(e.message))
+                      }
+                    >
+                      +5
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        action({
+                          action: "adjust_stock",
+                          product_id: p.id,
+                          delta: -1,
+                          reason: "Ajuste inventário",
+                        }).catch((e) => setError(e.message))
+                      }
+                    >
+                      −1
+                    </Button>
+                  </div>
+                </div>
+              </article>
+            ))}
+            <div className="glass-panel rounded-2xl p-4 text-sm text-stone-400">
+              Fornecedores: {data.suppliers.map((s) => s.name).join(" · ") || "—"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "financeiro" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl">Contas a pagar</h3>
+            <Input
+              placeholder="Descrição"
+              value={payableForm.description}
+              onChange={(e) =>
+                setPayableForm({ ...payableForm, description: e.target.value })
+              }
+            />
+            <Input
+              type="number"
+              value={payableForm.amount}
+              onChange={(e) =>
+                setPayableForm({ ...payableForm, amount: Number(e.target.value) })
+              }
+            />
+            <Input
+              type="date"
+              value={payableForm.due_date}
+              onChange={(e) =>
+                setPayableForm({ ...payableForm, due_date: e.target.value })
+              }
+            />
+            <Button
+              onClick={() =>
+                action({ action: "upsert_payable", ...payableForm }).catch((e) =>
+                  setError(e.message),
+                )
+              }
+            >
+              Lançar despesa
+            </Button>
+            {data.payables.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
+              >
+                <span>
+                  {p.description} · {formatBRL(p.amount)} · {p.status}
+                </span>
+                {p.status === "open" && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      action({ action: "pay_payable", id: p.id }).catch((e) =>
+                        setError(e.message),
+                      )
+                    }
+                  >
+                    Pagar
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl">Fiados / a receber</h3>
+            <Button
+              variant="outline"
+              onClick={() =>
+                action({
+                  action: "upsert_receivable",
+                  client_name: "Cliente fiado",
+                  description: "Serviço fiado",
+                  amount: 55,
+                  due_date: new Date().toISOString().slice(0, 10),
+                }).catch((e) => setError(e.message))
+              }
+            >
+              Registrar fiado R$ 55
+            </Button>
+            {data.receivables.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
+              >
+                <span>
+                  {r.client_name} · {formatBRL(r.amount)} · {r.status}
+                </span>
+                {r.status === "open" && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      action({ action: "pay_receivable", id: r.id }).catch((e) =>
+                        setError(e.message),
+                      )
+                    }
+                  >
+                    Receber
+                  </Button>
+                )}
+              </div>
+            ))}
+            <div className="rounded-xl bg-white/5 p-3 text-sm text-stone-300">
+              DRE rápido: receita {formatBRL(data.cashflow.gross_revenue)} − CMV{" "}
+              {formatBRL(data.cashflow.cogs)} − despesas{" "}
+              {formatBRL(data.cashflow.expenses)} ={" "}
+              <strong>{formatBRL(data.cashflow.net_profit)}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "comissoes" && (
+        <div className="space-y-3">
+          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
+            Regra padrão:{" "}
+            {data.commissionRules[0]
+              ? `${data.commissionRules[0].service_percent}% serviço / ${data.commissionRules[0].product_percent}% produto`
+              : "—"}
+          </div>
+          {data.ranking.map((row) => {
+            const barber = barbers.find((b) => b.id === row.barber_id);
+            return (
+              <article
+                key={row.barber_id}
+                className="glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4"
+              >
+                <div>
+                  <p className="font-medium text-stone-100">{barber?.name ?? row.barber_id}</p>
+                  <p className="text-sm text-stone-400">
+                    {formatBRL(row.revenue)} · {row.services} atend. · comissão{" "}
+                    {formatBRL(row.commission)}
+                    {row.goal
+                      ? ` · meta ${formatBRL(row.goal.revenue_target)}`
+                      : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    action({ action: "pay_commissions", barber_id: row.barber_id }).catch(
+                      (e) => setError(e.message),
+                    )
+                  }
+                >
+                  Pagar comissões
+                </Button>
+              </article>
+            );
+          })}
+          {data.commissionEntries.slice(0, 10).map((c) => (
+            <div key={c.id} className="text-sm text-stone-500">
+              {formatBRL(c.amount)} · {c.status} · {c.percent}%
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "pacotes" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            {data.packages.map((p) => (
+              <article key={p.id} className="glass-panel rounded-2xl p-4">
+                <p className="font-medium text-stone-100">{p.name}</p>
+                <p className="text-sm text-stone-400">
+                  {p.credits} créditos · {formatBRL(p.price)} · {p.valid_days} dias
+                </p>
+                <Button
+                  className="mt-2"
+                  size="sm"
+                  disabled={!clients[0]}
+                  onClick={() =>
+                    action({
+                      action: "sell_package",
+                      client_id: clients[0].id,
+                      package_id: p.id,
+                    }).catch((e) => setError(e.message))
+                  }
+                >
+                  Vender para {clients[0]?.full_name ?? "cliente"}
+                </Button>
+              </article>
+            ))}
+            {data.subscriptionPlans.map((plan) => (
+              <article key={plan.id} className="glass-panel rounded-2xl p-4">
+                <p className="font-medium">{plan.name}</p>
+                <p className="text-sm text-stone-400">
+                  {formatBRL(plan.price_monthly)}/mês · {plan.credits_per_month} créditos
+                </p>
+                <Button
+                  className="mt-2"
+                  size="sm"
+                  variant="outline"
+                  disabled={!clients[0]}
+                  onClick={() =>
+                    action({
+                      action: "subscribe_client",
+                      client_id: clients[0].id,
+                      plan_id: plan.id,
+                    }).catch((e) => setError(e.message))
+                  }
+                >
+                  Assinar cliente
+                </Button>
+              </article>
+            ))}
+          </div>
+          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
+            Pacotes ativos de clientes: {data.clientPackages.length}
+            <ul className="mt-3 space-y-2">
+              {data.clientPackages.map((cp) => (
+                <li key={cp.id}>
+                  {cp.credits_left}/{cp.credits_total} créditos · {cp.status}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {tab === "waitlist" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl">Lista de espera / encaixe</h3>
+            <Input
+              placeholder="Nome"
+              value={waitForm.client_name}
+              onChange={(e) => setWaitForm({ ...waitForm, client_name: e.target.value })}
+            />
+            <Input
+              placeholder="WhatsApp"
+              value={waitForm.client_phone}
+              onChange={(e) => setWaitForm({ ...waitForm, client_phone: e.target.value })}
+            />
+            <Input
+              type="date"
+              value={waitForm.preferred_date}
+              onChange={(e) =>
+                setWaitForm({ ...waitForm, preferred_date: e.target.value })
+              }
+            />
+            <Button
+              onClick={() =>
+                action({
+                  action: "add_waitlist",
+                  ...waitForm,
+                  preferred_date: waitForm.preferred_date || null,
+                }).catch((e) => setError(e.message))
+              }
+            >
+              Adicionar à fila
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {data.waitlist.map((w) => (
+              <article
+                key={w.id}
+                className="glass-panel flex items-center justify-between rounded-2xl p-4"
+              >
+                <div>
+                  <p className="font-medium">{w.client_name}</p>
+                  <p className="text-sm text-stone-400">
+                    {formatPhoneBR(w.client_phone)} · {w.status}
+                  </p>
+                </div>
+                {w.status === "waiting" && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      action({
+                        action: "waitlist_status",
+                        id: w.id,
+                        status: "offered",
+                      }).catch((e) => setError(e.message))
+                    }
+                  >
+                    Oferecer vaga
+                  </Button>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "marketing" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl">Campanha</h3>
+            <Input
+              placeholder="Nome"
+              value={campaignForm.name}
+              onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
+            />
+            <select
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+              value={campaignForm.segment}
+              onChange={(e) =>
+                setCampaignForm({
+                  ...campaignForm,
+                  segment: e.target.value as typeof campaignForm.segment,
+                })
+              }
+            >
+              <option value="inactive" className="bg-stone-900">
+                Inativos
+              </option>
+              <option value="birthday" className="bg-stone-900">
+                Aniversariantes
+              </option>
+              <option value="frequent" className="bg-stone-900">
+                Frequentes
+              </option>
+              <option value="all" className="bg-stone-900">
+                Todos
+              </option>
+            </select>
+            <Input
+              value={campaignForm.message}
+              onChange={(e) =>
+                setCampaignForm({ ...campaignForm, message: e.target.value })
+              }
+            />
+            <Button
+              onClick={async () => {
+                try {
+                  const created = await action({
+                    action: "create_campaign",
+                    ...campaignForm,
+                  });
+                  await action({
+                    action: "send_campaign",
+                    id: created.campaign.id,
+                  });
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Erro");
+                }
+              }}
+            >
+              Criar e enviar (WhatsApp)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                action({
+                  action: "upsert_coupon",
+                  code: `PROMO${Math.floor(Math.random() * 90 + 10)}`,
+                  percent_off: 15,
+                }).catch((e) => setError(e.message))
+              }
+            >
+              Gerar cupom 15%
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {data.campaigns.map((c) => (
+              <article key={c.id} className="glass-panel rounded-2xl p-4 text-sm">
+                <p className="font-medium">{c.name}</p>
+                <p className="text-stone-400">
+                  {c.segment} · {c.status}
+                </p>
+              </article>
+            ))}
+            {data.coupons.map((c) => (
+              <div key={c.id} className="text-sm text-stone-400">
+                Cupom {c.code} · {c.percent_off}% · {c.used_count}/{c.max_uses}
+              </div>
+            ))}
+            <Button
+              variant="secondary"
+              onClick={() =>
+                action({
+                  action: "add_review",
+                  client_name: "Cliente demo",
+                  client_phone: "11999990000",
+                  rating: 5,
+                  comment: "Atendimento excelente",
+                }).catch((e) => setError(e.message))
+              }
+            >
+              Registrar avaliação 5★
+            </Button>
+            {data.reviews.map((r) => (
+              <div key={r.id} className="text-sm text-amber-200">
+                {r.rating}★ {r.client_name}: {r.comment}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "relatorios" && reports && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
+            <h3 className="mb-2 font-display text-xl text-stone-50">Indicadores</h3>
+            <p>Receita {formatBRL(reports.cashflow.gross_revenue)}</p>
+            <p>Lucro {formatBRL(reports.cashflow.net_profit)}</p>
+            <p>Ticket {formatBRL(reports.cashflow.ticket_avg)}</p>
+            <p>
+              NPS/avaliações {reports.avgRating.toFixed(1)}★ ({reports.reviewCount})
+            </p>
+            <p>Fila de espera {reports.waitlistWaiting}</p>
+          </div>
+          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
+            <h3 className="mb-2 font-display text-xl text-stone-50">Mix de pagamento</h3>
+            {Object.entries(reports.byMethod).map(([m, v]) => (
+              <p key={m}>
+                {m}: {formatBRL(v)}
+              </p>
+            ))}
+            <h4 className="mt-3 font-medium text-stone-200">Horários pico</h4>
+            {Object.entries(reports.peakHours)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([h, n]) => (
+                <p key={h}>
+                  {h} · {n} vendas
+                </p>
+              ))}
+          </div>
+          <div className="glass-panel rounded-2xl p-5 text-sm md:col-span-2">
+            <h3 className="mb-2 font-display text-xl">Auditoria recente</h3>
+            {reports.auditLog.slice(0, 12).map((a, idx) => (
+              <p key={idx} className="text-stone-500">
+                {new Date(a.created_at).toLocaleString("pt-BR")} · {a.actor} · {a.action}{" "}
+                · {a.detail}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "unidades" && (
+        <div className="space-y-3">
+          {data.units.map((u) => (
+            <article key={u.id} className="glass-panel rounded-2xl p-4">
+              <p className="font-medium text-stone-100">
+                {u.name} {u.is_hq ? <Badge>HQ</Badge> : null}
+              </p>
+              <p className="text-sm text-stone-400">
+                /{u.slug} · {u.city}
+              </p>
+            </article>
+          ))}
+          <Button
+            onClick={() =>
+              action({
+                action: "add_unit",
+                name: "Navalha Negra — Nova unidade",
+                slug: `navalha-${Date.now().toString().slice(-4)}`,
+                city: "São Paulo",
+              }).catch((e) => setError(e.message))
+            }
+          >
+            Adicionar unidade
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}

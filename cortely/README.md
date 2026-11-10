@@ -48,7 +48,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 2. Configure as env vars do Supabase Cortely.
 3. Não aponte para o projeto Vercel do FilaDock.
 
-## Fluxos prontos (P0)
+## Fluxos prontos (P0 + P1 + P2)
 
 1. Agendamento em 3 passos (serviço → barbeiro/horário → dados)
 2. Confirmação WhatsApp (API se configurada; senão `wa.me` manual)
@@ -65,6 +65,19 @@ SUPABASE_SERVICE_ROLE_KEY=...
 | `dono@cortely.demo` | `dono123` | owner |
 | `recepcao@cortely.demo` | `recepcao123` | reception |
 | `rafael@cortely.demo` | `barbeiro123` | barber |
+
+### Módulos Operação (aba Admin → Operação)
+
+- Caixa (abertura/fechamento, sangria/suprimento, vendas, estorno, cupom, PIX)
+- Estoque (produtos, custo/margem, alerta mínimo, fornecedores)
+- Financeiro (pagar/receber, fiado, DRE rápido)
+- Comissões + ranking + metas
+- Pacotes pré-pagos e assinaturas
+- Lista de espera / encaixe
+- Marketing (campanhas WhatsApp, cupons, avaliações)
+- Relatórios e auditoria
+- Multi-unidades
+- Portal do barbeiro em `/pro`
 
 ## Isolamento
 

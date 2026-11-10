@@ -18,6 +18,8 @@ export function ClientLookup({ slug }: { slug: string }) {
   const [threshold, setThreshold] = useState(5);
   const [reward, setReward] = useState("");
   const [cancelHours, setCancelHours] = useState(2);
+  const [packagesInfo, setPackagesInfo] = useState<string[]>([]);
+  const [rating, setRating] = useState(5);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
@@ -45,6 +47,20 @@ export function ClientLookup({ slug }: { slug: string }) {
       setThreshold(data.threshold ?? 5);
       setReward(data.reward ?? "");
       setCancelHours(data.cancelHoursBefore ?? 2);
+      const pkgLines = [
+        ...(data.clientPackages ?? []).map(
+          (p: { credits_left: number; credits_total: number; status: string }) =>
+            `Pacote ${p.credits_left}/${p.credits_total} · ${p.status}`,
+        ),
+        ...(data.subscriptions ?? []).map(
+          (s: { status: string }) => `Assinatura ${s.status}`,
+        ),
+        ...(data.packages ?? []).map(
+          (p: { name: string; price: number; credits: number }) =>
+            `Disponível: ${p.name} (${p.credits} créditos)`,
+        ),
+      ];
+      setPackagesInfo(pkgLines);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro");
     } finally {
@@ -154,6 +170,52 @@ export function ClientLookup({ slug }: { slug: string }) {
               Ainda sem pontos neste WhatsApp.
             </div>
           )}
+
+          {packagesInfo.length > 0 && (
+            <div className="rounded-2xl border border-white/10 p-4 text-sm text-stone-300 space-y-1">
+              {packagesInfo.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-white/10 p-4 space-y-2">
+            <p className="text-sm text-stone-300">Avaliar atendimento</p>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`h-9 w-9 rounded-lg text-sm ${
+                    rating === n ? "bg-amber-500 text-stone-950" : "bg-white/5"
+                  }`}
+                  onClick={() => setRating(n)}
+                >
+                  {n}★
+                </button>
+              ))}
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  await fetch("/api/ops", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      action: "add_review",
+                      client_name: appointments[0]?.client_name || "Cliente",
+                      client_phone: onlyDigits(phone),
+                      rating,
+                      comment: "Avaliação pelo portal",
+                      appointment_id: appointments[0]?.id ?? null,
+                    }),
+                  });
+                }}
+              >
+                Enviar
+              </Button>
+            </div>
+          </div>
 
           {appointments.length === 0 ? (
             <p className="text-sm text-stone-500">Nenhum agendamento encontrado.</p>

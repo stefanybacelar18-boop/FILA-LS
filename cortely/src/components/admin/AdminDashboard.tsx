@@ -15,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { AdminLogin } from "@/components/admin/AdminLogin";
+import { AdminOpsPanel } from "@/components/admin/AdminOpsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,8 @@ type Tab =
   | "lembretes"
   | "fidelidade"
   | "config"
-  | "usuarios";
+  | "usuarios"
+  | "operacao";
 
 type Permissions = Record<Tab, boolean>;
 
@@ -220,6 +222,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
   const tabs: { id: Tab; label: string }[] = (
     [
       ["agenda", "Agenda"],
+      ["operacao", "Operação"],
       ["servicos", "Serviços"],
       ["equipe", "Equipe"],
       ["horarios", "Horários"],
@@ -231,7 +234,10 @@ export function AdminDashboard({ slug }: { slug: string }) {
       ["usuarios", "Usuários"],
     ] as const
   )
-    .filter(([id]) => data.permissions[id])
+    .filter(([id]) => {
+      if (id === "operacao") return data.session.role !== "barber";
+      return Boolean(data.permissions[id as keyof typeof data.permissions]);
+    })
     .map(([id, label]) => ({ id, label }));
 
   return (
@@ -252,6 +258,13 @@ export function AdminDashboard({ slug }: { slug: string }) {
               Página do cliente
             </Button>
           </Link>
+          {data.session.role === "barber" && (
+            <Link href="/pro">
+              <Button variant="outline" size="sm">
+                Portal barbeiro
+              </Button>
+            </Link>
+          )}
           <Button variant="secondary" size="sm" onClick={logout}>
             Sair
           </Button>
@@ -293,6 +306,14 @@ export function AdminDashboard({ slug }: { slug: string }) {
           </Button>
         ))}
       </div>
+
+      {tab === "operacao" && data.session.role !== "barber" && (
+        <AdminOpsPanel
+          barbers={data.barbers}
+          services={data.services}
+          clients={data.clients}
+        />
+      )}
 
       {tab === "agenda" && (
         <section className="mt-4 space-y-3">

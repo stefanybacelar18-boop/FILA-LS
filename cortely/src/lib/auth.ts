@@ -2,26 +2,36 @@ import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import type { SessionUser, StaffRole } from "@/lib/types";
 import { demoStore } from "@/lib/demo-store";
-import { isDemoMode } from "@/lib/supabase/env";
 
 export const SESSION_COOKIE = "cortely_session";
 
+const OWNER = new Set([
+  "agenda",
+  "servicos",
+  "equipe",
+  "horarios",
+  "bloqueios",
+  "clientes",
+  "lembretes",
+  "fidelidade",
+  "config",
+  "usuarios",
+  "mark_status",
+  "manage_blocks",
+  "manage_clients",
+  "caixa",
+  "estoque",
+  "financeiro",
+  "comissoes",
+  "pacotes",
+  "waitlist",
+  "marketing",
+  "relatorios",
+  "unidades",
+]);
+
 const ROLE_PERMISSIONS: Record<StaffRole, Set<string>> = {
-  owner: new Set([
-    "agenda",
-    "servicos",
-    "equipe",
-    "horarios",
-    "bloqueios",
-    "clientes",
-    "lembretes",
-    "fidelidade",
-    "config",
-    "usuarios",
-    "mark_status",
-    "manage_blocks",
-    "manage_clients",
-  ]),
+  owner: OWNER,
   reception: new Set([
     "agenda",
     "horarios",
@@ -32,12 +42,18 @@ const ROLE_PERMISSIONS: Record<StaffRole, Set<string>> = {
     "mark_status",
     "manage_blocks",
     "manage_clients",
+    "caixa",
+    "estoque",
+    "pacotes",
+    "waitlist",
+    "marketing",
   ]),
   barber: new Set([
     "agenda",
     "bloqueios",
     "mark_status",
     "manage_blocks",
+    "comissoes",
   ]),
 };
 
@@ -72,21 +88,6 @@ export function getRequestSession(req: NextRequest): SessionUser | null {
 
 export async function authenticateStaff(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
-  if (isDemoMode()) {
-    const user = demoStore.authenticate(normalized, password);
-    if (!user) return null;
-    return {
-      id: user.id,
-      email: user.email,
-      full_name: user.full_name,
-      role: user.role,
-      barbershop_id: user.barbershop_id,
-      barber_id: user.barber_id,
-    };
-  }
-
-  // Caminho Supabase: use service role para localizar profile por e-mail demo
-  // até o Auth UI completo. Em produção, troque por supabase.auth.signInWithPassword.
   const user = demoStore.authenticate(normalized, password);
   if (!user) return null;
   return {
