@@ -68,6 +68,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
   const [barberForm, setBarberForm] = useState({
     name: "",
     specialties: "",
+    avatar_url: "",
   });
   const [hoursBarberId, setHoursBarberId] = useState<string>("");
   const [settings, setSettings] = useState({
@@ -390,6 +391,25 @@ export function AdminDashboard({ slug }: { slug: string }) {
                 setBarberForm({ ...barberForm, specialties: e.target.value })
               }
             />
+            <Input
+              placeholder="URL da foto (https://...)"
+              value={barberForm.avatar_url}
+              onChange={(e) =>
+                setBarberForm({ ...barberForm, avatar_url: e.target.value })
+              }
+            />
+            <p className="text-xs text-stone-500">
+              Cole o link de uma foto (Google Drive público, Imgur, site da
+              barbearia). Se deixar vazio, o Cortely gera um avatar automático.
+            </p>
+            {barberForm.avatar_url.trim() && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={barberForm.avatar_url.trim()}
+                alt="Prévia"
+                className="h-16 w-16 rounded-full object-cover border border-white/10"
+              />
+            )}
             <Button
               onClick={async () => {
                 await adminAction({
@@ -399,8 +419,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
                     .split(",")
                     .map((s) => s.trim())
                     .filter(Boolean),
+                  ...(barberForm.avatar_url.trim()
+                    ? { avatar_url: barberForm.avatar_url.trim() }
+                    : {}),
                 });
-                setBarberForm({ name: "", specialties: "" });
+                setBarberForm({ name: "", specialties: "", avatar_url: "" });
               }}
             >
               Salvar barbeiro
@@ -410,7 +433,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
             {data.barbers.map((barber) => (
               <article
                 key={barber.id}
-                className="glass-panel flex items-center gap-4 rounded-2xl p-4"
+                className="glass-panel flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -418,11 +441,39 @@ export function AdminDashboard({ slug }: { slug: string }) {
                   alt={barber.name}
                   className="h-14 w-14 rounded-full object-cover"
                 />
-                <div className="flex-1">
+                <div className="flex-1 space-y-2">
                   <h4 className="font-medium text-stone-100">{barber.name}</h4>
                   <p className="text-sm text-stone-400">
                     {barber.specialties.join(" · ")}
                   </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      placeholder="Nova URL da foto"
+                      defaultValue={barber.avatar_url ?? ""}
+                      id={`avatar-${barber.id}`}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const input = document.getElementById(
+                          `avatar-${barber.id}`,
+                        ) as HTMLInputElement | null;
+                        const url = input?.value.trim();
+                        if (!url) return;
+                        adminAction({
+                          action: "upsert_barber",
+                          id: barber.id,
+                          name: barber.name,
+                          specialties: barber.specialties,
+                          avatar_url: url,
+                          is_active: barber.is_active,
+                        });
+                      }}
+                    >
+                      Atualizar foto
+                    </Button>
+                  </div>
                 </div>
                 <Badge>{barber.is_active ? "Ativo" : "Inativo"}</Badge>
                 <Button
@@ -434,6 +485,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
                       id: barber.id,
                       name: barber.name,
                       specialties: barber.specialties,
+                      avatar_url: barber.avatar_url,
                       is_active: !barber.is_active,
                     })
                   }
