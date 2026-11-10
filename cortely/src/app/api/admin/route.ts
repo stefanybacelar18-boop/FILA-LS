@@ -11,6 +11,7 @@ import {
   deleteService,
   getAdminCatalog,
   getDashboard,
+  getScheduleBlock,
   listClients,
   listLoyalty,
   listReminders,
@@ -222,6 +223,15 @@ export async function POST(req: NextRequest) {
       case "delete_block": {
         requirePermission(session, "manage_blocks");
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
+        if (session!.role === "barber" && session!.barber_id) {
+          const block = await getScheduleBlock(id);
+          if (!block || block.barber_id !== session!.barber_id) {
+            return NextResponse.json(
+              { error: "Barbeiro só pode remover o próprio bloqueio" },
+              { status: 403 },
+            );
+          }
+        }
         await deleteScheduleBlock(id);
         return NextResponse.json({ ok: true });
       }

@@ -4,6 +4,7 @@ import { computeEndTime } from "@/lib/availability";
 import {
   cancelAppointmentByClient,
   createAppointment,
+  getAppointment,
   getShopBundle,
   listAppointments,
   rescheduleAppointmentByClient,
@@ -15,12 +16,9 @@ import {
   requirePermission,
 } from "@/lib/auth";
 import { opsStore } from "@/lib/ops-store";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
-import {
-  buildClientConfirmationMessage,
-  buildWhatsAppConfirmUrl,
-  sendWhatsAppMessage,
-} from "@/lib/whatsapp";
+import { buildWhatsAppConfirmUrl } from "@/lib/whatsapp";
 
 const createSchema = z.object({
   slug: z.string().min(1),
@@ -51,6 +49,10 @@ export async function GET(req: NextRequest) {
 
     const appointments = await listAppointments({
       barbershopId: bundle.shop.id,
+      barberId:
+        session!.role === "barber"
+          ? session!.barber_id ?? undefined
+          : undefined,
     });
     return NextResponse.json({
       appointments,
@@ -69,6 +71,22 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = clientIp(req);
+    const limited = checkRateLimit(`book:${ip}`, {
+      limit: 20,
+      windowMs: 60 * 60 * 1000,
+      lockMs: 60 * 60 * 1000,
+    });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { error: limited.error, retryAfterSec: limited.retryAfterSec },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limited.retryAfterSec) },
+        },
+      );
+    }
+
     const body = createSchema.parse(await req.json());
     const bundle = await getShopBundle(body.slug);
     if (!bundle) {
@@ -81,11 +99,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Barbeiro ou serviço inválido" }, { status: 400 });
     }
 
+    // Nome sanitizado — evita texto livre em mensagens WhatsApp
+    const clientName = body.client_name
+      .trim()
+      .slice(0, 80)
+      .replace(/[^\w\s.'-]/g, "");
+
     const appointment = await createAppointment({
       barbershop_id: bundle.shop.id,
       barber_id: body.barber_id,
       service_id: body.service_id,
-      client_name: body.client_name,
+      client_name: clientName || "Cliente",
       client_phone: onlyDigits(body.client_phone),
       appointment_date: body.appointment_date,
       start_time: body.start_time,
@@ -97,29 +121,22 @@ export async function POST(req: NextRequest) {
       { weekday: "long", day: "2-digit", month: "long" },
     );
 
-    const confirmPayload = {
+    // Só wa.me para a loja (template fixo). Sem envio API anônimo a números arbitrários.
+    const whatsappUrl = buildWhatsAppConfirmUrl({
       shopName: bundle.shop.name,
       shopPhone: bundle.shop.phone,
-      clientName: body.client_name,
+      clientName: appointment.client_name,
       barberName: barber.name,
       serviceName: service.name,
       dateLabel,
       time: body.start_time,
       price: service.price,
-    };
-
-    const whatsappUrl = buildWhatsAppConfirmUrl(confirmPayload);
-    const clientMessage = buildClientConfirmationMessage(confirmPayload);
-    const delivery = await sendWhatsAppMessage({
-      toPhone: body.client_phone,
-      message: clientMessage,
-      fallbackShopPhone: bundle.shop.phone,
     });
 
     return NextResponse.json({
       appointment,
-      whatsappUrl: delivery.url || whatsappUrl,
-      confirmation: delivery,
+      whatsappUrl,
+      confirmation: { ok: true, mode: "manual" as const, url: whatsappUrl },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao agendar";
@@ -184,6 +201,27 @@ export async function PATCH(req: NextRequest) {
         status: z.enum(["confirmed", "completed", "canceled", "no_show"]),
       })
       .parse(body);
+
+    const current = await getAppointment(data.id);
+    if (!current) {
+      return NextResponse.json(
+        { error: "Agendamento não encontrado" },
+        { status: 404 },
+      );
+    }
+    if (current.barbershop_id !== session!.barbershop_id) {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+    if (
+      session!.role === "barber" &&
+      session!.barber_id &&
+      current.barber_id !== session!.barber_id
+    ) {
+      return NextResponse.json(
+        { error: "Só pode alterar a própria agenda" },
+        { status: 403 },
+      );
+    }
 
     const appointment = await updateAppointmentStatus(data.id, data.status);
 

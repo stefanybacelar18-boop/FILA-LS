@@ -5,6 +5,7 @@ import {
   authenticateStaff,
   encodeSession,
 } from "@/lib/auth";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +16,24 @@ export async function POST(req: NextRequest) {
       })
       .parse(await req.json());
 
-    const session = await authenticateStaff(body.email, body.password);
+    const ip = clientIp(req);
+    const email = body.email.trim().toLowerCase();
+    const limited = checkRateLimit(`login:${ip}:${email}`, {
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+      lockMs: 15 * 60 * 1000,
+    });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { error: limited.error, retryAfterSec: limited.retryAfterSec },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limited.retryAfterSec) },
+        },
+      );
+    }
+
+    const session = await authenticateStaff(email, body.password);
     if (!session) {
       return NextResponse.json(
         { error: "E-mail ou senha inválidos" },
@@ -27,6 +45,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
       sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 60 * 60 * 24 * 14,
     });

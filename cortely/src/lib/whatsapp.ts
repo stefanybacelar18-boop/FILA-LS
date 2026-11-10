@@ -1,3 +1,4 @@
+import { checkRateLimit } from "@/lib/rate-limit";
 import { formatBRL, onlyDigits } from "@/lib/utils";
 import type { WhatsAppDeliveryMode } from "@/lib/types";
 
@@ -85,6 +86,32 @@ export async function sendWhatsAppMessage(input: {
       ok: true,
       mode: "manual",
       url: `https://wa.me/55${phone}?text=${encodeURIComponent(input.message)}`,
+    };
+  }
+
+  const limited = checkRateLimit(`wa-api:${to}`, {
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    lockMs: 60 * 60 * 1000,
+  });
+  if (!limited.ok) {
+    return {
+      ok: false,
+      mode: "api",
+      error: limited.error,
+    };
+  }
+
+  const globalWa = checkRateLimit("wa-api:global", {
+    limit: 60,
+    windowMs: 60 * 60 * 1000,
+    lockMs: 15 * 60 * 1000,
+  });
+  if (!globalWa.ok) {
+    return {
+      ok: false,
+      mode: "api",
+      error: globalWa.error,
     };
   }
 

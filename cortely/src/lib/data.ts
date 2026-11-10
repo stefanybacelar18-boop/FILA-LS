@@ -180,6 +180,18 @@ export async function createAppointment(input: {
   return appointment;
 }
 
+export async function getAppointment(id: string): Promise<Appointment | null> {
+  if (isDemoMode()) return demoStore.getAppointment(id);
+
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as Appointment | null) ?? null;
+}
+
 export async function updateAppointmentStatus(
   id: string,
   status: Appointment["status"],
@@ -446,6 +458,17 @@ export async function createScheduleBlock(input: {
     .single();
   if (error) throw new Error(error.message);
   return data as ScheduleBlock;
+}
+
+export async function getScheduleBlock(id: string): Promise<ScheduleBlock | null> {
+  if (isDemoMode()) return demoStore.getScheduleBlock(id);
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("schedule_blocks")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as ScheduleBlock | null) ?? null;
 }
 
 export async function deleteScheduleBlock(id: string) {

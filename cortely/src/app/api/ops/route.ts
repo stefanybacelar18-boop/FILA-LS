@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getRequestSession, requirePermission, roleCan } from "@/lib/auth";
+import {
+  getRequestSession,
+  parseClientProof,
+  requirePermission,
+  roleCan,
+} from "@/lib/auth";
 import { opsStore } from "@/lib/ops-store";
+import { onlyDigits } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -367,12 +373,32 @@ export async function POST(req: NextRequest) {
           .object({
             client_name: z.string().min(2),
             client_phone: z.string().min(10),
+            client_token: z.string().min(20).optional(),
             rating: z.number().int().min(1).max(5),
             comment: z.string().nullable().optional(),
             appointment_id: z.string().uuid().nullable().optional(),
           })
           .parse(body);
-        return NextResponse.json({ review: opsStore.addReview(data) });
+        const digits = onlyDigits(data.client_phone);
+        const staffOk = Boolean(session && roleCan(session.role, "marketing"));
+        const clientOk = Boolean(
+          data.client_token && parseClientProof(data.client_token, digits),
+        );
+        if (!staffOk && !clientOk) {
+          return NextResponse.json(
+            { error: "OTP do cliente ou login da equipe necessário" },
+            { status: 401 },
+          );
+        }
+        return NextResponse.json({
+          review: opsStore.addReview({
+            client_name: data.client_name,
+            client_phone: digits,
+            rating: data.rating,
+            comment: data.comment,
+            appointment_id: data.appointment_id,
+          }),
+        });
       }
       case "create_deposit": {
         requirePermission(session, "caixa");

@@ -443,6 +443,11 @@ const demoStoreImpl = {
     return { ...row };
   },
 
+  getAppointment(id: string) {
+    const row = state().appointments.find((a) => a.id === id);
+    return row ? { ...row } : null;
+  },
+
   updateAppointmentStatus(id: string, status: Appointment["status"]) {
     const s = state();
     const row = s.appointments.find((a) => a.id === id);
@@ -602,6 +607,11 @@ const demoStoreImpl = {
     };
     s.scheduleBlocks.push(row);
     return { ...row };
+  },
+
+  getScheduleBlock(id: string) {
+    const row = state().scheduleBlocks.find((b) => b.id === id);
+    return row ? { ...row } : null;
   },
 
   deleteScheduleBlock(id: string) {

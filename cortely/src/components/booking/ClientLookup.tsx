@@ -286,6 +286,7 @@ export function ClientLookup({ slug }: { slug: string }) {
                       action: "add_review",
                       client_name: appointments[0]?.client_name || "Cliente",
                       client_phone: onlyDigits(phone),
+                      client_token: clientToken,
                       rating,
                       comment: "Avaliação pelo portal",
                       appointment_id: appointments[0]?.id ?? null,
