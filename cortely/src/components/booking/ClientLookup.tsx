@@ -1,0 +1,256 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { Appointment, Barber, LoyaltyAccount, Service } from "@/lib/types";
+import { formatPhoneBR, onlyDigits } from "@/lib/utils";
+
+export function ClientLookup({ slug }: { slug: string }) {
+  const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loyalty, setLoyalty] = useState<LoyaltyAccount | null>(null);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [threshold, setThreshold] = useState(5);
+  const [reward, setReward] = useState("");
+  const [cancelHours, setCancelHours] = useState(2);
+  const [error, setError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [slots, setSlots] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const minDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  async function lookup() {
+    setLoading(true);
+    setError(null);
+    setSearched(true);
+    try {
+      const res = await fetch(
+        `/api/client-lookup?slug=${slug}&phone=${onlyDigits(phone)}`,
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na consulta");
+      setAppointments(data.appointments ?? []);
+      setLoyalty(data.loyalty);
+      setBarbers(data.barbers ?? []);
+      setServices(data.services ?? []);
+      setThreshold(data.threshold ?? 5);
+      setReward(data.reward ?? "");
+      setCancelHours(data.cancelHoursBefore ?? 2);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cancelAppointment(id: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "client_cancel",
+          id,
+          phone: onlyDigits(phone),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao cancelar");
+      await lookup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadSlots(item: Appointment) {
+    setRescheduleId(item.id);
+    setNewDate(item.appointment_date);
+    setNewTime("");
+    setSlots([]);
+    const res = await fetch(
+      `/api/availability?slug=${slug}&barberId=${item.barber_id}&serviceId=${item.service_id}&date=${item.appointment_date}`,
+    );
+    const data = await res.json();
+    setSlots(data.slots ?? []);
+  }
+
+  async function loadSlotsForDate(item: Appointment, date: string) {
+    setNewDate(date);
+    setNewTime("");
+    const res = await fetch(
+      `/api/availability?slug=${slug}&barberId=${item.barber_id}&serviceId=${item.service_id}&date=${date}`,
+    );
+    const data = await res.json();
+    setSlots(data.slots ?? []);
+  }
+
+  async function confirmReschedule(item: Appointment) {
+    if (!newDate || !newTime) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "client_reschedule",
+          id: item.id,
+          phone: onlyDigits(phone),
+          appointment_date: newDate,
+          start_time: newTime,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao reagendar");
+      setRescheduleId(null);
+      await lookup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="glass-panel rounded-3xl p-5 sm:p-7">
+      <h3 className="font-display text-2xl text-stone-50">Meus horários</h3>
+      <p className="mt-2 text-sm text-stone-400">
+        Consulte, cancele ou reagende com pelo menos {cancelHours}h de antecedência.
+      </p>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <Input
+          placeholder="Seu WhatsApp"
+          value={phone}
+          onChange={(e) => setPhone(formatPhoneBR(e.target.value))}
+        />
+        <Button onClick={lookup} disabled={loading || onlyDigits(phone).length < 10}>
+          <Search className="h-4 w-4" />
+          {loading ? "Buscando…" : "Consultar"}
+        </Button>
+      </div>
+      {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+
+      {searched && !error && (
+        <div className="mt-5 space-y-3">
+          {loyalty ? (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+              Barber Points: {loyalty.points}/{threshold} · {reward}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/10 p-4 text-sm text-stone-400">
+              Ainda sem pontos neste WhatsApp.
+            </div>
+          )}
+
+          {appointments.length === 0 ? (
+            <p className="text-sm text-stone-500">Nenhum agendamento encontrado.</p>
+          ) : (
+            appointments.map((item) => {
+              const barber = barbers.find((b) => b.id === item.barber_id);
+              const service = services.find((s) => s.id === item.service_id);
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-stone-100">
+                      {service?.name ?? "Serviço"}
+                    </p>
+                    <Badge>{item.status}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-stone-400">
+                    {new Date(`${item.appointment_date}T12:00:00`).toLocaleDateString(
+                      "pt-BR",
+                    )}{" "}
+                    às {item.start_time.slice(0, 5)} · {barber?.name}
+                  </p>
+
+                  {item.status === "confirmed" && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={busy}
+                        onClick={() => cancelAppointment(item.id)}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() => loadSlots(item)}
+                      >
+                        Reagendar
+                      </Button>
+                    </div>
+                  )}
+
+                  {rescheduleId === item.id && (
+                    <div className="mt-3 space-y-2 rounded-xl border border-white/10 p-3">
+                      <Input
+                        type="date"
+                        min={minDate}
+                        value={newDate}
+                        onChange={(e) => loadSlotsForDate(item, e.target.value)}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {slots.length === 0 && (
+                          <p className="text-xs text-stone-500">Sem horários neste dia.</p>
+                        )}
+                        {slots.map((slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setNewTime(slot)}
+                            className={`rounded-lg px-3 py-1.5 text-xs ${
+                              newTime === slot
+                                ? "bg-amber-500 text-stone-950"
+                                : "bg-white/5 text-stone-300"
+                            }`}
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={!newTime || busy}
+                          onClick={() => confirmReschedule(item)}
+                        >
+                          Confirmar novo horário
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setRescheduleId(null)}
+                        >
+                          Fechar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
