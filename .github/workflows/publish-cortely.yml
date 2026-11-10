@@ -1,0 +1,37 @@
+name: Publish Cortely repo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout FILA-LS
+        uses: actions/checkout@v4
+        with:
+          ref: cursor/cortely-7332
+
+      - name: Publish cortely/ to stefanybacelar18-boop/cortely
+        env:
+          CORTELY_GITHUB_TOKEN: ${{ secrets.CORTELY_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CORTELY_GITHUB_TOKEN}" || { echo "Missing CORTELY_GITHUB_TOKEN secret"; exit 1; }
+          test -d cortely || { echo "cortely/ folder missing on branch"; exit 1; }
+
+          git config --global user.name "cortely-publish"
+          git config --global user.email "cortely-publish@users.noreply.github.com"
+
+          rm -rf /tmp/cortely-publish
+          mkdir -p /tmp/cortely-publish
+          cp -a cortely/. /tmp/cortely-publish/
+          cd /tmp/cortely-publish
+          rm -rf .git node_modules .next .env.local
+
+          git init
+          git add .
+          git commit -m "feat: Cortely SaaS de agendamento e fidelidade"
+          git branch -M main
+          git remote add origin "https://x-access-token:${CORTELY_GITHUB_TOKEN}@github.com/stefanybacelar18-boop/cortely.git"
+          git push -u origin main --force
