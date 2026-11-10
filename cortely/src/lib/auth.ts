@@ -88,7 +88,9 @@ export function roleCan(role: StaffRole, permission: string) {
 export function parseSessionToken(token: string | undefined | null): SessionUser | null {
   if (!token || !token.includes(".")) return null;
   try {
-    const [body, sig] = token.split(".");
+    const dot = token.lastIndexOf(".");
+    const body = token.slice(0, dot);
+    const sig = token.slice(dot + 1);
     if (!body || !sig) return null;
     const expected = signBody(body);
     if (!safeEqual(sig, expected)) return null;
@@ -101,19 +103,30 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
     }
     if (parsed.exp < Date.now()) return null;
 
+    // Confia no cookie assinado (HMAC). Em serverless o store em memória
+    // pode não existir no próximo request — não invalidar a sessão por isso.
     const live = demoStore.getStaffById(parsed.id);
-    if (!live) return null;
-    if (live.role !== parsed.role || live.barbershop_id !== parsed.barbershop_id) {
-      return null;
+    if (live) {
+      if (live.role !== parsed.role || live.barbershop_id !== parsed.barbershop_id) {
+        return null;
+      }
+      return {
+        id: live.id,
+        email: live.email,
+        full_name: live.full_name,
+        role: live.role,
+        barbershop_id: live.barbershop_id,
+        barber_id: live.barber_id,
+      };
     }
 
     return {
-      id: live.id,
-      email: live.email,
-      full_name: live.full_name,
-      role: live.role,
-      barbershop_id: live.barbershop_id,
-      barber_id: live.barber_id,
+      id: parsed.id,
+      email: parsed.email,
+      full_name: parsed.full_name,
+      role: parsed.role,
+      barbershop_id: parsed.barbershop_id,
+      barber_id: parsed.barber_id ?? null,
     };
   } catch {
     return null;

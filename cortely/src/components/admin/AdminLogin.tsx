@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Props = {
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
 };
 
 export function AdminLogin({ onSuccess }: Props) {
@@ -22,11 +22,19 @@ export function AdminLogin({ onSuccess }: Props) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha no login");
-      onSuccess();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+            (res.status === 429
+              ? "Muitas tentativas. Aguarde alguns minutos."
+              : "Falha no login"),
+        );
+      }
+      await onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro");
     } finally {

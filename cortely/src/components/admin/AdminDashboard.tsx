@@ -121,18 +121,19 @@ export function AdminDashboard({ slug }: { slug: string }) {
     setLoading(true);
     const res = await fetch(
       `/api/admin?slug=${slug}${clientQuery ? `&q=${encodeURIComponent(clientQuery)}` : ""}`,
+      { credentials: "same-origin" },
     );
     if (res.status === 401) {
       setAuthed(false);
       setData(null);
       setLoading(false);
-      return;
+      throw new Error("Sessão inválida. Tente entrar de novo.");
     }
     const json = await res.json();
     if (!res.ok) {
       setAuthed(false);
       setLoading(false);
-      return;
+      throw new Error(json.error || "Falha ao carregar o painel");
     }
     setAuthed(true);
     setData(json);
@@ -161,7 +162,9 @@ export function AdminDashboard({ slug }: { slug: string }) {
   }, [slug, hoursBarberId, clientQuery]);
 
   useEffect(() => {
-    reload();
+    reload().catch(() => {
+      /* sem sessão no boot — mostra login */
+    });
   }, [reload]);
 
   const barberMap = useMemo(() => {
@@ -209,7 +212,14 @@ export function AdminDashboard({ slug }: { slug: string }) {
   }, [data, hoursBarberId]);
 
   if (authed === false) {
-    return <AdminLogin onSuccess={() => reload()} />;
+    return (
+      <AdminLogin
+        onSuccess={async () => {
+          setAuthed(true);
+          await reload();
+        }}
+      />
+    );
   }
 
   if (loading || !data) {

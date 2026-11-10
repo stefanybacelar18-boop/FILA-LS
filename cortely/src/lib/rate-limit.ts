@@ -64,6 +64,10 @@ export function checkRateLimit(
 
 export function clientIp(req: { headers: Headers }) {
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]?.trim() || "unknown";
+  if (fwd) {
+    // Plataforma acrescenta o IP real à direita; a esquerda o cliente controla.
+    const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
+    return parts[parts.length - 1] || "unknown";
+  }
   return req.headers.get("x-real-ip") || "unknown";
 }
