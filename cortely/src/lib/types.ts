@@ -1,4 +1,5 @@
 export type AppointmentStatus = "confirmed" | "completed" | "canceled";
+export type ReminderStatus = "pending" | "sent" | "skipped";
 
 export type Barbershop = {
   id: string;
@@ -11,6 +12,7 @@ export type Barbershop = {
   primary_color: string;
   loyalty_threshold: number;
   loyalty_reward: string;
+  reminder_hours_before: number;
   created_at: string;
 };
 
@@ -69,6 +71,18 @@ export type LoyaltyAccount = {
   points: number;
   total_visits: number;
   updated_at: string;
+};
+
+export type Reminder = {
+  id: string;
+  barbershop_id: string;
+  appointment_id: string;
+  client_name: string;
+  client_phone: string;
+  scheduled_for: string;
+  status: ReminderStatus;
+  message: string;
+  created_at: string;
 };
 
 export type ShopBundle = {

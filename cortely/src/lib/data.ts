@@ -1,11 +1,18 @@
 import { demoStore } from "@/lib/demo-store";
-import type { Appointment, ShopBundle } from "@/lib/types";
+import type {
+  Appointment,
+  Barber,
+  Barbershop,
+  Reminder,
+  Service,
+  ShopBundle,
+  WorkingHours,
+} from "@/lib/types";
 import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
+import { onlyDigits } from "@/lib/utils";
 
 export async function getShopBundle(slug: string): Promise<ShopBundle | null> {
-  if (isDemoMode()) {
-    return demoStore.getShopBySlug(slug);
-  }
+  if (isDemoMode()) return demoStore.getShopBySlug(slug);
 
   const supabase = createServiceClient();
   const { data: shop, error } = await supabase
@@ -35,7 +42,10 @@ export async function getShopBundle(slug: string): Promise<ShopBundle | null> {
   const barberIds = new Set((barbers ?? []).map((b) => b.id));
 
   return {
-    shop,
+    shop: {
+      ...shop,
+      reminder_hours_before: shop.reminder_hours_before ?? 24,
+    },
     barbers: barbers ?? [],
     services: (services ?? []).map((s) => ({
       ...s,
@@ -46,14 +56,18 @@ export async function getShopBundle(slug: string): Promise<ShopBundle | null> {
   };
 }
 
+export async function getAdminCatalog(slug: string) {
+  if (isDemoMode()) return demoStore.getCatalog(slug);
+  return getShopBundle(slug);
+}
+
 export async function listAppointments(params: {
   barbershopId: string;
   barberId?: string;
   date?: string;
+  phone?: string;
 }): Promise<Appointment[]> {
-  if (isDemoMode()) {
-    return demoStore.listAppointments(params);
-  }
+  if (isDemoMode()) return demoStore.listAppointments(params);
 
   const supabase = createServiceClient();
   let query = supabase
@@ -63,6 +77,7 @@ export async function listAppointments(params: {
 
   if (params.barberId) query = query.eq("barber_id", params.barberId);
   if (params.date) query = query.eq("appointment_date", params.date);
+  if (params.phone) query = query.eq("client_phone", onlyDigits(params.phone));
 
   const { data } = await query.order("start_time");
   return data ?? [];
@@ -78,17 +93,12 @@ export async function createAppointment(input: {
   start_time: string;
   end_time: string;
 }) {
-  if (isDemoMode()) {
-    return demoStore.createAppointment(input);
-  }
+  if (isDemoMode()) return demoStore.createAppointment(input);
 
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("appointments")
-    .insert({
-      ...input,
-      status: "confirmed",
-    })
+    .insert({ ...input, status: "confirmed" })
     .select("*")
     .single();
 
@@ -100,9 +110,7 @@ export async function updateAppointmentStatus(
   id: string,
   status: Appointment["status"],
 ) {
-  if (isDemoMode()) {
-    return demoStore.updateAppointmentStatus(id, status);
-  }
+  if (isDemoMode()) return demoStore.updateAppointmentStatus(id, status);
 
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -113,89 +121,11 @@ export async function updateAppointmentStatus(
     .single();
 
   if (error) throw new Error(error.message);
-
-  if (status === "completed" && data) {
-    await upsertLoyaltyOnComplete({
-      barbershopId: data.barbershop_id,
-      clientPhone: data.client_phone,
-      clientName: data.client_name,
-      appointmentId: data.id,
-    });
-  }
-
   return data as Appointment;
 }
 
-async function upsertLoyaltyOnComplete(input: {
-  barbershopId: string;
-  clientPhone: string;
-  clientName: string;
-  appointmentId: string;
-}) {
-  const supabase = createServiceClient();
-  const { data: shop } = await supabase
-    .from("barbershops")
-    .select("loyalty_threshold")
-    .eq("id", input.barbershopId)
-    .single();
-
-  const { data: existing } = await supabase
-    .from("loyalty_accounts")
-    .select("*")
-    .eq("barbershop_id", input.barbershopId)
-    .eq("client_phone", input.clientPhone)
-    .maybeSingle();
-
-  let points = (existing?.points ?? 0) + 1;
-  const total_visits = (existing?.total_visits ?? 0) + 1;
-  const threshold = shop?.loyalty_threshold ?? 5;
-  if (points >= threshold) points = 0;
-
-  if (existing) {
-    await supabase
-      .from("loyalty_accounts")
-      .update({
-        points,
-        total_visits,
-        client_name: input.clientName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
-
-    await supabase.from("loyalty_events").insert({
-      loyalty_account_id: existing.id,
-      appointment_id: input.appointmentId,
-      delta: 1,
-      reason: "atendimento_concluido",
-    });
-  } else {
-    const { data: created } = await supabase
-      .from("loyalty_accounts")
-      .insert({
-        barbershop_id: input.barbershopId,
-        client_phone: input.clientPhone,
-        client_name: input.clientName,
-        points,
-        total_visits,
-      })
-      .select("*")
-      .single();
-
-    if (created) {
-      await supabase.from("loyalty_events").insert({
-        loyalty_account_id: created.id,
-        appointment_id: input.appointmentId,
-        delta: 1,
-        reason: "atendimento_concluido",
-      });
-    }
-  }
-}
-
 export async function getDashboard(barbershopId: string) {
-  if (isDemoMode()) {
-    return demoStore.dashboard(barbershopId);
-  }
+  if (isDemoMode()) return demoStore.dashboard(barbershopId);
 
   const appointments = await listAppointments({ barbershopId });
   const today = new Date().toISOString().slice(0, 10);
@@ -212,41 +142,82 @@ export async function getDashboard(barbershopId: string) {
     confirmedCount: appointments.filter((a) => a.status === "confirmed").length,
     completedCount: appointments.filter((a) => a.status === "completed").length,
     loyaltyClients: loyalty?.length ?? 0,
+    pendingReminders: 0,
     appointments,
   };
 }
 
 export async function listLoyalty(barbershopId: string) {
-  if (isDemoMode()) {
-    return demoStore.listLoyalty(barbershopId);
-  }
-
+  if (isDemoMode()) return demoStore.listLoyalty(barbershopId);
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("loyalty_accounts")
     .select("*")
     .eq("barbershop_id", barbershopId)
     .order("points", { ascending: false });
-
   return data ?? [];
 }
 
 export async function getLoyalty(barbershopId: string, phone: string) {
-  if (isDemoMode()) {
-    return demoStore.getLoyalty(barbershopId, phone);
-  }
-
+  if (isDemoMode()) return demoStore.getLoyalty(barbershopId, phone);
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("loyalty_accounts")
     .select("*")
     .eq("barbershop_id", barbershopId)
-    .eq("client_phone", phone)
+    .eq("client_phone", onlyDigits(phone))
     .maybeSingle();
-
   return data;
 }
 
-export function demoShopId() {
-  return "11111111-1111-4111-8111-111111111111";
+export async function listReminders(barbershopId: string): Promise<Reminder[]> {
+  if (isDemoMode()) return demoStore.listReminders(barbershopId);
+  return [];
+}
+
+export async function markReminderSent(id: string) {
+  if (isDemoMode()) return demoStore.markReminderSent(id);
+  throw new Error("Lembretes via Supabase ainda não configurados");
+}
+
+export async function upsertBarber(input: {
+  id?: string;
+  name: string;
+  specialties: string[];
+  avatar_url?: string | null;
+  is_active?: boolean;
+}): Promise<Barber> {
+  if (isDemoMode()) return demoStore.upsertBarber(input);
+  throw new Error("CRUD barbeiro via Supabase: use o painel SQL por enquanto");
+}
+
+export async function upsertService(input: {
+  id?: string;
+  name: string;
+  description?: string;
+  duration_minutes: number;
+  price: number;
+  category?: string;
+  gallery_urls?: string[];
+}): Promise<Service> {
+  if (isDemoMode()) return demoStore.upsertService(input);
+  throw new Error("CRUD serviço via Supabase: use o painel SQL por enquanto");
+}
+
+export async function deleteService(id: string) {
+  if (isDemoMode()) return demoStore.deleteService(id);
+  throw new Error("CRUD serviço via Supabase: use o painel SQL por enquanto");
+}
+
+export async function setWorkingHours(
+  barberId: string,
+  rows: Omit<WorkingHours, "id" | "barber_id">[],
+) {
+  if (isDemoMode()) return demoStore.setWorkingHours(barberId, rows);
+  throw new Error("Horários via Supabase: use o painel SQL por enquanto");
+}
+
+export async function updateShopSettings(input: Partial<Barbershop>) {
+  if (isDemoMode()) return demoStore.updateShopSettings(input);
+  throw new Error("Configurações via Supabase: use o painel SQL por enquanto");
 }

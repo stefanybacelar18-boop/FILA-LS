@@ -3,11 +3,6 @@
 SaaS de agendamento e fidelidade para barbearias — **projeto 100% isolado** (não compartilha código, `.env`, Supabase nem deploy com FilaDock / FrotaTMS).
 
 > Nome de produto: **Cortely** (BarberFlow já existe no mercado).
->
-> Este diretório vive temporariamente em `FILA-LS/cortely` só para versionar no GitHub
-> (o GitHub App do Cursor hoje só acessa este repositório). Em produção use
-> **Root Directory = `cortely`** no Vercel e um projeto Supabase próprio chamado `cortely`.
-> Quando existir o repo `stefanybacelar18-boop/cortely`, este app deve migrar para lá.
 
 ## Stack
 

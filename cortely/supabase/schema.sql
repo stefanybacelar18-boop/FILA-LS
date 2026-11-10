@@ -15,6 +15,7 @@ CREATE TABLE public.barbershops (
   primary_color TEXT DEFAULT '#d97706',
   loyalty_threshold INT NOT NULL DEFAULT 5,
   loyalty_reward TEXT NOT NULL DEFAULT '6º corte com 50% de desconto',
+  reminder_hours_before INT NOT NULL DEFAULT 24,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -103,6 +104,20 @@ CREATE TABLE public.loyalty_events (
   appointment_id UUID REFERENCES public.appointments(id) ON DELETE SET NULL,
   delta INT NOT NULL,
   reason TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 8. Lembretes WhatsApp
+CREATE TABLE public.reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  barbershop_id UUID NOT NULL REFERENCES public.barbershops(id) ON DELETE CASCADE,
+  appointment_id UUID NOT NULL REFERENCES public.appointments(id) ON DELETE CASCADE,
+  client_name TEXT NOT NULL,
+  client_phone TEXT NOT NULL,
+  scheduled_for TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'sent', 'skipped')),
+  message TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -29,3 +29,8 @@ export function buildWhatsAppConfirmUrl(payload: WhatsAppPayload) {
 
   return `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`;
 }
+
+export function buildWhatsAppReminderUrl(clientPhone: string, message: string) {
+  const phone = onlyDigits(clientPhone);
+  return `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+}

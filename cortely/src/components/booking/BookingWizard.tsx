@@ -132,14 +132,30 @@ export function BookingWizard({ shop, barbers, services }: Props) {
                 setServiceId(item.id);
                 setStep(2);
               }}
-              className="group flex w-full items-start justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-amber-500/40 hover:bg-amber-500/5"
+              className="group flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-amber-500/40 hover:bg-amber-500/5"
             >
-              <div>
-                <div className="flex items-center gap-2">
-                  <Scissors className="h-4 w-4 text-amber-400" />
-                  <span className="font-medium text-stone-100">{item.name}</span>
+              {item.gallery_urls[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.gallery_urls[0]}
+                  alt={item.name}
+                  className="h-20 w-24 shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="flex h-20 w-24 shrink-0 items-center justify-center rounded-xl bg-white/5">
+                  <Scissors className="h-5 w-5 text-amber-400" />
                 </div>
-                <p className="mt-1 text-sm text-stone-400">{item.description}</p>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium text-stone-100">{item.name}</span>
+                    <p className="mt-1 text-sm text-stone-400">{item.description}</p>
+                  </div>
+                  <p className="font-display text-xl text-amber-300">
+                    {formatBRL(item.price)}
+                  </p>
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Badge>
                     <Clock className="mr-1 h-3 w-3" />
@@ -149,11 +165,6 @@ export function BookingWizard({ shop, barbers, services }: Props) {
                     {item.category}
                   </Badge>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="font-display text-xl text-amber-300">
-                  {formatBRL(item.price)}
-                </p>
               </div>
             </button>
           ))}
@@ -175,9 +186,18 @@ export function BookingWizard({ shop, barbers, services }: Props) {
                     : "border-white/10 bg-white/[0.03] hover:border-white/20"
                 }`}
               >
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-500/30 to-stone-800 text-amber-200">
-                  <UserRound className="h-5 w-5" />
-                </div>
+                {item.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.avatar_url}
+                    alt={item.name}
+                    className="mb-3 h-14 w-14 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500/30 to-stone-800 text-amber-200">
+                    <UserRound className="h-5 w-5" />
+                  </div>
+                )}
                 <p className="font-medium text-stone-100">{item.name}</p>
                 <p className="mt-1 text-xs text-stone-400">
                   {item.specialties.join(" · ")}
@@ -307,7 +327,8 @@ export function BookingWizard({ shop, barbers, services }: Props) {
           <div>
             <h3 className="font-display text-3xl text-stone-50">Horário reservado</h3>
             <p className="mt-2 text-stone-400">
-              Envie a confirmação no WhatsApp da {shop.name} para garantir sua vaga.
+              Envie a confirmação no WhatsApp da {shop.name}. Um lembrete automático
+              também fica preparado no painel ({shop.reminder_hours_before}h antes).
             </p>
           </div>
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
