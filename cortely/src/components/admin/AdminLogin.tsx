@@ -9,8 +9,8 @@ type Props = {
 };
 
 export function AdminLogin({ onSuccess }: Props) {
-  const [email, setEmail] = useState("dono@cortely.demo");
-  const [password, setPassword] = useState("dono123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,8 +43,7 @@ export function AdminLogin({ onSuccess }: Props) {
           </p>
           <h1 className="mt-2 font-display text-3xl text-stone-50">Entrar</h1>
           <p className="mt-2 text-sm text-stone-400">
-            Demo: dono@cortely.demo / dono123 · recepcao@cortely.demo /
-            recepcao123 · rafael@cortely.demo / barbeiro123
+            Use o e-mail e a senha configurados nos secrets do ambiente.
           </p>
         </div>
         <Input
@@ -53,6 +52,7 @@ export function AdminLogin({ onSuccess }: Props) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="E-mail"
           required
+          autoComplete="username"
         />
         <Input
           type="password"
@@ -60,6 +60,8 @@ export function AdminLogin({ onSuccess }: Props) {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Senha"
           required
+          autoComplete="current-password"
+          minLength={8}
         />
         {error && <p className="text-sm text-rose-400">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>

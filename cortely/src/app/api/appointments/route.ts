@@ -9,7 +9,11 @@ import {
   rescheduleAppointmentByClient,
   updateAppointmentStatus,
 } from "@/lib/data";
-import { getRequestSession, requirePermission } from "@/lib/auth";
+import {
+  getRequestSession,
+  parseClientProof,
+  requirePermission,
+} from "@/lib/auth";
 import { opsStore } from "@/lib/ops-store";
 import { onlyDigits } from "@/lib/utils";
 import {
@@ -114,9 +118,17 @@ export async function PATCH(req: NextRequest) {
         .object({
           id: z.string().uuid(),
           phone: z.string().min(10),
+          client_token: z.string().min(20),
         })
         .parse(body);
-      const appointment = await cancelAppointmentByClient(data.id, data.phone);
+      const digits = onlyDigits(data.phone);
+      if (!parseClientProof(data.client_token, digits)) {
+        return NextResponse.json(
+          { error: "Verifique o WhatsApp com OTP para cancelar" },
+          { status: 401 },
+        );
+      }
+      const appointment = await cancelAppointmentByClient(data.id, digits);
       return NextResponse.json({ appointment });
     }
 
@@ -125,11 +137,22 @@ export async function PATCH(req: NextRequest) {
         .object({
           id: z.string().uuid(),
           phone: z.string().min(10),
+          client_token: z.string().min(20),
           appointment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           start_time: z.string().regex(/^\d{2}:\d{2}$/),
         })
         .parse(body);
-      const appointment = await rescheduleAppointmentByClient(data);
+      const digits = onlyDigits(data.phone);
+      if (!parseClientProof(data.client_token, digits)) {
+        return NextResponse.json(
+          { error: "Verifique o WhatsApp com OTP para reagendar" },
+          { status: 401 },
+        );
+      }
+      const appointment = await rescheduleAppointmentByClient({
+        ...data,
+        phone: digits,
+      });
       return NextResponse.json({ appointment });
     }
 

@@ -131,7 +131,6 @@ export type StaffUser = {
   full_name: string;
   role: StaffRole;
   barber_id: string | null;
-  password: string;
 };
 
 export type ShopBundle = {

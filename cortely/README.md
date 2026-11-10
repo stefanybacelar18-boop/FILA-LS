@@ -59,13 +59,11 @@ SUPABASE_SERVICE_ROLE_KEY=...
 6. Fila de lembretes + `POST /api/reminders/process` (cron)
 7. Barber Points ao concluir atendimento
 
-### Contas demo
+### Contas staff (demo)
 
-| E-mail | Senha | Papel |
-|---|---|---|
-| `dono@cortely.demo` | `dono123` | owner |
-| `recepcao@cortely.demo` | `recepcao123` | reception |
-| `rafael@cortely.demo` | `barbeiro123` | barber |
+E-mails seed: `dono@cortely.demo`, `recepcao@cortely.demo`, `rafael@cortely.demo`.  
+Senhas vêm só dos secrets `CORTELY_OWNER_PASSWORD`, `CORTELY_RECEPTION_PASSWORD` e `CORTELY_BARBER_PASSWORD` (mín. 8 caracteres).  
+Sessões usam cookie assinado com `CORTELY_SESSION_SECRET`.
 
 ### Módulos Operação (aba Admin → Operação)
 

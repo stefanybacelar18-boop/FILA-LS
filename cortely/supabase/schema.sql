@@ -26,7 +26,7 @@ CREATE TABLE public.profiles (
   barbershop_id UUID REFERENCES public.barbershops(id) ON DELETE CASCADE,
   full_name TEXT,
   email TEXT,
-  role TEXT NOT NULL DEFAULT 'owner'
+  role TEXT NOT NULL DEFAULT 'barber'
     CHECK (role IN ('owner', 'reception', 'barber')),
   barber_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -196,19 +196,28 @@ CREATE POLICY "Public read services"
 CREATE POLICY "Public read working_hours"
   ON public.working_hours FOR SELECT USING (true);
 
-CREATE POLICY "Public create appointments"
-  ON public.appointments FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Public read own appointments by phone"
-  ON public.appointments FOR SELECT USING (true);
+-- Agendamentos: sem leitura/escrita pública via anon key.
+-- Criação e consulta passam pela API Next.js com service role.
 
 -- Admin: dono da barbearia
 CREATE OR REPLACE FUNCTION public.user_barbershop_id()
 RETURNS UUID
 LANGUAGE sql
 STABLE
+SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT barbershop_id FROM public.profiles WHERE id = auth.uid()
+$$;
+
+CREATE OR REPLACE FUNCTION public.user_role()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid()
 $$;
 
 CREATE POLICY "Owner manage barbershop"
@@ -216,10 +225,19 @@ CREATE POLICY "Owner manage barbershop"
   USING (id = public.user_barbershop_id())
   WITH CHECK (id = public.user_barbershop_id());
 
-CREATE POLICY "Owner manage profile"
-  ON public.profiles FOR ALL
+-- Perfis: sem INSERT público (service role cria). Sem auto-promoção a owner.
+CREATE POLICY "Read own profile"
+  ON public.profiles FOR SELECT
+  USING (id = auth.uid());
+
+CREATE POLICY "Update own profile safe"
+  ON public.profiles FOR UPDATE
   USING (id = auth.uid())
-  WITH CHECK (id = auth.uid());
+  WITH CHECK (
+    id = auth.uid()
+    AND role = public.user_role()
+    AND barbershop_id IS NOT DISTINCT FROM public.user_barbershop_id()
+  );
 
 CREATE POLICY "Owner manage barbers"
   ON public.barbers FOR ALL

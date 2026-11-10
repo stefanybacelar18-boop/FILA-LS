@@ -17,6 +17,10 @@ import type {
 import { computeEndTime } from "@/lib/availability";
 import { loadPersistedStore, persistDemo } from "@/lib/persist";
 import { onlyDigits } from "@/lib/utils";
+import {
+  expectedPasswordForRole,
+  passwordsMatch,
+} from "@/lib/staff-passwords";
 import { getWhatsAppDeliveryMode } from "@/lib/whatsapp";
 
 const SHOP_ID = "11111111-1111-4111-8111-111111111111";
@@ -163,7 +167,6 @@ function seedState(): CatalogState {
       full_name: "Stefany — Dona",
       role: "owner",
       barber_id: null,
-      password: "dono123",
     },
     {
       id: "44444444-4444-4444-8444-444444444442",
@@ -172,7 +175,6 @@ function seedState(): CatalogState {
       full_name: "Ana — Recepção",
       role: "reception",
       barber_id: null,
-      password: "recepcao123",
     },
     {
       id: "44444444-4444-4444-8444-444444444443",
@@ -181,7 +183,6 @@ function seedState(): CatalogState {
       full_name: "Rafael Costa",
       role: "barber",
       barber_id: barbers[0].id,
-      password: "barbeiro123",
     },
   ];
 
@@ -199,11 +200,23 @@ function seedState(): CatalogState {
   };
 }
 
+function scrubStaff(staff: StaffUser[]) {
+  return staff.map((s) => ({
+    id: s.id,
+    barbershop_id: s.barbershop_id,
+    email: s.email,
+    full_name: s.full_name,
+    role: s.role,
+    barber_id: s.barber_id,
+  }));
+}
+
 function state(): CatalogState {
   if (!globalForDemo.__cortelyDemoV4) {
     const saved = loadPersistedStore().demo as CatalogState | undefined;
+    if (saved?.staff) saved.staff = scrubStaff(saved.staff);
     globalForDemo.__cortelyDemoV4 = saved ?? seedState();
-    if (!saved) persistDemo(globalForDemo.__cortelyDemoV4);
+    persistDemo(globalForDemo.__cortelyDemoV4);
   }
   return globalForDemo.__cortelyDemoV4;
 }
@@ -314,11 +327,27 @@ const READ_ONLY = new Set([
 const demoStoreImpl = {
   isDemo: true as const,
 
+  getStaffById(id: string): StaffUser | null {
+    const user = state().staff.find((s) => s.id === id);
+    if (!user) return null;
+    return {
+      id: user.id,
+      barbershop_id: user.barbershop_id,
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role,
+      barber_id: user.barber_id,
+    };
+  },
+
   authenticate(email: string, password: string): StaffUser | null {
     const user = state().staff.find(
-      (s) => s.email === email.trim().toLowerCase() && s.password === password,
+      (s) => s.email === email.trim().toLowerCase(),
     );
-    return user ? { ...user } : null;
+    if (!user) return null;
+    const expected = expectedPasswordForRole(user.role);
+    if (!expected || !passwordsMatch(password, expected)) return null;
+    return this.getStaffById(user.id);
   },
 
   listStaff(barbershopId: string) {

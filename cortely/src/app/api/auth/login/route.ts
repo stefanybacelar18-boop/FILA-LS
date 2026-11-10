@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const body = z
       .object({
         email: z.string().email(),
-        password: z.string().min(4),
+        password: z.string().min(8),
       })
       .parse(await req.json());
 

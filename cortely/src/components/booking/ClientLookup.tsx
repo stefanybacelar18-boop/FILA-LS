@@ -22,8 +22,7 @@ export function ClientLookup({ slug }: { slug: string }) {
   const [rating, setRating] = useState(5);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
-  const [otpDemo, setOtpDemo] = useState<string | null>(null);
-  const [verified, setVerified] = useState(false);
+  const [clientToken, setClientToken] = useState<string | null>(null);
   const [depositMsg, setDepositMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
@@ -34,14 +33,20 @@ export function ClientLookup({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
 
   const minDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const verified = Boolean(clientToken);
 
-  async function lookup() {
+  async function lookup(token = clientToken) {
+    if (!token) {
+      setError("Verifique o WhatsApp com OTP antes de consultar");
+      return;
+    }
     setLoading(true);
     setError(null);
     setSearched(true);
     try {
       const res = await fetch(
         `/api/client-lookup?slug=${slug}&phone=${onlyDigits(phone)}`,
+        { headers: { "x-cortely-client": token } },
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha na consulta");
@@ -74,6 +79,7 @@ export function ClientLookup({ slug }: { slug: string }) {
   }
 
   async function cancelAppointment(id: string) {
+    if (!clientToken) return;
     setBusy(true);
     setError(null);
     try {
@@ -84,6 +90,7 @@ export function ClientLookup({ slug }: { slug: string }) {
           action: "client_cancel",
           id,
           phone: onlyDigits(phone),
+          client_token: clientToken,
         }),
       });
       const data = await res.json();
@@ -119,7 +126,7 @@ export function ClientLookup({ slug }: { slug: string }) {
   }
 
   async function confirmReschedule(item: Appointment) {
-    if (!newDate || !newTime) return;
+    if (!newDate || !newTime || !clientToken) return;
     setBusy(true);
     setError(null);
     try {
@@ -130,6 +137,7 @@ export function ClientLookup({ slug }: { slug: string }) {
           action: "client_reschedule",
           id: item.id,
           phone: onlyDigits(phone),
+          client_token: clientToken,
           appointment_date: newDate,
           start_time: newTime,
         }),
@@ -149,15 +157,23 @@ export function ClientLookup({ slug }: { slug: string }) {
     <div className="glass-panel rounded-3xl p-5 sm:p-7">
       <h3 className="font-display text-2xl text-stone-50">Meus horários</h3>
       <p className="mt-2 text-sm text-stone-400">
-        Consulte, cancele ou reagende com pelo menos {cancelHours}h de antecedência.
+        Verifique o WhatsApp com OTP. Depois consulte, cancele ou reagende com
+        pelo menos {cancelHours}h de antecedência.
       </p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <Input
           placeholder="Seu WhatsApp"
           value={phone}
-          onChange={(e) => setPhone(formatPhoneBR(e.target.value))}
+          onChange={(e) => {
+            setPhone(formatPhoneBR(e.target.value));
+            setClientToken(null);
+            setOtpSent(false);
+          }}
         />
-        <Button onClick={lookup} disabled={loading || onlyDigits(phone).length < 10}>
+        <Button
+          onClick={() => lookup()}
+          disabled={loading || !verified || onlyDigits(phone).length < 10}
+        >
           <Search className="h-4 w-4" />
           {loading ? "Buscando…" : "Consultar"}
         </Button>
@@ -168,14 +184,18 @@ export function ClientLookup({ slug }: { slug: string }) {
           variant="secondary"
           disabled={onlyDigits(phone).length < 10}
           onClick={async () => {
+            setError(null);
             const res = await fetch("/api/client-otp", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ action: "send", phone: onlyDigits(phone) }),
             });
             const data = await res.json();
+            if (!res.ok) {
+              setError(data.error || "Falha ao enviar OTP");
+              return;
+            }
             setOtpSent(true);
-            setOtpDemo(data.demo_code ?? null);
           }}
         >
           Receber código OTP
@@ -191,6 +211,7 @@ export function ClientLookup({ slug }: { slug: string }) {
             <Button
               size="sm"
               onClick={async () => {
+                setError(null);
                 const res = await fetch("/api/client-otp", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -200,16 +221,18 @@ export function ClientLookup({ slug }: { slug: string }) {
                     code: otpCode,
                   }),
                 });
-                if (res.ok) setVerified(true);
-                else setError("OTP inválido");
+                const data = await res.json();
+                if (!res.ok || !data.token) {
+                  setError(data.error || "OTP inválido");
+                  return;
+                }
+                setClientToken(data.token);
+                await lookup(data.token);
               }}
             >
               Verificar
             </Button>
           </>
-        )}
-        {otpDemo && (
-          <span className="text-xs text-amber-300">Demo OTP: {otpDemo}</span>
         )}
         {verified && <Badge>Conta verificada</Badge>}
       </div>
@@ -254,6 +277,7 @@ export function ClientLookup({ slug }: { slug: string }) {
               <Button
                 size="sm"
                 variant="secondary"
+                disabled={!verified}
                 onClick={async () => {
                   await fetch("/api/ops", {
                     method: "POST",

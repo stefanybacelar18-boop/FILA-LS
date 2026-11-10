@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseClientProof } from "@/lib/auth";
 import { getLoyalty, getShopBundle, listAppointments, listClients } from "@/lib/data";
 import { opsStore } from "@/lib/ops-store";
 import { onlyDigits } from "@/lib/utils";
@@ -6,8 +7,21 @@ import { onlyDigits } from "@/lib/utils";
 export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
   const phone = req.nextUrl.searchParams.get("phone");
+  const proof =
+    req.headers.get("x-cortely-client") ||
+    req.nextUrl.searchParams.get("client_token");
+
   if (!phone || onlyDigits(phone).length < 10) {
     return NextResponse.json({ error: "Informe um WhatsApp válido" }, { status: 400 });
+  }
+
+  const digits = onlyDigits(phone);
+  const verifiedPhone = parseClientProof(proof, digits);
+  if (!verifiedPhone) {
+    return NextResponse.json(
+      { error: "Verifique o WhatsApp com OTP antes de consultar seus dados" },
+      { status: 401 },
+    );
   }
 
   const bundle = await getShopBundle(slug);
@@ -17,11 +31,11 @@ export async function GET(req: NextRequest) {
 
   const appointments = await listAppointments({
     barbershopId: bundle.shop.id,
-    phone,
+    phone: digits,
   });
-  const loyalty = await getLoyalty(bundle.shop.id, phone);
-  const clients = await listClients(bundle.shop.id, onlyDigits(phone));
-  const client = clients.find((c) => c.phone === onlyDigits(phone));
+  const loyalty = await getLoyalty(bundle.shop.id, digits);
+  const clients = await listClients(bundle.shop.id, digits);
+  const client = clients.find((c) => c.phone === digits);
   const snap = opsStore.snapshot();
   const clientPackages = client
     ? snap.clientPackages.filter((p) => p.client_id === client.id)
@@ -39,8 +53,21 @@ export async function GET(req: NextRequest) {
     cancelHoursBefore: bundle.shop.cancel_hours_before,
     barbers: bundle.barbers,
     services: bundle.services,
-    shop: bundle.shop,
-    client,
+    shop: {
+      id: bundle.shop.id,
+      name: bundle.shop.name,
+      slug: bundle.shop.slug,
+      cancel_hours_before: bundle.shop.cancel_hours_before,
+      loyalty_threshold: bundle.shop.loyalty_threshold,
+      loyalty_reward: bundle.shop.loyalty_reward,
+    },
+    client: client
+      ? {
+          id: client.id,
+          full_name: client.full_name,
+          phone: client.phone,
+        }
+      : null,
     packages,
     clientPackages,
     subscriptions,

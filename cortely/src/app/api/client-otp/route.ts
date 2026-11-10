@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { encodeClientProof } from "@/lib/auth";
 import { onlyDigits } from "@/lib/utils";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
@@ -12,7 +13,7 @@ function store() {
   return globalOtp.__cortelyOtp;
 }
 
-/** OTP leve por WhatsApp (demo: código também volta na resposta). */
+/** OTP por WhatsApp. O código nunca é devolvido na resposta HTTP. */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -23,15 +24,21 @@ export async function POST(req: NextRequest) {
       const digits = onlyDigits(phone);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       store().set(digits, { code, expires: Date.now() + 10 * 60 * 1000 });
-      await sendWhatsAppMessage({
+      const delivery = await sendWhatsAppMessage({
         toPhone: digits,
         message: `Seu código Cortely é ${code}. Válido por 10 minutos.`,
       });
-      return NextResponse.json({
-        ok: true,
-        // em produção não devolver; útil no demo sem API WhatsApp
-        demo_code: process.env.WHATSAPP_API_TOKEN ? undefined : code,
-      });
+      if (!process.env.WHATSAPP_API_TOKEN) {
+        return NextResponse.json(
+          {
+            error:
+              "WhatsApp API não configurada. Não é possível enviar OTP sem WHATSAPP_API_TOKEN.",
+            whatsappUrl: delivery.url || undefined,
+          },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json({ ok: true });
     }
 
     if (action === "verify") {
@@ -41,15 +48,15 @@ export async function POST(req: NextRequest) {
       const digits = onlyDigits(data.phone);
       const row = store().get(digits);
       if (!row || row.expires < Date.now() || row.code !== data.code) {
-        return NextResponse.json({ error: "Código inválido ou expirado" }, { status: 401 });
+        return NextResponse.json(
+          { error: "Código inválido ou expirado" },
+          { status: 401 },
+        );
       }
       store().delete(digits);
       return NextResponse.json({
         ok: true,
-        token: Buffer.from(
-          JSON.stringify({ phone: digits, at: Date.now() }),
-          "utf8",
-        ).toString("base64url"),
+        token: encodeClientProof(digits),
       });
     }
 
