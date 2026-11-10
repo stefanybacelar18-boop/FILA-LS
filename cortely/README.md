@@ -26,7 +26,8 @@ Abra:
 - Página do cliente: http://localhost:3000/b/navalha-negra
 - Admin demo: http://localhost:3000/admin
 
-No demo mode os dados ficam em memória no processo do servidor (reiniciar o `dev` zera a agenda).
+No demo mode os dados **persistem em disco** em `.data/cortely-store.json` (sobrevivem ao restart).
+Com Supabase configurado e `NEXT_PUBLIC_DEMO_MODE=false`, usa o banco.
 
 ## Supabase (produção / staging)
 

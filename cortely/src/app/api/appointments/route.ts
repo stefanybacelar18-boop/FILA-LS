@@ -10,6 +10,7 @@ import {
   updateAppointmentStatus,
 } from "@/lib/data";
 import { getRequestSession, requirePermission } from "@/lib/auth";
+import { opsStore } from "@/lib/ops-store";
 import { onlyDigits } from "@/lib/utils";
 import {
   buildClientConfirmationMessage,
@@ -143,7 +144,58 @@ export async function PATCH(req: NextRequest) {
       .parse(body);
 
     const appointment = await updateAppointmentStatus(data.id, data.status);
-    return NextResponse.json({ appointment });
+
+    let sale = null;
+    if (data.status === "completed") {
+      try {
+        const bundle = await getShopBundle(
+          req.nextUrl.searchParams.get("slug") ?? "navalha-negra",
+        );
+        const service = bundle?.services.find((s) => s.id === appointment.service_id);
+        if (service) {
+          // tenta consumir crédito de pacote do cliente
+          const snap = opsStore.snapshot();
+          const clientPkg = snap.clientPackages.find(
+            (p) =>
+              p.status === "active" &&
+              p.credits_left > 0 &&
+              appointment.client_id === p.client_id,
+          );
+          if (clientPkg) {
+            opsStore.consumePackageCredit(clientPkg.id);
+          } else {
+            if (!opsStore.currentCash()) {
+              opsStore.openCash({
+                opened_by: session?.full_name || "sistema",
+                opening_amount: 0,
+                notes: "Abertura automática ao concluir atendimento",
+              });
+            }
+            sale = opsStore.createSale({
+              created_by: session?.full_name || "sistema",
+              client_id: appointment.client_id,
+              client_name: appointment.client_name,
+              barber_id: appointment.barber_id,
+              appointment_id: appointment.id,
+              items: [
+                {
+                  kind: "service",
+                  ref_id: service.id,
+                  description: service.name,
+                  quantity: 1,
+                  unit_price: service.price,
+                },
+              ],
+              payments: [{ method: "pix", amount: service.price }],
+            });
+          }
+        }
+      } catch {
+        // não bloqueia conclusão se PDV falhar
+      }
+    }
+
+    return NextResponse.json({ appointment, sale });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao atualizar";
     const status = message.includes("login") || message.includes("permissão") ? 401 : 400;

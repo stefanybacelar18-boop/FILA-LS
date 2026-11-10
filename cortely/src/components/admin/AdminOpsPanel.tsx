@@ -112,10 +112,21 @@ export function AdminOpsPanel({
     ref_id: "",
     barber_id: "",
     client_name: "",
-    method: "pix" as const,
     discount: 0,
     coupon_code: "",
   });
+  const [cart, setCart] = useState<
+    Array<{
+      kind: "service" | "product";
+      ref_id: string;
+      description: string;
+      quantity: number;
+      unit_price: number;
+    }>
+  >([]);
+  const [splits, setSplits] = useState([
+    { method: "pix" as "pix" | "cash" | "debit" | "credit", amount: 0 },
+  ]);
   const [productForm, setProductForm] = useState({
     name: "",
     price: 40,
@@ -151,7 +162,11 @@ export function AdminOpsPanel({
     }
     setData(json);
     if (!saleForm.ref_id && services[0]) {
-      setSaleForm((s) => ({ ...s, ref_id: services[0].id, barber_id: barbers[0]?.id || "" }));
+      setSaleForm((s) => ({
+        ...s,
+        ref_id: services[0].id,
+        barber_id: barbers[0]?.id || "",
+      }));
     }
     const rep = await fetch("/api/ops?view=reports");
     const repJson = await rep.json();
@@ -295,7 +310,7 @@ export function AdminOpsPanel({
               </Button>
             )}
 
-            <h4 className="pt-2 font-medium text-stone-200">Nova venda / comanda</h4>
+            <h4 className="pt-2 font-medium text-stone-200">Comanda multi-item</h4>
             <select
               className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
               value={saleForm.kind}
@@ -329,6 +344,51 @@ export function AdminOpsPanel({
                 </option>
               ))}
             </select>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const unit =
+                  saleForm.kind === "service"
+                    ? selectedService?.price ?? 0
+                    : selectedProduct?.price ?? 0;
+                const description =
+                  saleForm.kind === "service"
+                    ? selectedService?.name ?? "Serviço"
+                    : selectedProduct?.name ?? "Produto";
+                setCart((c) => [
+                  ...c,
+                  {
+                    kind: saleForm.kind,
+                    ref_id: saleForm.ref_id,
+                    description,
+                    quantity: 1,
+                    unit_price: unit,
+                  },
+                ]);
+              }}
+            >
+              Adicionar à comanda
+            </Button>
+            {cart.length > 0 && (
+              <div className="space-y-1 rounded-xl border border-white/10 p-3 text-sm">
+                {cart.map((item, idx) => (
+                  <div key={`${item.ref_id}-${idx}`} className="flex justify-between">
+                    <span>
+                      {item.description} × {item.quantity}
+                    </span>
+                    <span>{formatBRL(item.unit_price * item.quantity)}</span>
+                  </div>
+                ))}
+                <p className="pt-1 font-medium text-amber-200">
+                  Subtotal{" "}
+                  {formatBRL(cart.reduce((a, i) => a + i.unit_price * i.quantity, 0))}
+                </p>
+                <Button size="sm" variant="ghost" onClick={() => setCart([])}>
+                  Limpar comanda
+                </Button>
+              </div>
+            )}
             <select
               className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
               value={saleForm.barber_id}
@@ -358,60 +418,81 @@ export function AdminOpsPanel({
                 setSaleForm({ ...saleForm, discount: Number(e.target.value) })
               }
             />
+            <div className="space-y-2 rounded-xl border border-white/10 p-3">
+              <p className="text-xs text-stone-400">Pagamento dividido</p>
+              {splits.map((split, idx) => (
+                <div key={idx} className="grid grid-cols-2 gap-2">
+                  <select
+                    className="h-10 rounded-xl border border-white/10 bg-white/5 px-2 text-sm"
+                    value={split.method}
+                    onChange={(e) => {
+                      const next = [...splits];
+                      next[idx] = {
+                        ...next[idx],
+                        method: e.target.value as typeof split.method,
+                      };
+                      setSplits(next);
+                    }}
+                  >
+                    {["pix", "cash", "debit", "credit"].map((m) => (
+                      <option key={m} value={m} className="bg-stone-900">
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    type="number"
+                    placeholder="Valor"
+                    value={split.amount || ""}
+                    onChange={(e) => {
+                      const next = [...splits];
+                      next[idx] = { ...next[idx], amount: Number(e.target.value) };
+                      setSplits(next);
+                    }}
+                  />
+                </div>
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setSplits((s) => [...s, { method: "cash", amount: 0 }])
+                }
+              >
+                + meio de pagamento
+              </Button>
+            </div>
             <Button
               onClick={async () => {
                 try {
-                  const unit =
-                    saleForm.kind === "service"
-                      ? selectedService?.price ?? 0
-                      : selectedProduct?.price ?? 0;
-                  const description =
-                    saleForm.kind === "service"
-                      ? selectedService?.name ?? "Serviço"
-                      : selectedProduct?.name ?? "Produto";
-                  const discount = saleForm.discount;
-                  const coupon = saleForm.coupon_code || null;
-                  let total = unit - discount;
-                  if (coupon) {
-                    // server aplica cupom; enviamos total bruto e cupom
-                    total = unit - discount;
-                  }
+                  if (cart.length === 0) throw new Error("Adicione itens à comanda");
+                  const subtotal = cart.reduce(
+                    (a, i) => a + i.unit_price * i.quantity,
+                    0,
+                  );
+                  const paySum = splits.reduce((a, s) => a + (s.amount || 0), 0);
+                  const payments =
+                    paySum > 0
+                      ? splits.filter((s) => s.amount > 0)
+                      : [{ method: "pix" as const, amount: subtotal }];
                   await action({
                     action: "create_sale",
                     client_name: saleForm.client_name || null,
                     barber_id: saleForm.barber_id || null,
-                    discount,
-                    coupon_code: coupon,
-                    items: [
-                      {
-                        kind: saleForm.kind,
-                        ref_id: saleForm.ref_id,
-                        description,
-                        quantity: 1,
-                        unit_price: unit,
-                      },
-                    ],
-                    payments: [
-                      {
-                        method: saleForm.method,
-                        amount: Math.max(
-                          0,
-                          coupon ? unit - discount : total,
-                        ),
-                      },
-                    ],
+                    discount: saleForm.discount,
+                    coupon_code: saleForm.coupon_code || null,
+                    items: cart,
+                    payments,
                   });
+                  setCart([]);
+                  setSplits([{ method: "pix", amount: 0 }]);
                 } catch (e) {
                   setError(e instanceof Error ? e.message : "Erro na venda");
                 }
               }}
             >
-              Registrar venda ({saleForm.method.toUpperCase()})
+              Fechar comanda
             </Button>
-            <p className="text-xs text-stone-500">
-              Pagamento padrão PIX. Split: registre outra venda ou ajuste no código do
-              cupom (servidor recalcula o total).
-            </p>
           </div>
 
           <div className="space-y-3">
@@ -942,6 +1023,23 @@ export function AdminOpsPanel({
 
       {tab === "relatorios" && reports && (
         <div className="grid gap-4 md:grid-cols-2">
+          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300 md:col-span-2 flex flex-wrap gap-2">
+            <a href="/api/export?kind=sales">
+              <Button size="sm" variant="outline">
+                Exportar vendas CSV
+              </Button>
+            </a>
+            <a href="/api/export?kind=products">
+              <Button size="sm" variant="outline">
+                Exportar estoque CSV
+              </Button>
+            </a>
+            <a href="/api/export?kind=commissions">
+              <Button size="sm" variant="outline">
+                Exportar comissões CSV
+              </Button>
+            </a>
+          </div>
           <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
             <h3 className="mb-2 font-display text-xl text-stone-50">Indicadores</h3>
             <p>Receita {formatBRL(reports.cashflow.gross_revenue)}</p>

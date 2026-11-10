@@ -25,11 +25,12 @@ import type {
   Supplier,
   WaitlistEntry,
 } from "@/lib/types-ops";
+import { loadPersistedStore, persistOps } from "@/lib/persist";
 
 const SHOP_ID = "11111111-1111-4111-8111-111111111111";
 
 const globalOps = globalThis as typeof globalThis & {
-  __cortelyOpsV1?: OpsSnapshot;
+  __cortelyOpsV2?: OpsSnapshot;
 };
 
 function seed(): OpsSnapshot {
@@ -179,8 +180,16 @@ function seed(): OpsSnapshot {
 }
 
 function state(): OpsSnapshot {
-  if (!globalOps.__cortelyOpsV1) globalOps.__cortelyOpsV1 = seed();
-  return globalOps.__cortelyOpsV1;
+  if (!globalOps.__cortelyOpsV2) {
+    const saved = loadPersistedStore().ops as OpsSnapshot | undefined;
+    globalOps.__cortelyOpsV2 = saved ?? seed();
+    if (!saved) persistOps(globalOps.__cortelyOpsV2);
+  }
+  return globalOps.__cortelyOpsV2;
+}
+
+function commit() {
+  persistOps(state());
 }
 
 function audit(actor: string, action: string, detail: string) {
@@ -192,9 +201,10 @@ function audit(actor: string, action: string, detail: string) {
     detail,
     created_at: new Date().toISOString(),
   });
+  commit();
 }
 
-export const opsStore = {
+const opsStoreImpl = {
   snapshot() {
     const s = state();
     return JSON.parse(JSON.stringify(s)) as OpsSnapshot;
@@ -998,6 +1008,36 @@ export const opsStore = {
       is_hq: false,
     };
     state().units.push(row);
+    commit();
     return { ...row };
   },
 };
+
+const OPS_READ = new Set([
+  "snapshot",
+  "currentCash",
+  "listProducts",
+  "lowStock",
+  "listSuppliers",
+  "ranking",
+  "listPackages",
+  "listSubscriptionPlans",
+  "cashflowSummary",
+  "reports",
+  "listUnits",
+]);
+
+export const opsStore: typeof opsStoreImpl = new Proxy(opsStoreImpl, {
+  get(target, prop, receiver) {
+    const value = Reflect.get(target, prop, receiver);
+    if (typeof value !== "function") return value;
+    if (OPS_READ.has(String(prop))) {
+      return (...args: unknown[]) => value.apply(target, args);
+    }
+    return (...args: unknown[]) => {
+      const result = value.apply(target, args);
+      commit();
+      return result;
+    };
+  },
+});

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Appointment, Barber, LoyaltyAccount, Service } from "@/lib/types";
-import { formatPhoneBR, onlyDigits } from "@/lib/utils";
+import { formatBRL, formatPhoneBR, onlyDigits } from "@/lib/utils";
 
 export function ClientLookup({ slug }: { slug: string }) {
   const [phone, setPhone] = useState("");
@@ -20,6 +20,11 @@ export function ClientLookup({ slug }: { slug: string }) {
   const [cancelHours, setCancelHours] = useState(2);
   const [packagesInfo, setPackagesInfo] = useState<string[]>([]);
   const [rating, setRating] = useState(5);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpDemo, setOtpDemo] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
+  const [depositMsg, setDepositMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
@@ -157,7 +162,59 @@ export function ClientLookup({ slug }: { slug: string }) {
           {loading ? "Buscando…" : "Consultar"}
         </Button>
       </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={onlyDigits(phone).length < 10}
+          onClick={async () => {
+            const res = await fetch("/api/client-otp", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "send", phone: onlyDigits(phone) }),
+            });
+            const data = await res.json();
+            setOtpSent(true);
+            setOtpDemo(data.demo_code ?? null);
+          }}
+        >
+          Receber código OTP
+        </Button>
+        {otpSent && (
+          <>
+            <Input
+              className="max-w-[140px]"
+              placeholder="Código"
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
+            />
+            <Button
+              size="sm"
+              onClick={async () => {
+                const res = await fetch("/api/client-otp", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "verify",
+                    phone: onlyDigits(phone),
+                    code: otpCode,
+                  }),
+                });
+                if (res.ok) setVerified(true);
+                else setError("OTP inválido");
+              }}
+            >
+              Verificar
+            </Button>
+          </>
+        )}
+        {otpDemo && (
+          <span className="text-xs text-amber-300">Demo OTP: {otpDemo}</span>
+        )}
+        {verified && <Badge>Conta verificada</Badge>}
+      </div>
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+      {depositMsg && <p className="mt-3 text-sm text-emerald-300">{depositMsg}</p>}
 
       {searched && !error && (
         <div className="mt-5 space-y-3">
@@ -258,6 +315,36 @@ export function ClientLookup({ slug }: { slug: string }) {
                         onClick={() => loadSlots(item)}
                       >
                         Reagendar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={async () => {
+                          const price = service?.price ?? 30;
+                          const sinal = Math.round(price * 0.3 * 100) / 100;
+                          const res = await fetch("/api/payments", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "create_intent",
+                              amount: sinal,
+                              description: `Sinal ${service?.name ?? "serviço"}`,
+                              customer_name: item.client_name,
+                              customer_phone: item.client_phone,
+                              method: "pix",
+                              appointment_id: item.id,
+                            }),
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setDepositMsg(
+                              `Sinal Pix ${formatBRL(sinal)} · ${data.intent.status} (${data.intent.provider})`,
+                            );
+                          }
+                        }}
+                      >
+                        Pagar sinal Pix (30%)
                       </Button>
                     </div>
                   )}

@@ -15,6 +15,7 @@ import type {
   WorkingHours,
 } from "@/lib/types";
 import { computeEndTime } from "@/lib/availability";
+import { loadPersistedStore, persistDemo } from "@/lib/persist";
 import { onlyDigits } from "@/lib/utils";
 import { getWhatsAppDeliveryMode } from "@/lib/whatsapp";
 
@@ -45,7 +46,7 @@ type CatalogState = {
 };
 
 const globalForDemo = globalThis as typeof globalThis & {
-  __cortelyDemoV3?: CatalogState;
+  __cortelyDemoV4?: CatalogState;
 };
 
 function seedState(): CatalogState {
@@ -199,10 +200,16 @@ function seedState(): CatalogState {
 }
 
 function state(): CatalogState {
-  if (!globalForDemo.__cortelyDemoV3) {
-    globalForDemo.__cortelyDemoV3 = seedState();
+  if (!globalForDemo.__cortelyDemoV4) {
+    const saved = loadPersistedStore().demo as CatalogState | undefined;
+    globalForDemo.__cortelyDemoV4 = saved ?? seedState();
+    if (!saved) persistDemo(globalForDemo.__cortelyDemoV4);
   }
-  return globalForDemo.__cortelyDemoV3;
+  return globalForDemo.__cortelyDemoV4;
+}
+
+function commit() {
+  persistDemo(state());
 }
 
 function upsertClientFromBooking(input: {
@@ -287,7 +294,24 @@ function assertCancelWindow(appointment: Appointment) {
   }
 }
 
-export const demoStore = {
+const READ_ONLY = new Set([
+  "isDemo",
+  "authenticate",
+  "listStaff",
+  "getShopBySlug",
+  "getCatalog",
+  "listAppointments",
+  "listClients",
+  "listScheduleBlocks",
+  "listLoyalty",
+  "getLoyalty",
+  "listReminders",
+  "dueReminders",
+  "dashboard",
+  "flush",
+]);
+
+const demoStoreImpl = {
   isDemo: true as const,
 
   authenticate(email: string, password: string): StaffUser | null {
@@ -760,6 +784,11 @@ export const demoStore = {
     return { ...s.shop };
   },
 
+  /** Persiste estado em disco (.data/cortely-store.json). */
+  flush() {
+    commit();
+  },
+
   dashboard(barbershopId: string, session?: SessionUser | null) {
     const today = new Date().toISOString().slice(0, 10);
     const s = state();
@@ -797,3 +826,18 @@ export const demoStore = {
     };
   },
 };
+
+export const demoStore: typeof demoStoreImpl = new Proxy(demoStoreImpl, {
+  get(target, prop, receiver) {
+    const value = Reflect.get(target, prop, receiver);
+    if (typeof value !== "function") return value;
+    if (READ_ONLY.has(String(prop))) {
+      return (...args: unknown[]) => value.apply(target, args);
+    }
+    return (...args: unknown[]) => {
+      const result = value.apply(target, args);
+      commit();
+      return result;
+    };
+  },
+});

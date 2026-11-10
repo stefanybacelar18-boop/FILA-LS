@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
+/**
+ * Demo mode: sem Supabase OU NEXT_PUBLIC_DEMO_MODE=true.
+ * Em demo, agenda/CRM/ops persistem em `.data/cortely-store.json` (não zera ao reiniciar).
+ */
 export function isDemoMode() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

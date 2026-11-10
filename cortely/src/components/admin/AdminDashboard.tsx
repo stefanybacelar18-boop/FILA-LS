@@ -14,6 +14,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+import { AdminCalendar } from "@/components/admin/AdminCalendar";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminOpsPanel } from "@/components/admin/AdminOpsPanel";
 import { Badge } from "@/components/ui/badge";
@@ -317,6 +318,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
 
       {tab === "agenda" && (
         <section className="mt-4 space-y-3">
+          <AdminCalendar
+            appointments={data.appointments}
+            barbers={data.barbers}
+            services={data.services}
+          />
           {data.appointments.length === 0 && (
             <div className="glass-panel rounded-2xl p-8 text-center text-stone-400">
               Nenhum agendamento ainda.
