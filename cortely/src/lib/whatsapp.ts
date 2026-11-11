@@ -102,10 +102,10 @@ export async function sendWhatsAppMessage(input: {
     };
   }
 
+  // Limite global sem lock longo — evita um anônimo travar OTP/lembretes da loja.
   const globalWa = checkRateLimit("wa-api:global", {
-    limit: 60,
+    limit: 120,
     windowMs: 60 * 60 * 1000,
-    lockMs: 15 * 60 * 1000,
   });
   if (!globalWa.ok) {
     return {
