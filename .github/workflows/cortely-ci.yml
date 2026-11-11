@@ -51,6 +51,19 @@ jobs:
           NEXT_PUBLIC_DEMO_MODE: "true"
         run: npx tsx scripts/security-fase1a.ts
 
+      - name: Install PostgreSQL (RLS SQL isolation)
+        working-directory: .
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-client
+          sudo pg_ctlcluster 16 main start || sudo service postgresql start
+          sudo -u postgres psql -c 'SELECT 1'
+
+      - name: Security fase 1.A RLS SQL isolation (two tenants)
+        env:
+          CORTELY_RLS_TEST_DB: cortely_fase1a_rls_test
+        run: npx tsx scripts/security-fase1a-rls-sql.ts
+
       - name: Production build
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars

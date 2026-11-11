@@ -11,27 +11,40 @@
 Leitura de `profiles` nos helpers: `id = auth.uid()` + `is_active` + `ready`.  
 Policy SELECT de `profiles` **não** chama `user_barbershop_id()` (anti-recursão).
 
+## Schema `public`
+
+Ver `fase1a-schema-privileges.md`: **USAGE** para `anon`/`authenticated`/`service_role`; **CREATE** revogado desses papéis e de `PUBLIC` (`20261111_06`).
+
 ## Tabelas operacionais 1.A (tenant-owned)
 
-| Tabela | RLS | Policy | Grants authenticated | anon |
-|---|---|---|---|---|
-| products | ENABLE+FORCE | `*_tenant_all` shop = user_barbershop_id() | SELECT/INSERT/UPDATE/DELETE | REVOKE |
-| suppliers | idem | idem | idem | REVOKE |
-| cash_sessions | idem | idem | idem | REVOKE |
-| sales | idem | idem | idem | REVOKE |
-| service_packages | idem | idem | idem | REVOKE |
-| waitlist | idem | idem | idem | REVOKE |
-| payables | idem | idem | idem | REVOKE |
-| campaigns | idem | idem | idem | REVOKE |
-| reviews | idem | idem | idem | REVOKE |
-| cash_movements | idem | idem | idem | REVOKE |
-| stock_movements | idem | idem | idem | REVOKE |
-| inventory_counts | idem | idem | idem | REVOKE |
-| receivables | idem | idem | idem | REVOKE |
-| fiscal_documents | idem | idem | idem | REVOKE |
-| ops_audit_log | ENABLE+FORCE | SELECT+INSERT only (append-only) | SELECT/INSERT | REVOKE |
-| sale_items | ENABLE+FORCE | via JOIN sales.barbershop_id | CRUD via policy | REVOKE |
-| sale_payments | ENABLE+FORCE | via JOIN sales.barbershop_id | CRUD via policy | REVOKE |
+Todas as linhas abaixo: **ENABLE RLS + FORCE RLS** (obrigatório; migration `20261111_03` falha se `relrowsecurity`/`relforcerowsecurity` for falso — sem swallow de `insufficient_privilege`).
+
+| Tabela | Policy | Grants authenticated | anon |
+|---|---|---|---|
+| products | `*_tenant_all` shop = user_barbershop_id() | SELECT/INSERT/UPDATE/DELETE | REVOKE |
+| suppliers | idem | idem | REVOKE |
+| cash_sessions | idem | idem | REVOKE |
+| sales | idem | idem | REVOKE |
+| service_packages | idem | idem | REVOKE |
+| waitlist | idem | idem | REVOKE |
+| payables | idem | idem | REVOKE |
+| campaigns | idem | idem | REVOKE |
+| reviews | idem | idem | REVOKE |
+| cash_movements | idem | idem | REVOKE |
+| stock_movements | idem | idem | REVOKE |
+| inventory_counts | idem | idem | REVOKE |
+| receivables | idem | idem | REVOKE |
+| fiscal_documents | idem | idem | REVOKE |
+| ops_audit_log | SELECT+INSERT only (append-only) | SELECT/INSERT (UPDATE/DELETE bloqueados por policy) | REVOKE |
+| sale_items | `sale_items_via_sales` JOIN `sales.barbershop_id` | CRUD via policy | REVOKE |
+| sale_payments | `sale_payments_via_sales` JOIN `sales.barbershop_id` | CRUD via policy | REVOKE |
+
+## Isolamento SQL comprovado
+
+Suite `npm run test:security:fase1a-rls-sql` (PostgreSQL + role `authenticated` + `auth.uid()`):
+
+- Barbearia A não SELECT/INSERT/UPDATE/DELETE `sale_items`/`sale_payments` da Barbearia B (e simétrico).
+- Demais tabelas ops: SELECT isolado + INSERT cross-tenant bloqueado (`products`).
 
 ## Auth / sessão (também com RLS)
 
@@ -42,17 +55,12 @@ Policy SELECT de `profiles` **não** chama `user_barbershop_id()` (anti-recursã
 | client_otp_challenges | idem (service role na prática) |
 | client_proof_jtis | idem |
 
-## Agenda/CRM (schema base — já com RLS de owner)
+## Agenda/CRM (schema base)
 
-barbershops, profiles, barbers, services, working_hours, schedule_blocks, clients, appointments, loyalty_*, reminders — policies existentes em `schema.sql` / `20260328`.
+barbershops, profiles, barbers, services, working_hours, schedule_blocks, clients, appointments, loyalty_*, reminders — policies em `schema.sql` / `20260328`.
 
-## Lacunas conhecidas (não bloqueiam 1.A de Auth; entram em 1.B/FK composta)
+## Notas
 
-- `sale_items` / `sale_payments` sem `barbershop_id` denormalizado (isolamento via JOIN).
+- `sale_items` / `sale_payments` sem `barbershop_id` denormalizado; isolamento por JOIN + RLS (aceitável na 1.A).
 - Ops JSON ainda é fonte de verdade da UI ops (1.B).
-- Vitrine pública (`Public read *`) permanece ampla para catálogo — writes nunca anon.
-
-## Cross-tenant
-
-Toda policy `USING/WITH CHECK` de ops usa `barbershop_id = public.user_barbershop_id()`.  
-Usuário sem profile ativo → helper NULL → 0 linhas.
+- Migrations **não** aplicadas remotamente nesta entrega.

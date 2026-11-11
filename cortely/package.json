@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:security": "tsx scripts/security-phase0.ts",
-    "test:security:fase1a": "tsx scripts/security-fase1a.ts"
+    "test:security:fase1a": "tsx scripts/security-fase1a.ts",
+    "test:security:fase1a-rls-sql": "tsx scripts/security-fase1a-rls-sql.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

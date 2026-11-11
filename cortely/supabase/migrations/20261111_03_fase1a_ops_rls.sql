@@ -29,12 +29,40 @@ BEGIN
       SELECT 1 FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name = t
     ) THEN
+      -- ENABLE + FORCE são obrigatórios. Falha = migration falha (sem swallow).
       EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-      BEGIN
-        EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', t);
-      EXCEPTION WHEN insufficient_privilege THEN
-        NULL;
-      END;
+      EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', t);
+    END IF;
+  END LOOP;
+END $$;
+
+-- Verificação explícita: toda tabela ops presente deve ter RLS + FORCE
+DO $$
+DECLARE
+  t TEXT;
+  r RECORD;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'products', 'suppliers', 'cash_sessions', 'sales', 'service_packages',
+    'waitlist', 'payables', 'campaigns', 'reviews', 'cash_movements',
+    'stock_movements', 'inventory_counts', 'receivables', 'ops_audit_log',
+    'fiscal_documents', 'sale_items', 'sale_payments'
+  ]
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = t
+    ) THEN
+      SELECT c.relrowsecurity AS rls, c.relforcerowsecurity AS force_rls
+        INTO r
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname = t;
+      IF NOT r.rls OR NOT r.force_rls THEN
+        RAISE EXCEPTION
+          'Falha de segurança: public.% deve ter ENABLE+FORCE RLS (rls=%, force=%)',
+          t, r.rls, r.force_rls;
+      END IF;
     END IF;
   END LOOP;
 END $$;
