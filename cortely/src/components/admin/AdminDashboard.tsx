@@ -32,6 +32,10 @@ import type {
   SessionUser,
   WorkingHours,
 } from "@/lib/types";
+import {
+  clearStaffToken,
+  staffAuthHeaders,
+} from "@/lib/staff-session";
 import { formatBRL, formatPhoneBR } from "@/lib/utils";
 import { buildWhatsAppReminderUrl } from "@/lib/whatsapp";
 
@@ -121,7 +125,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
     setLoading(true);
     const res = await fetch(
       `/api/admin?slug=${slug}${clientQuery ? `&q=${encodeURIComponent(clientQuery)}` : ""}`,
-      { credentials: "same-origin" },
+      { credentials: "include", headers: staffAuthHeaders() },
     );
     if (res.status === 401) {
       setAuthed(false);
@@ -182,7 +186,8 @@ export function AdminDashboard({ slug }: { slug: string }) {
   async function setStatus(id: string, status: Appointment["status"]) {
     await fetch("/api/appointments", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: staffAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ id, status }),
     });
     await reload();
@@ -191,7 +196,8 @@ export function AdminDashboard({ slug }: { slug: string }) {
   async function adminAction(body: Record<string, unknown>) {
     const res = await fetch(`/api/admin?slug=${slug}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: staffAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
     const json = await res.json();
@@ -201,7 +207,12 @@ export function AdminDashboard({ slug }: { slug: string }) {
   }
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: staffAuthHeaders(),
+    });
+    clearStaffToken();
     setAuthed(false);
     setData(null);
   }

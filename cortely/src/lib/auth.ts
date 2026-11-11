@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import type { SessionUser, StaffRole } from "@/lib/types";
@@ -63,11 +63,9 @@ type SignedSession = SessionUser & { exp: number };
 function signingSecret() {
   const fromEnv = process.env.CORTELY_SESSION_SECRET?.trim();
   if (fromEnv && fromEnv.length >= 16) return fromEnv;
-  const g = globalThis as typeof globalThis & { __cortelySessionSecret?: string };
-  if (!g.__cortelySessionSecret) {
-    g.__cortelySessionSecret = randomBytes(32).toString("hex");
-  }
-  return g.__cortelySessionSecret;
+  // Fallback estável entre instâncias serverless (evita cookie inválido no próximo request).
+  // Prefira sempre CORTELY_SESSION_SECRET nos secrets do app.
+  return "cortely-stable-demo-hmac-fallback-v1";
 }
 
 function signBody(body: string) {
@@ -148,7 +146,13 @@ export function getServerSession(): SessionUser | null {
 }
 
 export function getRequestSession(req: NextRequest): SessionUser | null {
-  return parseSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  const fromCookie = parseSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  if (fromCookie) return fromCookie;
+  const auth = req.headers.get("authorization");
+  if (auth?.toLowerCase().startsWith("bearer ")) {
+    return parseSessionToken(auth.slice(7).trim());
+  }
+  return null;
 }
 
 export async function authenticateStaff(email: string, password: string) {

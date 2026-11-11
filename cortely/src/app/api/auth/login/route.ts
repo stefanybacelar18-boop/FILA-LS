@@ -41,11 +41,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const res = NextResponse.json({ user: session });
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
+    const token = encodeSession(session);
+    const res = NextResponse.json({ user: session, token });
+    res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       path: "/",
       maxAge: 60 * 60 * 24 * 14,
     });

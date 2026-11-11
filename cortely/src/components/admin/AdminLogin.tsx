@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { saveStaffToken } from "@/lib/staff-session";
 
 type Props = {
   onSuccess: () => void | Promise<void>;
@@ -22,7 +23,7 @@ export function AdminLogin({ onSuccess }: Props) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json().catch(() => ({}));
@@ -33,6 +34,9 @@ export function AdminLogin({ onSuccess }: Props) {
               ? "Muitas tentativas. Aguarde alguns minutos."
               : "Falha no login"),
         );
+      }
+      if (typeof data.token === "string" && data.token.includes(".")) {
+        saveStaffToken(data.token);
       }
       await onSuccess();
     } catch (err) {

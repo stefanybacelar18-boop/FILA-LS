@@ -21,6 +21,7 @@ import type {
   Supplier,
   WaitlistEntry,
 } from "@/lib/types-ops";
+import { staffAuthHeaders } from "@/lib/staff-session";
 import { formatBRL, formatPhoneBR } from "@/lib/utils";
 
 type OpsTab =
@@ -154,7 +155,10 @@ export function AdminOpsPanel({
 
   const reload = useCallback(async () => {
     setError(null);
-    const res = await fetch("/api/ops");
+    const res = await fetch("/api/ops", {
+      credentials: "include",
+      headers: staffAuthHeaders(),
+    });
     const json = await res.json();
     if (!res.ok) {
       setError(json.error || "Falha ao carregar ops");
@@ -168,7 +172,10 @@ export function AdminOpsPanel({
         barber_id: barbers[0]?.id || "",
       }));
     }
-    const rep = await fetch("/api/ops?view=reports");
+    const rep = await fetch("/api/ops?view=reports", {
+      credentials: "include",
+      headers: staffAuthHeaders(),
+    });
     const repJson = await rep.json();
     if (rep.ok) setReports(repJson.reports);
   }, [barbers, services, saleForm.ref_id]);
@@ -181,7 +188,8 @@ export function AdminOpsPanel({
     setError(null);
     const res = await fetch("/api/ops", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: staffAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
     const json = await res.json();
