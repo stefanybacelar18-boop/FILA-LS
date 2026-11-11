@@ -480,12 +480,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
               </div>
             ))}
           </nav>
-          <div className="shrink-0 space-y-2 border-t border-white/10 pt-3">
-            <Link href={`/b/${slug}`} className="block">
-              <Button variant="outline" size="sm" className="w-full">
-                Página do cliente
-              </Button>
-            </Link>
+          <div className="shrink-0 border-t border-white/10 pt-3">
             <Button variant="secondary" size="sm" className="w-full" onClick={logout}>
               Sair
             </Button>
@@ -522,6 +517,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
             </div>
           </div>
           <div className="flex gap-2">
+            <Link href={`/b/${slug}`}>
+              <Button variant="outline" size="sm">
+                Página do cliente
+              </Button>
+            </Link>
             {data.session.role === "barber" && (
               <Link href="/pro">
                 <Button variant="outline" size="sm">
