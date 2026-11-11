@@ -67,6 +67,10 @@ function seedState(): CatalogState {
     loyalty_reward: "6º corte com 50% de desconto",
     reminder_hours_before: 24,
     cancel_hours_before: 2,
+    booking_link_enabled: true,
+    booking_slot_minutes: 30,
+    booking_show_prices: true,
+    booking_group_by_category: false,
     created_at: new Date().toISOString(),
   };
 
@@ -212,10 +216,21 @@ function scrubStaff(staff: StaffUser[]) {
   }));
 }
 
+function normalizeShop(shop: Barbershop): Barbershop {
+  return {
+    ...shop,
+    booking_link_enabled: shop.booking_link_enabled ?? true,
+    booking_slot_minutes: shop.booking_slot_minutes ?? 30,
+    booking_show_prices: shop.booking_show_prices ?? true,
+    booking_group_by_category: shop.booking_group_by_category ?? false,
+  };
+}
+
 function state(): CatalogState {
   if (!globalForDemo.__cortelyDemoV4) {
     const saved = loadPersistedStore().demo as CatalogState | undefined;
     if (saved?.staff) saved.staff = scrubStaff(saved.staff);
+    if (saved?.shop) saved.shop = normalizeShop(saved.shop);
     globalForDemo.__cortelyDemoV4 = saved ?? seedState();
     persistDemo(globalForDemo.__cortelyDemoV4);
   }
@@ -824,6 +839,14 @@ const demoStoreImpl = {
         input.reminder_hours_before ?? s.shop.reminder_hours_before,
       cancel_hours_before:
         input.cancel_hours_before ?? s.shop.cancel_hours_before,
+      booking_link_enabled:
+        input.booking_link_enabled ?? s.shop.booking_link_enabled,
+      booking_slot_minutes:
+        input.booking_slot_minutes ?? s.shop.booking_slot_minutes,
+      booking_show_prices:
+        input.booking_show_prices ?? s.shop.booking_show_prices,
+      booking_group_by_category:
+        input.booking_group_by_category ?? s.shop.booking_group_by_category,
     });
     return { ...s.shop };
   },

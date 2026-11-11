@@ -21,6 +21,10 @@ function mapShop(shop: Barbershop & { cancel_hours_before?: number }) {
     ...shop,
     reminder_hours_before: shop.reminder_hours_before ?? 24,
     cancel_hours_before: shop.cancel_hours_before ?? 2,
+    booking_link_enabled: shop.booking_link_enabled ?? true,
+    booking_slot_minutes: shop.booking_slot_minutes ?? 30,
+    booking_show_prices: shop.booking_show_prices ?? true,
+    booking_group_by_category: shop.booking_group_by_category ?? false,
   };
 }
 

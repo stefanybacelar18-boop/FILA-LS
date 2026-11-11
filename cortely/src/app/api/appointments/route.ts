@@ -92,6 +92,12 @@ export async function POST(req: NextRequest) {
     if (!bundle) {
       return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
     }
+    if (bundle.shop.booking_link_enabled === false) {
+      return NextResponse.json(
+        { error: "Agendamento online está pausado nesta barbearia" },
+        { status: 403 },
+      );
+    }
 
     const barber = bundle.barbers.find((b) => b.id === body.barber_id);
     const service = bundle.services.find((s) => s.id === body.service_id);

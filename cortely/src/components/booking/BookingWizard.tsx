@@ -39,10 +39,26 @@ export function BookingWizard({ shop, barbers, services }: Props) {
     [barbers, barberId],
   );
 
+  const showPrices = shop.booking_show_prices ?? true;
+  const groupByCategory = shop.booking_group_by_category ?? false;
+  const bookingEnabled = shop.booking_link_enabled ?? true;
+
+  const servicesByCategory = useMemo(() => {
+    if (!groupByCategory) return null;
+    const map = new Map<string, Service[]>();
+    for (const item of services) {
+      const key = item.category || "Outros";
+      const list = map.get(key) ?? [];
+      list.push(item);
+      map.set(key, list);
+    }
+    return Array.from(map.entries());
+  }, [services, groupByCategory]);
+
   const minDate = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
-    if (!serviceId || !barberId || !date) return;
+    if (!bookingEnabled || !serviceId || !barberId || !date) return;
     let cancelled = false;
     setLoadingSlots(true);
     setTime(null);
@@ -64,7 +80,7 @@ export function BookingWizard({ shop, barbers, services }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [serviceId, barberId, date, shop.slug]);
+  }, [serviceId, barberId, date, shop.slug, bookingEnabled]);
 
   async function confirmBooking() {
     if (!serviceId || !barberId || !date || !time) return;
@@ -96,6 +112,17 @@ export function BookingWizard({ shop, barbers, services }: Props) {
     }
   }
 
+  if (!bookingEnabled) {
+    return (
+      <div className="glass-panel rounded-3xl p-8 text-center">
+        <p className="font-display text-2xl text-stone-50">Agendamento online pausado</p>
+        <p className="mt-2 text-sm text-stone-400">
+          O link público está desativado. Entre em contato pelo WhatsApp da barbearia.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="glass-panel relative overflow-hidden rounded-3xl p-5 sm:p-7">
       <div className="pointer-events-none absolute inset-0 grain opacity-[0.07]" />
@@ -124,50 +151,65 @@ export function BookingWizard({ shop, barbers, services }: Props) {
       {step === 1 && (
         <div className="relative space-y-3 animate-rise">
           <p className="text-sm text-stone-400">1. Serviço</p>
-          {services.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setServiceId(item.id);
-                setStep(2);
-              }}
-              className="group flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-amber-500/40 hover:bg-amber-500/5"
-            >
-              {item.gallery_urls[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.gallery_urls[0]}
-                  alt={item.name}
-                  className="h-20 w-24 shrink-0 rounded-xl object-cover"
-                />
-              ) : (
-                <div className="flex h-20 w-24 shrink-0 items-center justify-center rounded-xl bg-white/5">
-                  <Scissors className="h-5 w-5 text-amber-400" />
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="font-medium text-stone-100">{item.name}</span>
-                    <p className="mt-1 text-sm text-stone-400">{item.description}</p>
-                  </div>
-                  <p className="font-display text-xl text-amber-300">
-                    {formatBRL(item.price)}
+          {(servicesByCategory ?? ([[null, services]] as const)).map(
+            ([category, items]) => (
+              <div key={category ?? "all"} className="space-y-3">
+                {category && (
+                  <p className="pt-2 text-xs uppercase tracking-[0.18em] text-amber-400/80">
+                    {category}
                   </p>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge>
-                    <Clock className="mr-1 h-3 w-3" />
-                    {item.duration_minutes} min
-                  </Badge>
-                  <Badge className="border-amber-500/30 text-amber-300">
-                    {item.category}
-                  </Badge>
-                </div>
+                )}
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setServiceId(item.id);
+                      setStep(2);
+                    }}
+                    className="group flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-amber-500/40 hover:bg-amber-500/5"
+                  >
+                    {item.gallery_urls[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.gallery_urls[0]}
+                        alt={item.name}
+                        className="h-20 w-24 shrink-0 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-24 shrink-0 items-center justify-center rounded-xl bg-white/5">
+                        <Scissors className="h-5 w-5 text-amber-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <span className="font-medium text-stone-100">{item.name}</span>
+                          <p className="mt-1 text-sm text-stone-400">{item.description}</p>
+                        </div>
+                        {showPrices && (
+                          <p className="font-display text-xl text-amber-300">
+                            {formatBRL(item.price)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge>
+                          <Clock className="mr-1 h-3 w-3" />
+                          {item.duration_minutes} min
+                        </Badge>
+                        {!groupByCategory && (
+                          <Badge className="border-amber-500/30 text-amber-300">
+                            {item.category}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
               </div>
-            </button>
-          ))}
+            ),
+          )}
         </div>
       )}
 

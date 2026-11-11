@@ -15,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { AdminCalendar } from "@/components/admin/AdminCalendar";
+import { AdminDayBoard } from "@/components/admin/AdminDayBoard";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminOpsPanel } from "@/components/admin/AdminOpsPanel";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,10 @@ import { buildWhatsAppReminderUrl } from "@/lib/whatsapp";
 
 type Tab =
   | "agenda"
+  | "calendario"
+  | "comandas"
+  | "despesas"
+  | "produtos"
   | "servicos"
   | "equipe"
   | "horarios"
@@ -49,10 +54,23 @@ type Tab =
   | "lembretes"
   | "fidelidade"
   | "config"
+  | "online"
   | "usuarios"
   | "operacao";
 
-type Permissions = Record<Tab, boolean>;
+type Permissions = Record<
+  | "agenda"
+  | "servicos"
+  | "equipe"
+  | "horarios"
+  | "bloqueios"
+  | "clientes"
+  | "lembretes"
+  | "fidelidade"
+  | "config"
+  | "usuarios",
+  boolean
+>;
 
 type AdminPayload = {
   shop: Barbershop;
@@ -90,6 +108,10 @@ export function AdminDashboard({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("agenda");
   const [clientQuery, setClientQuery] = useState("");
+  const [clientFilter, setClientFilter] = useState<
+    "all" | "inactive" | "noshow" | "notes"
+  >("all");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [serviceForm, setServiceForm] = useState({
     name: "",
     description: "",
@@ -119,6 +141,10 @@ export function AdminDashboard({ slug }: { slug: string }) {
     loyalty_reward: "",
     reminder_hours_before: 24,
     cancel_hours_before: 2,
+    booking_link_enabled: true,
+    booking_slot_minutes: 30,
+    booking_show_prices: true,
+    booking_group_by_category: false,
   });
 
   const reload = useCallback(async () => {
@@ -150,6 +176,10 @@ export function AdminDashboard({ slug }: { slug: string }) {
       loyalty_reward: json.shop.loyalty_reward,
       reminder_hours_before: json.shop.reminder_hours_before ?? 24,
       cancel_hours_before: json.shop.cancel_hours_before ?? 2,
+      booking_link_enabled: json.shop.booking_link_enabled ?? true,
+      booking_slot_minutes: json.shop.booking_slot_minutes ?? 30,
+      booking_show_prices: json.shop.booking_show_prices ?? true,
+      booking_group_by_category: json.shop.booking_group_by_category ?? false,
     });
     if (!hoursBarberId && json.barbers?.[0]?.id) {
       setHoursBarberId(json.barbers[0].id);
@@ -241,103 +271,208 @@ export function AdminDashboard({ slug }: { slug: string }) {
     );
   }
 
-  const tabs: { id: Tab; label: string }[] = (
+  const canOps = data.session.role !== "barber";
+  const navItems: { id: Tab; label: string; group: string }[] = (
     [
-      ["agenda", "Agenda"],
-      ["operacao", "Operação"],
-      ["servicos", "Serviços"],
-      ["equipe", "Equipe"],
-      ["horarios", "Horários"],
-      ["bloqueios", "Bloqueios"],
-      ["clientes", "Clientes"],
-      ["lembretes", "Lembretes"],
-      ["fidelidade", "Barber Points"],
-      ["config", "Config"],
-      ["usuarios", "Usuários"],
+      ["agenda", "Agenda do dia", "Agenda"],
+      ["calendario", "Calendário", "Agenda"],
+      ["bloqueios", "Ausências", "Agenda"],
+      ["comandas", "Comandas", "Operação"],
+      ["produtos", "Produtos", "Operação"],
+      ["despesas", "Despesas", "Operação"],
+      ["operacao", "Mais módulos", "Operação"],
+      ["clientes", "Clientes", "Cadastros"],
+      ["servicos", "Serviços", "Cadastros"],
+      ["equipe", "Equipe", "Cadastros"],
+      ["horarios", "Horários", "Cadastros"],
+      ["lembretes", "Lembretes", "Relacionamento"],
+      ["fidelidade", "Barber Points", "Relacionamento"],
+      ["online", "Agendamento online", "Sistema"],
+      ["config", "Identidade", "Sistema"],
+      ["usuarios", "Usuários", "Sistema"],
     ] as const
   )
     .filter(([id]) => {
-      if (id === "operacao") return data.session.role !== "barber";
-      return Boolean(data.permissions[id as keyof typeof data.permissions]);
+      if (id === "comandas" || id === "produtos" || id === "despesas" || id === "operacao") {
+        return canOps;
+      }
+      if (id === "calendario" || id === "online") {
+        return Boolean(data.permissions.agenda) || Boolean(data.permissions.config);
+      }
+      if (id === "agenda") return Boolean(data.permissions.agenda);
+      return Boolean(data.permissions[id as keyof Permissions]);
     })
-    .map(([id, label]) => ({ id, label }));
+    .map(([id, label, group]) => ({ id, label, group }));
+
+  const filteredClients = data.clients.filter((client) => {
+    if (clientFilter === "inactive") {
+      if (!client.last_visit_at) return true;
+      const days =
+        (Date.now() - new Date(client.last_visit_at).getTime()) / (1000 * 60 * 60 * 24);
+      return days >= 45;
+    }
+    if (clientFilter === "noshow") return client.no_show_count > 0;
+    if (clientFilter === "notes") return Boolean(client.notes?.trim());
+    return true;
+  });
+
+  function go(id: Tab) {
+    setTab(id);
+    setMobileNavOpen(false);
+  }
+
+  const navGroups = Array.from(new Set(navItems.map((n) => n.group)));
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 pb-16 pt-6 sm:px-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-amber-400/80">
-            Cortely Admin · {data.session.role}
-          </p>
-          <h1 className="mt-1 font-display text-3xl text-stone-50">
-            {data.shop.name}
-          </h1>
-          <p className="mt-1 text-sm text-stone-400">{data.session.full_name}</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/b/${slug}`}>
-            <Button variant="outline" size="sm">
+    <div className="min-h-screen lg:flex">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-white/10 bg-[#12100e]/95 p-4 backdrop-blur-xl transition lg:static lg:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <p className="text-[10px] uppercase tracking-[0.28em] text-amber-400/80">
+          Cortely
+        </p>
+        <h1 className="mt-1 font-display text-2xl text-stone-50">{data.shop.name}</h1>
+        <p className="mt-1 text-xs text-stone-500">
+          {data.session.full_name} · {data.session.role}
+        </p>
+        <nav className="mt-6 space-y-5 overflow-y-auto pb-20">
+          {navGroups.map((group) => (
+            <div key={group}>
+              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.2em] text-stone-500">
+                {group}
+              </p>
+              <div className="space-y-1">
+                {navItems
+                  .filter((n) => n.group === group)
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => go(item.id)}
+                      className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                        tab === item.id
+                          ? "bg-amber-500/20 text-amber-100"
+                          : "text-stone-300 hover:bg-white/5"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+        <div className="absolute bottom-4 left-4 right-4 space-y-2">
+          <Link href={`/b/${slug}`} className="block">
+            <Button variant="outline" size="sm" className="w-full">
               Página do cliente
             </Button>
           </Link>
-          {data.session.role === "barber" && (
-            <Link href="/pro">
-              <Button variant="outline" size="sm">
-                Portal barbeiro
-              </Button>
-            </Link>
-          )}
-          <Button variant="secondary" size="sm" onClick={logout}>
+          <Button variant="secondary" size="sm" className="w-full" onClick={logout}>
             Sair
           </Button>
         </div>
-      </header>
-
-      <section className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {[
-          { label: "Hoje", value: data.todayCount, icon: CalendarDays },
-          { label: "Confirmados", value: data.confirmedCount, icon: Scissors },
-          { label: "Concluídos", value: data.completedCount, icon: CheckCircle2 },
-          { label: "No-show", value: data.noShowCount, icon: UserRoundX },
-          { label: "Fiéis", value: data.loyaltyClients, icon: Gift },
-          {
-            label: "Lembretes",
-            value: data.pendingReminders,
-            icon: MessageCircle,
-          },
-        ].map((card) => (
-          <div key={card.label} className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-stone-400">{card.label}</p>
-              <card.icon className="h-4 w-4 text-amber-400" />
-            </div>
-            <p className="mt-3 font-display text-3xl text-stone-50">{card.value}</p>
-          </div>
-        ))}
-      </section>
-
-      <div className="mt-8 flex flex-wrap gap-2">
-        {tabs.map((item) => (
-          <Button
-            key={item.id}
-            variant={tab === item.id ? "default" : "secondary"}
-            size="sm"
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </Button>
-        ))}
-      </div>
-
-      {tab === "operacao" && data.session.role !== "barber" && (
-        <AdminOpsPanel
-          barbers={data.barbers}
-          services={data.services}
-          clients={data.clients}
+      </aside>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
         />
       )}
 
+      <main className="flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="lg:hidden"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              Menu
+            </Button>
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-amber-400/80">
+                Painel admin
+              </p>
+              <h2 className="font-display text-2xl text-stone-50 sm:text-3xl">
+                {navItems.find((n) => n.id === tab)?.label ?? "Painel"}
+              </h2>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {data.session.role === "barber" && (
+              <Link href="/pro">
+                <Button variant="outline" size="sm">
+                  Portal barbeiro
+                </Button>
+              </Link>
+            )}
+          </div>
+        </header>
+
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {[
+            { label: "Hoje", value: data.todayCount, icon: CalendarDays },
+            { label: "Confirmados", value: data.confirmedCount, icon: Scissors },
+            { label: "Concluídos", value: data.completedCount, icon: CheckCircle2 },
+            { label: "No-show", value: data.noShowCount, icon: UserRoundX },
+            { label: "Fiéis", value: data.loyaltyClients, icon: Gift },
+            {
+              label: "Lembretes",
+              value: data.pendingReminders,
+              icon: MessageCircle,
+            },
+          ].map((card) => (
+            <div key={card.label} className="glass-panel rounded-2xl p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-stone-400">{card.label}</p>
+                <card.icon className="h-4 w-4 text-amber-400" />
+              </div>
+              <p className="mt-3 font-display text-3xl text-stone-50">{card.value}</p>
+            </div>
+          ))}
+        </section>
+
+      {(tab === "comandas" ||
+        tab === "produtos" ||
+        tab === "despesas" ||
+        tab === "operacao") &&
+        canOps && (
+          <AdminOpsPanel
+            barbers={data.barbers}
+            services={data.services}
+            clients={data.clients}
+            hideTabs={tab !== "operacao"}
+            initialTab={
+              tab === "produtos"
+                ? "estoque"
+                : tab === "despesas"
+                  ? "financeiro"
+                  : tab === "comandas"
+                    ? "caixa"
+                    : "caixa"
+            }
+          />
+        )}
+
       {tab === "agenda" && (
+        <section className="mt-4 space-y-3">
+          <AdminDayBoard
+            appointments={data.appointments}
+            barbers={data.barbers}
+            services={data.services}
+            blocks={data.scheduleBlocks}
+            onStatus={setStatus}
+          />
+        </section>
+      )}
+
+      {tab === "calendario" && (
         <section className="mt-4 space-y-3">
           <AdminCalendar
             appointments={data.appointments}
@@ -777,7 +912,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
           <div className="glass-panel rounded-2xl p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="font-display text-xl text-stone-50">CRM mínimo</h3>
+                <h3 className="font-display text-xl text-stone-50">Clientes</h3>
                 <p className="text-sm text-stone-400">
                   {data.inactiveClients} cliente(s) inativos (45+ dias sem visita)
                 </p>
@@ -789,12 +924,31 @@ export function AdminDashboard({ slug }: { slug: string }) {
                   onChange={(e) => setClientQuery(e.target.value)}
                 />
                 <Button variant="secondary" onClick={() => reload()}>
-                  Filtrar
+                  Buscar
                 </Button>
               </div>
             </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "Todos"],
+                  ["inactive", "Inativos"],
+                  ["noshow", "Com faltas"],
+                  ["notes", "Com observações"],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  size="sm"
+                  variant={clientFilter === id ? "default" : "secondary"}
+                  onClick={() => setClientFilter(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
-          {data.clients.map((client) => (
+          {filteredClients.map((client) => (
             <article key={client.id} className="glass-panel space-y-3 rounded-2xl p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1004,6 +1158,88 @@ export function AdminDashboard({ slug }: { slug: string }) {
         </section>
       )}
 
+      {tab === "online" && (
+        <section className="mt-4 glass-panel space-y-4 rounded-2xl p-5">
+          <div>
+            <h3 className="font-display text-xl text-stone-50">
+              Configuração do agendamento online
+            </h3>
+            <p className="mt-1 text-sm text-stone-400">
+              Controla o link público{" "}
+              <Link className="text-amber-300 underline" href={`/b/${slug}`}>
+                /b/{slug}
+              </Link>
+            </p>
+          </div>
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm text-stone-200">
+            Link de agendamento ativo
+            <input
+              type="checkbox"
+              checked={settings.booking_link_enabled}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  booking_link_enabled: e.target.checked,
+                })
+              }
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm text-stone-200">
+            Mostrar preços no agendamento
+            <input
+              type="checkbox"
+              checked={settings.booking_show_prices}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  booking_show_prices: e.target.checked,
+                })
+              }
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm text-stone-200">
+            Agrupar serviços por categoria
+            <input
+              type="checkbox"
+              checked={settings.booking_group_by_category}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  booking_group_by_category: e.target.checked,
+                })
+              }
+            />
+          </label>
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wide text-stone-500">
+              Intervalo entre horários (minutos)
+            </label>
+            <Input
+              type="number"
+              min={5}
+              max={120}
+              value={settings.booking_slot_minutes}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  booking_slot_minutes: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+          <Button
+            onClick={() =>
+              adminAction({
+                action: "update_settings",
+                ...settings,
+              })
+            }
+          >
+            Salvar agendamento online
+          </Button>
+        </section>
+      )}
+
       {tab === "usuarios" && (
         <section className="mt-4 space-y-3">
           <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
@@ -1024,6 +1260,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
           ))}
         </section>
       )}
-    </main>
+      </main>
+    </div>
   );
 }

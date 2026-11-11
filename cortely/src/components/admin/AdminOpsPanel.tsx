@@ -98,15 +98,23 @@ export function AdminOpsPanel({
   barbers,
   services,
   clients,
+  initialTab = "caixa",
+  hideTabs = false,
 }: {
   barbers: Barber[];
   services: Service[];
   clients: Array<{ id: string; full_name: string; phone: string }>;
+  initialTab?: OpsTab;
+  hideTabs?: boolean;
 }) {
-  const [tab, setTab] = useState<OpsTab>("caixa");
+  const [tab, setTab] = useState<OpsTab>(initialTab);
   const [data, setData] = useState<OpsPayload | null>(null);
   const [reports, setReports] = useState<ReportsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [comandaFilter, setComandaFilter] = useState<"all" | "paid" | "refunded">(
+    "all",
+  );
+  const [stockDelta, setStockDelta] = useState(5);
 
   const [saleForm, setSaleForm] = useState({
     kind: "service" as "service" | "product",
@@ -198,13 +206,17 @@ export function AdminOpsPanel({
     return json;
   }
 
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
   const tabs = useMemo(() => {
     if (!data) return [] as { id: OpsTab; label: string }[];
     return (
       [
-        ["caixa", "Caixa"],
-        ["estoque", "Estoque"],
-        ["financeiro", "Financeiro"],
+        ["caixa", "Comandas"],
+        ["estoque", "Produtos"],
+        ["financeiro", "Despesas"],
         ["comissoes", "Comissões"],
         ["pacotes", "Pacotes"],
         ["waitlist", "Fila"],
@@ -227,35 +239,41 @@ export function AdminOpsPanel({
 
   const selectedService = services.find((s) => s.id === saleForm.ref_id);
   const selectedProduct = data.products.find((p) => p.id === saleForm.ref_id);
+  const filteredSales = data.sales.filter((sale) => {
+    if (comandaFilter === "all") return true;
+    return sale.status === comandaFilter;
+  });
 
   return (
-    <section className="mt-6 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-amber-400/80">
-            Operação completa
-          </p>
-          <h2 className="font-display text-2xl text-stone-50">P1 / P2 — gestão</h2>
+    <section className="mt-2 space-y-4">
+      {!hideTabs && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-400/80">
+              Operação
+            </p>
+            <h2 className="font-display text-2xl text-stone-50">Gestão do salão</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((t) => (
+              <Button
+                key={t.id}
+                size="sm"
+                variant={tab === t.id ? "default" : "secondary"}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </Button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((t) => (
-            <Button
-              key={t.id}
-              size="sm"
-              variant={tab === t.id ? "default" : "secondary"}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      )}
       {error && <p className="text-sm text-rose-400">{error}</p>}
 
       {tab === "caixa" && (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="glass-panel space-y-3 rounded-2xl p-5">
-            <h3 className="font-display text-xl text-stone-50">Caixa do dia</h3>
+            <h3 className="font-display text-xl text-stone-50">Comandas / caixa</h3>
             {data.currentCash ? (
               <>
                 <Badge>Aberto</Badge>
@@ -509,7 +527,43 @@ export function AdminOpsPanel({
               {formatBRL(data.cashflow.ticket_avg)} · Lucro líquido{" "}
               {formatBRL(data.cashflow.net_profit)}
             </div>
-            {data.sales.slice(0, 8).map((sale) => (
+            <div className="glass-panel space-y-2 rounded-2xl p-4">
+              <p className="text-sm font-medium text-stone-200">Comanda em aberto</p>
+              {cart.length === 0 ? (
+                <p className="text-sm text-stone-500">Nenhum item na comanda atual.</p>
+              ) : (
+                cart.map((item, idx) => (
+                  <div
+                    key={`${item.ref_id}-${idx}`}
+                    className="flex justify-between text-sm text-stone-300"
+                  >
+                    <span>
+                      {item.quantity}× {item.description}
+                    </span>
+                    <span>{formatBRL(item.unit_price * item.quantity)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "Todas"],
+                  ["paid", "Fechadas"],
+                  ["refunded", "Estornadas"],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  size="sm"
+                  variant={comandaFilter === id ? "default" : "secondary"}
+                  onClick={() => setComandaFilter(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {filteredSales.slice(0, 12).map((sale) => (
               <article
                 key={sale.id}
                 className="glass-panel flex items-center justify-between rounded-2xl p-4"
@@ -544,7 +598,20 @@ export function AdminOpsPanel({
       {tab === "estoque" && (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="glass-panel space-y-3 rounded-2xl p-5">
-            <h3 className="font-display text-xl">Novo produto</h3>
+            <h3 className="font-display text-xl">Produtos · entrada / saída</h3>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
+                  Qtd. movimento
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={stockDelta}
+                  onChange={(e) => setStockDelta(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </div>
+            </div>
             <Input
               placeholder="Nome"
               value={productForm.name}
@@ -613,12 +680,12 @@ export function AdminOpsPanel({
                         action({
                           action: "adjust_stock",
                           product_id: p.id,
-                          delta: 5,
-                          reason: "Compra / entrada",
+                          delta: stockDelta,
+                          reason: "Entrada de estoque",
                         }).catch((e) => setError(e.message))
                       }
                     >
-                      +5
+                      Entrada +{stockDelta}
                     </Button>
                     <Button
                       size="sm"
@@ -627,12 +694,12 @@ export function AdminOpsPanel({
                         action({
                           action: "adjust_stock",
                           product_id: p.id,
-                          delta: -1,
-                          reason: "Ajuste inventário",
+                          delta: -stockDelta,
+                          reason: "Saída de estoque",
                         }).catch((e) => setError(e.message))
                       }
                     >
-                      −1
+                      Saída −{stockDelta}
                     </Button>
                   </div>
                 </div>
@@ -648,7 +715,7 @@ export function AdminOpsPanel({
       {tab === "financeiro" && (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="glass-panel space-y-3 rounded-2xl p-5">
-            <h3 className="font-display text-xl">Contas a pagar</h3>
+            <h3 className="font-display text-xl">Despesas / contas a pagar</h3>
             <Input
               placeholder="Descrição"
               value={payableForm.description}

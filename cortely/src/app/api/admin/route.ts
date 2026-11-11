@@ -178,6 +178,10 @@ export async function POST(req: NextRequest) {
             loyalty_reward: z.string().optional(),
             reminder_hours_before: z.number().int().positive().optional(),
             cancel_hours_before: z.number().int().nonnegative().optional(),
+            booking_link_enabled: z.boolean().optional(),
+            booking_slot_minutes: z.number().int().positive().max(120).optional(),
+            booking_show_prices: z.boolean().optional(),
+            booking_group_by_category: z.boolean().optional(),
           })
           .parse(body);
         return NextResponse.json({ shop: await updateShopSettings(data) });

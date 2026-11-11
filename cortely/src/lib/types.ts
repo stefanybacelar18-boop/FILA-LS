@@ -21,6 +21,11 @@ export type Barbershop = {
   loyalty_reward: string;
   reminder_hours_before: number;
   cancel_hours_before: number;
+  /** Agendamento online (estilo Salon Soft) */
+  booking_link_enabled: boolean;
+  booking_slot_minutes: number;
+  booking_show_prices: boolean;
+  booking_group_by_category: boolean;
   created_at: string;
 };
 

@@ -41,7 +41,11 @@ export async function GET(req: NextRequest) {
     scheduleBlocks,
     dateISO: date,
     durationMinutes: service.duration_minutes,
+    slotStepMinutes: bundle.shop.booking_slot_minutes ?? 30,
   });
 
-  return NextResponse.json({ slots });
+  return NextResponse.json({
+    slots,
+    booking_link_enabled: bundle.shop.booking_link_enabled ?? true,
+  });
 }
