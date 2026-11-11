@@ -15,8 +15,8 @@
 
 | # | Decisão |
 |---|---|
-| D1 | **Após a primeira escrita operacional em `ops_core` pós-cutover, PostgreSQL é a fonte oficial definitiva.** Não há retorno a JSON depois disso. Rollback de aplicação = **redeploy mantendo PG** + correção *forward*. Retorno a JSON **só** durante o freeze do cutover, **antes** de qualquer escrita operacional. Sem dual-write. Ver §3.3. |
-| D2 | **Registry global** (não por tenant): tabela `ops_domain_registry` é a **fonte canônica** após o seed. Arquivo/env só fazem **seed inicial** e **nunca** promovem para `active_postgres`. Divergência env↔tabela → **fail-fast**. R=W; dual-write/bridges proibidos; mudanças **auditadas**. Ver §3.2 (P13 **fechado**). |
+| D1 | **Ponto sem retorno = flip do registry para `active_postgres` (`ops_core`).** Depois disso, PostgreSQL é a fonte oficial definitiva — **não há retorno a JSON**. Rollback de aplicação = **redeploy mantendo PG** + correção *forward*. Abortar para JSON **só** durante `cutover_pending`, **antes** do flip. Sem dual-write. Ver §3.3. |
+| D2 | **Registry global** (não por tenant): tabela `ops_domain_registry` é a **fonte canônica** após o seed. Arquivo só faz **seed inicial** e, com tabela existente, é **ignorado** (não comparado). Presença de `CORTELY_OPS_REGISTRY` com tabela existente → **fail-fast**. Arquivo/env **nunca** promovem para `active_postgres`. R=W; dual-write/bridges proibidos; mudanças **auditadas**. Ver §3.2 (P13 **fechado**). |
 | D3 | **`ops_core`** é a **única unidade de cutover** na 1.B.3: une o antigo sale_graph + oc_graph + package_graph (`sales`, `products`, `stock`, `cash`, `commissions`, `purchasing`, `payables`, `packages`). Proibida execução financeira partida JSON+PG. |
 | D3a | **Prep ≠ cutover.** Schema/adapters/testes (incl. purchasing/payables/packages) em PG **antes** da 1.B.3, sem alterar fonte oficial em produção. |
 | D3b | **Fail-fast no boot:** combinações inválidas **impedem** boot/execução — zero side-effects. |
@@ -123,7 +123,7 @@ Qualquer fluxo de `ops_core` só executa com fonte homogênea; senão **fail-fas
 
 ### 3.1 Princípios
 
-1. PostgreSQL = fonte oficial após cutover `ops_core` e primeira escrita (D1).  
+1. PostgreSQL = fonte oficial após flip `ops_core` → `active_postgres` (ponto sem retorno, D1).  
 2. `barbershop_id` só da sessão desde 1.B.0 (D8).  
 3. RLS 1.A + FKs compostas `(id, barbershop_id)`.  
 4. Infra ops (`ops_domain_registry*`, `ops_idempotency_keys`, `ops_shop_id_map`) = **service role only**.  
@@ -153,8 +153,7 @@ ops_domain_registry (
     'active_json',
     'prep_pg',
     'cutover_pending',
-    'active_postgres',
-    'readonly_postgres_export'   -- só no freeze pré-escrita (§3.3)
+    'active_postgres'
   )),
   cutover_at TIMESTAMPTZ NULL,
   updated_at TIMESTAMPTZ NOT NULL,
@@ -162,7 +161,7 @@ ops_domain_registry (
   CONSTRAINT ops_registry_source_state_ck CHECK (
     (source = 'json'     AND state IN ('active_json','prep_pg','cutover_pending'))
     OR
-    (source = 'postgres' AND state IN ('active_postgres','readonly_postgres_export','cutover_pending'))
+    (source = 'postgres' AND state IN ('active_postgres','cutover_pending'))
   )
 )
 -- REVOKE ALL ON ops_domain_registry, ops_domain_registry_audit FROM anon, authenticated;
@@ -176,10 +175,12 @@ ops_domain_registry (
 | Situação | Comportamento |
 |---|---|
 | Tabela **não existe** ainda | Usar arquivo/env interpretado como **all-json** / `active_json` (ou o mapa do arquivo **se** for all-json válido). **Não criar** tabela nem migrations neste momento de boot “pré-1.B.0”. |
-| Tabela existe (pós-`fase1b_00` + seed) | **Tabela vence.** Arquivo/env **não** sobrescrevem `source`/`state` em runtime. |
-| Env tenta promover para `active_postgres` | **Ignorado / rejeitado** — arquivo/env **nunca** promovem para `active_postgres`. Só API de cutover auditada (conjunto `ops_core`). |
-| Env/arquivo **divergem** da tabela | **Fail-fast no boot** (exit ≠ 0). |
-| Seed inicial | Uma vez: arquivo/env → INSERT na tabela (tudo `json`/`active_json` ou `prep_pg` onde permitido) + linha de audit `seed`. |
+| Tabela existe (pós-`fase1b_00` + seed) | **Tabela é a única fonte.** O **arquivo de seed é IGNORADO** (não lido, **não comparado**). |
+| `CORTELY_OPS_REGISTRY` presente **e** tabela existe | **Fail-fast no boot** (exit ≠ 0). Env não coexiste com tabela. |
+| Arquivo/env tentam promover `active_postgres` | **Proibido** — só API de cutover auditada (conjunto `ops_core`). |
+| Seed inicial | Uma vez: arquivo/env → INSERT na tabela (tudo `json`/`active_json` ou `prep_pg` onde permitido) + linha de audit `seed`. Depois do seed, arquivo deixa de ser consultado. |
+
+**Removido:** regra “arquivo diverge da tabela → fail-fast” — com tabela existente o arquivo **não é comparado**.
 
 #### 3.2.3 Valores padrão e transições permitidas
 
@@ -188,17 +189,19 @@ Default produção: todos `source=json`, `state=active_json`.
 | De | Para | Quando |
 |---|---|---|
 | `active_json` | `prep_pg` | Início de prep (schema/adapters); `source` permanece `json` |
-| `prep_pg` | `cutover_pending` | Freeze do cutover `ops_core` (ainda sem escrita PG operacional) |
-| `cutover_pending` + `source=json` | `active_json` | Abortar cutover **antes** de qualquer escrita operacional |
-| `cutover_pending` | `active_postgres` (`source=postgres`) | Flip `ops_core` no go-live |
+| `prep_pg` | `cutover_pending` | Freeze do cutover `ops_core` |
+| `cutover_pending` + `source=json` | `active_json` | Abortar cutover **antes** do flip |
+| `cutover_pending` | `active_postgres` (`source=postgres`) | Flip `ops_core` no go-live = **ponto sem retorno** |
 | `active_postgres` | — | **Sem retorno a json.** Correção = forward + redeploy |
 
-Estados `readonly_postgres_export` / retorno a JSON **não** se aplicam após a primeira escrita operacional (§3.3).
+Não existe estado `readonly_postgres_export`.
 
 #### 3.2.4 Validação no boot (fail-fast)
 
-1. Se tabela existe: carregar tabela; se env/arquivo presentes e divergem → abortar.  
-2. Se tabela não existe: carregar arquivo/env all-json (ou abortar se mapa ilegal).  
+1. Se tabela existe: carregar **somente** a tabela.  
+   - Se `CORTELY_OPS_REGISTRY` estiver definido → **abortar** (fail-fast).  
+   - Arquivo de seed (`ops-registry.json`) → **ignorado** (não comparado).  
+2. Se tabela não existe: carregar arquivo/env all-json (ou abortar se mapa ilegal). **Não criar** tabela.  
 3. Validar CHECK source↔state e domínios.  
 4. Avaliar conjunto **`ops_core`**: todos os domínios abaixo homogêneos (`all json` ou `all postgres`):
 
@@ -227,17 +230,17 @@ Estados `readonly_postgres_export` / retorno a JSON **não** se aplicam após a 
 
 ### 3.3 Rollback e ponto sem retorno (D1)
 
-**Regra dura:** depois da **primeira escrita operacional** em qualquer domínio de `ops_core` com `source=postgres`, **não há retorno a JSON**.
+**Regra dura:** o **ponto sem retorno = flip do registry para `active_postgres`** no conjunto `ops_core`. A partir desse instante **não há retorno a JSON**.
 
 | Fase | Rollback permitido |
 |---|---|
 | Prep (`active_json` / `prep_pg`) | Redeploy; produção continua json |
-| Freeze `cutover_pending` **antes** de qualquer escrita PG operacional | Abortar: registry volta a `active_json` (grafo inteiro); **sem** dual-write; intents **não** são aplicados em JSON |
-| **Após** primeira escrita operacional em `ops_core` | **Ponto sem retorno.** Rollback = redeploy da app **mantendo** `source=postgres` + correção *forward*. Dados PG preservados. **Proibido** apontar registry para json; **proibido** aplicar intents em JSON |
+| Freeze `cutover_pending` **antes** do flip | Abortar: registry volta a `active_json` (grafo inteiro); **sem** dual-write; intents **não** são aplicados em JSON |
+| **Após flip → `active_postgres`** | **Ponto sem retorno.** Rollback = redeploy da app **mantendo** `source=postgres` / `active_postgres` + correção *forward*. Dados PG preservados. **Proibido** apontar registry para json; **proibido** aplicar intents em JSON |
 
-**Pagamentos já capturados (pós ponto sem retorno):** permanecem em PG; reconcile/forward fix na fonte postgres; chargebacks = lançamentos compensatórios em PG. **Não** há procedimento de “exportar para JSON e virar registry” após a primeira escrita.
+**Pagamentos já capturados (pós flip):** permanecem em PG; reconcile/forward fix na fonte postgres; chargebacks = lançamentos compensatórios em PG. **Não** há export PG→JSON nem virada de registry após o flip.
 
-**Sem janela de dual-write** em nenhuma fase.
+**Sem janela de dual-write** em nenhuma fase. Estado `readonly_postgres_export` **não existe**.
 
 ### 3.4 Isolamento / camadas
 
@@ -531,14 +534,14 @@ Prep/CI **não** implica flip `ops_core` em produção.
 
 | Subetapa | Tipo | Escopo | Dependências | Critérios de aceite | Riscos |
 |---|---|---|---|---|---|
-| **1.B.0** | Prep | `OpsRepository` + registry global (§3.2) + fail-fast `ops_core` + audit; branch a partir de `8ce23b1`, PR empilhado **sem merge** (D11) | 1.A `8ce23b1` | Tabela canônica pós-seed; env não promove postgres; divergência fail-fast; R=W | Registry |
+| **1.B.0** | Prep | `OpsRepository` + registry global (§3.2) + fail-fast `ops_core` + audit; branch a partir de `8ce23b1`, PR empilhado **sem merge** (D11) | 1.A `8ce23b1` | Tabela canônica pós-seed; arquivo ignorado se tabela existe; `CORTELY_OPS_REGISTRY`+tabela → fail-fast; R=W | Registry |
 | **1.B.1** | Prep | products + stock (+ inventory) | 1.B.0 + mig | CI PG; **prod json** | Flip cedo |
 | **1.B.2** | Prep | cash_sessions + cash_movements (troco) | 1.B.1 | CI caixa; **prod json** | Flip cedo |
 | **1.B.3-G** | Gateway isolado | intents + events + quarantine + pipeline TX 4–6 | 1.B.0 | Assinatura; event_id; quarantine; zero efeitos JSON | Efeitos cedo |
 | **1.B.4** | Prep | commissions DDL/unique/clawback + advances (adapters/testes; prod json) | 1.B.0 | Unique sale_item; clawback nova linha | — |
 | **1.B.5** | **Prep** (ex-cutover) | packages / client_packages schema+adapters+testes; **prod json** | 1.B.0 | Prep OK; sem flip | Confundir com cutover |
 | **1.B.6** | **Prep** (ex-cutover) | purchasing (OC) + payables schema+adapters+testes; **prod json** | 1.B.1 | Prep OK; sem flip | Confundir com cutover |
-| **1.B.3** | **Cutover único `ops_core`** | Flip atômico: sales+products+stock+cash+commissions+purchasing+payables+packages → postgres; createSale/refund/OC/pacote/troco; ligar intents aplicados **só em PG** | 1.B.1, 1.B.2, 1.B.3-G, 1.B.4, **1.B.5**, **1.B.6** | Um flip auditado; Σ applied = total; change só cash; append-only; isolamento 3 tenants; após 1ª escrita = ponto sem retorno | Cutover parcial |
+| **1.B.3** | **Cutover único `ops_core`** | Flip atômico: sales+products+stock+cash+commissions+purchasing+payables+packages → postgres; createSale/refund/OC/pacote/troco; ligar intents aplicados **só em PG** | 1.B.1, 1.B.2, 1.B.3-G, 1.B.4, **1.B.5**, **1.B.6** | Um flip auditado → `active_postgres` = **ponto sem retorno**; Σ applied = total; change só cash; append-only; isolamento 3 tenants | Cutover parcial |
 | **1.B.7** | Cutover leve | receivables, coupons, deposits (registry coerente), campaigns, waitlist, reviews, fiscal | 1.B.3, 1.B.3-G | Deposit só intent paid + PG | Bridge |
 | **1.B.8** | ETL + harden | ETL idempotente + map + reconcile por tenant; JSON RO backup | 1.B.3+ | Reconcile 0/tenant | Truncate |
 | **1.B.9** | Limpeza | Remover SHOP_ID; ADR units | 1.B.8 | Multi-tenant real | — |
@@ -554,8 +557,7 @@ Prep/CI **não** implica flip `ops_core` em produção.
 [Freeze cutover_pending — ainda sem escrita PG]
         ↓ abortável → active_json
         ↓
-[1.B.3] flip auditado ops_core → active_postgres
-        → primeira escrita operacional = PONTO SEM RETORNO
+[1.B.3] flip auditado ops_core → active_postgres  = PONTO SEM RETORNO
         ↓
 [1.B.7 → 1.B.8 → 1.B.9]
 ```
@@ -568,8 +570,8 @@ Prep/CI **não** implica flip `ops_core` em produção.
 4. Sem dual-write/bridges.  
 5. Prep não altera fonte oficial (exceto intents isolados).  
 6. Sem apply remoto sem autorização.  
-7. Revisão humana: **1.B.3-G, 1.B.3, 1.B.8**.  
-8. Pós 1ª escrita: rollback = redeploy + forward (sem retorno JSON).  
+7. **Toda subetapa exige aprovação humana antes de iniciar e antes de concluir.** Subetapas **1.B.3-G, 1.B.3 e 1.B.8** têm **revisão reforçada** (risco financeiro / cutover / ETL).  
+8. Pós flip `active_postgres`: rollback = redeploy + forward (sem retorno JSON).  
 9. Isolamento ≥ 3 tenants.  
 10. 1.B.0 empilhado a partir de `8ce23b1`, sem merge até autorização.
 
@@ -623,18 +625,17 @@ Para cada `barbershop_id`:
 
 ### 7.6 Rollback — alinhado a §3.3
 
-- Durante freeze, **antes** da 1ª escrita: abortar cutover → `active_json`.  
-- **Depois** da 1ª escrita: **sem** retorno a JSON; redeploy + forward; **não** aplicar intents em JSON.  
-- Sem dual-write; sem delete automático de batch pós-cutover.
+- Durante freeze (`cutover_pending`), **antes** do flip: abortar cutover → `active_json`.  
+- **Depois** do flip → `active_postgres` (**ponto sem retorno**): **sem** retorno a JSON; redeploy + forward; **não** aplicar intents em JSON.  
+- Sem dual-write; sem delete automático de batch pós-cutover; sem estado `readonly_postgres_export`.
 
 ### 7.7 Cutover
 
 1. Prep 1.B.0–1.B.6 + 1.B.3-G concluídas; `ops_core=json`.  
 2. Freeze `cutover_pending` (**sem** dual-write).  
 3. Import/reconcile delta por tenant.  
-4. Flip auditado `ops_core` → `active_postgres`.  
-5. Primeira escrita → ponto sem retorno.  
-6. 1.B.7–1.B.9.
+4. Flip auditado `ops_core` → `active_postgres` = **ponto sem retorno**.  
+5. 1.B.7–1.B.9.
 
 ### 7.8 Anti-duplicação
 
@@ -646,7 +647,8 @@ Para cada `barbershop_id`:
 
 | Classe | Conteúdo |
 |---|---|
-| **Registry** | Tabela canônica; env não promove postgres; divergência fail-fast; sem tabela → all-json; audit; global |
+| **Registry** | Tabela canônica; arquivo ignorado se tabela existe; `CORTELY_OPS_REGISTRY`+tabela → fail-fast; sem tabela → all-json; audit; global |
+| **Boot pós-cutover + arquivo all-json** | Com tabela `active_postgres`, presença do arquivo seed all-json **não** falha — arquivo ignorado; boot sobe normalmente |
 | **Fail-fast ops_core** | Qualquer domínio do conjunto misto → abort |
 | **Prep sem cutover** | 1.B.5/1.B.6 prep: createSale/receive OC **não** escrevem PG em prod json |
 | **Webhook** | Assinatura; tenant do intent; event_id unique; quarantine sem tenant; reprocessamento; TX 4–6 atômica |
@@ -655,7 +657,7 @@ Para cada `barbershop_id`:
 | **Troco DDL** | `reason=change` exige `sale_payment_id`; direction=out |
 | **Estorno** | Nova linha; sem DELETE destrutivo |
 | **Comissão** | Unique (barbershop, sale_item, barber); UNIQUE clawback_of; FK composta |
-| **Rollback** | Pós 1ª escrita: registry permanece postgres; sem apply intent→JSON |
+| **Rollback** | Pós flip `active_postgres`: registry permanece postgres; sem apply intent→JSON |
 | **Isolamento tenants** | 3 lojas SQL+API+webhook |
 | **ETL** | Idempotente; reconcile por tenant |
 | **Infra grants** | anon/authenticated sem acesso a registry/idempotency/map/quarantine |
@@ -668,8 +670,8 @@ Para cada `barbershop_id`:
 | Risco | Mitigação |
 |---|---|
 | Cutover parcial | Unidade `ops_core` na 1.B.3 |
-| Env promovendo postgres | P13: só seed; fail-fast se diverge |
-| Dual-write / retorno JSON tardio | D1 / §3.3 |
+| Env com tabela existente | Fail-fast; arquivo seed ignorado pós-tabela |
+| Dual-write / retorno JSON após flip | D1 / §3.3 — ponto sem retorno = `active_postgres` |
 | Webhook sem intent | `payment_webhook_quarantine` |
 | Troco em cartão / applied ≠ total | Invariantes B1 + testes |
 | Comissão duplicada / double clawback | Unique sale_item + UNIQUE clawback_of |
@@ -687,7 +689,7 @@ Para cada `barbershop_id`:
 - Gateway: assinatura, event_id, quarantine, TX 4–6.  
 - ETL idempotente; reconcile 0/tenant.  
 - 1.A intacta; SHOP_ID removido.  
-- Sem retorno a JSON após 1ª escrita operacional.
+- Sem retorno a JSON após flip para `active_postgres`.
 
 ---
 
@@ -701,7 +703,7 @@ Para cada `barbershop_id`:
 
 | Pendência | Notas |
 |---|---|
-| ~~P13~~ | **Fechado:** tabela canônica após seed; arquivo/env só seed; nunca promovem `active_postgres`; divergência → fail-fast; sem tabela → all-json sem criar nada; registry **global** |
+| ~~P13~~ | **Fechado:** tabela canônica após seed; arquivo ignorado se tabela existe; `CORTELY_OPS_REGISTRY`+tabela → fail-fast; nunca promovem `active_postgres`; sem tabela → all-json sem criar nada; registry **global** |
 | P2 | Status `draft` de sale? |
 | P3 | Clawback automático vs só bloqueio (default = bloqueio) |
 | P4 | Caixa open obrigatório em toda sale `paid`? |
@@ -713,6 +715,10 @@ Para cada `barbershop_id`:
 | P10 | `paid_unapplied` vs `paid` + `applied_at` |
 | P11 | `NUMERIC(12,2)` vs centavos `BIGINT` |
 | P12 | `UNIQUE (id, barbershop_id)` em barbers/services |
+| P14 | Coupons/deposits que afetam venda: incluir em `ops_core` **ou** bloquear o uso até a 1.B.7 — **decidir antes da 1.B.3** |
+| P15 | Reversão de comissão `pending`: coluna `reversal_of` + UNIQUE e payout excluindo entries revertidas — **decidir na 1.B.4** |
+| P16 | `UNIQUE (provider, provider_event_id)` na quarentena com contador de tentativas — **decidir na 1.B.3-G** |
+| P17 | `cash_movements` com `reason=sale_cash_in`: `amount = tendered_amount` do `sale_payment` cash correspondente |
 
 ---
 
