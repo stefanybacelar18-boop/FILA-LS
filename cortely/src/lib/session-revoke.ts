@@ -108,11 +108,17 @@ export function revokeStaffSessions(input: {
   if (isDemoMode()) {
     row.newGeneration = bumpDemoGeneration(input.staffId);
   } else {
-    // Fire-and-forget bump; callers críticos devem usar revokeStaffSessionsAsync
+    // Fire-and-forget bump + signOut global; callers críticos: revokeStaffSessionsAsync
     void bumpProdGeneration(input.staffId, input.barbershopId)
-      .then((gen) => {
+      .then(async (gen) => {
         row.newGeneration = gen;
         persistRevocation(row);
+        try {
+          const supabase = createServiceClient();
+          await supabase.auth.admin.signOut(input.staffId, "global");
+        } catch {
+          /* proof HMAC + sg já bloqueiam tokens residuais */
+        }
       })
       .catch(() => {
         const fallback = (state().generationByStaffId.get(input.staffId) ?? 1) + 1;
@@ -163,6 +169,14 @@ export async function revokeStaffSessionsAsync(input: {
     detail: `${input.reason} · staff=${input.staffId} · sg=${gen}`,
   });
   persistRevocation(row);
+  if (!isDemoMode()) {
+    try {
+      const supabase = createServiceClient();
+      await supabase.auth.admin.signOut(input.staffId, "global");
+    } catch {
+      /* sg proof + generation já bastam */
+    }
+  }
   return row;
 }
 

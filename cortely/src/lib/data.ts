@@ -988,7 +988,10 @@ export async function upsertStaff(input: {
 
 /**
  * Convida funcionário via Supabase Auth Admin e associa profile à barbearia.
- * Papel e tenant vêm exclusivamente do owner autenticado.
+ * - Preferência: inviteUserByEmail (envia e-mail; confirmação obrigatória).
+ * - Fallback createUser: NÃO confirma e-mail; profile fica pending_email/inativo
+ *   até o primeiro login com e-mail confirmado (activateInvitedStaff).
+ * - Se profile falhar após criar Auth user: compensação deleteUser.
  */
 export async function inviteStaffMember(input: {
   email: string;
@@ -997,7 +1000,7 @@ export async function inviteStaffMember(input: {
   barber_id?: string | null;
   barbershop_id: string;
   actorId?: string;
-}): Promise<StaffUser> {
+}): Promise<StaffUser & { invite_mode?: string }> {
   if (isDemoMode()) {
     return demoStore.upsertStaff({
       email: input.email,
@@ -1013,103 +1016,136 @@ export async function inviteStaffMember(input: {
 
   const { data: existingProfile } = await supabase
     .from("profiles")
-    .select("id, barbershop_id")
+    .select("id, barbershop_id, is_active")
     .eq("email", email)
     .maybeSingle();
   if (existingProfile && existingProfile.barbershop_id !== input.barbershop_id) {
     throw new Error("E-mail já vinculado a outra barbearia");
   }
   if (existingProfile && existingProfile.barbershop_id === input.barbershop_id) {
+    if (existingProfile.is_active === false) {
+      throw new Error(
+        "Usuário desativado nesta barbearia. Reative pelo painel antes de reenviar convite.",
+      );
+    }
     throw new Error("Já existe usuário com este e-mail nesta barbearia");
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const meta = {
+    full_name: input.full_name.trim(),
+    invited_barbershop_id: input.barbershop_id,
+    invited_role: input.role,
+  };
+
+  let userId: string | null = null;
+  let inviteMode = "invite";
+
   const { data: invited, error: inviteError } =
     await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${appUrl}/pro/auth/callback`,
-      data: {
-        full_name: input.full_name.trim(),
-        invited_barbershop_id: input.barbershop_id,
-        invited_role: input.role,
-      },
+      data: meta,
     });
 
-  if (inviteError || !invited.user) {
-    // Fallback: createUser se invite indisponível (SMTP)
+  if (!inviteError && invited.user) {
+    userId = invited.user.id;
+    inviteMode = "invite";
+  } else {
+    // Fallback sem confirmar e-mail — profile permanece inativo até confirmação.
     const { data: created, error: createError } =
       await supabase.auth.admin.createUser({
         email,
         email_confirm: false,
-        user_metadata: {
-          full_name: input.full_name.trim(),
-          invited_barbershop_id: input.barbershop_id,
-          invited_role: input.role,
-        },
+        user_metadata: meta,
       });
     if (createError || !created.user) {
-      throw new Error(inviteError?.message || createError?.message || "Falha ao convidar");
+      throw new Error(
+        inviteError?.message ||
+          createError?.message ||
+          "Falha ao convidar funcionário",
+      );
     }
-    const { data, error } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: created.user.id,
-          barbershop_id: input.barbershop_id,
-          email,
-          full_name: input.full_name.trim(),
-          role: input.role,
-          barber_id: input.role === "barber" ? input.barber_id ?? null : null,
-          is_active: true,
-          provisioning_status: "ready",
-          session_generation: 1,
-        },
-        { onConflict: "id" },
-      )
-      .select(
-        "id, barbershop_id, full_name, role, email, barber_id, session_generation",
-      )
-      .single();
-    if (error) throw new Error(error.message);
-    const { auditPermissionChange } = await import("@/lib/session-revoke");
-    auditPermissionChange({
-      actorId: input.actorId ?? null,
-      barbershopId: input.barbershop_id,
-      action: "staff.invite",
-      detail: `${email} · ${input.role} · createUser`,
-    });
-    return data as StaffUser;
+    userId = created.user.id;
+    inviteMode = "create_pending";
+    // Gera link de convite/recuperação para ativação segura
+    try {
+      await supabase.auth.admin.generateLink({
+        type: "invite",
+        email,
+        options: { redirectTo: `${appUrl}/pro/auth/callback` },
+      });
+    } catch {
+      /* SMTP pode falhar; owner pode reenviar */
+    }
   }
 
+  // Sempre pending_email até confirmação (invite ou create_pending).
+  // Evita ready+active antes do e-mail confirmado / clique no convite.
   const { data, error } = await supabase
     .from("profiles")
     .upsert(
       {
-        id: invited.user.id,
+        id: userId,
         barbershop_id: input.barbershop_id,
         email,
         full_name: input.full_name.trim(),
         role: input.role,
         barber_id: input.role === "barber" ? input.barber_id ?? null : null,
-        is_active: true,
-        provisioning_status: "ready",
+        is_active: false,
+        provisioning_status: "pending_email",
         session_generation: 1,
       },
       { onConflict: "id" },
     )
     .select(
-      "id, barbershop_id, full_name, role, email, barber_id, session_generation",
+      "id, barbershop_id, full_name, role, email, barber_id, session_generation, is_active, provisioning_status",
     )
     .single();
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    // Compensação: remove Auth user órfão
+    try {
+      await supabase.auth.admin.deleteUser(userId!);
+    } catch {
+      /* best-effort */
+    }
+    throw new Error(`Falha ao criar profile: ${error.message}`);
+  }
 
   const { auditPermissionChange } = await import("@/lib/session-revoke");
   auditPermissionChange({
     actorId: input.actorId ?? null,
     barbershopId: input.barbershop_id,
     action: "staff.invite",
-    detail: `${email} · ${input.role}`,
+    detail: `${email} · ${input.role} · ${inviteMode}`,
   });
-  return data as StaffUser;
+  return { ...(data as StaffUser), invite_mode: inviteMode };
+}
+
+/**
+ * Ativa staff convidado após e-mail confirmado (pending_email → ready).
+ */
+export async function activateInvitedStaff(userId: string) {
+  if (isDemoMode()) return null;
+  const supabase = createServiceClient();
+  const { data: userData } = await supabase.auth.admin.getUserById(userId);
+  if (!userData.user?.email_confirmed_at) {
+    throw new Error("E-mail ainda não confirmado");
+  }
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      is_active: true,
+      provisioning_status: "ready",
+    })
+    .eq("id", userId)
+    .eq("provisioning_status", "pending_email")
+    .select(
+      "id, barbershop_id, full_name, role, email, barber_id, session_generation",
+    )
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as StaffUser | null;
 }
 
 export async function deleteStaff(

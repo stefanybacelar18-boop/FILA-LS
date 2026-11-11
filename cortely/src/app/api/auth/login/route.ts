@@ -12,7 +12,10 @@ import {
   SB_COOKIE_MAX_AGE,
   SB_REFRESH_COOKIE,
 } from "@/lib/supabase/auth-cookies";
-import { SESSION_GENERATION_COOKIE } from "@/lib/session-epoch";
+import {
+  SESSION_GENERATION_COOKIE,
+  encodeSessionGenerationProof,
+} from "@/lib/session-epoch";
 import {
   createAuthAnonClient,
   loadActiveStaffProfile,
@@ -61,17 +64,8 @@ export async function POST(req: NextRequest) {
         path: "/",
         maxAge: 60 * 60 * 8,
       });
-      res.cookies.set(
-        SESSION_GENERATION_COOKIE,
-        String(session.session_generation ?? 1),
-        {
-          httpOnly: true,
-          sameSite: "lax",
-          secure: true,
-          path: "/",
-          maxAge: 60 * 60 * 8,
-        },
-      );
+      // Demo: geração já está assinada dentro do HMAC cortely_session (campo sg).
+      res.cookies.set(SESSION_GENERATION_COOKIE, "", { path: "/", maxAge: 0 });
       res.cookies.set(SB_ACCESS_COOKIE, "", { path: "/", maxAge: 0 });
       res.cookies.set(SB_REFRESH_COOKIE, "", { path: "/", maxAge: 0 });
       return res;
@@ -94,6 +88,14 @@ export async function POST(req: NextRequest) {
         { error: "Confirme seu e-mail antes de entrar" },
         { status: 403 },
       );
+    }
+
+    // Ativa convites pending_email após confirmação
+    try {
+      const { activateInvitedStaff } = await import("@/lib/data");
+      await activateInvitedStaff(data.user.id);
+    } catch {
+      /* ignore se não for convite pendente */
     }
 
     const profile = await loadActiveStaffProfile(data.user.id);
@@ -137,13 +139,21 @@ export async function POST(req: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
-    res.cookies.set(SESSION_GENERATION_COOKIE, String(sg), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true,
-      path: "/",
-      maxAge: SB_COOKIE_MAX_AGE,
-    });
+    res.cookies.set(
+      SESSION_GENERATION_COOKIE,
+      encodeSessionGenerationProof({
+        userId: user.id,
+        sessionGeneration: sg,
+        accessToken: data.session.access_token,
+      }),
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: SB_COOKIE_MAX_AGE,
+      },
+    );
     res.cookies.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
     return res;
   } catch (error) {

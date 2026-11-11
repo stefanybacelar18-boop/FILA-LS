@@ -10,15 +10,13 @@ import {
   loadActiveStaffProfile,
   readAccessTokenFromRequest,
 } from "@/lib/supabase/staff-auth";
-import {
-  SESSION_GENERATION_COOKIE,
-  parseSessionGeneration,
-} from "@/lib/session-epoch";
+import { verifySessionGenerationProof } from "@/lib/session-epoch";
 import {
   isStaffSessionRevokedDurable,
   listPermissionAudit,
   sessionGenerationMatches,
 } from "@/lib/session-revoke";
+import { SESSION_GENERATION_COOKIE } from "@/lib/session-epoch";
 
 export const SESSION_COOKIE = "cortely_session";
 
@@ -203,19 +201,27 @@ export async function getLiveSession(
   const profile = await loadActiveStaffProfile(user.id);
   if (!profile) return null;
 
-  const presentedSg = parseSessionGeneration(
-    req.cookies.get(SESSION_GENERATION_COOKIE)?.value,
-  );
   const currentSg =
     typeof profile.session_generation === "number"
       ? profile.session_generation
       : 1;
-  if (!sessionGenerationMatches(presentedSg, currentSg)) {
+
+  // Proof HMAC: uid + sg + hash(access_token) — cookie cru/adulterado falha.
+  const proof = req.cookies.get(SESSION_GENERATION_COOKIE)?.value;
+  const verified = verifySessionGenerationProof({
+    proof,
+    userId: user.id,
+    accessToken,
+    currentGeneration: currentSg,
+  });
+  if (!verified.ok) {
     return null;
   }
 
-  // Marcador auxiliar de revoke (auditoria); geração já invalida tokens antigos.
-  void isStaffSessionRevokedDurable(user.id, jwtIssuedAtMs(accessToken) ?? undefined);
+  void isStaffSessionRevokedDurable(
+    user.id,
+    jwtIssuedAtMs(accessToken) ?? undefined,
+  );
 
   return {
     id: profile.id,

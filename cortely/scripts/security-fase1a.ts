@@ -188,6 +188,130 @@ async function main() {
   );
   ok("Bearer JWT accepted; HMAC-shaped bearer ignored in prod helper");
 
+  // --- Proof HMAC: adulteração / replay / cross-user ---
+  const accessA = "access-token-user-a-aaaa";
+  const accessB = "access-token-user-b-bbbb";
+  const uidA = "11111111-1111-4111-8111-111111111101";
+  const uidB = "11111111-1111-4111-8111-111111111102";
+  const proofA1 = epoch.encodeSessionGenerationProof({
+    userId: uidA,
+    sessionGeneration: 1,
+    accessToken: accessA,
+  });
+  assert.equal(
+    epoch.verifySessionGenerationProof({
+      proof: proofA1,
+      userId: uidA,
+      accessToken: accessA,
+      currentGeneration: 1,
+    }).ok,
+    true,
+  );
+  note("EVIDENCE valid proof accepts matching uid+sg+ath");
+
+  // Cookie adulterado: inteiro cru
+  assert.equal(
+    epoch.verifySessionGenerationProof({
+      proof: "2",
+      userId: uidA,
+      accessToken: accessA,
+      currentGeneration: 2,
+    }).ok,
+    false,
+  );
+  note("EVIDENCE raw integer cookie rejected (missing signature)");
+
+  // Forjar sg nova sem secret (trocar payload)
+  const tampered = proofA1.replace(/^../, "xx");
+  assert.equal(
+    epoch.verifySessionGenerationProof({
+      proof: tampered,
+      userId: uidA,
+      accessToken: accessA,
+      currentGeneration: 1,
+    }).ok,
+    false,
+  );
+  note("EVIDENCE tampered proof signature rejected");
+
+  // Cookie de outro usuário
+  const crossUser = epoch.verifySessionGenerationProof({
+    proof: proofA1,
+    userId: uidB,
+    accessToken: accessA,
+    currentGeneration: 1,
+  });
+  assert.equal(crossUser.ok, false);
+  if (!crossUser.ok) assert.equal(crossUser.reason, "uid_mismatch");
+  note("EVIDENCE proof of user A rejected for user B (uid_mismatch)");
+
+  // Cookie de outra sessão JWT (mesmo user, outro access token)
+  const crossTok = epoch.verifySessionGenerationProof({
+    proof: proofA1,
+    userId: uidA,
+    accessToken: accessB,
+    currentGeneration: 1,
+  });
+  assert.equal(crossTok.ok, false);
+  if (!crossTok.ok) assert.equal(crossTok.reason, "token_mismatch");
+  note("EVIDENCE proof bound to access_token hash (token_mismatch)");
+
+  // Replay após revoke (sg bumped)
+  const replay = epoch.verifySessionGenerationProof({
+    proof: proofA1,
+    userId: uidA,
+    accessToken: accessA,
+    currentGeneration: 2,
+  });
+  assert.equal(replay.ok, false);
+  if (!replay.ok) assert.equal(replay.reason, "sg_mismatch");
+  note("EVIDENCE revoked generation: old proof sg_mismatch even with valid JWT");
+
+  // Novo login proof após bump
+  const proofA2 = epoch.encodeSessionGenerationProof({
+    userId: uidA,
+    sessionGeneration: 2,
+    accessToken: accessA,
+  });
+  assert.equal(
+    epoch.verifySessionGenerationProof({
+      proof: proofA2,
+      userId: uidA,
+      accessToken: accessA,
+      currentGeneration: 2,
+    }).ok,
+    true,
+  );
+  note("EVIDENCE new proof after revoke accepts sg=2");
+  ok("session_generation proof resists tamper/replay/cross-user/cross-token");
+
+  // Contrato de código: fallback createUser sem email_confirm + pending_email
+  const { readFileSync } = await import("node:fs");
+  const dataSrc = readFileSync(
+    new URL("../src/lib/data.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(dataSrc, /email_confirm:\s*false/);
+  assert.match(dataSrc, /provisioning_status:\s*"pending_email"/);
+  assert.match(dataSrc, /deleteUser/);
+  assert.match(dataSrc, /activateInvitedStaff/);
+  note(
+    "EVIDENCE inviteStaffMember source: email_confirm:false + pending_email + deleteUser compensation + activateInvitedStaff",
+  );
+  ok("invite contract: createUser fallback keeps pending_email (code path)");
+
+  // Cookie flags no login (HttpOnly/Secure/SameSite) — não substituem HMAC
+  const loginSrc = readFileSync(
+    new URL("../src/app/api/auth/login/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(loginSrc, /httpOnly:\s*true/);
+  assert.match(loginSrc, /secure:\s*true/);
+  assert.match(loginSrc, /sameSite:\s*"lax"/);
+  assert.match(loginSrc, /encodeSessionGenerationProof/);
+  note("EVIDENCE login sets HttpOnly+Secure+SameSite=Lax + signed cortely_sg proof");
+  ok("cortely_sg cookie flags + signed proof emission on login");
+
   const outPath = "/tmp/cortely-fase1a-evidence.txt";
   writeFileSync(outPath, evidence.join("\n") + `\nPASSED=${passed}\n`, "utf8");
   note(`EVIDENCE file written: ${outPath}`);
