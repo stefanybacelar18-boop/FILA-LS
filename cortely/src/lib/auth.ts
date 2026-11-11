@@ -250,6 +250,13 @@ export function getRequestSession(req: NextRequest): SessionUser | null {
 }
 
 export async function authenticateStaff(email: string, password: string) {
+  // Produção: senhas compartilhadas por papel (env) não são autenticação multi-tenant.
+  // Até Supabase Auth, login staff só no DEMO MODE.
+  if (!isDemoMode()) {
+    throw new Error(
+      "Login staff em produção exige Supabase Auth (ainda não habilitado). Use DEMO MODE ou complete a migração Auth.",
+    );
+  }
   const normalized = email.trim().toLowerCase();
   const user = demoStore.authenticate(normalized, password);
   if (!user) return null;

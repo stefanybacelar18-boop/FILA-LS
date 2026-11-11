@@ -35,13 +35,24 @@ export async function GET(req: NextRequest) {
   const loyalty = await getLoyalty(bundle.shop.id, digits);
   const clients = await listClients(bundle.shop.id, digits);
   const client = clients.find((c) => c.phone === digits);
-  const snap = opsStore.snapshot();
-  const clientPackages = client
-    ? snap.clientPackages.filter((p) => p.client_id === client.id)
+
+  // Ops JSON é single-tenant (loja seed). Nunca misturar com outra barbearia.
+  const DEMO_SHOP_ID = "11111111-1111-4111-8111-111111111111";
+  const opsAllowed = bundle.shop.id === DEMO_SHOP_ID;
+  const snap = opsAllowed ? opsStore.snapshot() : null;
+  const clientPackages =
+    opsAllowed && client
+      ? snap!.clientPackages.filter((p) => p.client_id === client.id)
+      : [];
+  const packages = opsAllowed
+    ? snap!.packages.filter((p) => p.is_active)
     : [];
-  const packages = snap.packages.filter((p) => p.is_active);
-  const subscriptions = client
-    ? snap.clientSubscriptions.filter((s) => s.client_id === client.id)
+  const subscriptions =
+    opsAllowed && client
+      ? snap!.clientSubscriptions.filter((s) => s.client_id === client.id)
+      : [];
+  const plans = opsAllowed
+    ? snap!.subscriptionPlans.filter((p) => p.is_active)
     : [];
 
   return NextResponse.json({
@@ -70,6 +81,6 @@ export async function GET(req: NextRequest) {
     packages,
     clientPackages,
     subscriptions,
-    plans: snap.subscriptionPlans.filter((p) => p.is_active),
+    plans,
   });
 }

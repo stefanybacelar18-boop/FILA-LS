@@ -49,11 +49,12 @@ export async function POST(req: NextRequest) {
       sameSite: "lax",
       secure: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 14,
+      maxAge: 60 * 60 * 8, // alinhado à expiração do token (8h)
     });
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha no login";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const status = message.includes("Supabase Auth") ? 503 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

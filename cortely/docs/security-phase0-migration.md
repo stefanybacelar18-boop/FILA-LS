@@ -46,6 +46,9 @@ Rollback: manter snapshot do JSON + dump SQL até N dias após cutover.
 - Isolamento: toda query com `barbershop_id` + policies
 - Bridge atual: `getLiveSession` reconcilia cookie HMAC com `profiles` + `staff_session_revocations`
 - OTP/JTI: tabelas `client_otp_challenges` + `client_proof_jtis` (migration `20260331`)
+- **Fora do DEMO MODE**, `authenticateStaff` recusa login com senhas compartilhadas por papel (503) até Auth
+- `createServiceClient` exige `SUPABASE_SERVICE_ROLE_KEY` fora do demo (sem fallback anon)
+- Ops JSON / client-lookup: pacotes e planos só quando `shop.id ===` seed; demais lojas não recebem ops alheio
 
 ## WhatsApp
 

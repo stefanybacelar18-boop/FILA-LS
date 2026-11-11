@@ -230,6 +230,37 @@ async function main() {
     staff.id,
   );
 
+  // 11) Produção: login staff compartilhado bloqueado
+  const prevDemo = process.env.NEXT_PUBLIC_DEMO_MODE;
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const prevAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.NEXT_PUBLIC_DEMO_MODE = "false";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key-for-test";
+  // Re-import env-dependent modules is hard; call authenticateStaff which reads isDemoMode live
+  await assert.rejects(
+    () => auth.authenticateStaff("owner@test.com", "password123"),
+    /Supabase Auth/,
+  );
+  ok("production staff login refuses shared role passwords");
+  process.env.NEXT_PUBLIC_DEMO_MODE = prevDemo;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = prevAnon;
+
+  // 12) Service role obrigatório fora do demo
+  const env = await import("../src/lib/supabase/env");
+  process.env.NEXT_PUBLIC_DEMO_MODE = "false";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-only";
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  assert.throws(() => env.createServiceClient(), /SERVICE_ROLE/);
+  ok("createServiceClient requires service role outside demo");
+  process.env.NEXT_PUBLIC_DEMO_MODE = prevDemo ?? "true";
+  if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+  if (prevAnon === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = prevAnon;
+
   console.log(`\nSecurity phase 0: ${passed} checks passed`);
 }
 
