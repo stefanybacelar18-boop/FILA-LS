@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestSession, requirePermission } from "@/lib/auth";
+import { getLiveSession, requirePermission } from "@/lib/auth";
 import { getDashboard, getShopBundle } from "@/lib/data";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
 
     const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";

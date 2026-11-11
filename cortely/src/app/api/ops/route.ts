@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  getRequestSession,
-  parseClientProof,
+  getLiveSession,
   requirePermission,
   roleCan,
+  verifyClientProof,
 } from "@/lib/auth";
 import { getAppointment } from "@/lib/data";
 import { opsStore } from "@/lib/ops-store";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
 
+const DEMO_SHOP_ID = "11111111-1111-4111-8111-111111111111";
+
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
+    // Isolamento: ops JSON atual é single-tenant até migração Postgres
+    if (session!.barbershop_id !== DEMO_SHOP_ID) {
+      return NextResponse.json(
+        { error: "Sem acesso operacional a esta barbearia" },
+        { status: 403 },
+      );
+    }
     const view = req.nextUrl.searchParams.get("view") ?? "snapshot";
 
     if (view === "reports") {
@@ -81,8 +90,30 @@ export async function GET(req: NextRequest) {
       units: permissions.unidades ? snap.units : [],
       deposits: permissions.caixa ? snap.deposits : [],
       currentCash: permissions.caixa ? opsStore.currentCash() : null,
+      cashConference: permissions.caixa
+        ? (() => {
+            try {
+              return opsStore.cashConference();
+            } catch {
+              return null;
+            }
+          })()
+        : null,
       lowStock: permissions.estoque ? opsStore.lowStock() : [],
-      cashflow: permissions.financeiro ? opsStore.cashflowSummary() : null,
+      replenishment: permissions.estoque
+        ? opsStore.replenishmentSuggestions()
+        : [],
+      inventoryCounts: permissions.estoque
+        ? snap.inventoryCounts.slice(0, 20)
+        : [],
+      cashflow:
+        permissions.financeiro || permissions.caixa
+          ? opsStore.cashflowSummary()
+          : null,
+      profitability: permissions.relatorios ? opsStore.profitability() : null,
+      fiscalDocuments: permissions.caixa
+        ? snap.fiscalDocuments.slice(0, 20)
+        : [],
       ranking: permissions.comissoes ? opsStore.ranking() : [],
       session,
       permissions,
@@ -96,10 +127,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     const body = await req.json();
     const action = z.string().parse(body.action);
     const actor = session?.full_name || session?.email || "sistema";
+
+    // Ops JSON é single-tenant (loja seed) até migração Postgres.
+    // Staff de outra empresa nunca escreve no store compartilhado.
+    if (session && session.barbershop_id !== DEMO_SHOP_ID) {
+      return NextResponse.json(
+        { error: "Sem acesso operacional a esta barbearia" },
+        { status: 403 },
+      );
+    }
 
     switch (action) {
       case "open_cash": {
@@ -117,13 +157,23 @@ export async function POST(req: NextRequest) {
       }
       case "close_cash": {
         requirePermission(session, "caixa");
-        const data = z.object({ closing_amount: z.number().nonnegative() }).parse(body);
+        const data = z
+          .object({
+            closing_amount: z.number().nonnegative(),
+            counted_by_method: z.record(z.string(), z.number()).optional(),
+          })
+          .parse(body);
         return NextResponse.json({
           cash: opsStore.closeCash({
             closed_by: actor,
             closing_amount: data.closing_amount,
+            counted_by_method: data.counted_by_method,
           }),
         });
+      }
+      case "cash_conference": {
+        requirePermission(session, "caixa");
+        return NextResponse.json({ conference: opsStore.cashConference() });
       }
       case "cash_movement": {
         requirePermission(session, "caixa");
@@ -147,6 +197,7 @@ export async function POST(req: NextRequest) {
             barber_id: z.string().uuid().nullable().optional(),
             appointment_id: z.string().uuid().nullable().optional(),
             discount: z.number().nonnegative().optional(),
+            tip: z.number().nonnegative().optional(),
             coupon_code: z.string().nullable().optional(),
             items: z
               .array(
@@ -175,8 +226,57 @@ export async function POST(req: NextRequest) {
       }
       case "refund_sale": {
         requirePermission(session, "caixa");
-        const { id } = z.object({ id: z.string().uuid() }).parse(body);
-        return NextResponse.json({ sale: opsStore.refundSale(id, actor) });
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            reason: z.string().optional(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          sale: opsStore.refundSale(data.id, actor, data.reason),
+        });
+      }
+      case "cancel_sale": {
+        requirePermission(session, "caixa");
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            reason: z.string().min(2),
+          })
+          .parse(body);
+        return NextResponse.json({
+          sale: opsStore.cancelSale(data.id, actor, data.reason),
+        });
+      }
+      case "inventory_count": {
+        requirePermission(session, "estoque");
+        const data = z
+          .object({
+            product_id: z.string().uuid(),
+            counted_qty: z.number().int().nonnegative(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          count: opsStore.inventoryCount({
+            ...data,
+            counted_by: actor,
+          }),
+        });
+      }
+      case "draft_fiscal": {
+        requirePermission(session, "caixa");
+        const data = z
+          .object({
+            sale_id: z.string().uuid(),
+            doc_type: z.enum(["nfc_e", "nf_e", "recibo"]).optional(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          document: opsStore.draftFiscalDocument({
+            ...data,
+            actor,
+          }),
+        });
       }
       case "upsert_product": {
         requirePermission(session, "estoque");
@@ -370,6 +470,17 @@ export async function POST(req: NextRequest) {
           entry: opsStore.updateWaitlistStatus(data.id, data.status),
         });
       }
+      case "offer_waitlist": {
+        requirePermission(session, "waitlist");
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            message: z.string().optional(),
+            offered_slot: z.string().optional(),
+          })
+          .parse(body);
+        return NextResponse.json(await opsStore.offerWaitlistSlot(data));
+      }
       case "upsert_payable": {
         requirePermission(session, "financeiro");
         const data = z
@@ -418,8 +529,27 @@ export async function POST(req: NextRequest) {
       }
       case "send_campaign": {
         requirePermission(session, "marketing");
-        const { id } = z.object({ id: z.string().uuid() }).parse(body);
-        return NextResponse.json({ campaign: opsStore.sendCampaign(id) });
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            phones: z.array(z.string()).optional(),
+          })
+          .parse(body);
+        const snap = opsStore.snapshot();
+        const fromOps = [
+          ...snap.reviews.map((r) => r.client_phone),
+          ...snap.waitlist.map((w) => w.client_phone),
+        ]
+          .map((p) => p.replace(/\D/g, ""))
+          .filter((p) => p.length >= 10);
+        const targets = Array.from(
+          new Set([...(data.phones ?? []).map((p) => p.replace(/\D/g, "")), ...fromOps]),
+        )
+          .filter((p) => p.length >= 10)
+          .slice(0, 30);
+        return NextResponse.json({
+          campaign: await opsStore.sendCampaign(data.id, targets),
+        });
       }
       case "upsert_coupon": {
         requirePermission(session, "marketing");
@@ -444,10 +574,25 @@ export async function POST(req: NextRequest) {
           })
           .parse(body);
         const digits = onlyDigits(data.client_phone);
-        const staffOk = Boolean(session && roleCan(session.role, "marketing"));
-        const clientOk = Boolean(
-          data.client_token && parseClientProof(data.client_token, digits),
+        const staffOk = Boolean(
+          session &&
+            session.barbershop_id === DEMO_SHOP_ID &&
+            roleCan(session.role, "marketing"),
         );
+        let clientOk = false;
+        if (data.client_token && data.appointment_id) {
+          const appt = await getAppointment(data.appointment_id);
+          clientOk = Boolean(
+            appt &&
+              appt.barbershop_id === DEMO_SHOP_ID &&
+              (await verifyClientProof(
+                data.client_token,
+                digits,
+                appt.barbershop_id,
+              )) &&
+              onlyDigits(appt.client_phone) === digits,
+          );
+        }
         if (!staffOk && !clientOk) {
           return NextResponse.json(
             { error: "OTP do cliente ou login da equipe necessário" },

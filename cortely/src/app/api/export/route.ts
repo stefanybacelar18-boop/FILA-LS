@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestSession, requirePermission } from "@/lib/auth";
+import { getLiveSession, requirePermission } from "@/lib/auth";
 import { opsStore } from "@/lib/ops-store";
+
+const DEMO_SHOP_ID = "11111111-1111-4111-8111-111111111111";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "relatorios");
+    if (session!.barbershop_id !== DEMO_SHOP_ID) {
+      return NextResponse.json(
+        { error: "Sem acesso operacional a esta barbearia" },
+        { status: 403 },
+      );
+    }
     const kind = req.nextUrl.searchParams.get("kind") ?? "sales";
     const snap = opsStore.snapshot();
 

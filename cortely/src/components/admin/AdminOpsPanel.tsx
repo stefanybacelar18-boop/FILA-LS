@@ -25,6 +25,7 @@ import type {
   WaitlistEntry,
 } from "@/lib/types-ops";
 import { staffAuthHeaders } from "@/lib/staff-session";
+import { printPlainReceipt } from "@/lib/html-escape";
 import { formatBRL, formatPhoneBR } from "@/lib/utils";
 
 type OpsTab =
@@ -72,7 +73,52 @@ type OpsPayload = {
     open_payables: number;
     open_receivables: number;
     ticket_avg: number;
-  };
+    billing?: number;
+    received?: number;
+    cash_balance?: number;
+    gross_profit?: number;
+    net_profit_strict?: number;
+    pending_receivables?: number;
+  } | null;
+  cashConference?: {
+    session_id: string;
+    opening_amount: number;
+    expected_cash: number;
+    by_method: Record<string, number>;
+  } | null;
+  replenishment?: Array<{
+    product_id: string;
+    name: string;
+    stock_qty: number;
+    suggested_qty: number;
+    estimated_cost: number;
+    margin_percent: number;
+  }>;
+  inventoryCounts?: Array<{
+    id: string;
+    product_id: string;
+    system_qty: number;
+    counted_qty: number;
+    difference: number;
+    created_at: string;
+  }>;
+  fiscalDocuments?: Array<{
+    id: string;
+    sale_id: string | null;
+    doc_type: string;
+    status: string;
+    created_at: string;
+  }>;
+  profitability?: {
+    by_service: Array<{ name: string; revenue: number; qty: number }>;
+    by_product: Array<{
+      name: string;
+      revenue: number;
+      margin: number;
+      margin_percent: number;
+    }>;
+    by_barber: Array<{ barber_id: string; revenue: number; qty: number }>;
+  } | null;
   ranking: Array<{
     barber_id: string;
     revenue: number;
@@ -311,46 +357,82 @@ export function AdminOpsPanel({
                   Abertura {formatBRL(data.currentCash.opening_amount)} ·{" "}
                   {new Date(data.currentCash.opened_at).toLocaleString("pt-BR")}
                 </p>
-                <div className="flex gap-2">
+                {data.cashConference && (
+                  <div className="rounded-xl bg-white/5 p-3 text-xs text-stone-300">
+                    Conferência: esperado em dinheiro{" "}
+                    <strong>{formatBRL(data.cashConference.expected_cash)}</strong>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {Object.entries(data.cashConference.by_method).map(
+                        ([method, amount]) => (
+                          <span key={method}>
+                            {method}: {formatBRL(amount)}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() =>
+                    onClick={() => {
+                      const raw = window.prompt("Valor da sangria (R$)", "50");
+                      if (!raw) return;
+                      const amount = Number(raw);
+                      if (!Number.isFinite(amount) || amount <= 0) return;
                       action({
                         action: "cash_movement",
                         type: "sangria",
-                        amount: 50,
-                        reason: "Troco / sangria rápida",
-                      }).catch((e) => setError(e.message))
-                    }
+                        amount,
+                        reason: "Sangria operacional",
+                      }).catch((e) => setError(e.message));
+                    }}
                   >
-                    Sangria R$ 50
+                    Sangria
                   </Button>
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() =>
+                    onClick={() => {
+                      const raw = window.prompt("Valor do suprimento (R$)", "50");
+                      if (!raw) return;
+                      const amount = Number(raw);
+                      if (!Number.isFinite(amount) || amount <= 0) return;
                       action({
                         action: "cash_movement",
                         type: "suprimento",
-                        amount: 50,
-                        reason: "Suprimento rápido",
-                      }).catch((e) => setError(e.message))
-                    }
+                        amount,
+                        reason: "Suprimento operacional",
+                      }).catch((e) => setError(e.message));
+                    }}
                   >
-                    Suprimento R$ 50
+                    Suprimento
                   </Button>
                   <Button
                     size="sm"
                     variant="danger"
-                    onClick={() =>
+                    onClick={() => {
+                      const expected =
+                        data.cashConference?.expected_cash ??
+                        data.currentCash!.opening_amount;
+                      const raw = window.prompt(
+                        `Contagem do caixa (esperado ${formatBRL(expected)})`,
+                        String(expected),
+                      );
+                      if (raw == null) return;
+                      const closing_amount = Number(raw);
+                      if (!Number.isFinite(closing_amount) || closing_amount < 0) {
+                        return;
+                      }
                       action({
                         action: "close_cash",
-                        closing_amount: data.cashflow.gross_revenue,
-                      }).catch((e) => setError(e.message))
-                    }
+                        closing_amount,
+                        counted_by_method: data.cashConference?.by_method,
+                      }).catch((e) => setError(e.message));
+                    }}
                   >
-                    Fechar caixa
+                    Fechar com conferência
                   </Button>
                 </div>
               </>
@@ -552,11 +634,17 @@ export function AdminOpsPanel({
           </div>
 
           <div className="space-y-3">
-            <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
-              Faturamento bruto {formatBRL(data.cashflow.gross_revenue)} · Ticket médio{" "}
-              {formatBRL(data.cashflow.ticket_avg)} · Lucro líquido{" "}
-              {formatBRL(data.cashflow.net_profit)}
-            </div>
+            {data.cashflow && (
+              <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
+                Faturamento{" "}
+                {formatBRL(data.cashflow.billing ?? data.cashflow.gross_revenue)} ·
+                Recebido {formatBRL(data.cashflow.received ?? 0)} · Caixa{" "}
+                {formatBRL(data.cashflow.cash_balance ?? 0)} · Lucro{" "}
+                {formatBRL(
+                  data.cashflow.net_profit_strict ?? data.cashflow.net_profit,
+                )}
+              </div>
+            )}
             <div className="glass-panel space-y-2 rounded-2xl p-4">
               <p className="text-sm font-medium text-stone-200">Comanda em aberto</p>
               {cart.length === 0 ? (
@@ -611,13 +699,16 @@ export function AdminOpsPanel({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      const w = window.open("", "_blank", "noopener,noreferrer");
-                      if (!w) return;
-                      w.document.write(
-                        `<pre style="font-family:sans-serif;padding:24px">Cortely — Comanda\n${sale.client_name || "Balcão"}\n${formatBRL(sale.total)}\n${new Date(sale.created_at).toLocaleString("pt-BR")}\nStatus: ${sale.status}</pre>`,
+                      printPlainReceipt(
+                        [
+                          "Cortely — Comanda",
+                          sale.client_name || "Balcão",
+                          formatBRL(sale.total),
+                          new Date(sale.created_at).toLocaleString("pt-BR"),
+                          `Status: ${sale.status}`,
+                        ],
+                        "Comanda Cortely",
                       );
-                      w.document.close();
-                      w.print();
                     }}
                   >
                     Imprimir
@@ -705,6 +796,17 @@ export function AdminOpsPanel({
                 Alerta reposição: {data.lowStock.map((p) => p.name).join(", ")}
               </p>
             )}
+            {(data.replenishment ?? []).length > 0 && (
+              <div className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-100">
+                <p className="mb-1 font-medium">Sugestão inteligente de compra</p>
+                {(data.replenishment ?? []).map((r) => (
+                  <p key={r.product_id}>
+                    {r.name}: comprar {r.suggested_qty} · custo est.{" "}
+                    {formatBRL(r.estimated_cost)} · margem {r.margin_percent}%
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
           <div className="space-y-3">
             {data.products.map((p) => (
@@ -719,7 +821,27 @@ export function AdminOpsPanel({
                         : "—"}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const raw = window.prompt(
+                          `Inventário de ${p.name} (sistema: ${p.stock_qty})`,
+                          String(p.stock_qty),
+                        );
+                        if (raw == null) return;
+                        const counted_qty = Number(raw);
+                        if (!Number.isFinite(counted_qty) || counted_qty < 0) return;
+                        action({
+                          action: "inventory_count",
+                          product_id: p.id,
+                          counted_qty,
+                        }).catch((e) => setError(e.message));
+                      }}
+                    >
+                      Inventariar
+                    </Button>
                     <Button
                       size="sm"
                       variant="secondary"
@@ -912,6 +1034,32 @@ export function AdminOpsPanel({
       )}
 
       {tab === "financeiro" && (
+        <div className="space-y-4">
+          {data.cashflow && (
+            <div className="glass-panel grid gap-2 rounded-2xl p-4 text-sm text-stone-300 sm:grid-cols-2 lg:grid-cols-4">
+              <p>
+                Faturamento{" "}
+                <strong>
+                  {formatBRL(data.cashflow.billing ?? data.cashflow.gross_revenue)}
+                </strong>
+              </p>
+              <p>
+                Recebido <strong>{formatBRL(data.cashflow.received ?? 0)}</strong>
+              </p>
+              <p>
+                Saldo caixa{" "}
+                <strong>{formatBRL(data.cashflow.cash_balance ?? 0)}</strong>
+              </p>
+              <p>
+                Lucro líquido{" "}
+                <strong>
+                  {formatBRL(
+                    data.cashflow.net_profit_strict ?? data.cashflow.net_profit,
+                  )}
+                </strong>
+              </p>
+            </div>
+          )}
         <div className="grid gap-4 lg:grid-cols-2">
           {panelMode !== "fiados" && (
             <div className="glass-panel space-y-3 rounded-2xl p-5">
@@ -1039,16 +1187,18 @@ export function AdminOpsPanel({
                   )}
                 </div>
               ))}
-              {panelMode === "all" && (
-                <div className="rounded-xl bg-white/5 p-3 text-sm text-stone-300">
-                  DRE rápido: receita {formatBRL(data.cashflow.gross_revenue)} − CMV{" "}
-                  {formatBRL(data.cashflow.cogs)} − despesas{" "}
-                  {formatBRL(data.cashflow.expenses)} ={" "}
-                  <strong>{formatBRL(data.cashflow.net_profit)}</strong>
+              {data.cashflow && (
+                <div className="rounded-xl bg-white/5 p-3 text-xs text-stone-500">
+                  DRE: faturamento − CMV {formatBRL(data.cashflow.cogs)} − despesas{" "}
+                  {formatBRL(data.cashflow.expenses)} = lucro{" "}
+                  {formatBRL(
+                    data.cashflow.net_profit_strict ?? data.cashflow.net_profit,
+                  )}
                 </div>
               )}
             </div>
           )}
+        </div>
         </div>
       )}
 
@@ -1259,13 +1409,12 @@ export function AdminOpsPanel({
                     size="sm"
                     onClick={() =>
                       action({
-                        action: "waitlist_status",
+                        action: "offer_waitlist",
                         id: w.id,
-                        status: "offered",
                       }).catch((e) => setError(e.message))
                     }
                   >
-                    Oferecer vaga
+                    Avisar vaga (WhatsApp)
                   </Button>
                 )}
               </article>
@@ -1401,9 +1550,26 @@ export function AdminOpsPanel({
           </div>
           <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
             <h3 className="mb-2 font-display text-xl text-stone-50">Indicadores</h3>
-            <p>Receita {formatBRL(reports.cashflow.gross_revenue)}</p>
-            <p>Lucro {formatBRL(reports.cashflow.net_profit)}</p>
-            <p>Ticket {formatBRL(reports.cashflow.ticket_avg)}</p>
+            {reports.cashflow && (
+              <>
+                <p>
+                  Faturamento{" "}
+                  {formatBRL(
+                    reports.cashflow.billing ?? reports.cashflow.gross_revenue,
+                  )}
+                </p>
+                <p>Recebido {formatBRL(reports.cashflow.received ?? 0)}</p>
+                <p>Saldo caixa {formatBRL(reports.cashflow.cash_balance ?? 0)}</p>
+                <p>
+                  Lucro líquido{" "}
+                  {formatBRL(
+                    reports.cashflow.net_profit_strict ??
+                      reports.cashflow.net_profit,
+                  )}
+                </p>
+                <p>Ticket {formatBRL(reports.cashflow.ticket_avg)}</p>
+              </>
+            )}
             <p>
               NPS/avaliações {reports.avgRating.toFixed(1)}★ ({reports.reviewCount})
             </p>

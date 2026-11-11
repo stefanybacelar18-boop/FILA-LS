@@ -12,10 +12,11 @@ import {
   updateAppointmentStatus,
 } from "@/lib/data";
 import {
-  getRequestSession,
-  parseClientProof,
+  getLiveSession,
   requirePermission,
+  verifyClientProof,
 } from "@/lib/auth";
+import { isDemoMode } from "@/lib/supabase/env";
 import { opsStore } from "@/lib/ops-store";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
@@ -33,7 +34,7 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
 
     const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
@@ -94,18 +95,31 @@ export async function POST(req: NextRequest) {
 
     const body = createPublicSchema.parse(await req.json());
     const phoneDigits = onlyDigits(body.client_phone);
-    const staff = getRequestSession(req);
+    const staff = await getLiveSession(req);
     const staffCanBook = Boolean(
       staff &&
         (staff.role === "owner" ||
           staff.role === "reception" ||
           staff.role === "barber"),
     );
+
+    const bundle = await getShopBundle(body.slug);
+    if (!bundle) {
+      return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+    }
+
     const clientOk = Boolean(
-      body.client_token && parseClientProof(body.client_token, phoneDigits),
+      body.client_token &&
+        (await verifyClientProof(
+          body.client_token,
+          phoneDigits,
+          bundle.shop.id,
+        )),
     );
-    // OTP obrigatório só com WhatsApp Business API configurada.
-    const otpRequired = Boolean(process.env.WHATSAPP_API_TOKEN?.trim());
+    // Produção: OTP obrigatório para agendamento público.
+    // Demo sem WhatsApp: permite criar agendamento público (sem atalho de auth privada).
+    const { isWhatsAppApiConfigured } = await import("@/lib/whatsapp");
+    const otpRequired = !isDemoMode() || isWhatsAppApiConfigured();
     if (!staffCanBook && !clientOk && otpRequired) {
       return NextResponse.json(
         {
@@ -116,10 +130,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const bundle = await getShopBundle(body.slug);
-    if (!bundle) {
-      return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
-    }
     if (staffCanBook && staff!.barbershop_id !== bundle.shop.id) {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
@@ -238,7 +248,18 @@ export async function PATCH(req: NextRequest) {
         })
         .parse(body);
       const digits = onlyDigits(data.phone);
-      if (!parseClientProof(data.client_token, digits)) {
+      const current = await getAppointment(data.id);
+      if (!current) {
+        return NextResponse.json({ error: "Agendamento não encontrado" }, { status: 404 });
+      }
+      if (
+        !(await verifyClientProof(
+          data.client_token,
+          digits,
+          current.barbershop_id,
+        )) ||
+        onlyDigits(current.client_phone) !== digits
+      ) {
         return NextResponse.json(
           { error: "Verifique o WhatsApp com OTP para cancelar" },
           { status: 401 },
@@ -259,7 +280,18 @@ export async function PATCH(req: NextRequest) {
         })
         .parse(body);
       const digits = onlyDigits(data.phone);
-      if (!parseClientProof(data.client_token, digits)) {
+      const current = await getAppointment(data.id);
+      if (!current) {
+        return NextResponse.json({ error: "Agendamento não encontrado" }, { status: 404 });
+      }
+      if (
+        !(await verifyClientProof(
+          data.client_token,
+          digits,
+          current.barbershop_id,
+        )) ||
+        onlyDigits(current.client_phone) !== digits
+      ) {
         return NextResponse.json(
           { error: "Verifique o WhatsApp com OTP para reagendar" },
           { status: 401 },
@@ -272,7 +304,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ appointment });
     }
 
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "mark_status");
 
     const data = z

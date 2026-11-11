@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  getRequestSession,
+  getLiveSession,
   requirePermission,
   roleCan,
 } from "@/lib/auth";
@@ -16,6 +16,7 @@ import {
   listLoyalty,
   listReminders,
   listScheduleBlocks,
+  deleteStaff,
   listStaff,
   markReminderSent,
   setWorkingHours,
@@ -23,11 +24,12 @@ import {
   updateShopSettings,
   upsertBarber,
   upsertService,
+  upsertStaff,
 } from "@/lib/data";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
 
     const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
@@ -93,7 +95,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
     const body = await req.json();
     const action = z.string().parse(body.action);
@@ -141,7 +143,12 @@ export async function POST(req: NextRequest) {
             gallery_urls: z.array(z.string()).optional(),
           })
           .parse(body);
-        return NextResponse.json({ service: await upsertService(data) });
+        return NextResponse.json({
+          service: await upsertService({
+            ...data,
+            barbershop_id: session!.barbershop_id,
+          }),
+        });
       }
       case "delete_service": {
         requirePermission(session, "servicos");
@@ -166,7 +173,11 @@ export async function POST(req: NextRequest) {
           })
           .parse(body);
         return NextResponse.json({
-          workingHours: await setWorkingHours(data.barber_id, data.rows),
+          workingHours: await setWorkingHours(
+            data.barber_id,
+            data.rows,
+            session!.barbershop_id,
+          ),
         });
       }
       case "update_settings": {
@@ -193,7 +204,50 @@ export async function POST(req: NextRequest) {
               .optional(),
           })
           .parse(body);
-        return NextResponse.json({ shop: await updateShopSettings(data) });
+        return NextResponse.json({
+          shop: await updateShopSettings({
+            ...data,
+            id: session!.barbershop_id,
+          }),
+        });
+      }
+      case "upsert_staff": {
+        requirePermission(session, "usuarios");
+        const data = z
+          .object({
+            id: z.string().uuid().optional(),
+            email: z.string().email(),
+            full_name: z.string().min(2),
+            role: z.enum(["owner", "reception", "barber"]),
+            barber_id: z.string().uuid().nullable().optional(),
+          })
+          .parse(body);
+        const staff = await upsertStaff({
+          ...data,
+          barbershop_id: session!.barbershop_id,
+          actorId: session!.id,
+        });
+        const { auditPermissionChange } = await import("@/lib/session-revoke");
+        // Mudança de papel já revoga sessões em upsertStaff — não limpar revogação aqui.
+        auditPermissionChange({
+          actorId: session!.id,
+          barbershopId: session!.barbershop_id,
+          action: data.id ? "staff.update" : "staff.create",
+          detail: `${staff.email} · ${staff.role}`,
+        });
+        return NextResponse.json({ staff });
+      }
+      case "delete_staff": {
+        requirePermission(session, "usuarios");
+        const { id } = z.object({ id: z.string().uuid() }).parse(body);
+        if (id === session!.id) {
+          return NextResponse.json(
+            { error: "Não é possível remover o próprio usuário" },
+            { status: 400 },
+          );
+        }
+        await deleteStaff(id, session!.barbershop_id, session!.id);
+        return NextResponse.json({ ok: true, sessions_revoked: true });
       }
       case "mark_reminder_sent": {
         requirePermission(session, "lembretes");

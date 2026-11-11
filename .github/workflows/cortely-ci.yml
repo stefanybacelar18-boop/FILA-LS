@@ -1,0 +1,49 @@
+name: Cortely CI
+
+on:
+  pull_request:
+    paths:
+      - "cortely/**"
+      - ".github/workflows/cortely-ci.yml"
+  push:
+    branches: [main, "cursor/**"]
+    paths:
+      - "cortely/**"
+      - ".github/workflows/cortely-ci.yml"
+
+defaults:
+  run:
+    working-directory: cortely
+
+jobs:
+  security-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: cortely/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Security phase 0 tests
+        env:
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          CORTELY_OWNER_PASSWORD: ownerpass123
+          CORTELY_RECEPTION_PASSWORD: reception123
+          CORTELY_BARBER_PASSWORD: barberpass123
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: npx tsx scripts/security-phase0.ts
+
+      - name: Production build
+        env:
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: npm run build

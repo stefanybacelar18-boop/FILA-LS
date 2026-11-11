@@ -10,6 +10,8 @@ import type {
   CommissionEntry,
   CommissionRule,
   Coupon,
+  FiscalDocument,
+  InventoryCount,
   OpsSnapshot,
   Payable,
   PaymentMethod,
@@ -28,6 +30,7 @@ import type {
   WaitlistEntry,
 } from "@/lib/types-ops";
 import { loadPersistedStore, persistOps } from "@/lib/persist";
+import { getWhatsAppDeliveryMode, sendWhatsAppMessage } from "@/lib/whatsapp";
 
 const SHOP_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -81,6 +84,7 @@ function seed(): OpsSnapshot {
       },
     ],
     stockMovements: [],
+    inventoryCounts: [],
     cashSessions: [],
     cashMovements: [],
     sales: [],
@@ -180,6 +184,7 @@ function seed(): OpsSnapshot {
       },
     ],
     auditLog: [],
+    fiscalDocuments: [],
   };
 }
 
@@ -188,10 +193,39 @@ function state(): OpsSnapshot {
     const saved = loadPersistedStore().ops as OpsSnapshot | undefined;
     if (saved && !saved.purchaseOrders) saved.purchaseOrders = [];
     if (saved && !saved.staffAdvances) saved.staffAdvances = [];
+    if (saved && !saved.inventoryCounts) saved.inventoryCounts = [];
+    if (saved && !saved.fiscalDocuments) saved.fiscalDocuments = [];
     globalOps.__cortelyOpsV2 = saved ?? seed();
     if (!saved) persistOps(globalOps.__cortelyOpsV2);
   }
   return globalOps.__cortelyOpsV2;
+}
+
+function sessionCashExpected(sessionId: string) {
+  const s = state();
+  const session = s.cashSessions.find((c) => c.id === sessionId);
+  if (!session) return { expected: 0, byMethod: {} as Record<string, number> };
+  const saleIds = new Set(
+    s.sales
+      .filter((x) => x.cash_session_id === sessionId && x.status === "paid")
+      .map((x) => x.id),
+  );
+  const byMethod: Record<string, number> = {};
+  let cashIn = 0;
+  for (const pay of s.salePayments) {
+    if (!saleIds.has(pay.sale_id)) continue;
+    byMethod[pay.method] = (byMethod[pay.method] ?? 0) + pay.amount;
+    if (pay.method === "cash") cashIn += pay.amount;
+  }
+  const movements = s.cashMovements.filter((m) => m.cash_session_id === sessionId);
+  const sangria = movements
+    .filter((m) => m.type === "sangria")
+    .reduce((a, m) => a + m.amount, 0);
+  const suprimento = movements
+    .filter((m) => m.type === "suprimento")
+    .reduce((a, m) => a + m.amount, 0);
+  const expected = session.opening_amount + cashIn + suprimento - sangria;
+  return { expected, byMethod };
 }
 
 function commit() {
@@ -239,16 +273,46 @@ const opsStoreImpl = {
     return { ...row };
   },
 
-  closeCash(input: { closed_by: string; closing_amount: number }) {
+  closeCash(input: {
+    closed_by: string;
+    closing_amount: number;
+    counted_by_method?: Record<string, number>;
+  }) {
     const s = state();
     const open = s.cashSessions.find((c) => c.status === "open");
     if (!open) throw new Error("Nenhum caixa aberto");
+    const { expected, byMethod } = sessionCashExpected(open.id);
     open.status = "closed";
     open.closed_by = input.closed_by;
     open.closing_amount = input.closing_amount;
+    open.expected_cash = Math.round(expected * 100) / 100;
+    open.difference =
+      Math.round((input.closing_amount - expected) * 100) / 100;
+    open.counted_by_method = input.counted_by_method ?? byMethod;
     open.closed_at = new Date().toISOString();
-    audit(input.closed_by, "cash.close", `Fechamento R$ ${input.closing_amount}`);
+    audit(
+      input.closed_by,
+      "cash.close",
+      `Fechamento R$ ${input.closing_amount} · esperado R$ ${open.expected_cash} · diff R$ ${open.difference}`,
+    );
     return { ...open };
+  },
+
+  cashConference(sessionId?: string) {
+    const open = sessionId
+      ? state().cashSessions.find((c) => c.id === sessionId)
+      : this.currentCash();
+    if (!open) throw new Error("Caixa não encontrado");
+    const { expected, byMethod } = sessionCashExpected(open.id);
+    return {
+      session_id: open.id,
+      opening_amount: open.opening_amount,
+      expected_cash: Math.round(expected * 100) / 100,
+      by_method: byMethod,
+      movements: state().cashMovements.filter(
+        (m) => m.cash_session_id === open.id,
+      ),
+    };
   },
 
   currentCash() {
@@ -284,6 +348,7 @@ const opsStoreImpl = {
     barber_id?: string | null;
     appointment_id?: string | null;
     discount?: number;
+    tip?: number;
     coupon_code?: string | null;
     items: Array<{
       kind: "service" | "product" | "package";
@@ -297,6 +362,7 @@ const opsStoreImpl = {
     const s = state();
     const open = this.currentCash();
     let discount = input.discount ?? 0;
+    const tip = Math.max(0, input.tip ?? 0);
     if (input.coupon_code) {
       const coupon = s.coupons.find(
         (c) =>
@@ -314,13 +380,28 @@ const opsStoreImpl = {
       (a, i) => a + i.quantity * i.unit_price,
       0,
     );
-    const total = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    const total =
+      Math.max(0, Math.round((subtotal - discount + tip) * 100) / 100);
     const payments = input.payments.map((p) => ({ ...p }));
     const paySum = payments.reduce((a, p) => a + p.amount, 0);
     if (payments.length === 1) {
       payments[0].amount = total;
     } else if (Math.abs(paySum - total) > 0.05) {
       throw new Error("Soma dos pagamentos deve fechar o total");
+    }
+
+    // Prevenção de cobrança duplicada: mesmo appointment + total nos últimos 2 min
+    if (input.appointment_id) {
+      const dup = s.sales.find(
+        (x) =>
+          x.appointment_id === input.appointment_id &&
+          x.status === "paid" &&
+          Math.abs(x.total - total) < 0.05 &&
+          Date.now() - new Date(x.created_at).getTime() < 120_000,
+      );
+      if (dup) {
+        throw new Error("Possível cobrança duplicada deste atendimento");
+      }
     }
 
     const sale: Sale = {
@@ -333,10 +414,13 @@ const opsStoreImpl = {
       appointment_id: input.appointment_id ?? null,
       subtotal,
       discount,
+      tip,
       total,
       status: "paid",
       created_by: input.created_by,
       created_at: new Date().toISOString(),
+      canceled_at: null,
+      cancel_reason: null,
     };
     s.sales.unshift(sale);
 
@@ -391,12 +475,15 @@ const opsStoreImpl = {
     };
   },
 
-  refundSale(saleId: string, actor: string) {
+  refundSale(saleId: string, actor: string, reason?: string) {
     const s = state();
     const sale = s.sales.find((x) => x.id === saleId);
     if (!sale) throw new Error("Venda não encontrada");
     if (sale.status !== "paid") throw new Error("Venda não está paga");
+    // Soft refund: mantém histórico original, só muda status
     sale.status = "refunded";
+    sale.canceled_at = new Date().toISOString();
+    sale.cancel_reason = reason ?? "Estorno";
     for (const item of s.saleItems.filter((i) => i.sale_id === saleId)) {
       if (item.kind === "product") {
         this.adjustStock({
@@ -410,7 +497,32 @@ const opsStoreImpl = {
       c.status = "paid";
       c.amount = 0;
     }
-    audit(actor, "sale.refund", saleId);
+    audit(actor, "sale.refund", `${saleId} · ${sale.cancel_reason}`);
+    return { ...sale };
+  },
+
+  cancelSale(saleId: string, actor: string, reason: string) {
+    const s = state();
+    const sale = s.sales.find((x) => x.id === saleId);
+    if (!sale) throw new Error("Venda não encontrada");
+    if (sale.status !== "paid") throw new Error("Venda não está paga");
+    sale.status = "canceled";
+    sale.canceled_at = new Date().toISOString();
+    sale.cancel_reason = reason;
+    for (const item of s.saleItems.filter((i) => i.sale_id === saleId)) {
+      if (item.kind === "product") {
+        this.adjustStock({
+          product_id: item.ref_id,
+          delta: item.quantity,
+          reason: `Cancelamento ${saleId.slice(0, 8)}`,
+        });
+      }
+    }
+    for (const c of s.commissionEntries.filter((e) => e.sale_id === saleId)) {
+      c.status = "paid";
+      c.amount = 0;
+    }
+    audit(actor, "sale.cancel", `${saleId} · ${reason}`);
     return { ...sale };
   },
 
@@ -941,9 +1053,16 @@ const opsStoreImpl = {
 
   cashflowSummary() {
     const s = state();
-    const revenue = s.sales
-      .filter((x) => x.status === "paid")
-      .reduce((a, x) => a + x.total, 0);
+    const paidSales = s.sales.filter((x) => x.status === "paid");
+    // Faturamento = vendas registradas (mesmo se fiado/parcial via receivables)
+    const billing = paidSales.reduce((a, x) => a + x.total, 0);
+    const receivedFromSales = s.salePayments
+      .filter((p) => paidSales.some((x) => x.id === p.sale_id))
+      .reduce((a, p) => a + p.amount, 0);
+    const receivedFromReceivables = s.receivables
+      .filter((r) => r.status === "paid")
+      .reduce((a, r) => a + r.amount, 0);
+    const received = receivedFromSales + receivedFromReceivables;
     const expenses = s.payables
       .filter((p) => p.status === "paid")
       .reduce((a, p) => a + p.amount, 0);
@@ -954,22 +1073,147 @@ const opsStoreImpl = {
       .filter((r) => r.status === "open")
       .reduce((a, r) => a + r.amount, 0);
     const cogs = s.saleItems
-      .filter((i) => i.kind === "product")
+      .filter((i) => {
+        const sale = paidSales.find((x) => x.id === i.sale_id);
+        return sale && i.kind === "product";
+      })
       .reduce((a, i) => {
         const p = s.products.find((x) => x.id === i.ref_id);
         return a + (p ? p.cost * i.quantity : 0);
       }, 0);
+    const grossProfit = billing - cogs;
+    const netProfit = grossProfit - expenses;
+    const open = this.currentCash();
+    const cashBalance = open
+      ? sessionCashExpected(open.id).expected
+      : s.cashSessions
+          .filter((c) => c.status === "closed")
+          .reduce((a, c) => a + (c.closing_amount ?? 0), 0);
     return {
-      gross_revenue: revenue,
+      // legado (compat UI)
+      gross_revenue: billing,
       cogs,
       expenses,
-      net_profit: revenue - expenses - cogs,
+      net_profit: netProfit,
       open_payables: openPayables,
       open_receivables: openReceivables,
-      ticket_avg:
-        s.sales.filter((x) => x.status === "paid").length > 0
-          ? revenue / s.sales.filter((x) => x.status === "paid").length
-          : 0,
+      ticket_avg: paidSales.length > 0 ? billing / paidSales.length : 0,
+      // indicadores separados (não misturar)
+      billing,
+      received,
+      cash_balance: Math.round(cashBalance * 100) / 100,
+      gross_profit: Math.round(grossProfit * 100) / 100,
+      net_profit_strict: Math.round(netProfit * 100) / 100,
+      pending_receivables: openReceivables,
+    };
+  },
+
+  inventoryCount(input: {
+    product_id: string;
+    counted_qty: number;
+    counted_by: string;
+  }) {
+    const s = state();
+    const product = s.products.find((p) => p.id === input.product_id);
+    if (!product) throw new Error("Produto não encontrado");
+    const difference = input.counted_qty - product.stock_qty;
+    const row: InventoryCount = {
+      id: randomUUID(),
+      barbershop_id: SHOP_ID,
+      product_id: product.id,
+      system_qty: product.stock_qty,
+      counted_qty: input.counted_qty,
+      difference,
+      counted_by: input.counted_by,
+      created_at: new Date().toISOString(),
+    };
+    s.inventoryCounts.unshift(row);
+    if (difference !== 0) {
+      this.adjustStock({
+        product_id: product.id,
+        delta: difference,
+        reason: `Inventário ${row.id.slice(0, 8)}`,
+      });
+    }
+    audit(input.counted_by, "inventory.count", `${product.name} Δ${difference}`);
+    return { ...row };
+  },
+
+  replenishmentSuggestions() {
+    return state()
+      .products.filter((p) => p.is_active && p.stock_qty <= p.min_stock)
+      .map((p) => {
+        const max = p.max_stock ?? Math.max(p.min_stock * 3, 20);
+        const suggested = Math.max(0, max - p.stock_qty);
+        const margin = p.price > 0 ? ((p.price - p.cost) / p.price) * 100 : 0;
+        return {
+          product_id: p.id,
+          name: p.name,
+          stock_qty: p.stock_qty,
+          min_stock: p.min_stock,
+          suggested_qty: suggested,
+          estimated_cost: suggested * p.cost,
+          margin_percent: Math.round(margin * 10) / 10,
+          supplier_id: p.supplier_id,
+        };
+      })
+      .sort((a, b) => a.stock_qty - b.stock_qty);
+  },
+
+  profitability() {
+    const s = state();
+    const paid = new Set(
+      s.sales.filter((x) => x.status === "paid").map((x) => x.id),
+    );
+    const byService: Record<string, { revenue: number; qty: number }> = {};
+    const byProduct: Record<
+      string,
+      { revenue: number; cost: number; qty: number }
+    > = {};
+    const byBarber: Record<string, { revenue: number; qty: number }> = {};
+    for (const item of s.saleItems) {
+      if (!paid.has(item.sale_id)) continue;
+      if (item.kind === "service") {
+        const row = (byService[item.description] ??= { revenue: 0, qty: 0 });
+        row.revenue += item.total;
+        row.qty += item.quantity;
+      }
+      if (item.kind === "product") {
+        const product = s.products.find((p) => p.id === item.ref_id);
+        const row = (byProduct[item.description] ??= {
+          revenue: 0,
+          cost: 0,
+          qty: 0,
+        });
+        row.revenue += item.total;
+        row.cost += (product?.cost ?? 0) * item.quantity;
+        row.qty += item.quantity;
+      }
+    }
+    for (const sale of s.sales.filter((x) => x.status === "paid")) {
+      if (!sale.barber_id) continue;
+      const row = (byBarber[sale.barber_id] ??= { revenue: 0, qty: 0 });
+      row.revenue += sale.total;
+      row.qty += 1;
+    }
+    return {
+      by_service: Object.entries(byService)
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.revenue - a.revenue),
+      by_product: Object.entries(byProduct)
+        .map(([name, v]) => ({
+          name,
+          ...v,
+          margin: v.revenue - v.cost,
+          margin_percent:
+            v.revenue > 0
+              ? Math.round(((v.revenue - v.cost) / v.revenue) * 1000) / 10
+              : 0,
+        }))
+        .sort((a, b) => b.margin - a.margin),
+      by_barber: Object.entries(byBarber)
+        .map(([barber_id, v]) => ({ barber_id, ...v }))
+        .sort((a, b) => b.revenue - a.revenue),
     };
   },
 
@@ -994,12 +1238,86 @@ const opsStoreImpl = {
     return { ...row };
   },
 
-  sendCampaign(id: string) {
+  async sendCampaign(id: string, phones: string[] = []) {
     const row = state().campaigns.find((c) => c.id === id);
     if (!row) throw new Error("Campanha não encontrada");
+    const mode = getWhatsAppDeliveryMode();
+    const deliveries: Array<{ phone: string; ok: boolean; url?: string }> = [];
+    for (const phone of phones.slice(0, 50)) {
+      const result = await sendWhatsAppMessage({
+        toPhone: phone,
+        message: row.message,
+      });
+      deliveries.push({
+        phone,
+        ok: result.ok,
+        url: result.url,
+      });
+    }
     row.status = "sent";
     row.sent_at = new Date().toISOString();
-    return { ...row, delivery_mode: "manual" as const };
+    audit("marketing", "campaign.send", `${row.name} · ${deliveries.length} destinos · ${mode}`);
+    return {
+      ...row,
+      delivery_mode: mode,
+      deliveries,
+      sent_count: deliveries.length,
+    };
+  },
+
+  async offerWaitlistSlot(input: {
+    id: string;
+    message?: string;
+    offered_slot?: string;
+  }) {
+    const row = state().waitlist.find((w) => w.id === input.id);
+    if (!row) throw new Error("Entrada não encontrada");
+    if (row.status !== "waiting") throw new Error("Entrada não está em espera");
+    const message =
+      input.message ||
+      `Olá ${row.client_name}! Abriu uma vaga na Cortely${
+        input.offered_slot ? ` às ${input.offered_slot}` : ""
+      }. Responda rápido para garantir.`;
+    const delivery = await sendWhatsAppMessage({
+      toPhone: row.client_phone,
+      message,
+    });
+    row.status = "offered";
+    audit(
+      "waitlist",
+      "waitlist.offer",
+      `${row.client_name} · ${delivery.mode}`,
+    );
+    return { entry: { ...row }, delivery };
+  },
+
+  draftFiscalDocument(input: {
+    sale_id: string;
+    doc_type?: FiscalDocument["doc_type"];
+    actor: string;
+  }) {
+    const sale = state().sales.find((s) => s.id === input.sale_id);
+    if (!sale) throw new Error("Venda não encontrada");
+    const items = state().saleItems.filter((i) => i.sale_id === sale.id);
+    const payments = state().salePayments.filter((p) => p.sale_id === sale.id);
+    const row: FiscalDocument = {
+      id: randomUUID(),
+      barbershop_id: SHOP_ID,
+      sale_id: sale.id,
+      doc_type: input.doc_type ?? "nfc_e",
+      status: "draft",
+      payload: {
+        total: sale.total,
+        client_name: sale.client_name,
+        items,
+        payments,
+        note: "Rascunho — emissão SEFAZ ainda não integrada",
+      },
+      created_at: new Date().toISOString(),
+    };
+    state().fiscalDocuments.unshift(row);
+    audit(input.actor, "fiscal.draft", `${row.doc_type} · venda ${sale.id}`);
+    return { ...row };
   },
 
   upsertCoupon(input: {
@@ -1098,6 +1416,8 @@ const opsStoreImpl = {
     return {
       cashflow: this.cashflowSummary(),
       ranking: this.ranking(),
+      profitability: this.profitability(),
+      replenishment: this.replenishmentSuggestions(),
       byMethod,
       topProducts: Object.entries(productSales)
         .sort((a, b) => b[1] - a[1])
@@ -1112,6 +1432,16 @@ const opsStoreImpl = {
       waitlistWaiting: s.waitlist.filter((w) => w.status === "waiting").length,
       units: s.units.map((u) => ({ ...u })),
       auditLog: s.auditLog.slice(0, 30),
+      fiscalDrafts: s.fiscalDocuments.filter((f) => f.status === "draft").length,
+      cashDifferences: s.cashSessions
+        .filter((c) => c.status === "closed" && (c.difference ?? 0) !== 0)
+        .map((c) => ({
+          id: c.id,
+          closed_at: c.closed_at,
+          difference: c.difference,
+          expected_cash: c.expected_cash,
+          closing_amount: c.closing_amount,
+        })),
     };
   },
 
@@ -1136,6 +1466,7 @@ const opsStoreImpl = {
 const OPS_READ = new Set([
   "snapshot",
   "currentCash",
+  "cashConference",
   "listProducts",
   "lowStock",
   "listSuppliers",
@@ -1144,6 +1475,8 @@ const OPS_READ = new Set([
   "listPackages",
   "listSubscriptionPlans",
   "cashflowSummary",
+  "replenishmentSuggestions",
+  "profitability",
   "reports",
   "listUnits",
 ]);
@@ -1157,6 +1490,13 @@ export const opsStore: typeof opsStoreImpl = new Proxy(opsStoreImpl, {
     }
     return (...args: unknown[]) => {
       const result = value.apply(target, args);
+      // Métodos async: persistir após resolução
+      if (result && typeof (result as Promise<unknown>).then === "function") {
+        return (result as Promise<unknown>).then((resolved) => {
+          commit();
+          return resolved;
+        });
+      }
       commit();
       return result;
     };

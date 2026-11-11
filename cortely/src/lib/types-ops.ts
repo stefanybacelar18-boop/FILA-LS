@@ -13,11 +13,14 @@ export type Product = {
   barbershop_id: string;
   name: string;
   sku: string | null;
+  barcode?: string | null;
+  brand?: string | null;
   category: string;
   price: number;
   cost: number;
   stock_qty: number;
   min_stock: number;
+  max_stock?: number;
   supplier_id: string | null;
   is_active: boolean;
   created_at: string;
@@ -66,6 +69,9 @@ export type CashSession = {
   closed_by: string | null;
   opening_amount: number;
   closing_amount: number | null;
+  expected_cash?: number | null;
+  difference?: number | null;
+  counted_by_method?: Record<string, number> | null;
   status: "open" | "closed";
   opened_at: string;
   closed_at: string | null;
@@ -93,9 +99,33 @@ export type Sale = {
   appointment_id: string | null;
   subtotal: number;
   discount: number;
+  tip?: number;
   total: number;
   status: "paid" | "canceled" | "refunded";
   created_by: string;
+  created_at: string;
+  canceled_at?: string | null;
+  cancel_reason?: string | null;
+};
+
+export type InventoryCount = {
+  id: string;
+  barbershop_id: string;
+  product_id: string;
+  system_qty: number;
+  counted_qty: number;
+  difference: number;
+  counted_by: string;
+  created_at: string;
+};
+
+export type FiscalDocument = {
+  id: string;
+  barbershop_id: string;
+  sale_id: string | null;
+  doc_type: "nfc_e" | "nf_e" | "recibo";
+  status: "draft" | "issued" | "canceled";
+  payload: Record<string, unknown>;
   created_at: string;
 };
 
@@ -304,6 +334,7 @@ export type OpsSnapshot = {
   suppliers: Supplier[];
   stockMovements: StockMovement[];
   purchaseOrders: PurchaseOrder[];
+  inventoryCounts: InventoryCount[];
   cashSessions: CashSession[];
   cashMovements: CashMovement[];
   sales: Sale[];
@@ -326,4 +357,5 @@ export type OpsSnapshot = {
   deposits: AppointmentDeposit[];
   units: ShopUnit[];
   auditLog: AuditEntry[];
+  fiscalDocuments: FiscalDocument[];
 };

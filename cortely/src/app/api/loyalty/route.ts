@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getRequestSession,
-  parseClientProof,
+  getLiveSession,
   requirePermission,
+  verifyClientProof,
 } from "@/lib/auth";
 import { getLoyalty, getShopBundle, listLoyalty } from "@/lib/data";
 import { onlyDigits } from "@/lib/utils";
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     // Cliente autenticado por OTP: só a própria conta
     if (phone && proof) {
       const digits = onlyDigits(phone);
-      if (!parseClientProof(proof, digits)) {
+      if (!(await verifyClientProof(proof, digits, bundle.shop.id))) {
         return NextResponse.json(
           { error: "Verifique o WhatsApp com OTP" },
           { status: 401 },
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Staff: lista ou consulta autenticada
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "fidelidade");
     if (bundle.shop.id !== session!.barbershop_id) {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });

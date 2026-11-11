@@ -383,6 +383,106 @@ const demoStoreImpl = {
       }));
   },
 
+  upsertStaff(input: {
+    id?: string;
+    email: string;
+    full_name: string;
+    role: StaffRole;
+    barber_id?: string | null;
+    barbershop_id: string;
+  }): StaffUser {
+    const s = state();
+    const email = input.email.trim().toLowerCase();
+    if (input.id) {
+      const row = s.staff.find((u) => u.id === input.id);
+      if (!row || row.barbershop_id !== input.barbershop_id) {
+        throw new Error("Usuário não encontrado");
+      }
+      if (
+        s.staff.some(
+          (u) => u.email === email && u.id !== row.id && u.barbershop_id === input.barbershop_id,
+        )
+      ) {
+        throw new Error("Já existe usuário com este e-mail");
+      }
+      const prevRole = row.role;
+      row.email = email;
+      row.full_name = input.full_name.trim();
+      row.role = input.role;
+      row.barber_id = input.role === "barber" ? input.barber_id ?? null : null;
+      if (prevRole !== input.role) {
+        void import("@/lib/session-revoke").then(
+          ({ revokeStaffSessions, auditPermissionChange }) => {
+            revokeStaffSessions({
+              staffId: row.id,
+              barbershopId: row.barbershop_id,
+              reason: `role_changed:${prevRole}->${input.role}`,
+            });
+            auditPermissionChange({
+              actorId: null,
+              barbershopId: row.barbershop_id,
+              action: "staff.role_change",
+              detail: `${prevRole} -> ${input.role} · ${row.email}`,
+            });
+          },
+        );
+      }
+      return {
+        id: row.id,
+        barbershop_id: row.barbershop_id,
+        email: row.email,
+        full_name: row.full_name,
+        role: row.role,
+        barber_id: row.barber_id,
+      };
+    }
+    if (s.staff.some((u) => u.email === email && u.barbershop_id === input.barbershop_id)) {
+      throw new Error("Já existe usuário com este e-mail");
+    }
+    const row: StaffUser = {
+      id: randomUUID(),
+      barbershop_id: input.barbershop_id,
+      email,
+      full_name: input.full_name.trim(),
+      role: input.role,
+      barber_id: input.role === "barber" ? input.barber_id ?? null : null,
+    };
+    s.staff.push(row);
+    return { ...row };
+  },
+
+  deleteStaff(id: string, barbershopId: string, actorId?: string) {
+    const s = state();
+    const row = s.staff.find((u) => u.id === id);
+    if (!row || row.barbershop_id !== barbershopId) {
+      throw new Error("Usuário não encontrado");
+    }
+    if (row.role === "owner") {
+      const owners = s.staff.filter(
+        (u) => u.barbershop_id === barbershopId && u.role === "owner",
+      );
+      if (owners.length <= 1) {
+        throw new Error("Não é possível remover o único owner");
+      }
+    }
+    s.staff = s.staff.filter((u) => u.id !== id);
+    // Revoga sessões imediatamente (import dinâmico evita ciclo)
+    void import("@/lib/session-revoke").then(({ revokeStaffSessions, auditPermissionChange }) => {
+      revokeStaffSessions({
+        staffId: id,
+        barbershopId,
+        reason: "staff_deleted",
+        actorId,
+      });
+      auditPermissionChange({
+        actorId: actorId ?? null,
+        barbershopId,
+        action: "staff.delete",
+        detail: `Removido ${row.email} (${row.role})`,
+      });
+    });
+  },
+
   getShopBySlug(slug: string): ShopBundle | null {
     const s = state();
     if (slug !== s.shop.slug) return null;

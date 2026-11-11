@@ -163,11 +163,20 @@ export function ClientLookup({ slug }: { slug: string }) {
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <Input
           placeholder="Seu WhatsApp"
+          inputMode="tel"
+          autoComplete="tel"
           value={phone}
           onChange={(e) => {
-            setPhone(formatPhoneBR(e.target.value));
+            const next = formatPhoneBR(e.target.value);
+            setPhone(next);
             setClientToken(null);
             setOtpSent(false);
+            setError(null);
+          }}
+          onBlur={() => {
+            if (onlyDigits(phone).length >= 10) {
+              setPhone(formatPhoneBR(phone));
+            }
           }}
         />
         <Button
@@ -185,6 +194,7 @@ export function ClientLookup({ slug }: { slug: string }) {
           disabled={onlyDigits(phone).length < 10}
           onClick={async () => {
             setError(null);
+            setClientToken(null);
             const res = await fetch("/api/client-otp", {
               method: "POST",
               headers: { "Content-Type": "application/json" },

@@ -121,11 +121,42 @@ type AdminPayload = {
 
 const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+function initialTab(): Tab {
+  if (typeof window === "undefined") return "agenda";
+  const fromQuery = new URLSearchParams(window.location.search).get("tab");
+  const allowed: Tab[] = [
+    "agenda",
+    "calendario",
+    "servicos",
+    "equipe",
+    "horarios",
+    "bloqueios",
+    "feriados",
+    "clientes",
+    "lembretes",
+    "fidelidade",
+    "config",
+    "usuarios",
+    "online",
+    "comandas",
+    "fiados",
+    "despesas",
+    "comissoes",
+    "pacotes",
+    "produtos",
+    "fornecedores",
+    "fila",
+    "marketing",
+    "relatorios",
+  ];
+  return allowed.includes(fromQuery as Tab) ? (fromQuery as Tab) : "agenda";
+}
+
 export function AdminDashboard({ slug }: { slug: string }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [data, setData] = useState<AdminPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("agenda");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [clientQuery, setClientQuery] = useState("");
   const [clientFilter, setClientFilter] = useState<
     "all" | "inactive" | "noshow" | "notes" | "debt" | "package" | "today"
@@ -434,6 +465,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
   function go(id: Tab) {
     setTab(id);
     setMobileNavOpen(false);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", id);
+      window.history.replaceState({}, "", url.toString());
+    }
   }
 
   const navGroups = Array.from(new Set(navItems.map((n) => n.group)));
@@ -441,7 +477,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
   return (
     <div className="min-h-screen lg:flex">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-white/10 bg-[#12100e]/95 p-4 backdrop-blur-xl transition lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-white/10 bg-[#12100e]/95 p-4 backdrop-blur-xl transition lg:static lg:translate-x-0 ${
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -452,42 +488,39 @@ export function AdminDashboard({ slug }: { slug: string }) {
         <p className="mt-1 text-xs text-stone-500">
           {data.session.full_name} · {data.session.role}
         </p>
-        <nav className="mt-6 space-y-5 overflow-y-auto pb-20">
-          {navGroups.map((group) => (
-            <div key={group}>
-              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.2em] text-stone-500">
-                {group}
-              </p>
-              <div className="space-y-1">
-                {navItems
-                  .filter((n) => n.group === group)
-                  .map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => go(item.id)}
-                      className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                        tab === item.id
-                          ? "bg-amber-500/20 text-amber-100"
-                          : "text-stone-300 hover:bg-white/5"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+        <div className="mt-6 flex min-h-0 flex-1 flex-col">
+          <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
+            {navGroups.map((group) => (
+              <div key={group}>
+                <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.2em] text-stone-500">
+                  {group}
+                </p>
+                <div className="space-y-1">
+                  {navItems
+                    .filter((n) => n.group === group)
+                    .map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => go(item.id)}
+                        className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                          tab === item.id
+                            ? "bg-amber-500/20 text-amber-100"
+                            : "text-stone-300 hover:bg-white/5"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </nav>
-        <div className="absolute bottom-4 left-4 right-4 space-y-2">
-          <Link href={`/b/${slug}`} className="block">
-            <Button variant="outline" size="sm" className="w-full">
-              Página do cliente
+            ))}
+          </nav>
+          <div className="shrink-0 border-t border-white/10 pt-3">
+            <Button variant="secondary" size="sm" className="w-full" onClick={logout}>
+              Sair
             </Button>
-          </Link>
-          <Button variant="secondary" size="sm" className="w-full" onClick={logout}>
-            Sair
-          </Button>
+          </div>
         </div>
       </aside>
       {mobileNavOpen && (
@@ -520,6 +553,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
             </div>
           </div>
           <div className="flex gap-2">
+            <Link href={`/b/${slug}`}>
+              <Button variant="outline" size="sm">
+                Página do cliente
+              </Button>
+            </Link>
             {data.session.role === "barber" && (
               <Link href="/pro">
                 <Button variant="outline" size="sm">
@@ -1134,7 +1172,19 @@ export function AdminDashboard({ slug }: { slug: string }) {
               ))}
             </div>
           </div>
-          {filteredClients.map((client) => (
+          {filteredClients.map((client) => {
+            const daysSince = client.last_visit_at
+              ? (Date.now() - new Date(client.last_visit_at).getTime()) /
+                (1000 * 60 * 60 * 24)
+              : null;
+            const churnRisk =
+              daysSince != null ? daysSince >= 45 : client.total_visits === 0;
+            const predictedReturn =
+              daysSince != null && client.total_visits > 1
+                ? Math.max(7, Math.round(30 - daysSince))
+                : 21;
+            const approxLtv = client.total_visits * 55;
+            return (
             <article key={client.id} className="glass-panel space-y-3 rounded-2xl p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1148,6 +1198,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
                     {client.last_visit_at
                       ? new Date(client.last_visit_at).toLocaleDateString("pt-BR")
                       : "—"}
+                    {" · "}
+                    LTV est. {formatBRL(approxLtv)}
+                    {" · "}
+                    retorno ~{predictedReturn}d
+                    {churnRisk ? " · risco de inatividade" : ""}
                   </p>
                 </div>
               </div>
@@ -1173,7 +1228,8 @@ export function AdminDashboard({ slug }: { slug: string }) {
                 Salvar observação
               </Button>
             </article>
-          ))}
+            );
+          })}
         </section>
       )}
 
@@ -1462,9 +1518,72 @@ export function AdminDashboard({ slug }: { slug: string }) {
 
       {tab === "usuarios" && (
         <section className="mt-4 space-y-3">
-          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
-            Papéis: owner (tudo), reception (operação), barber (própria agenda +
-            bloqueios).
+          <div className="glass-panel space-y-3 rounded-2xl p-5 text-sm text-stone-300">
+            <p>
+              Papéis: owner (tudo), reception (operação), barber (própria agenda +
+              bloqueios). Senhas vêm das variáveis CORTELY_*_PASSWORD por papel.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input id="staff-name" placeholder="Nome completo" />
+              <Input id="staff-email" placeholder="E-mail" type="email" />
+              <select
+                id="staff-role"
+                className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                defaultValue="reception"
+              >
+                <option value="owner" className="bg-stone-900">
+                  owner
+                </option>
+                <option value="reception" className="bg-stone-900">
+                  reception
+                </option>
+                <option value="barber" className="bg-stone-900">
+                  barber
+                </option>
+              </select>
+              <select
+                id="staff-barber"
+                className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                defaultValue=""
+              >
+                <option value="" className="bg-stone-900">
+                  Barbeiro vinculado (opcional)
+                </option>
+                {data.barbers.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-stone-900">
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                const full_name = (
+                  document.getElementById("staff-name") as HTMLInputElement | null
+                )?.value?.trim();
+                const email = (
+                  document.getElementById("staff-email") as HTMLInputElement | null
+                )?.value?.trim();
+                const role = (
+                  document.getElementById("staff-role") as HTMLSelectElement | null
+                )?.value as "owner" | "reception" | "barber";
+                const barber_id =
+                  (
+                    document.getElementById("staff-barber") as HTMLSelectElement | null
+                  )?.value || null;
+                if (!full_name || !email || !role) return;
+                adminAction({
+                  action: "upsert_staff",
+                  full_name,
+                  email,
+                  role,
+                  barber_id: role === "barber" ? barber_id : null,
+                });
+              }}
+            >
+              Adicionar usuário
+            </Button>
           </div>
           {data.staff.map((user) => (
             <article
@@ -1475,7 +1594,18 @@ export function AdminDashboard({ slug }: { slug: string }) {
                 <p className="font-medium text-stone-100">{user.full_name}</p>
                 <p className="text-sm text-stone-400">{user.email}</p>
               </div>
-              <Badge>{user.role}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge>{user.role}</Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    adminAction({ action: "delete_staff", id: user.id })
+                  }
+                >
+                  Remover
+                </Button>
+              </div>
             </article>
           ))}
         </section>
