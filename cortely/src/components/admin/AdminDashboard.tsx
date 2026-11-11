@@ -121,11 +121,42 @@ type AdminPayload = {
 
 const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+function initialTab(): Tab {
+  if (typeof window === "undefined") return "agenda";
+  const fromQuery = new URLSearchParams(window.location.search).get("tab");
+  const allowed: Tab[] = [
+    "agenda",
+    "calendario",
+    "servicos",
+    "equipe",
+    "horarios",
+    "bloqueios",
+    "feriados",
+    "clientes",
+    "lembretes",
+    "fidelidade",
+    "config",
+    "usuarios",
+    "online",
+    "comandas",
+    "fiados",
+    "despesas",
+    "comissoes",
+    "pacotes",
+    "produtos",
+    "fornecedores",
+    "fila",
+    "marketing",
+    "relatorios",
+  ];
+  return allowed.includes(fromQuery as Tab) ? (fromQuery as Tab) : "agenda";
+}
+
 export function AdminDashboard({ slug }: { slug: string }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [data, setData] = useState<AdminPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("agenda");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [clientQuery, setClientQuery] = useState("");
   const [clientFilter, setClientFilter] = useState<
     "all" | "inactive" | "noshow" | "notes" | "debt" | "package" | "today"
@@ -434,6 +465,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
   function go(id: Tab) {
     setTab(id);
     setMobileNavOpen(false);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", id);
+      window.history.replaceState({}, "", url.toString());
+    }
   }
 
   const navGroups = Array.from(new Set(navItems.map((n) => n.group)));
