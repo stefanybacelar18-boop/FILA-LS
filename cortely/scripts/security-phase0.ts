@@ -240,7 +240,7 @@ async function main() {
   // Re-import env-dependent modules is hard; call authenticateStaff which reads isDemoMode live
   await assert.rejects(
     () => auth.authenticateStaff("owner@test.com", "password123"),
-    /Supabase Auth/,
+    /Supabase Auth|DEMO MODE/i,
   );
   ok("production staff login refuses shared role passwords");
   process.env.NEXT_PUBLIC_DEMO_MODE = prevDemo;

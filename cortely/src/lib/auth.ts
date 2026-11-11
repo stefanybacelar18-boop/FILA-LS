@@ -5,7 +5,13 @@ import type { SessionUser, StaffRole } from "@/lib/types";
 import { demoStore } from "@/lib/demo-store";
 import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
 import {
-  isStaffSessionRevoked,
+  getSupabaseAuthUser,
+  jwtIssuedAtMs,
+  loadActiveStaffProfile,
+  readAccessTokenFromRequest,
+} from "@/lib/supabase/staff-auth";
+import {
+  getStaffRevokedAt,
   isStaffSessionRevokedDurable,
   listPermissionAudit,
 } from "@/lib/session-revoke";
@@ -127,7 +133,12 @@ function sessionFromDemo(parsed: SignedSession): SessionUser | null {
   };
 }
 
+/**
+ * Sessão HMAC legada — **somente DEMO MODE**.
+ * Em produção o caminho admin usa exclusivamente Supabase Auth JWT.
+ */
 export function parseSessionToken(token: string | undefined | null): SessionUser | null {
+  if (!isDemoMode()) return null;
   if (!token || !token.includes(".")) return null;
   try {
     const dot = token.lastIndexOf(".");
@@ -145,44 +156,44 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
     }
     if (parsed.exp < Date.now()) return null;
 
-    if (isStaffSessionRevoked(parsed.id)) {
+    const revokedAt = getStaffRevokedAt(parsed.id);
+    if (revokedAt != null && (parsed.iat ?? 0) < revokedAt) {
       return null;
     }
 
-    // Em demo: staff deve existir no store — removidos são bloqueados imediatamente.
-    if (isDemoMode()) {
-      return sessionFromDemo(parsed);
-    }
-
-    // Produção: HMAC ok; getLiveSession reconcilia com profiles + revogação durável.
-    return {
-      id: parsed.id,
-      email: parsed.email,
-      full_name: parsed.full_name,
-      role: parsed.role,
-      barbershop_id: parsed.barbershop_id,
-      barber_id: parsed.barber_id ?? null,
-    };
+    return sessionFromDemo(parsed);
   } catch {
     return null;
   }
 }
 
 /**
- * Sessão staff reconciliada com estado atual (demo store ou profiles + revogação SQL).
- * Use em todas as rotas administrativas / privadas.
+ * Sessão staff reconciliada com estado atual.
+ * - DEMO: cookie HMAC + demoStore + revogação por iat
+ * - PRODUÇÃO: somente JWT Supabase Auth + profiles ativos (HMAC ignorado)
  */
 export async function getLiveSession(
   req: NextRequest,
 ): Promise<SessionUser | null> {
-  const session = getRequestSession(req);
-  if (!session) return null;
-
-  if (await isStaffSessionRevokedDurable(session.id)) {
-    return null;
-  }
-
   if (isDemoMode()) {
+    const session = getRequestSession(req);
+    if (!session) return null;
+    const token = req.cookies.get(SESSION_COOKIE)?.value;
+    let iat: number | undefined;
+    if (token?.includes(".")) {
+      try {
+        const body = token.slice(0, token.lastIndexOf("."));
+        const parsed = JSON.parse(
+          Buffer.from(body, "base64url").toString("utf8"),
+        ) as { iat?: number };
+        iat = parsed.iat;
+      } catch {
+        iat = undefined;
+      }
+    }
+    if (await isStaffSessionRevokedDurable(session.id, iat)) {
+      return null;
+    }
     const live = demoStore.getStaffById(session.id);
     if (!live) return null;
     if (
@@ -201,26 +212,29 @@ export async function getLiveSession(
     };
   }
 
-  try {
-    const supabase = createServiceClient();
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, barbershop_id, barber_id")
-      .eq("id", session.id)
-      .maybeSingle();
-    if (error || !data) return null;
-    if (data.barbershop_id !== session.barbershop_id) return null;
-    return {
-      id: data.id,
-      email: data.email,
-      full_name: data.full_name,
-      role: data.role as StaffRole,
-      barbershop_id: data.barbershop_id,
-      barber_id: data.barber_id ?? null,
-    };
-  } catch {
-    return null; // fail-closed
+  // Produção: HMAC legado não autentica.
+  const accessToken = readAccessTokenFromRequest(req);
+  if (!accessToken) return null;
+
+  const user = await getSupabaseAuthUser(accessToken);
+  if (!user) return null;
+
+  const iat = jwtIssuedAtMs(accessToken);
+  if (await isStaffSessionRevokedDurable(user.id, iat)) {
+    return null;
   }
+
+  const profile = await loadActiveStaffProfile(user.id);
+  if (!profile) return null;
+
+  return {
+    id: profile.id,
+    email: profile.email ?? user.email ?? "",
+    full_name: profile.full_name ?? "",
+    role: profile.role as StaffRole,
+    barbershop_id: profile.barbershop_id,
+    barber_id: profile.barber_id ?? null,
+  };
 }
 
 export function encodeSession(user: SessionUser) {
@@ -249,12 +263,11 @@ export function getRequestSession(req: NextRequest): SessionUser | null {
   return null;
 }
 
+/** Demo only — senhas por papel via env. */
 export async function authenticateStaff(email: string, password: string) {
-  // Produção: senhas compartilhadas por papel (env) não são autenticação multi-tenant.
-  // Até Supabase Auth, login staff só no DEMO MODE.
   if (!isDemoMode()) {
     throw new Error(
-      "Login staff em produção exige Supabase Auth (ainda não habilitado). Use DEMO MODE ou complete a migração Auth.",
+      "Use autenticação Supabase Auth fora do DEMO MODE",
     );
   }
   const normalized = email.trim().toLowerCase();

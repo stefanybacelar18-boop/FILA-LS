@@ -6,6 +6,16 @@ import {
   encodeSession,
 } from "@/lib/auth";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { isDemoMode } from "@/lib/supabase/env";
+import {
+  SB_ACCESS_COOKIE,
+  SB_COOKIE_MAX_AGE,
+  SB_REFRESH_COOKIE,
+} from "@/lib/supabase/auth-cookies";
+import {
+  createAuthAnonClient,
+  loadActiveStaffProfile,
+} from "@/lib/supabase/staff-auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,28 +43,87 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const session = await authenticateStaff(email, body.password);
-    if (!session) {
+    if (isDemoMode()) {
+      const session = await authenticateStaff(email, body.password);
+      if (!session) {
+        return NextResponse.json(
+          { error: "E-mail ou senha inválidos" },
+          { status: 401 },
+        );
+      }
+      const token = encodeSession(session);
+      const res = NextResponse.json({ user: session, mode: "demo" });
+      res.cookies.set(SESSION_COOKIE, token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: 60 * 60 * 8,
+      });
+      res.cookies.set(SB_ACCESS_COOKIE, "", { path: "/", maxAge: 0 });
+      res.cookies.set(SB_REFRESH_COOKIE, "", { path: "/", maxAge: 0 });
+      return res;
+    }
+
+    const supabase = createAuthAnonClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: body.password,
+    });
+    if (error || !data.session || !data.user) {
       return NextResponse.json(
         { error: "E-mail ou senha inválidos" },
         { status: 401 },
       );
     }
 
-    const token = encodeSession(session);
-    // Token só no cookie httpOnly — não devolver no JSON (evita sessionStorage/XSS).
-    const res = NextResponse.json({ user: session });
-    res.cookies.set(SESSION_COOKIE, token, {
+    if (!data.user.email_confirmed_at) {
+      return NextResponse.json(
+        { error: "Confirme seu e-mail antes de entrar" },
+        { status: 403 },
+      );
+    }
+
+    const profile = await loadActiveStaffProfile(data.user.id);
+    if (!profile) {
+      return NextResponse.json(
+        {
+          error:
+            "Conta sem barbearia ativa. Conclua o onboarding após confirmar o e-mail.",
+          code: "ONBOARDING_REQUIRED",
+        },
+        { status: 403 },
+      );
+    }
+
+    const user = {
+      id: profile.id,
+      email: profile.email ?? email,
+      full_name: profile.full_name ?? "",
+      role: profile.role,
+      barbershop_id: profile.barbershop_id,
+      barber_id: profile.barber_id ?? null,
+    };
+
+    const res = NextResponse.json({ user, mode: "supabase" });
+    res.cookies.set(SB_ACCESS_COOKIE, data.session.access_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: true,
       path: "/",
-      maxAge: 60 * 60 * 8, // alinhado à expiração do token (8h)
+      maxAge: SB_COOKIE_MAX_AGE,
     });
+    res.cookies.set(SB_REFRESH_COOKIE, data.session.refresh_token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    res.cookies.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha no login";
-    const status = message.includes("Supabase Auth") ? 503 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

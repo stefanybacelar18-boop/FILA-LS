@@ -103,21 +103,43 @@ export function isStaffSessionRevoked(staffId: string) {
   return state().byStaffId.has(staffId);
 }
 
-/** Checagem durável (memória + Postgres). Fail-closed se DB inacessível em produção. */
+export function getStaffRevokedAt(staffId: string): number | null {
+  return state().byStaffId.get(staffId)?.revokedAt ?? null;
+}
+
+/**
+ * Revogação por marco temporal: tokens com iat < revoked_at são rejeitados.
+ * Login novo (iat >= revoked_at) funciona sem limpar o registro de auditoria.
+ * Fail-closed em produção se o DB estiver inacessível.
+ */
 export async function isStaffSessionRevokedDurable(
   staffId: string,
+  tokenIatMs?: number,
 ): Promise<boolean> {
-  if (state().byStaffId.has(staffId)) return true;
+  const memAt = getStaffRevokedAt(staffId);
+  if (memAt != null) {
+    if (tokenIatMs != null && tokenIatMs >= memAt) return false;
+    return true;
+  }
   if (isDemoMode()) return false;
   try {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("staff_session_revocations")
-      .select("staff_id")
+      .select("staff_id, revoked_at")
       .eq("staff_id", staffId)
       .maybeSingle();
-    if (error) return true; // fail-closed
-    return Boolean(data);
+    if (error) return true;
+    if (!data) return false;
+    const revokedAt = new Date(data.revoked_at).getTime();
+    state().byStaffId.set(staffId, {
+      staffId,
+      barbershopId: "",
+      reason: "durable",
+      revokedAt,
+    });
+    if (tokenIatMs != null && tokenIatMs >= revokedAt) return false;
+    return true;
   } catch {
     return true;
   }

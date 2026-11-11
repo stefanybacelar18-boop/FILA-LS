@@ -53,7 +53,8 @@ export function AdminLogin({ onSuccess }: Props) {
           </p>
           <h1 className="mt-2 font-display text-3xl text-stone-50">Entrar</h1>
           <p className="mt-2 text-sm text-stone-400">
-            Use o e-mail e a senha configurados nos secrets do ambiente.
+            Em produção: conta individual Supabase Auth. Em demo: e-mail/senha
+            dos secrets do ambiente.
           </p>
         </div>
         <Input
@@ -77,6 +78,15 @@ export function AdminLogin({ onSuccess }: Props) {
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Entrando…" : "Acessar painel"}
         </Button>
+        <p className="text-center text-xs text-stone-500">
+          <a href="/pro/auth/forgot" className="text-amber-400/90 hover:underline">
+            Esqueci a senha
+          </a>
+          {" · "}
+          <a href="/pro/onboarding" className="hover:underline">
+            Nova barbearia
+          </a>
+        </p>
       </form>
     </main>
   );

@@ -42,6 +42,15 @@ jobs:
           NEXT_PUBLIC_DEMO_MODE: "true"
         run: npx tsx scripts/security-phase0.ts
 
+      - name: Security fase 1.A tests
+        env:
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          CORTELY_OWNER_PASSWORD: ownerpass123
+          CORTELY_RECEPTION_PASSWORD: reception123
+          CORTELY_BARBER_PASSWORD: barberpass123
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: npx tsx scripts/security-fase1a.ts
+
       - name: Production build
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
