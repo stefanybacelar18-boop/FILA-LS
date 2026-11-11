@@ -59,7 +59,12 @@ export default async function ShopPage({
       </section>
 
       <div className="mt-8">
-        <BookingWizard shop={shop} barbers={barbers} services={services} />
+        <BookingWizard
+          shop={shop}
+          barbers={barbers}
+          services={services}
+          otpRequired={Boolean(process.env.WHATSAPP_API_TOKEN?.trim())}
+        />
       </div>
 
       <div className="mt-8">

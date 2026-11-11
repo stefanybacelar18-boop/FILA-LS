@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { computeEndTime } from "@/lib/availability";
+import { buildAvailableSlots, computeEndTime } from "@/lib/availability";
 import {
   cancelAppointmentByClient,
   createAppointment,
   getAppointment,
   getShopBundle,
   listAppointments,
+  listScheduleBlocks,
   rescheduleAppointmentByClient,
   updateAppointmentStatus,
 } from "@/lib/data";
@@ -103,7 +104,9 @@ export async function POST(req: NextRequest) {
     const clientOk = Boolean(
       body.client_token && parseClientProof(body.client_token, phoneDigits),
     );
-    if (!staffCanBook && !clientOk) {
+    // OTP obrigatório só com WhatsApp Business API configurada.
+    const otpRequired = Boolean(process.env.WHATSAPP_API_TOKEN?.trim());
+    if (!staffCanBook && !clientOk && otpRequired) {
       return NextResponse.json(
         {
           error:
@@ -131,6 +134,49 @@ export async function POST(req: NextRequest) {
     const service = bundle.services.find((s) => s.id === body.service_id);
     if (!barber || !service) {
       return NextResponse.json({ error: "Barbeiro ou serviço inválido" }, { status: 400 });
+    }
+
+    if (!staffCanBook) {
+      const holidays = bundle.shop.holidays ?? [];
+      if (holidays.includes(body.appointment_date)) {
+        return NextResponse.json(
+          { error: "Data indisponível (feriado)" },
+          { status: 400 },
+        );
+      }
+      const allowed = bundle.shop.booking_barber_ids ?? [];
+      if (allowed.length > 0 && !allowed.includes(body.barber_id)) {
+        return NextResponse.json(
+          { error: "Profissional indisponível no agendamento online" },
+          { status: 400 },
+        );
+      }
+      const [dayAppts, dayBlocks] = await Promise.all([
+        listAppointments({
+          barbershopId: bundle.shop.id,
+          barberId: body.barber_id,
+          date: body.appointment_date,
+        }),
+        listScheduleBlocks({
+          barbershopId: bundle.shop.id,
+          barberId: body.barber_id,
+          date: body.appointment_date,
+        }),
+      ]);
+      const free = buildAvailableSlots({
+        workingHours: bundle.workingHours.filter((w) => w.barber_id === body.barber_id),
+        appointments: dayAppts,
+        scheduleBlocks: dayBlocks,
+        dateISO: body.appointment_date,
+        durationMinutes: service.duration_minutes,
+        slotStepMinutes: bundle.shop.booking_slot_minutes ?? 30,
+      });
+      if (!free.includes(body.start_time.slice(0, 5))) {
+        return NextResponse.json(
+          { error: "Horário indisponível. Escolha outro." },
+          { status: 409 },
+        );
+      }
     }
 
     // Nome sanitizado — evita texto livre em mensagens WhatsApp

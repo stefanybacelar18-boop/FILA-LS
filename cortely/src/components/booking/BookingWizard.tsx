@@ -12,11 +12,18 @@ type Props = {
   shop: Barbershop;
   barbers: Barber[];
   services: Service[];
+  /** Só exige OTP quando a WhatsApp Business API está configurada. */
+  otpRequired?: boolean;
 };
 
 type Step = 1 | 2 | 3 | 4;
 
-export function BookingWizard({ shop, barbers, services }: Props) {
+export function BookingWizard({
+  shop,
+  barbers,
+  services,
+  otpRequired = false,
+}: Props) {
   const [step, setStep] = useState<Step>(1);
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [barberId, setBarberId] = useState<string | null>(null);
@@ -142,7 +149,8 @@ export function BookingWizard({ shop, barbers, services }: Props) {
   }
 
   async function confirmBooking() {
-    if (!serviceId || !barberId || !date || !time || !clientToken) return;
+    if (!serviceId || !barberId || !date || !time) return;
+    if (otpRequired && !clientToken) return;
     setSubmitting(true);
     setError(null);
 
@@ -158,7 +166,7 @@ export function BookingWizard({ shop, barbers, services }: Props) {
           client_phone: onlyDigits(clientPhone),
           appointment_date: date,
           start_time: time,
-          client_token: clientToken,
+          ...(clientToken ? { client_token: clientToken } : {}),
         }),
       });
       const data = await res.json();
@@ -404,41 +412,52 @@ export function BookingWizard({ shop, barbers, services }: Props) {
             />
           </div>
 
-          <div className="space-y-2 rounded-2xl border border-white/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-stone-500">
-              Confirmação WhatsApp (OTP)
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={otpBusy || onlyDigits(clientPhone).length < 10}
-                onClick={sendOtp}
-              >
-                {otpBusy ? "Enviando…" : "Receber código"}
-              </Button>
-              {otpSent && (
-                <>
-                  <Input
-                    className="max-w-[140px]"
-                    placeholder="Código"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
-                  />
-                  <Button size="sm" disabled={otpBusy || !otpCode} onClick={verifyOtp}>
-                    Validar
-                  </Button>
-                </>
+          {otpRequired ? (
+            <div className="space-y-2 rounded-2xl border border-white/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-stone-500">
+                Confirmação WhatsApp (OTP)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={otpBusy || onlyDigits(clientPhone).length < 10}
+                  onClick={sendOtp}
+                >
+                  {otpBusy ? "Enviando…" : "Receber código"}
+                </Button>
+                {otpSent && (
+                  <>
+                    <Input
+                      className="max-w-[140px]"
+                      placeholder="Código"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                    />
+                    <Button
+                      size="sm"
+                      disabled={otpBusy || !otpCode}
+                      onClick={verifyOtp}
+                    >
+                      Validar
+                    </Button>
+                  </>
+                )}
+              </div>
+              {clientToken ? (
+                <p className="text-xs text-emerald-300">WhatsApp verificado.</p>
+              ) : (
+                <p className="text-xs text-stone-500">
+                  Envie o código e valide antes de confirmar.
+                </p>
               )}
             </div>
-            {clientToken ? (
-              <p className="text-xs text-emerald-300">WhatsApp verificado.</p>
-            ) : (
-              <p className="text-xs text-stone-500">
-                Precisa da WhatsApp Business API configurada nos secrets do app.
-              </p>
-            )}
-          </div>
+          ) : (
+            <p className="text-xs text-stone-500">
+              Confirmação por código WhatsApp fica ativa quando a API estiver
+              configurada. Por enquanto basta nome e telefone.
+            </p>
+          )}
 
           {error && <p className="text-sm text-rose-400">{error}</p>}
 
@@ -450,7 +469,7 @@ export function BookingWizard({ shop, barbers, services }: Props) {
               className="flex-1 cta-glow"
               disabled={
                 submitting ||
-                !clientToken ||
+                (otpRequired && !clientToken) ||
                 clientName.trim().length < 2 ||
                 onlyDigits(clientPhone).length < 10
               }
