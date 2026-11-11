@@ -35,6 +35,12 @@ export async function GET(req: NextRequest) {
     if (!catalog) {
       return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
     }
+    if (catalog.shop.id !== session!.barbershop_id) {
+      return NextResponse.json(
+        { error: "Sem acesso a esta barbearia" },
+        { status: 403 },
+      );
+    }
 
     const q = req.nextUrl.searchParams.get("q") ?? undefined;
 
@@ -88,8 +94,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = getRequestSession(req);
+    requirePermission(session, "agenda");
     const body = await req.json();
     const action = z.string().parse(body.action);
+    const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
+    const catalog = await getAdminCatalog(slug);
+    if (!catalog) {
+      return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+    }
+    if (catalog.shop.id !== session!.barbershop_id) {
+      return NextResponse.json(
+        { error: "Sem acesso a esta barbearia" },
+        { status: 403 },
+      );
+    }
 
     switch (action) {
       case "upsert_barber": {
@@ -181,7 +199,12 @@ export async function POST(req: NextRequest) {
             full_name: z.string().optional(),
           })
           .parse(body);
-        return NextResponse.json({ client: await updateClient(data) });
+        return NextResponse.json({
+          client: await updateClient({
+            ...data,
+            barbershop_id: session!.barbershop_id,
+          }),
+        });
       }
       case "create_block": {
         requirePermission(session, "manage_blocks");
@@ -200,13 +223,6 @@ export async function POST(req: NextRequest) {
             { error: "Barbeiro só pode bloquear a própria agenda" },
             { status: 403 },
           );
-        }
-
-        const catalog = await getAdminCatalog(
-          req.nextUrl.searchParams.get("slug") ?? "navalha-negra",
-        );
-        if (!catalog) {
-          return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
         }
 
         const block = await createScheduleBlock({

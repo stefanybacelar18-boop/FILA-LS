@@ -54,7 +54,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Set<string>> = {
     "bloqueios",
     "mark_status",
     "manage_blocks",
-    "comissoes",
+    // comissões: barbeiro só lê as próprias via /api/ops?view=pro (sem escrita)
   ]),
 };
 

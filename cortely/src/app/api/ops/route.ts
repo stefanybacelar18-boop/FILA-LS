@@ -217,6 +217,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ supplier: opsStore.upsertSupplier(data) });
       }
       case "set_commission_rule": {
+        // Só a dona altera regras (loja ou por barbeiro)
+        if (session!.role !== "owner") {
+          return NextResponse.json(
+            { error: "Só o dono pode alterar regras de comissão" },
+            { status: 403 },
+          );
+        }
         requirePermission(session, "comissoes");
         const data = z
           .object({
@@ -228,11 +235,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ rule: opsStore.setCommissionRule(data) });
       }
       case "pay_commissions": {
+        if (session!.role !== "owner") {
+          return NextResponse.json(
+            { error: "Só o dono pode marcar comissões como pagas" },
+            { status: 403 },
+          );
+        }
         requirePermission(session, "comissoes");
         const data = z.object({ barber_id: z.string().uuid() }).parse(body);
         return NextResponse.json(opsStore.payCommissions(data.barber_id, actor));
       }
       case "upsert_goal": {
+        if (session!.role !== "owner") {
+          return NextResponse.json(
+            { error: "Só o dono pode definir metas" },
+            { status: 403 },
+          );
+        }
         requirePermission(session, "comissoes");
         const data = z
           .object({

@@ -553,9 +553,13 @@ const demoStoreImpl = {
     preferred_barber_id?: string | null;
     birth_date?: string | null;
     full_name?: string;
+    barbershop_id?: string;
   }) {
     const row = state().clients.find((c) => c.id === input.id);
     if (!row) throw new Error("Cliente não encontrado");
+    if (input.barbershop_id && row.barbershop_id !== input.barbershop_id) {
+      throw new Error("Cliente de outra barbearia");
+    }
     if (input.notes !== undefined) row.notes = input.notes;
     if (input.email !== undefined) row.email = input.email;
     if (input.preferred_barber_id !== undefined) {

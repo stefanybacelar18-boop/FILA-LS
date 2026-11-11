@@ -410,15 +410,17 @@ export async function updateClient(input: {
   preferred_barber_id?: string | null;
   birth_date?: string | null;
   full_name?: string;
+  barbershop_id?: string;
 }) {
   if (isDemoMode()) return demoStore.updateClient(input);
   const supabase = createServiceClient();
-  const { data, error } = await supabase
+  const { barbershop_id, id, ...patch } = input;
+  let query = supabase
     .from("clients")
-    .update({ ...input, updated_at: new Date().toISOString() })
-    .eq("id", input.id)
-    .select("*")
-    .single();
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (barbershop_id) query = query.eq("barbershop_id", barbershop_id);
+  const { data, error } = await query.select("*").single();
   if (error) throw new Error(error.message);
   return data as Client;
 }
