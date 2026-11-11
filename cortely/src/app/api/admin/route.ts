@@ -16,6 +16,7 @@ import {
   listLoyalty,
   listReminders,
   listScheduleBlocks,
+  deleteStaff,
   listStaff,
   markReminderSent,
   setWorkingHours,
@@ -23,6 +24,7 @@ import {
   updateShopSettings,
   upsertBarber,
   upsertService,
+  upsertStaff,
 } from "@/lib/data";
 
 export async function GET(req: NextRequest) {
@@ -141,7 +143,12 @@ export async function POST(req: NextRequest) {
             gallery_urls: z.array(z.string()).optional(),
           })
           .parse(body);
-        return NextResponse.json({ service: await upsertService(data) });
+        return NextResponse.json({
+          service: await upsertService({
+            ...data,
+            barbershop_id: session!.barbershop_id,
+          }),
+        });
       }
       case "delete_service": {
         requirePermission(session, "servicos");
@@ -193,7 +200,42 @@ export async function POST(req: NextRequest) {
               .optional(),
           })
           .parse(body);
-        return NextResponse.json({ shop: await updateShopSettings(data) });
+        return NextResponse.json({
+          shop: await updateShopSettings({
+            ...data,
+            id: session!.barbershop_id,
+          }),
+        });
+      }
+      case "upsert_staff": {
+        requirePermission(session, "usuarios");
+        const data = z
+          .object({
+            id: z.string().uuid().optional(),
+            email: z.string().email(),
+            full_name: z.string().min(2),
+            role: z.enum(["owner", "reception", "barber"]),
+            barber_id: z.string().uuid().nullable().optional(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          staff: await upsertStaff({
+            ...data,
+            barbershop_id: session!.barbershop_id,
+          }),
+        });
+      }
+      case "delete_staff": {
+        requirePermission(session, "usuarios");
+        const { id } = z.object({ id: z.string().uuid() }).parse(body);
+        if (id === session!.id) {
+          return NextResponse.json(
+            { error: "Não é possível remover o próprio usuário" },
+            { status: 400 },
+          );
+        }
+        await deleteStaff(id, session!.barbershop_id);
+        return NextResponse.json({ ok: true });
       }
       case "mark_reminder_sent": {
         requirePermission(session, "lembretes");

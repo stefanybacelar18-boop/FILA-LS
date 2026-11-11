@@ -81,8 +81,30 @@ export async function GET(req: NextRequest) {
       units: permissions.unidades ? snap.units : [],
       deposits: permissions.caixa ? snap.deposits : [],
       currentCash: permissions.caixa ? opsStore.currentCash() : null,
+      cashConference: permissions.caixa
+        ? (() => {
+            try {
+              return opsStore.cashConference();
+            } catch {
+              return null;
+            }
+          })()
+        : null,
       lowStock: permissions.estoque ? opsStore.lowStock() : [],
-      cashflow: permissions.financeiro ? opsStore.cashflowSummary() : null,
+      replenishment: permissions.estoque
+        ? opsStore.replenishmentSuggestions()
+        : [],
+      inventoryCounts: permissions.estoque
+        ? snap.inventoryCounts.slice(0, 20)
+        : [],
+      cashflow:
+        permissions.financeiro || permissions.caixa
+          ? opsStore.cashflowSummary()
+          : null,
+      profitability: permissions.relatorios ? opsStore.profitability() : null,
+      fiscalDocuments: permissions.caixa
+        ? snap.fiscalDocuments.slice(0, 20)
+        : [],
       ranking: permissions.comissoes ? opsStore.ranking() : [],
       session,
       permissions,
@@ -117,13 +139,23 @@ export async function POST(req: NextRequest) {
       }
       case "close_cash": {
         requirePermission(session, "caixa");
-        const data = z.object({ closing_amount: z.number().nonnegative() }).parse(body);
+        const data = z
+          .object({
+            closing_amount: z.number().nonnegative(),
+            counted_by_method: z.record(z.string(), z.number()).optional(),
+          })
+          .parse(body);
         return NextResponse.json({
           cash: opsStore.closeCash({
             closed_by: actor,
             closing_amount: data.closing_amount,
+            counted_by_method: data.counted_by_method,
           }),
         });
+      }
+      case "cash_conference": {
+        requirePermission(session, "caixa");
+        return NextResponse.json({ conference: opsStore.cashConference() });
       }
       case "cash_movement": {
         requirePermission(session, "caixa");
@@ -147,6 +179,7 @@ export async function POST(req: NextRequest) {
             barber_id: z.string().uuid().nullable().optional(),
             appointment_id: z.string().uuid().nullable().optional(),
             discount: z.number().nonnegative().optional(),
+            tip: z.number().nonnegative().optional(),
             coupon_code: z.string().nullable().optional(),
             items: z
               .array(
@@ -175,8 +208,57 @@ export async function POST(req: NextRequest) {
       }
       case "refund_sale": {
         requirePermission(session, "caixa");
-        const { id } = z.object({ id: z.string().uuid() }).parse(body);
-        return NextResponse.json({ sale: opsStore.refundSale(id, actor) });
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            reason: z.string().optional(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          sale: opsStore.refundSale(data.id, actor, data.reason),
+        });
+      }
+      case "cancel_sale": {
+        requirePermission(session, "caixa");
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            reason: z.string().min(2),
+          })
+          .parse(body);
+        return NextResponse.json({
+          sale: opsStore.cancelSale(data.id, actor, data.reason),
+        });
+      }
+      case "inventory_count": {
+        requirePermission(session, "estoque");
+        const data = z
+          .object({
+            product_id: z.string().uuid(),
+            counted_qty: z.number().int().nonnegative(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          count: opsStore.inventoryCount({
+            ...data,
+            counted_by: actor,
+          }),
+        });
+      }
+      case "draft_fiscal": {
+        requirePermission(session, "caixa");
+        const data = z
+          .object({
+            sale_id: z.string().uuid(),
+            doc_type: z.enum(["nfc_e", "nf_e", "recibo"]).optional(),
+          })
+          .parse(body);
+        return NextResponse.json({
+          document: opsStore.draftFiscalDocument({
+            ...data,
+            actor,
+          }),
+        });
       }
       case "upsert_product": {
         requirePermission(session, "estoque");
@@ -370,6 +452,17 @@ export async function POST(req: NextRequest) {
           entry: opsStore.updateWaitlistStatus(data.id, data.status),
         });
       }
+      case "offer_waitlist": {
+        requirePermission(session, "waitlist");
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            message: z.string().optional(),
+            offered_slot: z.string().optional(),
+          })
+          .parse(body);
+        return NextResponse.json(await opsStore.offerWaitlistSlot(data));
+      }
       case "upsert_payable": {
         requirePermission(session, "financeiro");
         const data = z
@@ -418,8 +511,27 @@ export async function POST(req: NextRequest) {
       }
       case "send_campaign": {
         requirePermission(session, "marketing");
-        const { id } = z.object({ id: z.string().uuid() }).parse(body);
-        return NextResponse.json({ campaign: opsStore.sendCampaign(id) });
+        const data = z
+          .object({
+            id: z.string().uuid(),
+            phones: z.array(z.string()).optional(),
+          })
+          .parse(body);
+        const snap = opsStore.snapshot();
+        const fromOps = [
+          ...snap.reviews.map((r) => r.client_phone),
+          ...snap.waitlist.map((w) => w.client_phone),
+        ]
+          .map((p) => p.replace(/\D/g, ""))
+          .filter((p) => p.length >= 10);
+        const targets = Array.from(
+          new Set([...(data.phones ?? []).map((p) => p.replace(/\D/g, "")), ...fromOps]),
+        )
+          .filter((p) => p.length >= 10)
+          .slice(0, 30);
+        return NextResponse.json({
+          campaign: await opsStore.sendCampaign(data.id, targets),
+        });
       }
       case "upsert_coupon": {
         requirePermission(session, "marketing");

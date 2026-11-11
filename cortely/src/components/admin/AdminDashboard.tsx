@@ -1134,7 +1134,19 @@ export function AdminDashboard({ slug }: { slug: string }) {
               ))}
             </div>
           </div>
-          {filteredClients.map((client) => (
+          {filteredClients.map((client) => {
+            const daysSince = client.last_visit_at
+              ? (Date.now() - new Date(client.last_visit_at).getTime()) /
+                (1000 * 60 * 60 * 24)
+              : null;
+            const churnRisk =
+              daysSince != null ? daysSince >= 45 : client.total_visits === 0;
+            const predictedReturn =
+              daysSince != null && client.total_visits > 1
+                ? Math.max(7, Math.round(30 - daysSince))
+                : 21;
+            const approxLtv = client.total_visits * 55;
+            return (
             <article key={client.id} className="glass-panel space-y-3 rounded-2xl p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1148,6 +1160,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
                     {client.last_visit_at
                       ? new Date(client.last_visit_at).toLocaleDateString("pt-BR")
                       : "—"}
+                    {" · "}
+                    LTV est. {formatBRL(approxLtv)}
+                    {" · "}
+                    retorno ~{predictedReturn}d
+                    {churnRisk ? " · risco de inatividade" : ""}
                   </p>
                 </div>
               </div>
@@ -1173,7 +1190,8 @@ export function AdminDashboard({ slug }: { slug: string }) {
                 Salvar observação
               </Button>
             </article>
-          ))}
+            );
+          })}
         </section>
       )}
 
@@ -1462,9 +1480,72 @@ export function AdminDashboard({ slug }: { slug: string }) {
 
       {tab === "usuarios" && (
         <section className="mt-4 space-y-3">
-          <div className="glass-panel rounded-2xl p-5 text-sm text-stone-300">
-            Papéis: owner (tudo), reception (operação), barber (própria agenda +
-            bloqueios).
+          <div className="glass-panel space-y-3 rounded-2xl p-5 text-sm text-stone-300">
+            <p>
+              Papéis: owner (tudo), reception (operação), barber (própria agenda +
+              bloqueios). Senhas vêm das variáveis CORTELY_*_PASSWORD por papel.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input id="staff-name" placeholder="Nome completo" />
+              <Input id="staff-email" placeholder="E-mail" type="email" />
+              <select
+                id="staff-role"
+                className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                defaultValue="reception"
+              >
+                <option value="owner" className="bg-stone-900">
+                  owner
+                </option>
+                <option value="reception" className="bg-stone-900">
+                  reception
+                </option>
+                <option value="barber" className="bg-stone-900">
+                  barber
+                </option>
+              </select>
+              <select
+                id="staff-barber"
+                className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                defaultValue=""
+              >
+                <option value="" className="bg-stone-900">
+                  Barbeiro vinculado (opcional)
+                </option>
+                {data.barbers.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-stone-900">
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                const full_name = (
+                  document.getElementById("staff-name") as HTMLInputElement | null
+                )?.value?.trim();
+                const email = (
+                  document.getElementById("staff-email") as HTMLInputElement | null
+                )?.value?.trim();
+                const role = (
+                  document.getElementById("staff-role") as HTMLSelectElement | null
+                )?.value as "owner" | "reception" | "barber";
+                const barber_id =
+                  (
+                    document.getElementById("staff-barber") as HTMLSelectElement | null
+                  )?.value || null;
+                if (!full_name || !email || !role) return;
+                adminAction({
+                  action: "upsert_staff",
+                  full_name,
+                  email,
+                  role,
+                  barber_id: role === "barber" ? barber_id : null,
+                });
+              }}
+            >
+              Adicionar usuário
+            </Button>
           </div>
           {data.staff.map((user) => (
             <article
@@ -1475,7 +1556,18 @@ export function AdminDashboard({ slug }: { slug: string }) {
                 <p className="font-medium text-stone-100">{user.full_name}</p>
                 <p className="text-sm text-stone-400">{user.email}</p>
               </div>
-              <Badge>{user.role}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge>{user.role}</Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    adminAction({ action: "delete_staff", id: user.id })
+                  }
+                >
+                  Remover
+                </Button>
+              </div>
             </article>
           ))}
         </section>

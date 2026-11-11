@@ -157,8 +157,8 @@ export function ClientLookup({ slug }: { slug: string }) {
     <div className="glass-panel rounded-3xl p-5 sm:p-7">
       <h3 className="font-display text-2xl text-stone-50">Meus horários</h3>
       <p className="mt-2 text-sm text-stone-400">
-        Verifique o WhatsApp com OTP. Depois consulte, cancele ou reagende com
-        pelo menos {cancelHours}h de antecedência.
+        Verifique o WhatsApp com OTP (ou acesso demo). Depois consulte, cancele
+        ou reagende com pelo menos {cancelHours}h de antecedência.
       </p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <Input
@@ -185,6 +185,21 @@ export function ClientLookup({ slug }: { slug: string }) {
           disabled={onlyDigits(phone).length < 10}
           onClick={async () => {
             setError(null);
+            const demoRes = await fetch("/api/client-otp", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "demo_access",
+                phone: onlyDigits(phone),
+                slug,
+              }),
+            });
+            const demoData = await demoRes.json();
+            if (demoRes.ok && demoData.token) {
+              setClientToken(demoData.token);
+              await lookup(demoData.token);
+              return;
+            }
             const res = await fetch("/api/client-otp", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -202,7 +217,7 @@ export function ClientLookup({ slug }: { slug: string }) {
             setOtpSent(true);
           }}
         >
-          Receber código OTP
+          Verificar acesso
         </Button>
         {otpSent && (
           <>

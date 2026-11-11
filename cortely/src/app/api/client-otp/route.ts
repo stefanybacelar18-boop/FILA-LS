@@ -4,6 +4,7 @@ import { z } from "zod";
 import { encodeClientProof } from "@/lib/auth";
 import { getShopBundle } from "@/lib/data";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
+import { isDemoMode } from "@/lib/supabase/env";
 import { onlyDigits } from "@/lib/utils";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
@@ -43,12 +44,48 @@ export async function POST(req: NextRequest) {
     const action = z.string().parse(body.action);
     const ip = clientIp(req);
 
+    if (action === "demo_access") {
+      // Paridade com booking sem OTP: em demo (ou sem WhatsApp API) libera prova assinada.
+      if (!isDemoMode() && process.env.WHATSAPP_API_TOKEN?.trim()) {
+        return NextResponse.json(
+          { error: "Use OTP WhatsApp neste ambiente" },
+          { status: 403 },
+        );
+      }
+      const { phone, slug } = z
+        .object({
+          phone: z.string().min(10).max(20),
+          slug: z.string().min(1).max(80),
+        })
+        .parse(body);
+      const digits = onlyDigits(phone);
+      if (digits.length < 10 || digits.length > 13) {
+        return NextResponse.json({ error: "Telefone inválido" }, { status: 400 });
+      }
+      const shop = await getShopBundle(slug);
+      if (!shop) {
+        return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+      }
+      const ipLimit = checkRateLimit(sensitiveIpKey("otp-demo-ip", ip), {
+        limit: 10,
+        windowMs: 60 * 60 * 1000,
+        lockMs: 30 * 60 * 1000,
+      });
+      if (!ipLimit.ok) return rateFail(ipLimit);
+      return NextResponse.json({
+        ok: true,
+        token: encodeClientProof(digits),
+        demo: true,
+      });
+    }
+
     if (action === "send") {
       if (!process.env.WHATSAPP_API_TOKEN?.trim()) {
         return NextResponse.json(
           {
             error:
               "OTP do cliente fica disponível após configurar a WhatsApp Business API.",
+            demoAccessAvailable: isDemoMode(),
           },
           { status: 503 },
         );

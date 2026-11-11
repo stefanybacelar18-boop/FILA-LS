@@ -383,6 +383,73 @@ const demoStoreImpl = {
       }));
   },
 
+  upsertStaff(input: {
+    id?: string;
+    email: string;
+    full_name: string;
+    role: StaffRole;
+    barber_id?: string | null;
+    barbershop_id: string;
+  }): StaffUser {
+    const s = state();
+    const email = input.email.trim().toLowerCase();
+    if (input.id) {
+      const row = s.staff.find((u) => u.id === input.id);
+      if (!row || row.barbershop_id !== input.barbershop_id) {
+        throw new Error("Usuário não encontrado");
+      }
+      if (
+        s.staff.some(
+          (u) => u.email === email && u.id !== row.id && u.barbershop_id === input.barbershop_id,
+        )
+      ) {
+        throw new Error("Já existe usuário com este e-mail");
+      }
+      row.email = email;
+      row.full_name = input.full_name.trim();
+      row.role = input.role;
+      row.barber_id = input.role === "barber" ? input.barber_id ?? null : null;
+      return {
+        id: row.id,
+        barbershop_id: row.barbershop_id,
+        email: row.email,
+        full_name: row.full_name,
+        role: row.role,
+        barber_id: row.barber_id,
+      };
+    }
+    if (s.staff.some((u) => u.email === email && u.barbershop_id === input.barbershop_id)) {
+      throw new Error("Já existe usuário com este e-mail");
+    }
+    const row: StaffUser = {
+      id: randomUUID(),
+      barbershop_id: input.barbershop_id,
+      email,
+      full_name: input.full_name.trim(),
+      role: input.role,
+      barber_id: input.role === "barber" ? input.barber_id ?? null : null,
+    };
+    s.staff.push(row);
+    return { ...row };
+  },
+
+  deleteStaff(id: string, barbershopId: string) {
+    const s = state();
+    const row = s.staff.find((u) => u.id === id);
+    if (!row || row.barbershop_id !== barbershopId) {
+      throw new Error("Usuário não encontrado");
+    }
+    if (row.role === "owner") {
+      const owners = s.staff.filter(
+        (u) => u.barbershop_id === barbershopId && u.role === "owner",
+      );
+      if (owners.length <= 1) {
+        throw new Error("Não é possível remover o único owner");
+      }
+    }
+    s.staff = s.staff.filter((u) => u.id !== id);
+  },
+
   getShopBySlug(slug: string): ShopBundle | null {
     const s = state();
     if (slug !== s.shop.slug) return null;

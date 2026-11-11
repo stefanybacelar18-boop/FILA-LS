@@ -17,6 +17,12 @@ CREATE TABLE public.barbershops (
   loyalty_reward TEXT NOT NULL DEFAULT '6º corte com 50% de desconto',
   reminder_hours_before INT NOT NULL DEFAULT 24,
   cancel_hours_before INT NOT NULL DEFAULT 2,
+  booking_link_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  booking_slot_minutes INT NOT NULL DEFAULT 30,
+  booking_show_prices BOOLEAN NOT NULL DEFAULT TRUE,
+  booking_group_by_category BOOLEAN NOT NULL DEFAULT FALSE,
+  booking_barber_ids UUID[] NOT NULL DEFAULT '{}',
+  holidays DATE[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -10,8 +10,10 @@ import type {
   SessionUser,
   ShopBundle,
   StaffRole,
+  StaffUser,
   WorkingHours,
 } from "@/lib/types";
+import { computeEndTime } from "@/lib/availability";
 import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
 import { onlyDigits, shopTodayISO } from "@/lib/utils";
 import { getWhatsAppDeliveryMode } from "@/lib/whatsapp";
@@ -30,6 +32,79 @@ function mapShop(shop: Barbershop & { cancel_hours_before?: number }) {
   };
 }
 
+function assertCancelWindowHours(
+  appointment: Pick<Appointment, "appointment_date" | "start_time">,
+  hours: number,
+) {
+  const when = new Date(
+    `${appointment.appointment_date}T${appointment.start_time}:00`,
+  );
+  const diffHours = (when.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (diffHours < hours) {
+    throw new Error(
+      `Cancelamento/reagendamento só com pelo menos ${hours}h de antecedência`,
+    );
+  }
+}
+
+async function addLoyaltyPointSql(input: {
+  barbershopId: string;
+  clientPhone: string;
+  clientName: string;
+  appointmentId?: string;
+  threshold: number;
+}) {
+  const supabase = createServiceClient();
+  const phone = onlyDigits(input.clientPhone);
+  const { data: existing } = await supabase
+    .from("loyalty_accounts")
+    .select("*")
+    .eq("barbershop_id", input.barbershopId)
+    .eq("client_phone", phone)
+    .maybeSingle();
+
+  const nextPoints = ((existing?.points as number | undefined) ?? 0) + 1;
+  const wrapped =
+    input.threshold > 0 && nextPoints >= input.threshold ? 0 : nextPoints;
+  const totalVisits = ((existing?.total_visits as number | undefined) ?? 0) + 1;
+
+  let accountId = existing?.id as string | undefined;
+  if (existing) {
+    await supabase
+      .from("loyalty_accounts")
+      .update({
+        points: wrapped,
+        total_visits: totalVisits,
+        client_name: input.clientName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id);
+  } else {
+    const { data: created } = await supabase
+      .from("loyalty_accounts")
+      .insert({
+        barbershop_id: input.barbershopId,
+        client_phone: phone,
+        client_name: input.clientName,
+        points: wrapped,
+        total_visits: totalVisits,
+        updated_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    accountId = created?.id;
+  }
+
+  if (accountId) {
+    await supabase.from("loyalty_events").insert({
+      loyalty_account_id: accountId,
+      appointment_id: input.appointmentId ?? null,
+      delta: 1,
+      reason: "visit_completed",
+    });
+  }
+}
+
 export async function getShopBundle(slug: string): Promise<ShopBundle | null> {
   if (isDemoMode()) return demoStore.getShopBySlug(slug);
 
@@ -42,23 +117,29 @@ export async function getShopBundle(slug: string): Promise<ShopBundle | null> {
 
   if (error || !shop) return null;
 
-  const [{ data: barbers }, { data: services }, { data: workingHours }] =
-    await Promise.all([
-      supabase
-        .from("barbers")
-        .select("*")
-        .eq("barbershop_id", shop.id)
-        .eq("is_active", true)
-        .order("name"),
-      supabase
-        .from("services")
-        .select("*")
-        .eq("barbershop_id", shop.id)
-        .order("price"),
-      supabase.from("working_hours").select("*"),
-    ]);
+  const [{ data: barbers }, { data: services }] = await Promise.all([
+    supabase
+      .from("barbers")
+      .select("*")
+      .eq("barbershop_id", shop.id)
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("services")
+      .select("*")
+      .eq("barbershop_id", shop.id)
+      .order("price"),
+  ]);
 
-  const barberIds = new Set((barbers ?? []).map((b) => b.id));
+  const barberIds = (barbers ?? []).map((b) => b.id as string);
+  let workingHours: WorkingHours[] = [];
+  if (barberIds.length) {
+    const { data: hours } = await supabase
+      .from("working_hours")
+      .select("*")
+      .in("barber_id", barberIds);
+    workingHours = (hours ?? []) as WorkingHours[];
+  }
 
   return {
     shop: mapShop(shop),
@@ -68,7 +149,7 @@ export async function getShopBundle(slug: string): Promise<ShopBundle | null> {
       price: Number(s.price),
       gallery_urls: s.gallery_urls ?? [],
     })),
-    workingHours: (workingHours ?? []).filter((w) => barberIds.has(w.barber_id)),
+    workingHours,
   };
 }
 
@@ -234,6 +315,19 @@ export async function updateAppointmentStatus(
         updated_at: new Date().toISOString(),
       })
       .eq("id", current.client_id);
+
+    const { data: shop } = await supabase
+      .from("barbershops")
+      .select("loyalty_threshold")
+      .eq("id", current.barbershop_id)
+      .maybeSingle();
+    await addLoyaltyPointSql({
+      barbershopId: current.barbershop_id,
+      clientPhone: current.client_phone,
+      clientName: current.client_name,
+      appointmentId: current.id,
+      threshold: shop?.loyalty_threshold ?? 5,
+    });
   }
 
   if (status === "no_show" && current.client_id) {
@@ -264,7 +358,27 @@ export async function updateAppointmentStatus(
 
 export async function cancelAppointmentByClient(id: string, phone: string) {
   if (isDemoMode()) return demoStore.cancelAppointmentByClient(id, phone);
-  throw new Error("Cancelamento self-service via Supabase: ative o DEMO ou complete o fluxo Auth");
+
+  const supabase = createServiceClient();
+  const { data: row, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error || !row) throw new Error("Agendamento não encontrado");
+  if (onlyDigits(row.client_phone) !== onlyDigits(phone)) {
+    throw new Error("WhatsApp não confere com este agendamento");
+  }
+  if (row.status !== "confirmed") {
+    throw new Error("Só é possível cancelar agendamentos confirmados");
+  }
+  const { data: shop } = await supabase
+    .from("barbershops")
+    .select("cancel_hours_before")
+    .eq("id", row.barbershop_id)
+    .maybeSingle();
+  assertCancelWindowHours(row, shop?.cancel_hours_before ?? 2);
+  return updateAppointmentStatus(id, "canceled");
 }
 
 export async function rescheduleAppointmentByClient(input: {
@@ -274,7 +388,75 @@ export async function rescheduleAppointmentByClient(input: {
   start_time: string;
 }) {
   if (isDemoMode()) return demoStore.rescheduleAppointmentByClient(input);
-  throw new Error("Reagendamento self-service via Supabase: ative o DEMO ou complete o fluxo Auth");
+
+  const supabase = createServiceClient();
+  const { data: row, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("id", input.id)
+    .single();
+  if (error || !row) throw new Error("Agendamento não encontrado");
+  if (onlyDigits(row.client_phone) !== onlyDigits(input.phone)) {
+    throw new Error("WhatsApp não confere com este agendamento");
+  }
+  if (row.status !== "confirmed") {
+    throw new Error("Só é possível reagendar agendamentos confirmados");
+  }
+  const { data: shop } = await supabase
+    .from("barbershops")
+    .select("cancel_hours_before, reminder_hours_before")
+    .eq("id", row.barbershop_id)
+    .maybeSingle();
+  assertCancelWindowHours(row, shop?.cancel_hours_before ?? 2);
+
+  const { data: service } = await supabase
+    .from("services")
+    .select("duration_minutes")
+    .eq("id", row.service_id)
+    .single();
+  if (!service) throw new Error("Serviço não encontrado");
+
+  const end_time = computeEndTime(
+    input.start_time,
+    Number(service.duration_minutes),
+  );
+  const { data, error: updError } = await supabase
+    .from("appointments")
+    .update({
+      appointment_date: input.appointment_date,
+      start_time: input.start_time,
+      end_time,
+    })
+    .eq("id", input.id)
+    .select("*")
+    .single();
+  if (updError) throw new Error(updError.message);
+
+  const appointment = data as Appointment;
+  await supabase
+    .from("reminders")
+    .update({ status: "skipped" })
+    .eq("appointment_id", appointment.id)
+    .eq("status", "pending");
+
+  const hours = shop?.reminder_hours_before || 24;
+  const when = new Date(
+    `${appointment.appointment_date}T${appointment.start_time}:00`,
+  );
+  when.setHours(when.getHours() - hours);
+  await supabase.from("reminders").insert({
+    barbershop_id: appointment.barbershop_id,
+    appointment_id: appointment.id,
+    client_name: appointment.client_name,
+    client_phone: appointment.client_phone,
+    scheduled_for: when.toISOString(),
+    status: "pending",
+    message: `Lembrete Cortely: ${appointment.client_name}, horário em ${appointment.appointment_date} às ${appointment.start_time}`,
+    channel: "whatsapp",
+    delivery_mode: getWhatsAppDeliveryMode(),
+  });
+
+  return appointment;
 }
 
 export async function getDashboard(
@@ -297,7 +479,10 @@ export async function getDashboard(
         .select("id")
         .eq("barbershop_id", barbershopId)
         .eq("status", "pending"),
-      supabase.from("clients").select("last_visit_at,total_visits,barbershop_id"),
+      supabase
+        .from("clients")
+        .select("last_visit_at,total_visits,barbershop_id")
+        .eq("barbershop_id", barbershopId),
     ]);
 
   return {
@@ -536,7 +721,22 @@ export async function upsertBarber(input: {
     return data as Barber;
   }
 
-  throw new Error("Criação de barbeiro via Supabase exige barbershop_id no payload");
+  if (!input.barbershop_id) {
+    throw new Error("barbershop_id obrigatório para criar barbeiro");
+  }
+  const { data, error } = await supabase
+    .from("barbers")
+    .insert({
+      barbershop_id: input.barbershop_id,
+      name: input.name,
+      specialties: input.specialties,
+      avatar_url: input.avatar_url ?? null,
+      is_active: input.is_active ?? true,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Barber;
 }
 
 export async function upsertService(input: {
@@ -547,9 +747,59 @@ export async function upsertService(input: {
   price: number;
   category?: string;
   gallery_urls?: string[];
+  barbershop_id?: string;
 }): Promise<Service> {
   if (isDemoMode()) return demoStore.upsertService(input);
-  throw new Error("CRUD serviço via Supabase: configure o DEMO ou complete o admin SQL");
+
+  const supabase = createServiceClient();
+  if (input.id) {
+    if (!input.barbershop_id) {
+      throw new Error("barbershop_id obrigatório para atualizar serviço");
+    }
+    const { data, error } = await supabase
+      .from("services")
+      .update({
+        name: input.name,
+        description: input.description ?? null,
+        duration_minutes: input.duration_minutes,
+        price: input.price,
+        category: input.category ?? "Geral",
+        gallery_urls: input.gallery_urls ?? [],
+      })
+      .eq("id", input.id)
+      .eq("barbershop_id", input.barbershop_id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return {
+      ...(data as Service),
+      price: Number((data as Service).price),
+      gallery_urls: (data as Service).gallery_urls ?? [],
+    };
+  }
+
+  if (!input.barbershop_id) {
+    throw new Error("barbershop_id obrigatório para criar serviço");
+  }
+  const { data, error } = await supabase
+    .from("services")
+    .insert({
+      barbershop_id: input.barbershop_id,
+      name: input.name,
+      description: input.description ?? null,
+      duration_minutes: input.duration_minutes,
+      price: input.price,
+      category: input.category ?? "Geral",
+      gallery_urls: input.gallery_urls ?? [],
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return {
+    ...(data as Service),
+    price: Number((data as Service).price),
+    gallery_urls: (data as Service).gallery_urls ?? [],
+  };
 }
 
 export async function deleteService(id: string, barbershopId?: string) {
@@ -571,10 +821,126 @@ export async function setWorkingHours(
   rows: Omit<WorkingHours, "id" | "barber_id">[],
 ) {
   if (isDemoMode()) return demoStore.setWorkingHours(barberId, rows);
-  throw new Error("Horários via Supabase: use o DEMO ou o painel SQL");
+
+  const supabase = createServiceClient();
+  const { error: delError } = await supabase
+    .from("working_hours")
+    .delete()
+    .eq("barber_id", barberId);
+  if (delError) throw new Error(delError.message);
+
+  if (!rows.length) return [];
+
+  const { data, error } = await supabase
+    .from("working_hours")
+    .insert(
+      rows.map((row) => ({
+        barber_id: barberId,
+        day_of_week: row.day_of_week,
+        start_time: row.start_time,
+        end_time: row.end_time,
+        break_start: row.break_start,
+        break_end: row.break_end,
+      })),
+    )
+    .select("*");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as WorkingHours[];
 }
 
-export async function updateShopSettings(input: Partial<Barbershop>) {
+export async function updateShopSettings(
+  input: Partial<Barbershop> & { id?: string },
+) {
   if (isDemoMode()) return demoStore.updateShopSettings(input);
-  throw new Error("Configurações via Supabase: use o DEMO ou o painel SQL");
+
+  if (!input.id) {
+    throw new Error("id da barbearia obrigatório para atualizar configurações");
+  }
+  const supabase = createServiceClient();
+  const patch: Record<string, unknown> = {};
+  const keys: (keyof Barbershop)[] = [
+    "name",
+    "phone",
+    "address",
+    "primary_color",
+    "banner_url",
+    "logo_url",
+    "loyalty_threshold",
+    "loyalty_reward",
+    "reminder_hours_before",
+    "cancel_hours_before",
+    "booking_link_enabled",
+    "booking_slot_minutes",
+    "booking_show_prices",
+    "booking_group_by_category",
+    "booking_barber_ids",
+    "holidays",
+  ];
+  for (const key of keys) {
+    if (input[key] !== undefined) patch[key] = input[key];
+  }
+
+  const { data, error } = await supabase
+    .from("barbershops")
+    .update(patch)
+    .eq("id", input.id)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return mapShop(data as Barbershop);
+}
+
+export async function upsertStaff(input: {
+  id?: string;
+  email: string;
+  full_name: string;
+  role: StaffRole;
+  barber_id?: string | null;
+  barbershop_id: string;
+}): Promise<StaffUser> {
+  if (isDemoMode()) return demoStore.upsertStaff(input);
+
+  const supabase = createServiceClient();
+  const email = input.email.trim().toLowerCase();
+  if (input.id) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({
+        email,
+        full_name: input.full_name,
+        role: input.role,
+        barber_id: input.barber_id ?? null,
+      })
+      .eq("id", input.id)
+      .eq("barbershop_id", input.barbershop_id)
+      .select("id, barbershop_id, full_name, role, email, barber_id")
+      .single();
+    if (error) throw new Error(error.message);
+    return data as StaffUser;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .insert({
+      barbershop_id: input.barbershop_id,
+      email,
+      full_name: input.full_name,
+      role: input.role,
+      barber_id: input.barber_id ?? null,
+    })
+    .select("id, barbershop_id, full_name, role, email, barber_id")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as StaffUser;
+}
+
+export async function deleteStaff(id: string, barbershopId: string) {
+  if (isDemoMode()) return demoStore.deleteStaff(id, barbershopId);
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", id)
+    .eq("barbershop_id", barbershopId);
+  if (error) throw new Error(error.message);
 }
