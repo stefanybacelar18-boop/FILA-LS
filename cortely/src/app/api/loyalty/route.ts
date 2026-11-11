@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     // Cliente autenticado por OTP: só a própria conta
     if (phone && proof) {
       const digits = onlyDigits(phone);
-      if (!parseClientProof(proof, digits)) {
+      if (!parseClientProof(proof, digits, bundle.shop.id)) {
         return NextResponse.json(
           { error: "Verifique o WhatsApp com OTP" },
           { status: 401 },

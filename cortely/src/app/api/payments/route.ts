@@ -37,10 +37,18 @@ export async function POST(req: NextRequest) {
       const phoneDigits = data.customer_phone
         ? onlyDigits(data.customer_phone)
         : "";
+      const shopForClient = data.slug
+        ? await getShopBundle(data.slug)
+        : null;
       const clientOk = Boolean(
         phoneDigits &&
           data.client_token &&
-          parseClientProof(data.client_token, phoneDigits),
+          shopForClient &&
+          parseClientProof(
+            data.client_token,
+            phoneDigits,
+            shopForClient.shop.id,
+          ),
       );
       if (!staffOk && !clientOk) {
         return NextResponse.json(

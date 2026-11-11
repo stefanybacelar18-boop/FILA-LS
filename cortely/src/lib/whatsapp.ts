@@ -1,6 +1,11 @@
 import { checkRateLimit } from "@/lib/rate-limit";
 import { formatBRL, onlyDigits } from "@/lib/utils";
 import type { WhatsAppDeliveryMode } from "@/lib/types";
+import {
+  isWhatsAppApiConfigured,
+  resolveWhatsAppProvider,
+  sendViaConfiguredProvider,
+} from "@/lib/whatsapp/providers";
 
 type WhatsAppPayload = {
   shopName: string;
@@ -19,20 +24,11 @@ export type WhatsAppSendResult = {
   url?: string;
   providerMessageId?: string;
   error?: string;
+  provider?: string;
 };
 
-function getApiConfig() {
-  const token = process.env.WHATSAPP_API_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const baseUrl =
-    process.env.WHATSAPP_API_BASE_URL ||
-    "https://graph.facebook.com/v19.0";
-  if (!token || !phoneId) return null;
-  return { token, phoneId, baseUrl };
-}
-
 export function getWhatsAppDeliveryMode(): WhatsAppDeliveryMode {
-  return getApiConfig() ? "api" : "manual";
+  return isWhatsAppApiConfigured() ? "api" : "manual";
 }
 
 export function buildWhatsAppConfirmUrl(payload: WhatsAppPayload) {
@@ -71,20 +67,21 @@ export function buildClientConfirmationMessage(payload: WhatsAppPayload) {
   ].join("\n");
 }
 
-/** Envia mensagem via API (Meta/Evolution) quando configurada; senão devolve URL manual. */
+/** Envia via adaptador Meta ou Evolution; sem provedor devolve URL manual. */
 export async function sendWhatsAppMessage(input: {
   toPhone: string;
   message: string;
   fallbackShopPhone?: string;
 }): Promise<WhatsAppSendResult> {
   const to = onlyDigits(input.toPhone);
-  const api = getApiConfig();
+  const provider = resolveWhatsAppProvider();
 
-  if (!api) {
+  if (provider === "none") {
     const phone = onlyDigits(input.fallbackShopPhone || to);
     return {
       ok: true,
       mode: "manual",
+      provider: "none",
       url: `https://wa.me/55${phone}?text=${encodeURIComponent(input.message)}`,
     };
   }
@@ -98,11 +95,11 @@ export async function sendWhatsAppMessage(input: {
     return {
       ok: false,
       mode: "api",
+      provider,
       error: limited.error,
     };
   }
 
-  // Limite global sem lock longo — evita um anônimo travar OTP/lembretes da loja.
   const globalWa = checkRateLimit("wa-api:global", {
     limit: 120,
     windowMs: 60 * 60 * 1000,
@@ -111,50 +108,32 @@ export async function sendWhatsAppMessage(input: {
     return {
       ok: false,
       mode: "api",
+      provider,
       error: globalWa.error,
     };
   }
 
-  try {
-    const res = await fetch(`${api.baseUrl}/${api.phoneId}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${api.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: `55${to}`,
-        type: "text",
-        text: { body: input.message },
-      }),
-    });
+  const result = await sendViaConfiguredProvider({
+    toDigits: to,
+    message: input.message,
+  });
 
-    const json = (await res.json()) as {
-      messages?: Array<{ id?: string }>;
-      error?: { message?: string };
-    };
-
-    if (!res.ok) {
-      return {
-        ok: false,
-        mode: "api",
-        error: json.error?.message || "Falha no provedor WhatsApp",
-        url: buildWhatsAppReminderUrl(to, input.message),
-      };
-    }
-
-    return {
-      ok: true,
-      mode: "api",
-      providerMessageId: json.messages?.[0]?.id,
-    };
-  } catch (error) {
+  if (!result.ok) {
     return {
       ok: false,
       mode: "api",
-      error: error instanceof Error ? error.message : "Erro de rede WhatsApp",
+      provider: result.provider,
+      error: result.error,
       url: buildWhatsAppReminderUrl(to, input.message),
     };
   }
+
+  return {
+    ok: true,
+    mode: "api",
+    provider: result.provider,
+    providerMessageId: result.providerMessageId,
+  };
 }
+
+export { isWhatsAppApiConfigured, resolveWhatsAppProvider };

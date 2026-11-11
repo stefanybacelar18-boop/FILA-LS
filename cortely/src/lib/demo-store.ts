@@ -433,7 +433,7 @@ const demoStoreImpl = {
     return { ...row };
   },
 
-  deleteStaff(id: string, barbershopId: string) {
+  deleteStaff(id: string, barbershopId: string, actorId?: string) {
     const s = state();
     const row = s.staff.find((u) => u.id === id);
     if (!row || row.barbershop_id !== barbershopId) {
@@ -448,6 +448,21 @@ const demoStoreImpl = {
       }
     }
     s.staff = s.staff.filter((u) => u.id !== id);
+    // Revoga sessões imediatamente (import dinâmico evita ciclo)
+    void import("@/lib/session-revoke").then(({ revokeStaffSessions, auditPermissionChange }) => {
+      revokeStaffSessions({
+        staffId: id,
+        barbershopId,
+        reason: "staff_deleted",
+        actorId,
+      });
+      auditPermissionChange({
+        actorId: actorId ?? null,
+        barbershopId,
+        action: "staff.delete",
+        detail: `Removido ${row.email} (${row.role})`,
+      });
+    });
   },
 
   getShopBySlug(slug: string): ShopBundle | null {

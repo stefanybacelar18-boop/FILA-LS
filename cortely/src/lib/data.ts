@@ -934,8 +934,12 @@ export async function upsertStaff(input: {
   return data as StaffUser;
 }
 
-export async function deleteStaff(id: string, barbershopId: string) {
-  if (isDemoMode()) return demoStore.deleteStaff(id, barbershopId);
+export async function deleteStaff(
+  id: string,
+  barbershopId: string,
+  actorId?: string,
+) {
+  if (isDemoMode()) return demoStore.deleteStaff(id, barbershopId, actorId);
   const supabase = createServiceClient();
   const { error } = await supabase
     .from("profiles")
@@ -943,4 +947,19 @@ export async function deleteStaff(id: string, barbershopId: string) {
     .eq("id", id)
     .eq("barbershop_id", barbershopId);
   if (error) throw new Error(error.message);
+  const { revokeStaffSessions, auditPermissionChange } = await import(
+    "@/lib/session-revoke"
+  );
+  revokeStaffSessions({
+    staffId: id,
+    barbershopId,
+    reason: "staff_deleted",
+    actorId,
+  });
+  auditPermissionChange({
+    actorId: actorId ?? null,
+    barbershopId,
+    action: "staff.delete",
+    detail: `profile ${id} removed`,
+  });
 }

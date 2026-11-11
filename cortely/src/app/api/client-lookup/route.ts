@@ -15,17 +15,17 @@ export async function GET(req: NextRequest) {
   }
 
   const digits = onlyDigits(phone);
-  const verifiedPhone = parseClientProof(proof, digits);
+  const bundle = await getShopBundle(slug);
+  if (!bundle) {
+    return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+  }
+
+  const verifiedPhone = parseClientProof(proof, digits, bundle.shop.id);
   if (!verifiedPhone) {
     return NextResponse.json(
       { error: "Verifique o WhatsApp com OTP antes de consultar seus dados" },
       { status: 401 },
     );
-  }
-
-  const bundle = await getShopBundle(slug);
-  if (!bundle) {
-    return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
   }
 
   const appointments = await listAppointments({

@@ -11,10 +11,19 @@ import { opsStore } from "@/lib/ops-store";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
 
+const DEMO_SHOP_ID = "11111111-1111-4111-8111-111111111111";
+
 export async function GET(req: NextRequest) {
   try {
     const session = getRequestSession(req);
     requirePermission(session, "agenda");
+    // Isolamento: ops JSON atual é single-tenant até migração Postgres
+    if (session!.barbershop_id !== DEMO_SHOP_ID) {
+      return NextResponse.json(
+        { error: "Sem acesso operacional a esta barbearia" },
+        { status: 403 },
+      );
+    }
     const view = req.nextUrl.searchParams.get("view") ?? "snapshot";
 
     if (view === "reports") {
@@ -122,6 +131,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const action = z.string().parse(body.action);
     const actor = session?.full_name || session?.email || "sistema";
+
+    // Review cliente pode ser anônimo com OTP; demais ações exigem staff da loja
+    if (action !== "add_review" && session) {
+      if (session.barbershop_id !== DEMO_SHOP_ID) {
+        return NextResponse.json(
+          { error: "Sem acesso operacional a esta barbearia" },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case "open_cash": {
@@ -557,9 +576,19 @@ export async function POST(req: NextRequest) {
           .parse(body);
         const digits = onlyDigits(data.client_phone);
         const staffOk = Boolean(session && roleCan(session.role, "marketing"));
-        const clientOk = Boolean(
-          data.client_token && parseClientProof(data.client_token, digits),
-        );
+        let clientOk = false;
+        if (data.client_token && data.appointment_id) {
+          const appt = await getAppointment(data.appointment_id);
+          clientOk = Boolean(
+            appt &&
+              parseClientProof(
+                data.client_token,
+                digits,
+                appt.barbershop_id,
+              ) &&
+              onlyDigits(appt.client_phone) === digits,
+          );
+        }
         if (!staffOk && !clientOk) {
           return NextResponse.json(
             { error: "OTP do cliente ou login da equipe necessário" },

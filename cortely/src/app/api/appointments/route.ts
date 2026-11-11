@@ -104,8 +104,9 @@ export async function POST(req: NextRequest) {
     const clientOk = Boolean(
       body.client_token && parseClientProof(body.client_token, phoneDigits),
     );
-    // OTP obrigatório só com WhatsApp Business API configurada.
-    const otpRequired = Boolean(process.env.WHATSAPP_API_TOKEN?.trim());
+    // OTP obrigatório só quando há provedor WhatsApp (Meta ou Evolution).
+    const { isWhatsAppApiConfigured } = await import("@/lib/whatsapp");
+    const otpRequired = isWhatsAppApiConfigured();
     if (!staffCanBook && !clientOk && otpRequired) {
       return NextResponse.json(
         {
@@ -238,7 +239,14 @@ export async function PATCH(req: NextRequest) {
         })
         .parse(body);
       const digits = onlyDigits(data.phone);
-      if (!parseClientProof(data.client_token, digits)) {
+      const current = await getAppointment(data.id);
+      if (!current) {
+        return NextResponse.json({ error: "Agendamento não encontrado" }, { status: 404 });
+      }
+      if (
+        !parseClientProof(data.client_token, digits, current.barbershop_id) ||
+        onlyDigits(current.client_phone) !== digits
+      ) {
         return NextResponse.json(
           { error: "Verifique o WhatsApp com OTP para cancelar" },
           { status: 401 },
@@ -259,7 +267,14 @@ export async function PATCH(req: NextRequest) {
         })
         .parse(body);
       const digits = onlyDigits(data.phone);
-      if (!parseClientProof(data.client_token, digits)) {
+      const current = await getAppointment(data.id);
+      if (!current) {
+        return NextResponse.json({ error: "Agendamento não encontrado" }, { status: 404 });
+      }
+      if (
+        !parseClientProof(data.client_token, digits, current.barbershop_id) ||
+        onlyDigits(current.client_phone) !== digits
+      ) {
         return NextResponse.json(
           { error: "Verifique o WhatsApp com OTP para reagendar" },
           { status: 401 },

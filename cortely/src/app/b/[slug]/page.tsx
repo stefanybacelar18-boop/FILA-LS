@@ -63,7 +63,13 @@ export default async function ShopPage({
           shop={shop}
           barbers={barbers}
           services={services}
-          otpRequired={Boolean(process.env.WHATSAPP_API_TOKEN?.trim())}
+          otpRequired={Boolean(
+            process.env.META_WHATSAPP_TOKEN?.trim() ||
+              process.env.WHATSAPP_API_TOKEN?.trim() ||
+              (process.env.EVOLUTION_API_URL?.trim() &&
+                process.env.EVOLUTION_API_KEY?.trim() &&
+                process.env.EVOLUTION_INSTANCE?.trim()),
+          )}
         />
       </div>
 

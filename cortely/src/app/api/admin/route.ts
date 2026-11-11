@@ -218,12 +218,24 @@ export async function POST(req: NextRequest) {
             barber_id: z.string().uuid().nullable().optional(),
           })
           .parse(body);
-        return NextResponse.json({
-          staff: await upsertStaff({
-            ...data,
-            barbershop_id: session!.barbershop_id,
-          }),
+        const staff = await upsertStaff({
+          ...data,
+          barbershop_id: session!.barbershop_id,
         });
+        const { auditPermissionChange, clearStaffRevocation } = await import(
+          "@/lib/session-revoke"
+        );
+        if (data.id) {
+          // Reativação: limpa revogação anterior se recriar/editar
+          clearStaffRevocation(staff.id);
+        }
+        auditPermissionChange({
+          actorId: session!.id,
+          barbershopId: session!.barbershop_id,
+          action: data.id ? "staff.update" : "staff.create",
+          detail: `${staff.email} · ${staff.role}`,
+        });
+        return NextResponse.json({ staff });
       }
       case "delete_staff": {
         requirePermission(session, "usuarios");
@@ -234,8 +246,8 @@ export async function POST(req: NextRequest) {
             { status: 400 },
           );
         }
-        await deleteStaff(id, session!.barbershop_id);
-        return NextResponse.json({ ok: true });
+        await deleteStaff(id, session!.barbershop_id, session!.id);
+        return NextResponse.json({ ok: true, sessions_revoked: true });
       }
       case "mark_reminder_sent": {
         requirePermission(session, "lembretes");

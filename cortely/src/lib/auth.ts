@@ -1,8 +1,13 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import type { SessionUser, StaffRole } from "@/lib/types";
 import { demoStore } from "@/lib/demo-store";
+import { isDemoMode } from "@/lib/supabase/env";
+import {
+  isStaffSessionRevoked,
+  listPermissionAudit,
+} from "@/lib/session-revoke";
 
 export const SESSION_COOKIE = "cortely_session";
 
@@ -54,16 +59,34 @@ const ROLE_PERMISSIONS: Record<StaffRole, Set<string>> = {
     "bloqueios",
     "mark_status",
     "manage_blocks",
-    // comissões: barbeiro só lê as próprias via /api/ops?view=pro (sem escrita)
   ]),
 };
 
-type SignedSession = SessionUser & { exp: number };
+type SignedSession = SessionUser & { exp: number; iat: number };
+
+type ClientProofPayload = {
+  phone: string;
+  shop_id: string;
+  exp: number;
+  iat: number;
+  jti: string;
+  kind: "client";
+};
+
+const globalClientJti = globalThis as typeof globalThis & {
+  __cortelyClientJtiV1?: Map<string, number>;
+};
+
+function clientJtiStore() {
+  if (!globalClientJti.__cortelyClientJtiV1) {
+    globalClientJti.__cortelyClientJtiV1 = new Map();
+  }
+  return globalClientJti.__cortelyClientJtiV1;
+}
 
 function signingSecret() {
   const fromEnv = process.env.CORTELY_SESSION_SECRET?.trim();
   if (fromEnv && fromEnv.length >= 16) return fromEnv;
-  // Sem fallback hardcoded: sem secret não há sessão assinável.
   throw new Error(
     "CORTELY_SESSION_SECRET não configurado (mínimo 16 caracteres)",
   );
@@ -102,11 +125,18 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
     }
     if (parsed.exp < Date.now()) return null;
 
-    // Confia no cookie assinado (HMAC). Em serverless o store em memória
-    // pode não existir no próximo request — não invalidar a sessão por isso.
-    const live = demoStore.getStaffById(parsed.id);
-    if (live) {
-      if (live.role !== parsed.role || live.barbershop_id !== parsed.barbershop_id) {
+    if (isStaffSessionRevoked(parsed.id)) {
+      return null;
+    }
+
+    // Em demo: staff deve existir no store — removidos são bloqueados imediatamente.
+    if (isDemoMode()) {
+      const live = demoStore.getStaffById(parsed.id);
+      if (!live) return null;
+      if (
+        live.role !== parsed.role ||
+        live.barbershop_id !== parsed.barbershop_id
+      ) {
         return null;
       }
       return {
@@ -119,6 +149,8 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
       };
     }
 
+    // Produção (Supabase): até Auth completo, confia no cookie + revogação;
+    // endpoints ainda validam barbershop_id e permissões no backend.
     return {
       id: parsed.id,
       email: parsed.email,
@@ -133,9 +165,11 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
 }
 
 export function encodeSession(user: SessionUser) {
+  const now = Date.now();
   const payload: SignedSession = {
     ...user,
-    exp: Date.now() + 60 * 60 * 24 * 14 * 1000,
+    iat: now,
+    exp: now + 60 * 60 * 8 * 1000, // 8h (antes 14d)
   };
   const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return `${body}.${signBody(body)}`;
@@ -177,13 +211,29 @@ export function requirePermission(session: SessionUser | null, permission: strin
   }
 }
 
-/** Token de cliente após OTP — assinado e com validade curta. */
-export function encodeClientProof(phoneDigits: string) {
-  const payload = {
+export function requireShopScope(
+  session: SessionUser | null,
+  barbershopId: string,
+) {
+  requirePermission(session, "agenda");
+  if (session!.barbershop_id !== barbershopId) {
+    throw new Error("Sem acesso a esta barbearia");
+  }
+}
+
+/** Token de cliente após OTP — assinado, com shop, jti e validade curta. */
+export function encodeClientProof(phoneDigits: string, shopId: string) {
+  const now = Date.now();
+  const jti = randomUUID();
+  const payload: ClientProofPayload = {
     phone: phoneDigits,
-    exp: Date.now() + 60 * 60 * 2 * 1000,
-    kind: "client" as const,
+    shop_id: shopId,
+    exp: now + 60 * 30 * 1000, // 30 min
+    iat: now,
+    jti,
+    kind: "client",
   };
+  clientJtiStore().set(jti, payload.exp);
   const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return `${body}.${signBody(body)}`;
 }
@@ -191,6 +241,7 @@ export function encodeClientProof(phoneDigits: string) {
 export function parseClientProof(
   token: string | undefined | null,
   expectedPhone?: string,
+  expectedShopId?: string,
 ): string | null {
   if (!token || !token.includes(".")) return null;
   try {
@@ -199,12 +250,40 @@ export function parseClientProof(
     if (!safeEqual(sig, signBody(body))) return null;
     const parsed = JSON.parse(
       Buffer.from(body, "base64url").toString("utf8"),
-    ) as { phone?: string; exp?: number; kind?: string };
-    if (parsed.kind !== "client" || !parsed.phone || !parsed.exp) return null;
-    if (parsed.exp < Date.now()) return null;
+    ) as Partial<ClientProofPayload>;
+    if (parsed.kind !== "client" || !parsed.phone || !parsed.exp || !parsed.jti) {
+      return null;
+    }
+    if (!parsed.shop_id) return null;
+    if (parsed.exp < Date.now()) {
+      clientJtiStore().delete(parsed.jti);
+      return null;
+    }
+    // jti deve existir (emitido e não revogado)
+    if (!clientJtiStore().has(parsed.jti)) return null;
     if (expectedPhone && parsed.phone !== expectedPhone) return null;
+    if (expectedShopId && parsed.shop_id !== expectedShopId) return null;
     return parsed.phone;
   } catch {
     return null;
   }
+}
+
+/** Invalida um proof de cliente (logout / uso único opcional). */
+export function revokeClientProof(token: string | undefined | null) {
+  if (!token || !token.includes(".")) return;
+  try {
+    const [body, sig] = token.split(".");
+    if (!body || !sig || !safeEqual(sig, signBody(body))) return;
+    const parsed = JSON.parse(
+      Buffer.from(body, "base64url").toString("utf8"),
+    ) as Partial<ClientProofPayload>;
+    if (parsed.jti) clientJtiStore().delete(parsed.jti);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getPermissionAudit(barbershopId: string) {
+  return listPermissionAudit(barbershopId);
 }

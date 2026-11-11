@@ -1,26 +1,40 @@
-import { randomInt } from "crypto";
+import { createHash, randomInt } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { encodeClientProof } from "@/lib/auth";
 import { getShopBundle } from "@/lib/data";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
-import { isDemoMode } from "@/lib/supabase/env";
 import { onlyDigits } from "@/lib/utils";
-import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import {
+  isWhatsAppApiConfigured,
+  sendWhatsAppMessage,
+} from "@/lib/whatsapp";
 
 type OtpRow = {
-  code: string;
+  codeHash: string;
   expires: number;
   attempts: number;
+  shopId: string;
+  consumed: boolean;
 };
 
 const globalOtp = globalThis as typeof globalThis & {
-  __cortelyOtpV2?: Map<string, OtpRow>;
+  __cortelyOtpV3?: Map<string, OtpRow>;
 };
 
 function store() {
-  if (!globalOtp.__cortelyOtpV2) globalOtp.__cortelyOtpV2 = new Map();
-  return globalOtp.__cortelyOtpV2;
+  if (!globalOtp.__cortelyOtpV3) globalOtp.__cortelyOtpV3 = new Map();
+  return globalOtp.__cortelyOtpV3;
+}
+
+function otpKey(shopId: string, phone: string) {
+  return `${shopId}:${phone}`;
+}
+
+function hashCode(code: string, shopId: string, phone: string) {
+  return createHash("sha256")
+    .update(`${shopId}:${phone}:${code}:${process.env.CORTELY_SESSION_SECRET || "otp"}`)
+    .digest("hex");
 }
 
 function rateFail(result: { retryAfterSec: number; error: string }) {
@@ -33,10 +47,18 @@ function rateFail(result: { retryAfterSec: number; error: string }) {
   );
 }
 
+/** Resposta uniforme — evita enumeração de telefones/lojas. */
+function genericSendOk() {
+  return NextResponse.json({
+    ok: true,
+    message: "Se o número for válido, o código será enviado em breve.",
+  });
+}
+
 /**
- * OTP por WhatsApp Business API.
- * Sem token: recusa. Código nunca volta na resposta.
- * Exige slug de loja válida + limites apertados (IP/telefone/global).
+ * OTP por WhatsApp (Meta ou Evolution via adaptadores).
+ * Sem provedor configurado: recusa autenticação privada (sem demo_access).
+ * Código nunca volta na resposta. Hash at-rest, uso único, tentativas limitadas.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -44,48 +66,20 @@ export async function POST(req: NextRequest) {
     const action = z.string().parse(body.action);
     const ip = clientIp(req);
 
+    // demo_access removido — não existe atalho público.
     if (action === "demo_access") {
-      // Paridade com booking sem OTP: em demo (ou sem WhatsApp API) libera prova assinada.
-      if (!isDemoMode() && process.env.WHATSAPP_API_TOKEN?.trim()) {
-        return NextResponse.json(
-          { error: "Use OTP WhatsApp neste ambiente" },
-          { status: 403 },
-        );
-      }
-      const { phone, slug } = z
-        .object({
-          phone: z.string().min(10).max(20),
-          slug: z.string().min(1).max(80),
-        })
-        .parse(body);
-      const digits = onlyDigits(phone);
-      if (digits.length < 10 || digits.length > 13) {
-        return NextResponse.json({ error: "Telefone inválido" }, { status: 400 });
-      }
-      const shop = await getShopBundle(slug);
-      if (!shop) {
-        return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
-      }
-      const ipLimit = checkRateLimit(sensitiveIpKey("otp-demo-ip", ip), {
-        limit: 10,
-        windowMs: 60 * 60 * 1000,
-        lockMs: 30 * 60 * 1000,
-      });
-      if (!ipLimit.ok) return rateFail(ipLimit);
-      return NextResponse.json({
-        ok: true,
-        token: encodeClientProof(digits),
-        demo: true,
-      });
+      return NextResponse.json(
+        { error: "Atalho de acesso demo foi removido. Use OTP WhatsApp." },
+        { status: 410 },
+      );
     }
 
     if (action === "send") {
-      if (!process.env.WHATSAPP_API_TOKEN?.trim()) {
+      if (!isWhatsAppApiConfigured()) {
         return NextResponse.json(
           {
             error:
-              "OTP do cliente fica disponível após configurar a WhatsApp Business API.",
-            demoAccessAvailable: isDemoMode(),
+              "OTP do cliente exige provedor WhatsApp (Meta ou Evolution) configurado.",
           },
           { status: 503 },
         );
@@ -99,15 +93,16 @@ export async function POST(req: NextRequest) {
         .parse(body);
       const digits = onlyDigits(phone);
       if (digits.length < 10 || digits.length > 13) {
-        return NextResponse.json({ error: "Telefone inválido" }, { status: 400 });
+        // Mesma mensagem genérica
+        return genericSendOk();
       }
 
       const shop = await getShopBundle(slug);
       if (!shop) {
-        return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+        // Não revela se a loja existe
+        return genericSendOk();
       }
 
-      // Sem IP confiável do host, não disparamos WhatsApp pago.
       if (ip === "unknown") {
         return NextResponse.json(
           { error: "Não foi possível validar a origem do pedido" },
@@ -116,52 +111,53 @@ export async function POST(req: NextRequest) {
       }
 
       const ipLimit = checkRateLimit(sensitiveIpKey("otp-send-ip", ip), {
-        limit: 2,
+        limit: 3,
         windowMs: 60 * 60 * 1000,
         lockMs: 60 * 60 * 1000,
       });
       if (!ipLimit.ok) return rateFail(ipLimit);
 
-      const phoneLimit = checkRateLimit(`otp-send-phone:${digits}`, {
-        limit: 2,
-        windowMs: 60 * 60 * 1000,
-        lockMs: 60 * 60 * 1000,
-      });
+      const phoneLimit = checkRateLimit(
+        `otp-send-phone:${shop.shop.id}:${digits}`,
+        {
+          limit: 3,
+          windowMs: 60 * 60 * 1000,
+          lockMs: 60 * 60 * 1000,
+        },
+      );
       if (!phoneLimit.ok) return rateFail(phoneLimit);
 
-      // Teto por loja (não global compartilhado) — esgota e trava 1h.
       const shopLimit = checkRateLimit(`otp-send-shop:${shop.shop.id}`, {
-        limit: 20,
+        limit: 40,
         windowMs: 60 * 60 * 1000,
         lockMs: 60 * 60 * 1000,
       });
       if (!shopLimit.ok) return rateFail(shopLimit);
 
       const code = String(randomInt(100000, 1000000));
-      store().set(digits, {
-        code,
+      store().set(otpKey(shop.shop.id, digits), {
+        codeHash: hashCode(code, shop.shop.id, digits),
         expires: Date.now() + 10 * 60 * 1000,
         attempts: 0,
+        shopId: shop.shop.id,
+        consumed: false,
       });
 
       const delivery = await sendWhatsAppMessage({
         toPhone: digits,
-        message: `Seu código Cortely é ${code}. Válido por 10 minutos.`,
+        message: `Seu código Cortely é ${code}. Válido por 10 minutos. Não compartilhe.`,
       });
 
       if (!delivery.ok || delivery.mode !== "api" || !delivery.providerMessageId) {
-        store().delete(digits);
+        store().delete(otpKey(shop.shop.id, digits));
+        // Não vaza detalhe do provedor ao cliente
         return NextResponse.json(
-          {
-            error:
-              delivery.error ||
-              "Não foi possível enviar o OTP pela WhatsApp API.",
-          },
+          { error: "Não foi possível enviar o código agora. Tente mais tarde." },
           { status: 502 },
         );
       }
 
-      return NextResponse.json({ ok: true });
+      return genericSendOk();
     }
 
     if (action === "verify") {
@@ -169,19 +165,23 @@ export async function POST(req: NextRequest) {
         .object({
           phone: z.string().min(10).max(20),
           code: z.string().min(4).max(8),
-          slug: z.string().min(1).max(80).optional(),
+          slug: z.string().min(1).max(80),
         })
         .parse(body);
       const digits = onlyDigits(data.phone);
       if (digits.length < 10 || digits.length > 13) {
-        return NextResponse.json({ error: "Telefone inválido" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Código inválido ou expirado" },
+          { status: 401 },
+        );
       }
 
-      if (data.slug) {
-        const shop = await getShopBundle(data.slug);
-        if (!shop) {
-          return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
-        }
+      const shop = await getShopBundle(data.slug);
+      if (!shop) {
+        return NextResponse.json(
+          { error: "Código inválido ou expirado" },
+          { status: 401 },
+        );
       }
 
       const ipLimit = checkRateLimit(sensitiveIpKey("otp-verify-ip", ip), {
@@ -191,9 +191,10 @@ export async function POST(req: NextRequest) {
       });
       if (!ipLimit.ok) return rateFail(ipLimit);
 
-      const row = store().get(digits);
-      if (!row || row.expires < Date.now()) {
-        store().delete(digits);
+      const key = otpKey(shop.shop.id, digits);
+      const row = store().get(key);
+      if (!row || row.consumed || row.expires < Date.now()) {
+        store().delete(key);
         return NextResponse.json(
           { error: "Código inválido ou expirado" },
           { status: 401 },
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (row.attempts >= 5) {
-        store().delete(digits);
+        store().delete(key);
         return NextResponse.json(
           {
             error: "Muitas tentativas. Solicite um novo código.",
@@ -211,11 +212,12 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (row.code !== data.code) {
+      const expected = hashCode(data.code, shop.shop.id, digits);
+      if (expected !== row.codeHash) {
         row.attempts += 1;
-        store().set(digits, row);
+        store().set(key, row);
         if (row.attempts >= 5) {
-          store().delete(digits);
+          store().delete(key);
           return NextResponse.json(
             {
               error: "Muitas tentativas. Solicite um novo código.",
@@ -230,10 +232,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      store().delete(digits);
+      // Uso único
+      row.consumed = true;
+      store().delete(key);
+
       return NextResponse.json({
         ok: true,
-        token: encodeClientProof(digits),
+        token: encodeClientProof(digits, shop.shop.id),
+        expires_in_sec: 30 * 60,
       });
     }
 

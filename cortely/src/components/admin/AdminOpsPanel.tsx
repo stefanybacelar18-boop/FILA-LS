@@ -25,6 +25,7 @@ import type {
   WaitlistEntry,
 } from "@/lib/types-ops";
 import { staffAuthHeaders } from "@/lib/staff-session";
+import { printPlainReceipt } from "@/lib/html-escape";
 import { formatBRL, formatPhoneBR } from "@/lib/utils";
 
 type OpsTab =
@@ -698,13 +699,16 @@ export function AdminOpsPanel({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      const w = window.open("", "_blank", "noopener,noreferrer");
-                      if (!w) return;
-                      w.document.write(
-                        `<pre style="font-family:sans-serif;padding:24px">Cortely — Comanda\n${sale.client_name || "Balcão"}\n${formatBRL(sale.total)}\n${new Date(sale.created_at).toLocaleString("pt-BR")}\nStatus: ${sale.status}</pre>`,
+                      printPlainReceipt(
+                        [
+                          "Cortely — Comanda",
+                          sale.client_name || "Balcão",
+                          formatBRL(sale.total),
+                          new Date(sale.created_at).toLocaleString("pt-BR"),
+                          `Status: ${sale.status}`,
+                        ],
+                        "Comanda Cortely",
                       );
-                      w.document.close();
-                      w.print();
                     }}
                   >
                     Imprimir
