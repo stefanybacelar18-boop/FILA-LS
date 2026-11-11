@@ -18,6 +18,20 @@ defaults:
 jobs:
   security-and-build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
 
@@ -51,16 +65,24 @@ jobs:
           NEXT_PUBLIC_DEMO_MODE: "true"
         run: npx tsx scripts/security-fase1a.ts
 
-      - name: Install PostgreSQL (RLS SQL isolation)
+      - name: Install psql client
         working-directory: .
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-client
-          sudo pg_ctlcluster 16 main start || sudo service postgresql start
-          sudo -u postgres psql -c 'SELECT 1'
+          for i in 1 2 3 4 5; do
+            sudo apt-get update -qq && \
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client && \
+              break
+            echo "apt retry $i…"
+            sleep $((i * 8))
+          done
+          psql --version
 
       - name: Security fase 1.A RLS SQL isolation (two tenants)
         env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
           CORTELY_RLS_TEST_DB: cortely_fase1a_rls_test
         run: npx tsx scripts/security-fase1a-rls-sql.ts
 

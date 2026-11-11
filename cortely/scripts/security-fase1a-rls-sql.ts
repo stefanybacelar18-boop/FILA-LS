@@ -1,6 +1,10 @@
 /**
  * Etapa 1.A — testes reais de isolamento SQL com PostgreSQL + RLS.
  * Sobe DB efêmero, aplica harness + migrations 03/06, executa asserts A×B.
+ *
+ * Conexão:
+ * - CI / remoto: PGHOST+PGUSER+PGPASSWORD (service container)
+ * - Local: sudo -u postgres (cluster do sistema)
  */
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
@@ -12,6 +16,9 @@ const MIG_DIR = join(ROOT, "supabase/migrations");
 const EVIDENCE = "/tmp/cortely-fase1a-rls-sql-evidence.txt";
 const DB = process.env.CORTELY_RLS_TEST_DB || "cortely_fase1a_rls_test";
 
+const useTcp =
+  Boolean(process.env.PGHOST) || Boolean(process.env.PGPASSWORD);
+
 function sh(cmd: string) {
   return execSync(cmd, {
     encoding: "utf8",
@@ -20,7 +27,44 @@ function sh(cmd: string) {
   });
 }
 
+function psqlArgs(db: string, extra: string[]) {
+  if (useTcp) {
+    const host = process.env.PGHOST || "127.0.0.1";
+    const port = process.env.PGPORT || "5432";
+    const user = process.env.PGUSER || "postgres";
+    return ["psql", "-h", host, "-p", port, "-U", user, "-d", db, ...extra];
+  }
+  return ["sudo", "-u", "postgres", "psql", "-d", db, ...extra];
+}
+
+function psqlCmd(db: string, sql: string) {
+  const args = psqlArgs(db, ["-v", "ON_ERROR_STOP=1", "-c", sql]);
+  return execSync(args.map(shellQuote).join(" "), {
+    encoding: "utf8",
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function shellQuote(s: string) {
+  if (/^[a-zA-Z0-9_./:@=-]+$/.test(s)) return s;
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
 function ensurePostgres() {
+  if (useTcp) {
+    // Aguarda service container
+    for (let i = 0; i < 30; i++) {
+      try {
+        psqlCmd("postgres", "SELECT 1");
+        return;
+      } catch {
+        sh("sleep 2");
+      }
+    }
+    console.error("PostgreSQL TCP indisponível (PGHOST/PGPASSWORD)");
+    process.exit(1);
+  }
   try {
     sh("sudo -u postgres psql -c 'SELECT 1' >/dev/null");
     return;
@@ -41,11 +85,11 @@ function ensurePostgres() {
 }
 
 function psqlFileAll(db: string, file: string): string {
-  // Captura stdout e stderr juntos (PASS notices estão em stderr)
-  return execSync(
-    `sudo -u postgres psql -v ON_ERROR_STOP=1 -d ${db} -f ${JSON.stringify(file)} 2>&1`,
-    { encoding: "utf8" },
-  );
+  const args = psqlArgs(db, ["-v", "ON_ERROR_STOP=1", "-f", file]);
+  return execSync(`${args.map(shellQuote).join(" ")} 2>&1`, {
+    encoding: "utf8",
+    env: process.env,
+  });
 }
 
 function main() {
@@ -56,16 +100,19 @@ function main() {
   };
 
   note("=== Cortely fase1a RLS SQL isolation ===");
+  note(`connection=${useTcp ? "tcp" : "local-sudo"}`);
   ensurePostgres();
   note("PostgreSQL up");
 
-  sh(`sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${DB}"`);
-  sh(`sudo -u postgres psql -c "CREATE DATABASE ${DB}"`);
+  try {
+    psqlCmd("postgres", `DROP DATABASE IF EXISTS ${DB}`);
+  } catch {
+    /* ignore */
+  }
+  psqlCmd("postgres", `CREATE DATABASE ${DB}`);
   note(`DB ${DB} created`);
 
-  sh(
-    `sudo -u postgres psql -d ${DB} -c "CREATE EXTENSION IF NOT EXISTS pgcrypto"`,
-  );
+  psqlCmd(DB, "CREATE EXTENSION IF NOT EXISTS pgcrypto");
 
   const harness = join(SQL_DIR, "fase1a_rls_isolation_harness.sql");
   const mig03 = join(MIG_DIR, "20261111_03_fase1a_ops_rls.sql");
@@ -116,9 +163,9 @@ function main() {
     process.exit(1);
   }
 
-  const inv = sh(
-    `sudo -u postgres psql -d ${DB} -Atc "
-SELECT 'schema_public_acl|' || COALESCE(nspacl::text, '<null>')
+  const invArgs = psqlArgs(DB, [
+    "-Atc",
+    `SELECT 'schema_public_acl|' || COALESCE(nspacl::text, '<null>')
 FROM pg_namespace WHERE nspname='public';
 SELECT 'schema_public|' || r.rolname || '|USAGE=' ||
   has_schema_privilege(r.rolname,'public','USAGE')::text || '|CREATE=' ||
@@ -141,9 +188,12 @@ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='public' AND c.relname IN (
   'sale_items','sale_payments','sales','products','ops_audit_log'
 )
-ORDER BY 1;
-"`,
-  );
+ORDER BY 1;`,
+  ]);
+  const inv = execSync(invArgs.map(shellQuote).join(" "), {
+    encoding: "utf8",
+    env: process.env,
+  });
   note("--- privilege inventory ---");
   note(inv.trim());
 
