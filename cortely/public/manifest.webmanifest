@@ -1,0 +1,10 @@
+{
+  "name": "Cortely",
+  "short_name": "Cortely",
+  "description": "Agendamento e fidelidade para barbearias",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "lang": "pt-BR"
+}
