@@ -1,17 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Syne } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const display = Syne({
-  subsets: ["latin"],
+/** Self-hosted to avoid flaky Google Fonts fetches in CI. */
+const display = localFont({
+  src: [
+    { path: "./fonts/syne-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/syne-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/syne-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/syne-latin-800-normal.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--font-display",
-  weight: ["500", "600", "700", "800"],
+  display: "swap",
 });
 
-const sans = Manrope({
-  subsets: ["latin"],
+const sans = localFont({
+  src: [
+    { path: "./fonts/manrope-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/manrope-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/manrope-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/manrope-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
