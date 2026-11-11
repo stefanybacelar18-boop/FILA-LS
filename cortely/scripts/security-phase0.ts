@@ -158,10 +158,77 @@ async function main() {
   assert.equal(shopB, null);
   ok("unknown shop slug returns null (no data leak)");
 
-  // 7) Hash OTP contract
-  const h = createHash("sha256").update("x").digest("hex");
+  // 7) Hash OTP contract — signingSecret obrigatório (sem fallback "otp")
+  assert.equal(typeof auth.signingSecret, "function");
+  assert.ok(auth.signingSecret().length >= 16);
+  const h = createHash("sha256")
+    .update(`shop:phone:123456:${auth.signingSecret()}`)
+    .digest("hex");
   assert.equal(h.length, 64);
-  ok("otp hash helper available");
+  ok("otp hash uses signingSecret");
+
+  // 8) verifyClientProof exige shop (async)
+  const tok2Shop = auth.encodeClientProof(
+    "11999997777",
+    "11111111-1111-4111-8111-111111111111",
+  );
+  assert.equal(
+    await auth.verifyClientProof(
+      tok2Shop,
+      "11999997777",
+      "11111111-1111-4111-8111-111111111111",
+    ),
+    "11999997777",
+  );
+  assert.equal(
+    await auth.verifyClientProof(
+      tok2Shop,
+      "11999997777",
+      "99999999-9999-4999-8999-999999999999",
+    ),
+    null,
+  );
+  ok("verifyClientProof blocks cross-shop booking token");
+
+  // 9) setWorkingHours exige barbershop + barbeiro da loja
+  const { setWorkingHours } = await import("../src/lib/data");
+  await assert.rejects(
+    () => setWorkingHours("00000000-0000-4000-8000-000000000099", [], "11111111-1111-4111-8111-111111111111"),
+    /não pertence/,
+  );
+  ok("setWorkingHours rejects foreign barber_id");
+
+  // 10) role change revoga sessão
+  const reception = demoStore.upsertStaff({
+    email: `role-chg-${Date.now()}@cortely.demo`,
+    full_name: "Role Chg",
+    role: "reception",
+    barbershop_id: "11111111-1111-4111-8111-111111111111",
+  });
+  const roleTok = auth.encodeSession({
+    id: reception.id,
+    email: reception.email,
+    full_name: reception.full_name,
+    role: reception.role,
+    barbershop_id: reception.barbershop_id,
+    barber_id: null,
+  });
+  assert.ok(auth.parseSessionToken(roleTok));
+  demoStore.upsertStaff({
+    id: reception.id,
+    email: reception.email,
+    full_name: reception.full_name,
+    role: "barber",
+    barbershop_id: reception.barbershop_id,
+  });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(auth.parseSessionToken(roleTok), null);
+  ok("role change revokes staff session");
+  demoStore.deleteStaff(
+    reception.id,
+    "11111111-1111-4111-8111-111111111111",
+    staff.id,
+  );
 
   console.log(`\nSecurity phase 0: ${passed} checks passed`);
 }

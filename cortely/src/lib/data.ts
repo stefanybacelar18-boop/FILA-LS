@@ -819,10 +819,33 @@ export async function deleteService(id: string, barbershopId?: string) {
 export async function setWorkingHours(
   barberId: string,
   rows: Omit<WorkingHours, "id" | "barber_id">[],
+  barbershopId?: string,
 ) {
-  if (isDemoMode()) return demoStore.setWorkingHours(barberId, rows);
+  if (!barbershopId) {
+    throw new Error("barbershop_id obrigatório para definir horários");
+  }
+
+  if (isDemoMode()) {
+    const catalog = await getAdminCatalog("navalha-negra");
+    if (!catalog || catalog.shop.id !== barbershopId) {
+      throw new Error("Barbeiro não pertence a esta barbearia");
+    }
+    if (!catalog.barbers.some((b) => b.id === barberId)) {
+      throw new Error("Barbeiro não pertence a esta barbearia");
+    }
+    return demoStore.setWorkingHours(barberId, rows);
+  }
 
   const supabase = createServiceClient();
+  const { data: barber, error: barberErr } = await supabase
+    .from("barbers")
+    .select("id")
+    .eq("id", barberId)
+    .eq("barbershop_id", barbershopId)
+    .maybeSingle();
+  if (barberErr) throw new Error(barberErr.message);
+  if (!barber) throw new Error("Barbeiro não pertence a esta barbearia");
+
   const { error: delError } = await supabase
     .from("working_hours")
     .delete()
@@ -897,12 +920,19 @@ export async function upsertStaff(input: {
   role: StaffRole;
   barber_id?: string | null;
   barbershop_id: string;
+  actorId?: string;
 }): Promise<StaffUser> {
   if (isDemoMode()) return demoStore.upsertStaff(input);
 
   const supabase = createServiceClient();
   const email = input.email.trim().toLowerCase();
   if (input.id) {
+    const { data: before } = await supabase
+      .from("profiles")
+      .select("id, role")
+      .eq("id", input.id)
+      .eq("barbershop_id", input.barbershop_id)
+      .maybeSingle();
     const { data, error } = await supabase
       .from("profiles")
       .update({
@@ -916,6 +946,23 @@ export async function upsertStaff(input: {
       .select("id, barbershop_id, full_name, role, email, barber_id")
       .single();
     if (error) throw new Error(error.message);
+    if (before && before.role !== input.role) {
+      const { revokeStaffSessions, auditPermissionChange } = await import(
+        "@/lib/session-revoke"
+      );
+      revokeStaffSessions({
+        staffId: input.id,
+        barbershopId: input.barbershop_id,
+        reason: `role_changed:${before.role}->${input.role}`,
+        actorId: input.actorId,
+      });
+      auditPermissionChange({
+        actorId: input.actorId ?? null,
+        barbershopId: input.barbershop_id,
+        action: "staff.role_change",
+        detail: `${before.role} -> ${input.role} · ${input.id}`,
+      });
+    }
     return data as StaffUser;
   }
 

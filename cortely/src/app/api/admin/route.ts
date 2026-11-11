@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  getRequestSession,
+  getLiveSession,
   requirePermission,
   roleCan,
 } from "@/lib/auth";
@@ -29,7 +29,7 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
 
     const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
     const body = await req.json();
     const action = z.string().parse(body.action);
@@ -173,7 +173,11 @@ export async function POST(req: NextRequest) {
           })
           .parse(body);
         return NextResponse.json({
-          workingHours: await setWorkingHours(data.barber_id, data.rows),
+          workingHours: await setWorkingHours(
+            data.barber_id,
+            data.rows,
+            session!.barbershop_id,
+          ),
         });
       }
       case "update_settings": {
@@ -221,14 +225,10 @@ export async function POST(req: NextRequest) {
         const staff = await upsertStaff({
           ...data,
           barbershop_id: session!.barbershop_id,
+          actorId: session!.id,
         });
-        const { auditPermissionChange, clearStaffRevocation } = await import(
-          "@/lib/session-revoke"
-        );
-        if (data.id) {
-          // Reativação: limpa revogação anterior se recriar/editar
-          clearStaffRevocation(staff.id);
-        }
+        const { auditPermissionChange } = await import("@/lib/session-revoke");
+        // Mudança de papel já revoga sessões em upsertStaff — não limpar revogação aqui.
         auditPermissionChange({
           actorId: session!.id,
           barbershopId: session!.barbershop_id,

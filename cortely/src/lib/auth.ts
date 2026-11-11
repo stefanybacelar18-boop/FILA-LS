@@ -3,9 +3,10 @@ import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import type { SessionUser, StaffRole } from "@/lib/types";
 import { demoStore } from "@/lib/demo-store";
-import { isDemoMode } from "@/lib/supabase/env";
+import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
 import {
   isStaffSessionRevoked,
+  isStaffSessionRevokedDurable,
   listPermissionAudit,
 } from "@/lib/session-revoke";
 
@@ -84,7 +85,7 @@ function clientJtiStore() {
   return globalClientJti.__cortelyClientJtiV1;
 }
 
-function signingSecret() {
+export function signingSecret() {
   const fromEnv = process.env.CORTELY_SESSION_SECRET?.trim();
   if (fromEnv && fromEnv.length >= 16) return fromEnv;
   throw new Error(
@@ -105,6 +106,25 @@ function safeEqual(a: string, b: string) {
 
 export function roleCan(role: StaffRole, permission: string) {
   return ROLE_PERMISSIONS[role]?.has(permission) ?? false;
+}
+
+function sessionFromDemo(parsed: SignedSession): SessionUser | null {
+  const live = demoStore.getStaffById(parsed.id);
+  if (!live) return null;
+  if (
+    live.role !== parsed.role ||
+    live.barbershop_id !== parsed.barbershop_id
+  ) {
+    return null;
+  }
+  return {
+    id: live.id,
+    email: live.email,
+    full_name: live.full_name,
+    role: live.role,
+    barbershop_id: live.barbershop_id,
+    barber_id: live.barber_id,
+  };
 }
 
 export function parseSessionToken(token: string | undefined | null): SessionUser | null {
@@ -131,26 +151,10 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
 
     // Em demo: staff deve existir no store — removidos são bloqueados imediatamente.
     if (isDemoMode()) {
-      const live = demoStore.getStaffById(parsed.id);
-      if (!live) return null;
-      if (
-        live.role !== parsed.role ||
-        live.barbershop_id !== parsed.barbershop_id
-      ) {
-        return null;
-      }
-      return {
-        id: live.id,
-        email: live.email,
-        full_name: live.full_name,
-        role: live.role,
-        barbershop_id: live.barbershop_id,
-        barber_id: live.barber_id,
-      };
+      return sessionFromDemo(parsed);
     }
 
-    // Produção (Supabase): até Auth completo, confia no cookie + revogação;
-    // endpoints ainda validam barbershop_id e permissões no backend.
+    // Produção: HMAC ok; getLiveSession reconcilia com profiles + revogação durável.
     return {
       id: parsed.id,
       email: parsed.email,
@@ -164,12 +168,67 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
   }
 }
 
+/**
+ * Sessão staff reconciliada com estado atual (demo store ou profiles + revogação SQL).
+ * Use em todas as rotas administrativas / privadas.
+ */
+export async function getLiveSession(
+  req: NextRequest,
+): Promise<SessionUser | null> {
+  const session = getRequestSession(req);
+  if (!session) return null;
+
+  if (await isStaffSessionRevokedDurable(session.id)) {
+    return null;
+  }
+
+  if (isDemoMode()) {
+    const live = demoStore.getStaffById(session.id);
+    if (!live) return null;
+    if (
+      live.role !== session.role ||
+      live.barbershop_id !== session.barbershop_id
+    ) {
+      return null;
+    }
+    return {
+      id: live.id,
+      email: live.email,
+      full_name: live.full_name,
+      role: live.role,
+      barbershop_id: live.barbershop_id,
+      barber_id: live.barber_id,
+    };
+  }
+
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role, barbershop_id, barber_id")
+      .eq("id", session.id)
+      .maybeSingle();
+    if (error || !data) return null;
+    if (data.barbershop_id !== session.barbershop_id) return null;
+    return {
+      id: data.id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role as StaffRole,
+      barbershop_id: data.barbershop_id,
+      barber_id: data.barber_id ?? null,
+    };
+  } catch {
+    return null; // fail-closed
+  }
+}
+
 export function encodeSession(user: SessionUser) {
   const now = Date.now();
   const payload: SignedSession = {
     ...user,
     iat: now,
-    exp: now + 60 * 60 * 8 * 1000, // 8h (antes 14d)
+    exp: now + 60 * 60 * 8 * 1000, // 8h
   };
   const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return `${body}.${signBody(body)}`;
@@ -221,6 +280,22 @@ export function requireShopScope(
   }
 }
 
+function persistClientJti(payload: ClientProofPayload) {
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    void supabase.from("client_proof_jtis").upsert({
+      jti: payload.jti,
+      barbershop_id: payload.shop_id,
+      phone: payload.phone,
+      expires_at: new Date(payload.exp).toISOString(),
+      revoked_at: null,
+    });
+  } catch {
+    /* memory still holds for this instance */
+  }
+}
+
 /** Token de cliente após OTP — assinado, com shop, jti e validade curta. */
 export function encodeClientProof(phoneDigits: string, shopId: string) {
   const now = Date.now();
@@ -234,16 +309,15 @@ export function encodeClientProof(phoneDigits: string, shopId: string) {
     kind: "client",
   };
   clientJtiStore().set(jti, payload.exp);
+  persistClientJti(payload);
   const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return `${body}.${signBody(body)}`;
 }
 
-export function parseClientProof(
-  token: string | undefined | null,
-  expectedPhone?: string,
-  expectedShopId?: string,
-): string | null {
-  if (!token || !token.includes(".")) return null;
+function decodeClientProofPayload(
+  token: string,
+): ClientProofPayload | null {
+  if (!token.includes(".")) return null;
   try {
     const [body, sig] = token.split(".");
     if (!body || !sig) return null;
@@ -259,10 +333,61 @@ export function parseClientProof(
       clientJtiStore().delete(parsed.jti);
       return null;
     }
-    // jti deve existir (emitido e não revogado)
-    if (!clientJtiStore().has(parsed.jti)) return null;
-    if (expectedPhone && parsed.phone !== expectedPhone) return null;
-    if (expectedShopId && parsed.shop_id !== expectedShopId) return null;
+    return parsed as ClientProofPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function parseClientProof(
+  token: string | undefined | null,
+  expectedPhone?: string,
+  expectedShopId?: string,
+): string | null {
+  if (!token) return null;
+  const parsed = decodeClientProofPayload(token);
+  if (!parsed) return null;
+  // jti deve existir (emitido e não revogado) — caminho sync / demo
+  if (!clientJtiStore().has(parsed.jti)) return null;
+  if (expectedPhone && parsed.phone !== expectedPhone) return null;
+  if (expectedShopId && parsed.shop_id !== expectedShopId) return null;
+  return parsed.phone;
+}
+
+/**
+ * Verifica proof de cliente com escopo de loja obrigatório.
+ * Em produção também consulta JTIs no Postgres (multi-instância).
+ */
+export async function verifyClientProof(
+  token: string | undefined | null,
+  expectedPhone: string,
+  expectedShopId: string,
+): Promise<string | null> {
+  if (!token) return null;
+  const parsed = decodeClientProofPayload(token);
+  if (!parsed) return null;
+  if (parsed.phone !== expectedPhone) return null;
+  if (parsed.shop_id !== expectedShopId) return null;
+
+  if (clientJtiStore().has(parsed.jti)) {
+    return parsed.phone;
+  }
+
+  if (isDemoMode()) return null;
+
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("client_proof_jtis")
+      .select("jti, revoked_at, expires_at")
+      .eq("jti", parsed.jti)
+      .eq("barbershop_id", expectedShopId)
+      .maybeSingle();
+    if (error || !data) return null;
+    if (data.revoked_at) return null;
+    if (new Date(data.expires_at).getTime() < Date.now()) return null;
+    // warm memory for subsequent sync checks on this instance
+    clientJtiStore().set(parsed.jti, parsed.exp);
     return parsed.phone;
   } catch {
     return null;
@@ -278,7 +403,20 @@ export function revokeClientProof(token: string | undefined | null) {
     const parsed = JSON.parse(
       Buffer.from(body, "base64url").toString("utf8"),
     ) as Partial<ClientProofPayload>;
-    if (parsed.jti) clientJtiStore().delete(parsed.jti);
+    if (parsed.jti) {
+      clientJtiStore().delete(parsed.jti);
+      if (!isDemoMode()) {
+        try {
+          const supabase = createServiceClient();
+          void supabase
+            .from("client_proof_jtis")
+            .update({ revoked_at: new Date().toISOString() })
+            .eq("jti", parsed.jti);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
   } catch {
     /* ignore */
   }

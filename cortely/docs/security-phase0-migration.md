@@ -44,6 +44,8 @@ Rollback: manter snapshot do JSON + dump SQL até N dias após cutover.
 - Backend **continua** validando permissão e tenant (RLS não substitui `requirePermission` / shop scope)
 - Recuperação de senha nativa do Auth
 - Isolamento: toda query com `barbershop_id` + policies
+- Bridge atual: `getLiveSession` reconcilia cookie HMAC com `profiles` + `staff_session_revocations`
+- OTP/JTI: tabelas `client_otp_challenges` + `client_proof_jtis` (migration `20260331`)
 
 ## WhatsApp
 

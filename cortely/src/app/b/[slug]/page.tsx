@@ -4,7 +4,9 @@ import { BookingWizard } from "@/components/booking/BookingWizard";
 import { ClientLookup } from "@/components/booking/ClientLookup";
 import { Badge } from "@/components/ui/badge";
 import { getShopBundle } from "@/lib/data";
+import { isDemoMode } from "@/lib/supabase/env";
 import { formatPhoneBR } from "@/lib/utils";
+import { isWhatsAppApiConfigured } from "@/lib/whatsapp";
 
 export default async function ShopPage({
   params,
@@ -63,13 +65,7 @@ export default async function ShopPage({
           shop={shop}
           barbers={barbers}
           services={services}
-          otpRequired={Boolean(
-            process.env.META_WHATSAPP_TOKEN?.trim() ||
-              process.env.WHATSAPP_API_TOKEN?.trim() ||
-              (process.env.EVOLUTION_API_URL?.trim() &&
-                process.env.EVOLUTION_API_KEY?.trim() &&
-                process.env.EVOLUTION_INSTANCE?.trim()),
-          )}
+          otpRequired={!isDemoMode() || isWhatsAppApiConfigured()}
         />
       </div>
 

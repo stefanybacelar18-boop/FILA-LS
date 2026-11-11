@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  getRequestSession,
-  parseClientProof,
+  getLiveSession,
   requirePermission,
   roleCan,
+  verifyClientProof,
 } from "@/lib/auth";
 import { getAppointment } from "@/lib/data";
 import { opsStore } from "@/lib/ops-store";
@@ -15,7 +15,7 @@ const DEMO_SHOP_ID = "11111111-1111-4111-8111-111111111111";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     requirePermission(session, "agenda");
     // Isolamento: ops JSON atual é single-tenant até migração Postgres
     if (session!.barbershop_id !== DEMO_SHOP_ID) {
@@ -127,19 +127,18 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     const body = await req.json();
     const action = z.string().parse(body.action);
     const actor = session?.full_name || session?.email || "sistema";
 
-    // Review cliente pode ser anônimo com OTP; demais ações exigem staff da loja
-    if (action !== "add_review" && session) {
-      if (session.barbershop_id !== DEMO_SHOP_ID) {
-        return NextResponse.json(
-          { error: "Sem acesso operacional a esta barbearia" },
-          { status: 403 },
-        );
-      }
+    // Ops JSON é single-tenant (loja seed) até migração Postgres.
+    // Staff de outra empresa nunca escreve no store compartilhado.
+    if (session && session.barbershop_id !== DEMO_SHOP_ID) {
+      return NextResponse.json(
+        { error: "Sem acesso operacional a esta barbearia" },
+        { status: 403 },
+      );
     }
 
     switch (action) {
@@ -575,17 +574,22 @@ export async function POST(req: NextRequest) {
           })
           .parse(body);
         const digits = onlyDigits(data.client_phone);
-        const staffOk = Boolean(session && roleCan(session.role, "marketing"));
+        const staffOk = Boolean(
+          session &&
+            session.barbershop_id === DEMO_SHOP_ID &&
+            roleCan(session.role, "marketing"),
+        );
         let clientOk = false;
         if (data.client_token && data.appointment_id) {
           const appt = await getAppointment(data.appointment_id);
           clientOk = Boolean(
             appt &&
-              parseClientProof(
+              appt.barbershop_id === DEMO_SHOP_ID &&
+              (await verifyClientProof(
                 data.client_token,
                 digits,
                 appt.barbershop_id,
-              ) &&
+              )) &&
               onlyDigits(appt.client_phone) === digits,
           );
         }

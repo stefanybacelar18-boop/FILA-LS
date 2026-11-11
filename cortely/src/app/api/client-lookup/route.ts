@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseClientProof } from "@/lib/auth";
+import { verifyClientProof } from "@/lib/auth";
 import { getLoyalty, getShopBundle, listAppointments, listClients } from "@/lib/data";
 import { opsStore } from "@/lib/ops-store";
 import { onlyDigits } from "@/lib/utils";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
   }
 
-  const verifiedPhone = parseClientProof(proof, digits, bundle.shop.id);
+  const verifiedPhone = await verifyClientProof(proof, digits, bundle.shop.id);
   if (!verifiedPhone) {
     return NextResponse.json(
       { error: "Verifique o WhatsApp com OTP antes de consultar seus dados" },

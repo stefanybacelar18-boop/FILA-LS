@@ -405,10 +405,28 @@ const demoStoreImpl = {
       ) {
         throw new Error("Já existe usuário com este e-mail");
       }
+      const prevRole = row.role;
       row.email = email;
       row.full_name = input.full_name.trim();
       row.role = input.role;
       row.barber_id = input.role === "barber" ? input.barber_id ?? null : null;
+      if (prevRole !== input.role) {
+        void import("@/lib/session-revoke").then(
+          ({ revokeStaffSessions, auditPermissionChange }) => {
+            revokeStaffSessions({
+              staffId: row.id,
+              barbershopId: row.barbershop_id,
+              reason: `role_changed:${prevRole}->${input.role}`,
+            });
+            auditPermissionChange({
+              actorId: null,
+              barbershopId: row.barbershop_id,
+              action: "staff.role_change",
+              detail: `${prevRole} -> ${input.role} · ${row.email}`,
+            });
+          },
+        );
+      }
       return {
         id: row.id,
         barbershop_id: row.barbershop_id,

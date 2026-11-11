@@ -1,7 +1,9 @@
 /**
- * Revogação de sessões staff (demo + bridge até Supabase Auth).
- * Persistido em memória do processo; em multi-instância usar tabela SQL.
+ * Revogação de sessões staff.
+ * Memória do processo (demo / single-instance) + tabela SQL quando Supabase ativo.
  */
+
+import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
 
 export type StaffRevocation = {
   staffId: string;
@@ -37,6 +39,28 @@ function state(): RevocationState {
   return globalRevoke.__cortelySessionRevokeV1;
 }
 
+function persistRevocation(row: StaffRevocation) {
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    void supabase.from("staff_session_revocations").upsert({
+      staff_id: row.staffId,
+      barbershop_id: row.barbershopId,
+      reason: row.reason,
+      actor_id: row.actorId ?? null,
+      revoked_at: new Date(row.revokedAt).toISOString(),
+    });
+    void supabase.from("permission_audit_log").insert({
+      barbershop_id: row.barbershopId,
+      actor_id: row.actorId ?? null,
+      action: "staff.session_revoke",
+      detail: `${row.reason} · staff=${row.staffId}`,
+    });
+  } catch {
+    /* fail-open on persist write would be unsafe; memory still holds */
+  }
+}
+
 export function revokeStaffSessions(input: {
   staffId: string;
   barbershopId: string;
@@ -59,17 +83,44 @@ export function revokeStaffSessions(input: {
     action: "staff.session_revoke",
     detail: `${input.reason} · staff=${input.staffId}`,
   });
-  // Mantém últimas 200 entradas
   if (state().audit.length > 200) state().audit.length = 200;
+  persistRevocation(row);
   return row;
 }
 
 export function clearStaffRevocation(staffId: string) {
   state().byStaffId.delete(staffId);
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    void supabase.from("staff_session_revocations").delete().eq("staff_id", staffId);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isStaffSessionRevoked(staffId: string) {
   return state().byStaffId.has(staffId);
+}
+
+/** Checagem durável (memória + Postgres). Fail-closed se DB inacessível em produção. */
+export async function isStaffSessionRevokedDurable(
+  staffId: string,
+): Promise<boolean> {
+  if (state().byStaffId.has(staffId)) return true;
+  if (isDemoMode()) return false;
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("staff_session_revocations")
+      .select("staff_id")
+      .eq("staff_id", staffId)
+      .maybeSingle();
+    if (error) return true; // fail-closed
+    return Boolean(data);
+  } catch {
+    return true;
+  }
 }
 
 export function listPermissionAudit(barbershopId?: string) {
@@ -92,4 +143,16 @@ export function auditPermissionChange(input: {
     action: input.action,
     detail: input.detail,
   });
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    void supabase.from("permission_audit_log").insert({
+      barbershop_id: input.barbershopId,
+      actor_id: input.actorId,
+      action: input.action,
+      detail: input.detail,
+    });
+  } catch {
+    /* ignore */
+  }
 }

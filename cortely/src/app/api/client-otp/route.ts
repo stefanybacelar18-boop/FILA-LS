@@ -1,9 +1,10 @@
 import { createHash, randomInt } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { encodeClientProof } from "@/lib/auth";
+import { encodeClientProof, signingSecret } from "@/lib/auth";
 import { getShopBundle } from "@/lib/data";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
+import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
 import { onlyDigits } from "@/lib/utils";
 import {
   isWhatsAppApiConfigured,
@@ -33,8 +34,95 @@ function otpKey(shopId: string, phone: string) {
 
 function hashCode(code: string, shopId: string, phone: string) {
   return createHash("sha256")
-    .update(`${shopId}:${phone}:${code}:${process.env.CORTELY_SESSION_SECRET || "otp"}`)
+    .update(`${shopId}:${phone}:${code}:${signingSecret()}`)
     .digest("hex");
+}
+
+async function persistOtpChallenge(row: {
+  shopId: string;
+  phone: string;
+  codeHash: string;
+  expires: number;
+}) {
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    // Invalida desafios abertos anteriores do mesmo telefone/loja
+    await supabase
+      .from("client_otp_challenges")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("barbershop_id", row.shopId)
+      .eq("phone", row.phone)
+      .is("consumed_at", null);
+    await supabase.from("client_otp_challenges").insert({
+      barbershop_id: row.shopId,
+      phone: row.phone,
+      code_hash: row.codeHash,
+      attempts: 0,
+      expires_at: new Date(row.expires).toISOString(),
+    });
+  } catch {
+    /* memória do processo permanece como fallback na mesma instância */
+  }
+}
+
+async function loadDurableOtp(
+  shopId: string,
+  phone: string,
+): Promise<OtpRow | null> {
+  if (isDemoMode()) return null;
+  try {
+    const supabase = createServiceClient();
+    const { data } = await supabase
+      .from("client_otp_challenges")
+      .select("code_hash, attempts, expires_at, consumed_at")
+      .eq("barbershop_id", shopId)
+      .eq("phone", phone)
+      .is("consumed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      codeHash: data.code_hash,
+      expires: new Date(data.expires_at).getTime(),
+      attempts: data.attempts,
+      shopId,
+      consumed: Boolean(data.consumed_at),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function bumpDurableOtpAttempts(shopId: string, phone: string, attempts: number) {
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    await supabase
+      .from("client_otp_challenges")
+      .update({ attempts })
+      .eq("barbershop_id", shopId)
+      .eq("phone", phone)
+      .is("consumed_at", null);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function consumeDurableOtp(shopId: string, phone: string) {
+  if (isDemoMode()) return;
+  try {
+    const supabase = createServiceClient();
+    await supabase
+      .from("client_otp_challenges")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("barbershop_id", shopId)
+      .eq("phone", phone)
+      .is("consumed_at", null);
+  } catch {
+    /* ignore */
+  }
 }
 
 function rateFail(result: { retryAfterSec: number; error: string }) {
@@ -135,12 +223,20 @@ export async function POST(req: NextRequest) {
       if (!shopLimit.ok) return rateFail(shopLimit);
 
       const code = String(randomInt(100000, 1000000));
+      const expires = Date.now() + 10 * 60 * 1000;
+      const codeHash = hashCode(code, shop.shop.id, digits);
       store().set(otpKey(shop.shop.id, digits), {
-        codeHash: hashCode(code, shop.shop.id, digits),
-        expires: Date.now() + 10 * 60 * 1000,
+        codeHash,
+        expires,
         attempts: 0,
         shopId: shop.shop.id,
         consumed: false,
+      });
+      await persistOtpChallenge({
+        shopId: shop.shop.id,
+        phone: digits,
+        codeHash,
+        expires,
       });
 
       const delivery = await sendWhatsAppMessage({
@@ -150,6 +246,7 @@ export async function POST(req: NextRequest) {
 
       if (!delivery.ok || delivery.mode !== "api" || !delivery.providerMessageId) {
         store().delete(otpKey(shop.shop.id, digits));
+        await consumeDurableOtp(shop.shop.id, digits);
         // Não vaza detalhe do provedor ao cliente
         return NextResponse.json(
           { error: "Não foi possível enviar o código agora. Tente mais tarde." },
@@ -192,9 +289,14 @@ export async function POST(req: NextRequest) {
       if (!ipLimit.ok) return rateFail(ipLimit);
 
       const key = otpKey(shop.shop.id, digits);
-      const row = store().get(key);
+      let row = store().get(key) ?? null;
+      if (!row) {
+        row = await loadDurableOtp(shop.shop.id, digits);
+        if (row) store().set(key, row);
+      }
       if (!row || row.consumed || row.expires < Date.now()) {
         store().delete(key);
+        await consumeDurableOtp(shop.shop.id, digits);
         return NextResponse.json(
           { error: "Código inválido ou expirado" },
           { status: 401 },
@@ -203,6 +305,7 @@ export async function POST(req: NextRequest) {
 
       if (row.attempts >= 5) {
         store().delete(key);
+        await consumeDurableOtp(shop.shop.id, digits);
         return NextResponse.json(
           {
             error: "Muitas tentativas. Solicite um novo código.",
@@ -216,8 +319,10 @@ export async function POST(req: NextRequest) {
       if (expected !== row.codeHash) {
         row.attempts += 1;
         store().set(key, row);
+        await bumpDurableOtpAttempts(shop.shop.id, digits, row.attempts);
         if (row.attempts >= 5) {
           store().delete(key);
+          await consumeDurableOtp(shop.shop.id, digits);
           return NextResponse.json(
             {
               error: "Muitas tentativas. Solicite um novo código.",
@@ -235,6 +340,7 @@ export async function POST(req: NextRequest) {
       // Uso único
       row.consumed = true;
       store().delete(key);
+      await consumeDurableOtp(shop.shop.id, digits);
 
       return NextResponse.json({
         ok: true,

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  getRequestSession,
-  parseClientProof,
+  getLiveSession,
   requirePermission,
   roleCan,
+  verifyClientProof,
 } from "@/lib/auth";
 import { getAppointment, getShopBundle } from "@/lib/data";
 import { createPaymentIntent } from "@/lib/payments";
@@ -14,7 +14,7 @@ import { onlyDigits } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getRequestSession(req);
+    const session = await getLiveSession(req);
     const body = await req.json();
     const action = z.string().parse(body.action);
     const ip = clientIp(req);
@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
         phoneDigits &&
           data.client_token &&
           shopForClient &&
-          parseClientProof(
+          (await verifyClientProof(
             data.client_token,
             phoneDigits,
             shopForClient.shop.id,
-          ),
+          )),
       );
       if (!staffOk && !clientOk) {
         return NextResponse.json(
@@ -80,8 +80,18 @@ export async function POST(req: NextRequest) {
             { status: 400 },
           );
         }
+        if (!shopForClient) {
+          return NextResponse.json(
+            { error: "Informe a barbearia (slug) para pagar o sinal" },
+            { status: 400 },
+          );
+        }
         const appointment = await getAppointment(data.appointment_id);
-        if (!appointment || onlyDigits(appointment.client_phone) !== phoneDigits) {
+        if (
+          !appointment ||
+          onlyDigits(appointment.client_phone) !== phoneDigits ||
+          appointment.barbershop_id !== shopForClient.shop.id
+        ) {
           return NextResponse.json(
             { error: "Agendamento não encontrado para este telefone" },
             { status: 403 },
@@ -93,9 +103,9 @@ export async function POST(req: NextRequest) {
             { status: 400 },
           );
         }
-        const slug = data.slug ?? "navalha-negra";
-        const bundle = await getShopBundle(slug);
-        const service = bundle?.services.find((s) => s.id === appointment.service_id);
+        const service = shopForClient.services.find(
+          (s) => s.id === appointment.service_id,
+        );
         const maxAmount = Math.max(service?.price ?? data.amount, 1);
         if (data.amount > maxAmount) {
           return NextResponse.json(
