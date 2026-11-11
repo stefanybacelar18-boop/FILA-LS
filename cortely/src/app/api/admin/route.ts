@@ -187,6 +187,10 @@ export async function POST(req: NextRequest) {
             booking_slot_minutes: z.number().int().positive().max(120).optional(),
             booking_show_prices: z.boolean().optional(),
             booking_group_by_category: z.boolean().optional(),
+            booking_barber_ids: z.array(z.string().uuid()).optional(),
+            holidays: z
+              .array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
+              .optional(),
           })
           .parse(body);
         return NextResponse.json({ shop: await updateShopSettings(data) });

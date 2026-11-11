@@ -43,9 +43,17 @@ import { buildWhatsAppReminderUrl } from "@/lib/whatsapp";
 type Tab =
   | "agenda"
   | "calendario"
+  | "feriados"
   | "comandas"
+  | "fiados"
   | "despesas"
+  | "comissoes"
+  | "pacotes"
   | "produtos"
+  | "fornecedores"
+  | "fila"
+  | "marketing"
+  | "relatorios"
   | "servicos"
   | "equipe"
   | "horarios"
@@ -57,6 +65,17 @@ type Tab =
   | "online"
   | "usuarios"
   | "operacao";
+
+type OpsFocus =
+  | "caixa"
+  | "estoque"
+  | "financeiro"
+  | "comissoes"
+  | "pacotes"
+  | "waitlist"
+  | "marketing"
+  | "relatorios"
+  | "unidades";
 
 type Permissions = Record<
   | "agenda"
@@ -109,9 +128,14 @@ export function AdminDashboard({ slug }: { slug: string }) {
   const [tab, setTab] = useState<Tab>("agenda");
   const [clientQuery, setClientQuery] = useState("");
   const [clientFilter, setClientFilter] = useState<
-    "all" | "inactive" | "noshow" | "notes"
+    "all" | "inactive" | "noshow" | "notes" | "debt" | "package" | "today"
   >("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [holidayDate, setHolidayDate] = useState("");
+  const [opsExtra, setOpsExtra] = useState<{
+    receivables: Array<{ client_name: string; status: string; amount: number }>;
+    clientPackages: Array<{ client_id: string; status: string }>;
+  }>({ receivables: [], clientPackages: [] });
   const [serviceForm, setServiceForm] = useState({
     name: "",
     description: "",
@@ -145,6 +169,8 @@ export function AdminDashboard({ slug }: { slug: string }) {
     booking_slot_minutes: 30,
     booking_show_prices: true,
     booking_group_by_category: false,
+    booking_barber_ids: [] as string[],
+    holidays: [] as string[],
   });
 
   const reload = useCallback(async () => {
@@ -180,6 +206,8 @@ export function AdminDashboard({ slug }: { slug: string }) {
       booking_slot_minutes: json.shop.booking_slot_minutes ?? 30,
       booking_show_prices: json.shop.booking_show_prices ?? true,
       booking_group_by_category: json.shop.booking_group_by_category ?? false,
+      booking_barber_ids: json.shop.booking_barber_ids ?? [],
+      holidays: json.shop.holidays ?? [],
     });
     if (!hoursBarberId && json.barbers?.[0]?.id) {
       setHoursBarberId(json.barbers[0].id);
@@ -200,6 +228,21 @@ export function AdminDashboard({ slug }: { slug: string }) {
       /* sem sessão no boot — mostra login */
     });
   }, [reload]);
+
+  useEffect(() => {
+    if (authed !== true) return;
+    fetch("/api/ops", { credentials: "include", headers: staffAuthHeaders() })
+      .then((r) => r.json())
+      .then((json) => {
+        setOpsExtra({
+          receivables: json.receivables ?? [],
+          clientPackages: json.clientPackages ?? [],
+        });
+      })
+      .catch(() => {
+        /* ops opcional para filtros de cliente */
+      });
+  }, [authed, data?.shop.id]);
 
   const barberMap = useMemo(() => {
     const map = new Map<string, Barber>();
@@ -252,6 +295,11 @@ export function AdminDashboard({ slug }: { slug: string }) {
     return data.workingHours.filter((w) => w.barber_id === hoursBarberId);
   }, [data, hoursBarberId]);
 
+  const todayISO = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
   if (authed === false) {
     return (
       <AdminLogin
@@ -272,30 +320,55 @@ export function AdminDashboard({ slug }: { slug: string }) {
   }
 
   const canOps = data.session.role !== "barber";
+
   const navItems: { id: Tab; label: string; group: string }[] = (
     [
       ["agenda", "Agenda do dia", "Agenda"],
       ["calendario", "Calendário", "Agenda"],
       ["bloqueios", "Ausências", "Agenda"],
-      ["comandas", "Comandas", "Operação"],
-      ["produtos", "Produtos", "Operação"],
+      ["feriados", "Feriados", "Agenda"],
+      ["comandas", "Comandas / Caixa", "Operação"],
+      ["fiados", "Fiados", "Operação"],
       ["despesas", "Despesas", "Operação"],
-      ["operacao", "Mais módulos", "Operação"],
+      ["comissoes", "Comissões + Vales", "Operação"],
+      ["pacotes", "Pacotes", "Operação"],
+      ["produtos", "Produtos / Estoque", "Operação"],
+      ["fornecedores", "Fornecedores", "Operação"],
+      ["fila", "Fila de espera", "Operação"],
+      ["marketing", "Marketing", "Operação"],
+      ["relatorios", "Relatórios", "Operação"],
       ["clientes", "Clientes", "Cadastros"],
       ["servicos", "Serviços", "Cadastros"],
-      ["equipe", "Equipe", "Cadastros"],
+      ["equipe", "Profissionais", "Cadastros"],
       ["horarios", "Horários", "Cadastros"],
-      ["lembretes", "Lembretes", "Relacionamento"],
-      ["fidelidade", "Barber Points", "Relacionamento"],
+      ["lembretes", "WhatsApp", "Diferencial Cortely"],
+      ["fidelidade", "Barber Points", "Diferencial Cortely"],
       ["online", "Agendamento online", "Sistema"],
       ["config", "Identidade", "Sistema"],
-      ["usuarios", "Usuários", "Sistema"],
+      ["usuarios", "Usuários / Acessos", "Sistema"],
     ] as const
   )
     .filter(([id]) => {
-      if (id === "comandas" || id === "produtos" || id === "despesas" || id === "operacao") {
-        return canOps;
+      const opsIds: Tab[] = [
+        "comandas",
+        "fiados",
+        "despesas",
+        "comissoes",
+        "pacotes",
+        "produtos",
+        "fornecedores",
+        "fila",
+        "marketing",
+        "relatorios",
+      ];
+      if (opsIds.includes(id)) {
+        if (!canOps) return false;
+        if (id === "despesas" || id === "fiados" || id === "comissoes" || id === "relatorios") {
+          return data.session.role === "owner";
+        }
+        return true;
       }
+      if (id === "feriados") return Boolean(data.permissions.config);
       if (id === "calendario" || id === "online") {
         return Boolean(data.permissions.agenda) || Boolean(data.permissions.config);
       }
@@ -303,6 +376,31 @@ export function AdminDashboard({ slug }: { slug: string }) {
       return Boolean(data.permissions[id as keyof Permissions]);
     })
     .map(([id, label, group]) => ({ id, label, group }));
+
+  const opsTabForNav = (id: Tab): OpsFocus | null => {
+    switch (id) {
+      case "comandas":
+        return "caixa";
+      case "fiados":
+      case "despesas":
+        return "financeiro";
+      case "comissoes":
+        return "comissoes";
+      case "pacotes":
+        return "pacotes";
+      case "produtos":
+      case "fornecedores":
+        return "estoque";
+      case "fila":
+        return "waitlist";
+      case "marketing":
+        return "marketing";
+      case "relatorios":
+        return "relatorios";
+      default:
+        return null;
+    }
+  };
 
   const filteredClients = data.clients.filter((client) => {
     if (clientFilter === "inactive") {
@@ -313,6 +411,26 @@ export function AdminDashboard({ slug }: { slug: string }) {
     }
     if (clientFilter === "noshow") return client.no_show_count > 0;
     if (clientFilter === "notes") return Boolean(client.notes?.trim());
+    if (clientFilter === "today") {
+      return data.appointments.some(
+        (a) =>
+          a.appointment_date === todayISO &&
+          a.client_phone === client.phone &&
+          a.status !== "canceled",
+      );
+    }
+    if (clientFilter === "debt") {
+      return opsExtra.receivables.some(
+        (r) =>
+          r.status === "open" &&
+          r.client_name.toLowerCase() === client.full_name.toLowerCase(),
+      );
+    }
+    if (clientFilter === "package") {
+      return opsExtra.clientPackages.some(
+        (p) => p.status === "active" && p.client_id === client.id,
+      );
+    }
     return true;
   });
 
@@ -438,27 +556,95 @@ export function AdminDashboard({ slug }: { slug: string }) {
           ))}
         </section>
 
-      {(tab === "comandas" ||
-        tab === "produtos" ||
-        tab === "despesas" ||
-        tab === "operacao") &&
-        canOps && (
+      {opsTabForNav(tab) && canOps && (
           <AdminOpsPanel
             barbers={data.barbers}
             services={data.services}
             clients={data.clients}
-            hideTabs={tab !== "operacao"}
-            initialTab={
-              tab === "produtos"
-                ? "estoque"
+            hideTabs
+            initialTab={opsTabForNav(tab)!}
+            panelMode={
+              tab === "fiados"
+                ? "fiados"
                 : tab === "despesas"
-                  ? "financeiro"
-                  : tab === "comandas"
-                    ? "caixa"
-                    : "caixa"
+                  ? "despesas"
+                  : tab === "fornecedores"
+                    ? "fornecedores"
+                    : "all"
             }
           />
         )}
+
+      {tab === "feriados" && (
+        <section className="mt-4 glass-panel space-y-4 rounded-2xl p-5">
+          <div>
+            <h3 className="font-display text-xl text-stone-50">Feriados</h3>
+            <p className="text-sm text-stone-400">
+              Datas sem agendamento online (grade do dia fica bloqueada no link
+              público).
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              type="date"
+              className="max-w-[180px]"
+              value={holidayDate}
+              onChange={(e) => setHolidayDate(e.target.value)}
+            />
+            <Button
+              onClick={() => {
+                if (!holidayDate) return;
+                const next = Array.from(
+                  new Set([...(settings.holidays ?? []), holidayDate]),
+                ).sort();
+                setSettings({ ...settings, holidays: next });
+                adminAction({
+                  action: "update_settings",
+                  ...settings,
+                  holidays: next,
+                });
+                setHolidayDate("");
+              }}
+            >
+              Adicionar feriado
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {(settings.holidays ?? []).length === 0 && (
+              <p className="text-sm text-stone-500">Nenhum feriado cadastrado.</p>
+            )}
+            {(settings.holidays ?? []).map((day) => (
+              <div
+                key={day}
+                className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
+              >
+                <span>
+                  {new Date(`${day}T12:00:00`).toLocaleDateString("pt-BR", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                  })}
+                </span>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    const next = (settings.holidays ?? []).filter((d) => d !== day);
+                    setSettings({ ...settings, holidays: next });
+                    adminAction({
+                      action: "update_settings",
+                      ...settings,
+                      holidays: next,
+                    });
+                  }}
+                >
+                  Remover
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {tab === "agenda" && (
         <section className="mt-4 space-y-3">
@@ -932,6 +1118,9 @@ export function AdminDashboard({ slug }: { slug: string }) {
               {(
                 [
                   ["all", "Todos"],
+                  ["today", "Agendados hoje"],
+                  ["debt", "Em débito"],
+                  ["package", "Com pacote"],
                   ["inactive", "Inativos"],
                   ["noshow", "Com faltas"],
                   ["notes", "Com observações"],
@@ -1226,6 +1415,40 @@ export function AdminDashboard({ slug }: { slug: string }) {
                 })
               }
             />
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-wide text-stone-500">
+              Profissionais no link público
+            </p>
+            <p className="text-xs text-stone-500">
+              Nenhum marcado = todos os ativos aparecem.
+            </p>
+            {data.barbers
+              .filter((b) => b.is_active)
+              .map((b) => {
+                const selected = (settings.booking_barber_ids ?? []).includes(b.id);
+                return (
+                  <label
+                    key={b.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm text-stone-200"
+                  >
+                    {b.name}
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(e) => {
+                        const cur = settings.booking_barber_ids ?? [];
+                        setSettings({
+                          ...settings,
+                          booking_barber_ids: e.target.checked
+                            ? [...cur, b.id]
+                            : cur.filter((id) => id !== b.id),
+                        });
+                      }}
+                    />
+                  </label>
+                );
+              })}
           </div>
           <Button
             onClick={() =>

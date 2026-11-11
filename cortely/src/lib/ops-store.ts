@@ -22,6 +22,7 @@ import type {
   SalePayment,
   ServicePackage,
   ShopUnit,
+  StaffAdvance,
   StockMovement,
   Supplier,
   WaitlistEntry,
@@ -96,6 +97,7 @@ function seed(): OpsSnapshot {
       },
     ],
     commissionEntries: [],
+    staffAdvances: [],
     goals: [
       {
         id: randomUUID(),
@@ -185,6 +187,7 @@ function state(): OpsSnapshot {
   if (!globalOps.__cortelyOpsV2) {
     const saved = loadPersistedStore().ops as OpsSnapshot | undefined;
     if (saved && !saved.purchaseOrders) saved.purchaseOrders = [];
+    if (saved && !saved.staffAdvances) saved.staffAdvances = [];
     globalOps.__cortelyOpsV2 = saved ?? seed();
     if (!saved) persistOps(globalOps.__cortelyOpsV2);
   }
@@ -645,9 +648,47 @@ const opsStoreImpl = {
       e.status = "paid";
       e.paid_at = new Date().toISOString();
     }
-    const total = pending.reduce((a, e) => a + e.amount, 0);
-    audit(actor, "commission.pay", `${barberId} R$ ${total}`);
-    return { count: pending.length, total };
+    let total = pending.reduce((a, e) => a + e.amount, 0);
+    const advances = s.staffAdvances.filter(
+      (a) => a.barber_id === barberId && a.status === "open",
+    );
+    let deducted = 0;
+    for (const adv of advances) {
+      deducted += adv.amount;
+      adv.status = "deducted";
+      adv.deducted_at = new Date().toISOString();
+    }
+    total = Math.max(0, Math.round((total - deducted) * 100) / 100);
+    audit(
+      actor,
+      "commission.pay",
+      `${barberId} bruto comissões − vales = R$ ${total}`,
+    );
+    return { count: pending.length, total, advances_deducted: deducted };
+  },
+
+  createStaffAdvance(input: {
+    barber_id: string;
+    amount: number;
+    reason: string;
+  }) {
+    if (input.amount <= 0) throw new Error("Valor do vale inválido");
+    const row: StaffAdvance = {
+      id: randomUUID(),
+      barbershop_id: SHOP_ID,
+      barber_id: input.barber_id,
+      amount: input.amount,
+      reason: input.reason.slice(0, 120),
+      status: "open",
+      created_at: new Date().toISOString(),
+      deducted_at: null,
+    };
+    state().staffAdvances.unshift(row);
+    return { ...row };
+  },
+
+  listStaffAdvances() {
+    return state().staffAdvances.map((a) => ({ ...a }));
   },
 
   ranking(month?: string) {

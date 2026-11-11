@@ -26,6 +26,10 @@ export type Barbershop = {
   booking_slot_minutes: number;
   booking_show_prices: boolean;
   booking_group_by_category: boolean;
+  /** IDs de barbeiros no link público; vazio = todos ativos */
+  booking_barber_ids: string[];
+  /** Feriados (YYYY-MM-DD) — bloqueiam agenda online */
+  holidays: string[];
   created_at: string;
 };
 

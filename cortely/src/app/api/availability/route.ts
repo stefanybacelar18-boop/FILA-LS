@@ -35,6 +35,24 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
+  const holidays = bundle.shop.holidays ?? [];
+  if (holidays.includes(date)) {
+    return NextResponse.json({
+      slots: [],
+      booking_link_enabled: bundle.shop.booking_link_enabled ?? true,
+      holiday: true,
+    });
+  }
+
+  const allowed = bundle.shop.booking_barber_ids ?? [];
+  if (allowed.length > 0 && !allowed.includes(barberId)) {
+    return NextResponse.json({
+      slots: [],
+      booking_link_enabled: bundle.shop.booking_link_enabled ?? true,
+      error: "Profissional não disponível no agendamento online",
+    });
+  }
+
   const slots = buildAvailableSlots({
     workingHours: bundle.workingHours.filter((w) => w.barber_id === barberId),
     appointments,

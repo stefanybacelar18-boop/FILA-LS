@@ -25,6 +25,8 @@ function mapShop(shop: Barbershop & { cancel_hours_before?: number }) {
     booking_slot_minutes: shop.booking_slot_minutes ?? 30,
     booking_show_prices: shop.booking_show_prices ?? true,
     booking_group_by_category: shop.booking_group_by_category ?? false,
+    booking_barber_ids: shop.booking_barber_ids ?? [],
+    holidays: shop.holidays ?? [],
   };
 }
 

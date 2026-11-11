@@ -18,6 +18,7 @@ import type {
   Sale,
   ServicePackage,
   ShopUnit,
+  StaffAdvance,
   StockMovement,
   SubscriptionPlan,
   Supplier,
@@ -46,6 +47,7 @@ type OpsPayload = {
   currentCash: CashSession | null;
   cashMovements: Array<{ id: string; type: string; amount: number; reason: string }>;
   commissionEntries: CommissionEntry[];
+  staffAdvances: StaffAdvance[];
   commissionRules: Array<{
     barber_id: string | null;
     service_percent: number;
@@ -104,12 +106,15 @@ export function AdminOpsPanel({
   clients,
   initialTab = "caixa",
   hideTabs = false,
+  panelMode = "all",
 }: {
   barbers: Barber[];
   services: Service[];
   clients: Array<{ id: string; full_name: string; phone: string }>;
   initialTab?: OpsTab;
   hideTabs?: boolean;
+  /** Recorte estilo Salon Soft quando aberto pelo menu lateral. */
+  panelMode?: "all" | "despesas" | "fiados" | "fornecedores";
 }) {
   const [tab, setTab] = useState<OpsTab>(initialTab);
   const [data, setData] = useState<OpsPayload | null>(null);
@@ -131,6 +136,14 @@ export function AdminOpsPanel({
     quantity: 10,
     unit_cost: 20,
     notes: "",
+  });
+  const [expenseMonth, setExpenseMonth] = useState(() =>
+    new Date().toISOString().slice(0, 7),
+  );
+  const [valeForm, setValeForm] = useState({
+    barber_id: "",
+    amount: 50,
+    reason: "Vale / adiantamento",
   });
 
   const [saleForm, setSaleForm] = useState({
@@ -593,19 +606,36 @@ export function AdminOpsPanel({
                     {new Date(sale.created_at).toLocaleString("pt-BR")} · {sale.status}
                   </p>
                 </div>
-                {sale.status === "paid" && (
+                <div className="flex gap-2">
                   <Button
                     size="sm"
-                    variant="danger"
-                    onClick={() =>
-                      action({ action: "refund_sale", id: sale.id }).catch((e) =>
-                        setError(e.message),
-                      )
-                    }
+                    variant="outline"
+                    onClick={() => {
+                      const w = window.open("", "_blank", "noopener,noreferrer");
+                      if (!w) return;
+                      w.document.write(
+                        `<pre style="font-family:sans-serif;padding:24px">Cortely — Comanda\n${sale.client_name || "Balcão"}\n${formatBRL(sale.total)}\n${new Date(sale.created_at).toLocaleString("pt-BR")}\nStatus: ${sale.status}</pre>`,
+                      );
+                      w.document.close();
+                      w.print();
+                    }}
                   >
-                    Estornar
+                    Imprimir
                   </Button>
-                )}
+                  {sale.status === "paid" && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() =>
+                        action({ action: "refund_sale", id: sale.id }).catch((e) =>
+                          setError(e.message),
+                        )
+                      }
+                    >
+                      Estornar
+                    </Button>
+                  )}
+                </div>
               </article>
             ))}
           </div>
@@ -883,106 +913,142 @@ export function AdminOpsPanel({
 
       {tab === "financeiro" && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="glass-panel space-y-3 rounded-2xl p-5">
-            <h3 className="font-display text-xl">Despesas / contas a pagar</h3>
-            <Input
-              placeholder="Descrição"
-              value={payableForm.description}
-              onChange={(e) =>
-                setPayableForm({ ...payableForm, description: e.target.value })
-              }
-            />
-            <Input
-              type="number"
-              value={payableForm.amount}
-              onChange={(e) =>
-                setPayableForm({ ...payableForm, amount: Number(e.target.value) })
-              }
-            />
-            <Input
-              type="date"
-              value={payableForm.due_date}
-              onChange={(e) =>
-                setPayableForm({ ...payableForm, due_date: e.target.value })
-              }
-            />
-            <Button
-              onClick={() =>
-                action({ action: "upsert_payable", ...payableForm }).catch((e) =>
-                  setError(e.message),
-                )
-              }
-            >
-              Lançar despesa
-            </Button>
-            {data.payables.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
+          {panelMode !== "fiados" && (
+            <div className="glass-panel space-y-3 rounded-2xl p-5">
+              <h3 className="font-display text-xl">Despesas / contas a pagar</h3>
+              <Input
+                type="month"
+                value={expenseMonth}
+                onChange={(e) => setExpenseMonth(e.target.value)}
+              />
+              <Input
+                placeholder="Descrição"
+                value={payableForm.description}
+                onChange={(e) =>
+                  setPayableForm({ ...payableForm, description: e.target.value })
+                }
+              />
+              <select
+                className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                value={payableForm.category}
+                onChange={(e) =>
+                  setPayableForm({ ...payableForm, category: e.target.value })
+                }
               >
-                <span>
-                  {p.description} · {formatBRL(p.amount)} · {p.status}
-                </span>
-                {p.status === "open" && (
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      action({ action: "pay_payable", id: p.id }).catch((e) =>
-                        setError(e.message),
-                      )
-                    }
-                  >
-                    Pagar
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="glass-panel space-y-3 rounded-2xl p-5">
-            <h3 className="font-display text-xl">Fiados / a receber</h3>
-            <Button
-              variant="outline"
-              onClick={() =>
-                action({
-                  action: "upsert_receivable",
-                  client_name: "Cliente fiado",
-                  description: "Serviço fiado",
-                  amount: 55,
-                  due_date: new Date().toISOString().slice(0, 10),
-                }).catch((e) => setError(e.message))
-              }
-            >
-              Registrar fiado R$ 55
-            </Button>
-            {data.receivables.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
+                {["Fixo", "Variável", "Estoque", "Marketing", "Outros"].map((c) => (
+                  <option key={c} value={c} className="bg-stone-900">
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="number"
+                value={payableForm.amount}
+                onChange={(e) =>
+                  setPayableForm({ ...payableForm, amount: Number(e.target.value) })
+                }
+              />
+              <Input
+                type="date"
+                value={payableForm.due_date}
+                onChange={(e) =>
+                  setPayableForm({ ...payableForm, due_date: e.target.value })
+                }
+              />
+              <Button
+                onClick={() =>
+                  action({ action: "upsert_payable", ...payableForm }).catch((e) =>
+                    setError(e.message),
+                  )
+                }
               >
-                <span>
-                  {r.client_name} · {formatBRL(r.amount)} · {r.status}
-                </span>
-                {r.status === "open" && (
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      action({ action: "pay_receivable", id: r.id }).catch((e) =>
-                        setError(e.message),
-                      )
-                    }
+                Lançar despesa
+              </Button>
+              {data.payables
+                .filter((p) => p.due_date.startsWith(expenseMonth))
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
                   >
-                    Receber
-                  </Button>
-                )}
-              </div>
-            ))}
-            <div className="rounded-xl bg-white/5 p-3 text-sm text-stone-300">
-              DRE rápido: receita {formatBRL(data.cashflow.gross_revenue)} − CMV{" "}
-              {formatBRL(data.cashflow.cogs)} − despesas{" "}
-              {formatBRL(data.cashflow.expenses)} ={" "}
-              <strong>{formatBRL(data.cashflow.net_profit)}</strong>
+                    <span>
+                      {p.category} · {p.description} · {formatBRL(p.amount)} ·{" "}
+                      {p.status}
+                    </span>
+                    {p.status === "open" && (
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          action({ action: "pay_payable", id: p.id }).catch((e) =>
+                            setError(e.message),
+                          )
+                        }
+                      >
+                        Pagar
+                      </Button>
+                    )}
+                  </div>
+                ))}
             </div>
-          </div>
+          )}
+          {panelMode !== "despesas" && (
+            <div className="glass-panel space-y-3 rounded-2xl p-5">
+              <h3 className="font-display text-xl">Fiados / a receber</h3>
+              <Input placeholder="Nome do cliente" id="fiado-name" defaultValue="" />
+              <Input type="number" placeholder="Valor" id="fiado-amount" defaultValue={55} />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const name = (
+                    document.getElementById("fiado-name") as HTMLInputElement | null
+                  )?.value?.trim();
+                  const amount = Number(
+                    (document.getElementById("fiado-amount") as HTMLInputElement | null)
+                      ?.value || 55,
+                  );
+                  action({
+                    action: "upsert_receivable",
+                    client_name: name || "Cliente fiado",
+                    description: "Serviço fiado",
+                    amount,
+                    due_date: new Date().toISOString().slice(0, 10),
+                  }).catch((e) => setError(e.message));
+                }}
+              >
+                Registrar fiado
+              </Button>
+              {data.receivables.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm"
+                >
+                  <span>
+                    {r.client_name} · {formatBRL(r.amount)} · {r.status}
+                  </span>
+                  {r.status === "open" && (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        action({ action: "pay_receivable", id: r.id }).catch((e) =>
+                          setError(e.message),
+                        )
+                      }
+                    >
+                      Receber
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {panelMode === "all" && (
+                <div className="rounded-xl bg-white/5 p-3 text-sm text-stone-300">
+                  DRE rápido: receita {formatBRL(data.cashflow.gross_revenue)} − CMV{" "}
+                  {formatBRL(data.cashflow.cogs)} − despesas{" "}
+                  {formatBRL(data.cashflow.expenses)} ={" "}
+                  <strong>{formatBRL(data.cashflow.net_profit)}</strong>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -993,6 +1059,55 @@ export function AdminOpsPanel({
             {data.commissionRules[0]
               ? `${data.commissionRules[0].service_percent}% serviço / ${data.commissionRules[0].product_percent}% produto`
               : "—"}
+            . Ao pagar, vales abertos são descontados automaticamente.
+          </div>
+          <div className="glass-panel space-y-3 rounded-2xl p-5">
+            <h3 className="font-display text-xl text-stone-50">Vales / adiantamentos</h3>
+            <select
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+              value={valeForm.barber_id || barbers[0]?.id || ""}
+              onChange={(e) => setValeForm({ ...valeForm, barber_id: e.target.value })}
+            >
+              {barbers.map((b) => (
+                <option key={b.id} value={b.id} className="bg-stone-900">
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="number"
+              value={valeForm.amount}
+              onChange={(e) =>
+                setValeForm({ ...valeForm, amount: Number(e.target.value) })
+              }
+            />
+            <Input
+              value={valeForm.reason}
+              onChange={(e) => setValeForm({ ...valeForm, reason: e.target.value })}
+            />
+            <Button
+              size="sm"
+              onClick={() =>
+                action({
+                  action: "create_staff_advance",
+                  barber_id: valeForm.barber_id || barbers[0]?.id,
+                  amount: valeForm.amount,
+                  reason: valeForm.reason,
+                }).catch((e) => setError(e.message))
+              }
+            >
+              Lançar vale
+            </Button>
+            {(data.staffAdvances ?? [])
+              .filter((a) => a.status === "open")
+              .map((a) => {
+                const barber = barbers.find((b) => b.id === a.barber_id);
+                return (
+                  <p key={a.id} className="text-sm text-amber-200/90">
+                    Aberto · {barber?.name} · {formatBRL(a.amount)} · {a.reason}
+                  </p>
+                );
+              })}
           </div>
           {data.ranking.map((row) => {
             const barber = barbers.find((b) => b.id === row.barber_id);

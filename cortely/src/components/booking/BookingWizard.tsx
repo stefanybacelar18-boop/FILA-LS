@@ -38,9 +38,16 @@ export function BookingWizard({ shop, barbers, services }: Props) {
     () => services.find((s) => s.id === serviceId) ?? null,
     [services, serviceId],
   );
+  const onlineBarbers = useMemo(() => {
+    const allowed = shop.booking_barber_ids ?? [];
+    const active = barbers.filter((b) => b.is_active);
+    if (!allowed.length) return active;
+    return active.filter((b) => allowed.includes(b.id));
+  }, [barbers, shop.booking_barber_ids]);
+
   const barber = useMemo(
-    () => barbers.find((b) => b.id === barberId) ?? null,
-    [barbers, barberId],
+    () => onlineBarbers.find((b) => b.id === barberId) ?? null,
+    [onlineBarbers, barberId],
   );
 
   const showPrices = shop.booking_show_prices ?? true;
@@ -270,7 +277,7 @@ export function BookingWizard({ shop, barbers, services }: Props) {
         <div className="relative space-y-4 animate-rise">
           <p className="text-sm text-stone-400">2. Barbeiro e horário</p>
           <div className="grid gap-3 sm:grid-cols-3">
-            {barbers.map((item) => (
+            {onlineBarbers.map((item) => (
               <button
                 key={item.id}
                 type="button"

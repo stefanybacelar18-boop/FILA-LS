@@ -139,6 +139,18 @@ export type CommissionEntry = {
   paid_at: string | null;
 };
 
+/** Vale / adiantamento do profissional (referência Salon Soft). */
+export type StaffAdvance = {
+  id: string;
+  barbershop_id: string;
+  barber_id: string;
+  amount: number;
+  reason: string;
+  status: "open" | "deducted";
+  created_at: string;
+  deducted_at: string | null;
+};
+
 export type BarberGoal = {
   id: string;
   barbershop_id: string;
@@ -299,6 +311,7 @@ export type OpsSnapshot = {
   salePayments: SalePayment[];
   commissionRules: CommissionRule[];
   commissionEntries: CommissionEntry[];
+  staffAdvances: StaffAdvance[];
   goals: BarberGoal[];
   packages: ServicePackage[];
   clientPackages: ClientPackage[];

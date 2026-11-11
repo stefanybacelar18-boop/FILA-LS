@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
       receivables: permissions.financeiro ? snap.receivables : [],
       commissionRules: permissions.comissoes ? snap.commissionRules : [],
       commissionEntries: permissions.comissoes ? snap.commissionEntries : [],
+      staffAdvances: permissions.comissoes ? snap.staffAdvances : [],
       goals: permissions.comissoes ? snap.goals : [],
       packages: permissions.pacotes ? snap.packages : [],
       clientPackages: permissions.pacotes ? snap.clientPackages : [],
@@ -264,6 +265,19 @@ export async function POST(req: NextRequest) {
           })
           .parse(body);
         return NextResponse.json({ rule: opsStore.setCommissionRule(data) });
+      }
+      case "create_staff_advance": {
+        requirePermission(session, "comissoes");
+        const data = z
+          .object({
+            barber_id: z.string().uuid(),
+            amount: z.number().positive().max(20_000),
+            reason: z.string().min(2).max(120),
+          })
+          .parse(body);
+        return NextResponse.json({
+          advance: opsStore.createStaffAdvance(data),
+        });
       }
       case "pay_commissions": {
         if (session!.role !== "owner") {
