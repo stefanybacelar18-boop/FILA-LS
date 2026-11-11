@@ -174,6 +174,7 @@ function seedState(): CatalogState {
       full_name: "Stefany — Dona",
       role: "owner",
       barber_id: null,
+      session_generation: 1,
     },
     {
       id: randomUUID(),
@@ -182,6 +183,7 @@ function seedState(): CatalogState {
       full_name: "Ana — Recepção",
       role: "reception",
       barber_id: null,
+      session_generation: 1,
     },
     {
       id: randomUUID(),
@@ -190,6 +192,7 @@ function seedState(): CatalogState {
       full_name: "Rafael Costa",
       role: "barber",
       barber_id: barbers[0].id,
+      session_generation: 1,
     },
   ];
 
@@ -215,6 +218,7 @@ function scrubStaff(staff: StaffUser[]) {
     full_name: s.full_name,
     role: s.role,
     barber_id: s.barber_id,
+    session_generation: s.session_generation ?? 1,
   }));
 }
 
@@ -357,7 +361,16 @@ const demoStoreImpl = {
       full_name: user.full_name,
       role: user.role,
       barber_id: user.barber_id,
+      session_generation: user.session_generation ?? 1,
     };
+  },
+
+  bumpSessionGeneration(id: string): number {
+    const user = state().staff.find((s) => s.id === id);
+    if (!user) return 1;
+    user.session_generation = (user.session_generation ?? 1) + 1;
+    commit();
+    return user.session_generation;
   },
 
   authenticate(email: string, password: string): StaffUser | null {
@@ -446,6 +459,7 @@ const demoStoreImpl = {
       full_name: input.full_name.trim(),
       role: input.role,
       barber_id: input.role === "barber" ? input.barber_id ?? null : null,
+      session_generation: 1,
     };
     s.staff.push(row);
     return { ...row };

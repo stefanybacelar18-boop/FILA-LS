@@ -11,9 +11,13 @@ import {
   readAccessTokenFromRequest,
 } from "@/lib/supabase/staff-auth";
 import {
-  getStaffRevokedAt,
+  SESSION_GENERATION_COOKIE,
+  parseSessionGeneration,
+} from "@/lib/session-epoch";
+import {
   isStaffSessionRevokedDurable,
   listPermissionAudit,
+  sessionGenerationMatches,
 } from "@/lib/session-revoke";
 
 export const SESSION_COOKIE = "cortely_session";
@@ -69,7 +73,12 @@ const ROLE_PERMISSIONS: Record<StaffRole, Set<string>> = {
   ]),
 };
 
-type SignedSession = SessionUser & { exp: number; iat: number };
+type SignedSession = SessionUser & {
+  exp: number;
+  iat: number;
+  /** session_generation no momento do login */
+  sg: number;
+};
 
 type ClientProofPayload = {
   phone: string;
@@ -123,6 +132,10 @@ function sessionFromDemo(parsed: SignedSession): SessionUser | null {
   ) {
     return null;
   }
+  const currentSg = live.session_generation ?? 1;
+  if (!sessionGenerationMatches(parsed.sg, currentSg)) {
+    return null;
+  }
   return {
     id: live.id,
     email: live.email,
@@ -130,6 +143,7 @@ function sessionFromDemo(parsed: SignedSession): SessionUser | null {
     role: live.role,
     barbershop_id: live.barbershop_id,
     barber_id: live.barber_id,
+    session_generation: currentSg,
   };
 }
 
@@ -155,14 +169,9 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
       return null;
     }
     if (parsed.exp < Date.now()) return null;
+    if (typeof parsed.sg !== "number") return null;
 
-    // Tokens emitidos no instante da revogação ou antes são inválidos.
-    // Novo login precisa de iat > revoked_at.
-    const revokedAt = getStaffRevokedAt(parsed.id);
-    if (revokedAt != null && (parsed.iat ?? 0) <= revokedAt) {
-      return null;
-    }
-
+    // Gate principal: session_generation (iat sozinho é insuficiente — ver session-epoch.ts)
     return sessionFromDemo(parsed);
   } catch {
     return null;
@@ -171,8 +180,8 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
 
 /**
  * Sessão staff reconciliada com estado atual.
- * - DEMO: cookie HMAC + demoStore + revogação por iat
- * - PRODUÇÃO: somente JWT Supabase Auth + profiles ativos (HMAC ignorado)
+ * - DEMO: cookie HMAC + demoStore + session_generation no payload
+ * - PRODUÇÃO: JWT Supabase + cookie cortely_sg + profiles.session_generation
  */
 export async function getLiveSession(
   req: NextRequest,
@@ -180,38 +189,8 @@ export async function getLiveSession(
   if (isDemoMode()) {
     const session = getRequestSession(req);
     if (!session) return null;
-    const token = req.cookies.get(SESSION_COOKIE)?.value;
-    let iat: number | undefined;
-    if (token?.includes(".")) {
-      try {
-        const body = token.slice(0, token.lastIndexOf("."));
-        const parsed = JSON.parse(
-          Buffer.from(body, "base64url").toString("utf8"),
-        ) as { iat?: number };
-        iat = parsed.iat;
-      } catch {
-        iat = undefined;
-      }
-    }
-    if (await isStaffSessionRevokedDurable(session.id, iat)) {
-      return null;
-    }
-    const live = demoStore.getStaffById(session.id);
-    if (!live) return null;
-    if (
-      live.role !== session.role ||
-      live.barbershop_id !== session.barbershop_id
-    ) {
-      return null;
-    }
-    return {
-      id: live.id,
-      email: live.email,
-      full_name: live.full_name,
-      role: live.role,
-      barbershop_id: live.barbershop_id,
-      barber_id: live.barber_id,
-    };
+    // parseSessionToken já valida sg vs demoStore
+    return session;
   }
 
   // Produção: HMAC legado não autentica.
@@ -221,13 +200,22 @@ export async function getLiveSession(
   const user = await getSupabaseAuthUser(accessToken);
   if (!user) return null;
 
-  const iat = jwtIssuedAtMs(accessToken);
-  if (await isStaffSessionRevokedDurable(user.id, iat)) {
+  const profile = await loadActiveStaffProfile(user.id);
+  if (!profile) return null;
+
+  const presentedSg = parseSessionGeneration(
+    req.cookies.get(SESSION_GENERATION_COOKIE)?.value,
+  );
+  const currentSg =
+    typeof profile.session_generation === "number"
+      ? profile.session_generation
+      : 1;
+  if (!sessionGenerationMatches(presentedSg, currentSg)) {
     return null;
   }
 
-  const profile = await loadActiveStaffProfile(user.id);
-  if (!profile) return null;
+  // Marcador auxiliar de revoke (auditoria); geração já invalida tokens antigos.
+  void isStaffSessionRevokedDurable(user.id, jwtIssuedAtMs(accessToken) ?? undefined);
 
   return {
     id: profile.id,
@@ -236,13 +224,22 @@ export async function getLiveSession(
     role: profile.role as StaffRole,
     barbershop_id: profile.barbershop_id,
     barber_id: profile.barber_id ?? null,
+    session_generation: currentSg,
   };
 }
 
 export function encodeSession(user: SessionUser) {
   const now = Date.now();
+  const live = isDemoMode() ? demoStore.getStaffById(user.id) : null;
+  const sg = live?.session_generation ?? user.session_generation ?? 1;
   const payload: SignedSession = {
-    ...user,
+    id: user.id,
+    email: user.email,
+    full_name: user.full_name,
+    role: user.role,
+    barbershop_id: user.barbershop_id,
+    barber_id: user.barber_id,
+    sg,
     iat: now,
     exp: now + 60 * 60 * 8 * 1000, // 8h
   };
@@ -282,6 +279,7 @@ export async function authenticateStaff(email: string, password: string) {
     role: user.role,
     barbershop_id: user.barbershop_id,
     barber_id: user.barber_id,
+    session_generation: user.session_generation ?? 1,
   };
 }
 

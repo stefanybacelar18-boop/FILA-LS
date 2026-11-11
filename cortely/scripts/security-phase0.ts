@@ -85,12 +85,22 @@ async function main() {
     barbershopId: staff.barbershop_id,
     reason: "test_revoke",
   });
-  // iat <= revoked_at ⇒ inválido (evita flake de mesmo milissegundo)
+  // Gate = session_generation: token antigo (sg anterior) inválido
   assert.equal(auth.parseSessionToken(sessionTok), null);
   ok("revoked staff session is rejected");
   revoke.clearStaffRevocation(staff.id);
-  assert.ok(auth.parseSessionToken(sessionTok));
-  ok("clear revocation restores session when staff still exists");
+  // clear NÃO revalida token com sg antiga — novo encode (login) é necessário
+  assert.equal(auth.parseSessionToken(sessionTok), null);
+  const sessionTokFresh = auth.encodeSession({
+    id: staff.id,
+    email: staff.email,
+    full_name: staff.full_name,
+    role: staff.role,
+    barbershop_id: staff.barbershop_id,
+    barber_id: staff.barber_id,
+  });
+  assert.ok(auth.parseSessionToken(sessionTokFresh));
+  ok("new login after revoke issues valid session (sg bumped)");
 
   // 3) Staff removido → sessão inválida
   const created = demoStore.upsertStaff({

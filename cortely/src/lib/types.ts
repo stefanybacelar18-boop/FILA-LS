@@ -140,6 +140,8 @@ export type StaffUser = {
   full_name: string;
   role: StaffRole;
   barber_id: string | null;
+  /** Incrementado em revoke/role-change/delete — gate de sessão. */
+  session_generation?: number;
 };
 
 export type ShopBundle = {
@@ -156,4 +158,5 @@ export type SessionUser = {
   role: StaffRole;
   barbershop_id: string;
   barber_id: string | null;
+  session_generation?: number;
 };

@@ -1,6 +1,6 @@
 /**
  * Revogação de sessões staff.
- * Memória do processo (demo / single-instance) + tabela SQL quando Supabase ativo.
+ * Gate principal: incremento de `session_generation` (ver session-epoch.ts).
  */
 
 import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
@@ -11,10 +11,12 @@ export type StaffRevocation = {
   reason: string;
   revokedAt: number;
   actorId?: string;
+  newGeneration?: number;
 };
 
 type RevocationState = {
   byStaffId: Map<string, StaffRevocation>;
+  generationByStaffId: Map<string, number>;
   audit: Array<{
     id: string;
     at: number;
@@ -26,17 +28,45 @@ type RevocationState = {
 };
 
 const globalRevoke = globalThis as typeof globalThis & {
-  __cortelySessionRevokeV1?: RevocationState;
+  __cortelySessionRevokeV2?: RevocationState;
 };
 
 function state(): RevocationState {
-  if (!globalRevoke.__cortelySessionRevokeV1) {
-    globalRevoke.__cortelySessionRevokeV1 = {
+  if (!globalRevoke.__cortelySessionRevokeV2) {
+    globalRevoke.__cortelySessionRevokeV2 = {
       byStaffId: new Map(),
+      generationByStaffId: new Map(),
       audit: [],
     };
   }
-  return globalRevoke.__cortelySessionRevokeV1;
+  return globalRevoke.__cortelySessionRevokeV2;
+}
+
+function bumpDemoGeneration(staffId: string): number {
+  // Import dinâmico sincronicamente via cache do módulo (evita ciclo no top-level).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require("@/lib/demo-store") as typeof import("@/lib/demo-store");
+  const next = mod.demoStore.bumpSessionGeneration(staffId);
+  state().generationByStaffId.set(staffId, next);
+  return next;
+}
+
+async function bumpProdGeneration(staffId: string, barbershopId: string) {
+  const supabase = createServiceClient();
+  const { data: current } = await supabase
+    .from("profiles")
+    .select("session_generation")
+    .eq("id", staffId)
+    .eq("barbershop_id", barbershopId)
+    .maybeSingle();
+  const next = (current?.session_generation ?? 1) + 1;
+  await supabase
+    .from("profiles")
+    .update({ session_generation: next })
+    .eq("id", staffId)
+    .eq("barbershop_id", barbershopId);
+  state().generationByStaffId.set(staffId, next);
+  return next;
 }
 
 function persistRevocation(row: StaffRevocation) {
@@ -54,10 +84,10 @@ function persistRevocation(row: StaffRevocation) {
       barbershop_id: row.barbershopId,
       actor_id: row.actorId ?? null,
       action: "staff.session_revoke",
-      detail: `${row.reason} · staff=${row.staffId}`,
+      detail: `${row.reason} · staff=${row.staffId} · sg=${row.newGeneration ?? "?"}`,
     });
   } catch {
-    /* fail-open on persist write would be unsafe; memory still holds */
+    /* generation local ainda aplica o gate */
   }
 }
 
@@ -74,6 +104,24 @@ export function revokeStaffSessions(input: {
     revokedAt: Date.now(),
     actorId: input.actorId,
   };
+
+  if (isDemoMode()) {
+    row.newGeneration = bumpDemoGeneration(input.staffId);
+  } else {
+    // Fire-and-forget bump; callers críticos devem usar revokeStaffSessionsAsync
+    void bumpProdGeneration(input.staffId, input.barbershopId)
+      .then((gen) => {
+        row.newGeneration = gen;
+        persistRevocation(row);
+      })
+      .catch(() => {
+        const fallback = (state().generationByStaffId.get(input.staffId) ?? 1) + 1;
+        state().generationByStaffId.set(input.staffId, fallback);
+        row.newGeneration = fallback;
+        persistRevocation(row);
+      });
+  }
+
   state().byStaffId.set(input.staffId, row);
   state().audit.unshift({
     id: `${Date.now()}-${input.staffId}`,
@@ -81,15 +129,46 @@ export function revokeStaffSessions(input: {
     actorId: input.actorId ?? null,
     barbershopId: input.barbershopId,
     action: "staff.session_revoke",
-    detail: `${input.reason} · staff=${input.staffId}`,
+    detail: `${input.reason} · staff=${input.staffId} · sg=${row.newGeneration ?? "pending"}`,
   });
   if (state().audit.length > 200) state().audit.length = 200;
+  if (isDemoMode()) persistRevocation(row);
+  return row;
+}
+
+export async function revokeStaffSessionsAsync(input: {
+  staffId: string;
+  barbershopId: string;
+  reason: string;
+  actorId?: string;
+}) {
+  const gen = isDemoMode()
+    ? bumpDemoGeneration(input.staffId)
+    : await bumpProdGeneration(input.staffId, input.barbershopId);
+  const row: StaffRevocation = {
+    staffId: input.staffId,
+    barbershopId: input.barbershopId,
+    reason: input.reason,
+    revokedAt: Date.now(),
+    actorId: input.actorId,
+    newGeneration: gen,
+  };
+  state().byStaffId.set(input.staffId, row);
+  state().audit.unshift({
+    id: `${Date.now()}-${input.staffId}`,
+    at: row.revokedAt,
+    actorId: input.actorId ?? null,
+    barbershopId: input.barbershopId,
+    action: "staff.session_revoke",
+    detail: `${input.reason} · staff=${input.staffId} · sg=${gen}`,
+  });
   persistRevocation(row);
   return row;
 }
 
 export function clearStaffRevocation(staffId: string) {
   state().byStaffId.delete(staffId);
+  // Não reseta session_generation — tokens com sg antiga permanecem inválidos.
   if (isDemoMode()) return;
   try {
     const supabase = createServiceClient();
@@ -107,11 +186,11 @@ export function getStaffRevokedAt(staffId: string): number | null {
   return state().byStaffId.get(staffId)?.revokedAt ?? null;
 }
 
-/**
- * Revogação por marco temporal: tokens com iat <= revoked_at são rejeitados.
- * Login novo (iat > revoked_at) funciona sem limpar o registro de auditoria.
- * Fail-closed em produção se o DB estiver inacessível.
- */
+export function getCachedSessionGeneration(staffId: string): number | null {
+  return state().generationByStaffId.get(staffId) ?? null;
+}
+
+/** Auxiliar iat (ms). Insuficiente sozinho para JWT — ver session-epoch.ts. */
 export async function isStaffSessionRevokedDurable(
   staffId: string,
   tokenIatMs?: number,
@@ -143,6 +222,14 @@ export async function isStaffSessionRevokedDurable(
   } catch {
     return true;
   }
+}
+
+export function sessionGenerationMatches(
+  presented: number | null | undefined,
+  current: number | null | undefined,
+): boolean {
+  if (presented == null || current == null) return false;
+  return presented === current;
 }
 
 export function listPermissionAudit(barbershopId?: string) {

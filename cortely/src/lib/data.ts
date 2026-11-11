@@ -926,39 +926,48 @@ export async function upsertStaff(input: {
 
   const supabase = createServiceClient();
   const email = input.email.trim().toLowerCase();
+
+  // Tenant é sempre o do ator — nunca aceitar barbershop_id do cliente além do session.
+  const barbershopId = input.barbershop_id;
+
   if (input.id) {
     const { data: before } = await supabase
       .from("profiles")
-      .select("id, role")
+      .select("id, role, barbershop_id")
       .eq("id", input.id)
-      .eq("barbershop_id", input.barbershop_id)
+      .eq("barbershop_id", barbershopId)
       .maybeSingle();
+    if (!before) throw new Error("Usuário não encontrado nesta barbearia");
+
+    // Impede mover staff para outro tenant via update
     const { data, error } = await supabase
       .from("profiles")
       .update({
         email,
         full_name: input.full_name,
         role: input.role,
-        barber_id: input.barber_id ?? null,
+        barber_id: input.role === "barber" ? input.barber_id ?? null : null,
       })
       .eq("id", input.id)
-      .eq("barbershop_id", input.barbershop_id)
-      .select("id, barbershop_id, full_name, role, email, barber_id")
+      .eq("barbershop_id", barbershopId)
+      .select(
+        "id, barbershop_id, full_name, role, email, barber_id, session_generation",
+      )
       .single();
     if (error) throw new Error(error.message);
-    if (before && before.role !== input.role) {
-      const { revokeStaffSessions, auditPermissionChange } = await import(
+    if (before.role !== input.role) {
+      const { revokeStaffSessionsAsync, auditPermissionChange } = await import(
         "@/lib/session-revoke"
       );
-      revokeStaffSessions({
+      await revokeStaffSessionsAsync({
         staffId: input.id,
-        barbershopId: input.barbershop_id,
+        barbershopId,
         reason: `role_changed:${before.role}->${input.role}`,
         actorId: input.actorId,
       });
       auditPermissionChange({
         actorId: input.actorId ?? null,
-        barbershopId: input.barbershop_id,
+        barbershopId,
         action: "staff.role_change",
         detail: `${before.role} -> ${input.role} · ${input.id}`,
       });
@@ -966,18 +975,140 @@ export async function upsertStaff(input: {
     return data as StaffUser;
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .insert({
-      barbershop_id: input.barbershop_id,
-      email,
+  // Convite: cria usuário Auth + profile vinculado à loja do owner
+  return inviteStaffMember({
+    email,
+    full_name: input.full_name,
+    role: input.role,
+    barber_id: input.barber_id,
+    barbershop_id: barbershopId,
+    actorId: input.actorId,
+  });
+}
+
+/**
+ * Convida funcionário via Supabase Auth Admin e associa profile à barbearia.
+ * Papel e tenant vêm exclusivamente do owner autenticado.
+ */
+export async function inviteStaffMember(input: {
+  email: string;
+  full_name: string;
+  role: StaffRole;
+  barber_id?: string | null;
+  barbershop_id: string;
+  actorId?: string;
+}): Promise<StaffUser> {
+  if (isDemoMode()) {
+    return demoStore.upsertStaff({
+      email: input.email,
       full_name: input.full_name,
       role: input.role,
-      barber_id: input.barber_id ?? null,
-    })
-    .select("id, barbershop_id, full_name, role, email, barber_id")
+      barber_id: input.barber_id,
+      barbershop_id: input.barbershop_id,
+    });
+  }
+
+  const supabase = createServiceClient();
+  const email = input.email.trim().toLowerCase();
+
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("id, barbershop_id")
+    .eq("email", email)
+    .maybeSingle();
+  if (existingProfile && existingProfile.barbershop_id !== input.barbershop_id) {
+    throw new Error("E-mail já vinculado a outra barbearia");
+  }
+  if (existingProfile && existingProfile.barbershop_id === input.barbershop_id) {
+    throw new Error("Já existe usuário com este e-mail nesta barbearia");
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const { data: invited, error: inviteError } =
+    await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${appUrl}/pro/auth/callback`,
+      data: {
+        full_name: input.full_name.trim(),
+        invited_barbershop_id: input.barbershop_id,
+        invited_role: input.role,
+      },
+    });
+
+  if (inviteError || !invited.user) {
+    // Fallback: createUser se invite indisponível (SMTP)
+    const { data: created, error: createError } =
+      await supabase.auth.admin.createUser({
+        email,
+        email_confirm: false,
+        user_metadata: {
+          full_name: input.full_name.trim(),
+          invited_barbershop_id: input.barbershop_id,
+          invited_role: input.role,
+        },
+      });
+    if (createError || !created.user) {
+      throw new Error(inviteError?.message || createError?.message || "Falha ao convidar");
+    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: created.user.id,
+          barbershop_id: input.barbershop_id,
+          email,
+          full_name: input.full_name.trim(),
+          role: input.role,
+          barber_id: input.role === "barber" ? input.barber_id ?? null : null,
+          is_active: true,
+          provisioning_status: "ready",
+          session_generation: 1,
+        },
+        { onConflict: "id" },
+      )
+      .select(
+        "id, barbershop_id, full_name, role, email, barber_id, session_generation",
+      )
+      .single();
+    if (error) throw new Error(error.message);
+    const { auditPermissionChange } = await import("@/lib/session-revoke");
+    auditPermissionChange({
+      actorId: input.actorId ?? null,
+      barbershopId: input.barbershop_id,
+      action: "staff.invite",
+      detail: `${email} · ${input.role} · createUser`,
+    });
+    return data as StaffUser;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: invited.user.id,
+        barbershop_id: input.barbershop_id,
+        email,
+        full_name: input.full_name.trim(),
+        role: input.role,
+        barber_id: input.role === "barber" ? input.barber_id ?? null : null,
+        is_active: true,
+        provisioning_status: "ready",
+        session_generation: 1,
+      },
+      { onConflict: "id" },
+    )
+    .select(
+      "id, barbershop_id, full_name, role, email, barber_id, session_generation",
+    )
     .single();
   if (error) throw new Error(error.message);
+
+  const { auditPermissionChange } = await import("@/lib/session-revoke");
+  auditPermissionChange({
+    actorId: input.actorId ?? null,
+    barbershopId: input.barbershop_id,
+    action: "staff.invite",
+    detail: `${email} · ${input.role}`,
+  });
   return data as StaffUser;
 }
 
@@ -988,21 +1119,31 @@ export async function deleteStaff(
 ) {
   if (isDemoMode()) return demoStore.deleteStaff(id, barbershopId, actorId);
   const supabase = createServiceClient();
+  const { revokeStaffSessionsAsync, auditPermissionChange } = await import(
+    "@/lib/session-revoke"
+  );
+  await revokeStaffSessionsAsync({
+    staffId: id,
+    barbershopId,
+    reason: "staff_deleted",
+    actorId,
+  });
+  await supabase
+    .from("profiles")
+    .update({ is_active: false, provisioning_status: "failed" })
+    .eq("id", id)
+    .eq("barbershop_id", barbershopId);
   const { error } = await supabase
     .from("profiles")
     .delete()
     .eq("id", id)
     .eq("barbershop_id", barbershopId);
   if (error) throw new Error(error.message);
-  const { revokeStaffSessions, auditPermissionChange } = await import(
-    "@/lib/session-revoke"
-  );
-  revokeStaffSessions({
-    staffId: id,
-    barbershopId,
-    reason: "staff_deleted",
-    actorId,
-  });
+  try {
+    await supabase.auth.admin.deleteUser(id);
+  } catch {
+    /* profile já removido; ban/delete Auth best-effort */
+  }
   auditPermissionChange({
     actorId: actorId ?? null,
     barbershopId,

@@ -56,7 +56,7 @@ export async function loadActiveStaffProfile(userId: string) {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, full_name, role, barbershop_id, barber_id, is_active, provisioning_status",
+      "id, email, full_name, role, barbershop_id, barber_id, is_active, provisioning_status, session_generation",
     )
     .eq("id", userId)
     .maybeSingle();

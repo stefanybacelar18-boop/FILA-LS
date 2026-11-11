@@ -5,6 +5,7 @@ import {
   SB_ACCESS_COOKIE,
   SB_REFRESH_COOKIE,
 } from "@/lib/supabase/auth-cookies";
+import { SESSION_GENERATION_COOKIE } from "@/lib/session-epoch";
 import {
   createAuthAnonClient,
   readAccessTokenFromRequest,
@@ -28,7 +29,12 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true });
-  for (const name of [SESSION_COOKIE, SB_ACCESS_COOKIE, SB_REFRESH_COOKIE]) {
+  for (const name of [
+    SESSION_COOKIE,
+    SB_ACCESS_COOKIE,
+    SB_REFRESH_COOKIE,
+    SESSION_GENERATION_COOKIE,
+  ]) {
     res.cookies.set(name, "", {
       httpOnly: true,
       sameSite: "lax",

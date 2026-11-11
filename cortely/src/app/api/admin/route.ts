@@ -222,17 +222,30 @@ export async function POST(req: NextRequest) {
             barber_id: z.string().uuid().nullable().optional(),
           })
           .parse(body);
+        // Staff não escolhe tenant; barbershop_id só da sessão.
+        // Não permitir auto-alteração de papel.
+        if (data.id && data.id === session!.id && data.role !== session!.role) {
+          return NextResponse.json(
+            { error: "Não é possível alterar o próprio papel" },
+            { status: 403 },
+          );
+        }
+        if (data.role === "owner" && session!.role !== "owner") {
+          return NextResponse.json(
+            { error: "Somente owner pode atribuir papel owner" },
+            { status: 403 },
+          );
+        }
         const staff = await upsertStaff({
           ...data,
           barbershop_id: session!.barbershop_id,
           actorId: session!.id,
         });
         const { auditPermissionChange } = await import("@/lib/session-revoke");
-        // Mudança de papel já revoga sessões em upsertStaff — não limpar revogação aqui.
         auditPermissionChange({
           actorId: session!.id,
           barbershopId: session!.barbershop_id,
-          action: data.id ? "staff.update" : "staff.create",
+          action: data.id ? "staff.update" : "staff.invite",
           detail: `${staff.email} · ${staff.role}`,
         });
         return NextResponse.json({ staff });

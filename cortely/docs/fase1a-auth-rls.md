@@ -2,21 +2,35 @@
 
 ## Arquitetura implementada
 
-- **Demo (`NEXT_PUBLIC_DEMO_MODE=true`):** login HMAC + senhas por papel (env). Sessões reconciliadas com `demoStore` e revogação por `iat`.
-- **Produção:** somente **Supabase Auth** (JWT em cookies `cortely_sb_access` / `cortely_sb_refresh`). Cookie `cortely_session` HMAC é **ignorado** (`parseSessionToken` → `null`).
-- **Gate:** `getLiveSession` em rotas admin/ops — profile ativo + `provisioning_status=ready` + revogação temporal (`iat > revoked_at` permite novo login; `iat <= revoked_at` rejeita).
-- **Onboarding:** `POST /api/auth/register` → confirmação de e-mail → `POST /api/auth/complete-onboarding` → RPC `provision_owner_barbershop` (service_role, idempotente).
-- **RLS:** migrations `20261111_02`–`04` (helpers, ops RLS, RPC). **Não aplicadas remotamente** nesta entrega.
+- **Demo:** login HMAC + senhas por papel (env). Payload inclui `sg` (`session_generation`).
+- **Produção:** somente **Supabase Auth** JWT (`cortely_sb_*`) + cookie `cortely_sg`. HMAC admin **ignorado**.
+- **Onboarding owner:** register → confirmação e-mail → `complete-onboarding` → RPC `provision_owner_barbershop`.
+- **Convite staff:** `inviteStaffMember` via Auth Admin (`inviteUserByEmail` / fallback `createUser`) + profile com `barbershop_id` do owner e role atribuída. Staff **não** escolhe tenant/papel próprio.
+- **RLS/helpers/RPC:** migrations `20261111_02`–`05` (repo only; **não** aplicadas remotamente nesta entrega).
+
+## Revogação — estratégia definitiva
+
+| Sinal | Unidade | Uso |
+|---|---|---|
+| JWT `iat` (Supabase) | **segundos** Unix | Observabilidade / auxiliar; **insuficiente sozinho** (mesmo segundo ⇒ mesmo iat) |
+| HMAC `iat` (demo) | **milissegundos** | Auxiliar |
+| `profiles.session_generation` + cookie/`sg` | inteiro | **Gate principal** |
+
+Fluxo:
+1. Login grava geração atual em `cortely_sg` (e no HMAC `sg`).
+2. Revoke / role-change / delete: `session_generation += 1`.
+3. Próxima request: `presented sg !== current` → 401 (token antigo rejeitado mesmo antes do exp).
+4. Novo login (mesmo segundo): cookie/payload com nova geração → OK.
+
+Ver `src/lib/session-epoch.ts`.
 
 ## Migrations (repo only)
 
 1. `20261111_02_fase1a_auth_helpers.sql`
 2. `20261111_03_fase1a_ops_rls.sql`
 3. `20261111_04_fase1a_onboarding_rpc.sql`
+4. `20261111_05_fase1a_session_generation.sql`
 
-## Pendências (fora de 1.A)
+## CI root cause (d62b0d4)
 
-- Etapa 1.B: migrar `ops-store` JSON → Postgres
-- Convite de funcionários via Auth Admin API
-- FKs compostas / Storage (planejado nas revisões)
-- Aplicar migrations no projeto Supabase remoto
+`security-phase0` falhou na PR: após revoke, `parseSessionToken` ainda aceitava o token quando `iat` (ms) e `revoked_at` coincidiam no mesmo milissegundo (`iat < revoked_at` falso). Correção intermediária usou `<=`, mas a estratégia final é **`session_generation`**, que resolve também o caso JWT de mesmo segundo.

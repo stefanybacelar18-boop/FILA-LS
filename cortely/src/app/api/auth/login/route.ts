@@ -12,6 +12,7 @@ import {
   SB_COOKIE_MAX_AGE,
   SB_REFRESH_COOKIE,
 } from "@/lib/supabase/auth-cookies";
+import { SESSION_GENERATION_COOKIE } from "@/lib/session-epoch";
 import {
   createAuthAnonClient,
   loadActiveStaffProfile,
@@ -60,6 +61,17 @@ export async function POST(req: NextRequest) {
         path: "/",
         maxAge: 60 * 60 * 8,
       });
+      res.cookies.set(
+        SESSION_GENERATION_COOKIE,
+        String(session.session_generation ?? 1),
+        {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: true,
+          path: "/",
+          maxAge: 60 * 60 * 8,
+        },
+      );
       res.cookies.set(SB_ACCESS_COOKIE, "", { path: "/", maxAge: 0 });
       res.cookies.set(SB_REFRESH_COOKIE, "", { path: "/", maxAge: 0 });
       return res;
@@ -96,6 +108,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const sg =
+      typeof profile.session_generation === "number"
+        ? profile.session_generation
+        : 1;
     const user = {
       id: profile.id,
       email: profile.email ?? email,
@@ -103,6 +119,7 @@ export async function POST(req: NextRequest) {
       role: profile.role,
       barbershop_id: profile.barbershop_id,
       barber_id: profile.barber_id ?? null,
+      session_generation: sg,
     };
 
     const res = NextResponse.json({ user, mode: "supabase" });
@@ -119,6 +136,13 @@ export async function POST(req: NextRequest) {
       secure: true,
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
+    });
+    res.cookies.set(SESSION_GENERATION_COOKIE, String(sg), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: SB_COOKIE_MAX_AGE,
     });
     res.cookies.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
     return res;
