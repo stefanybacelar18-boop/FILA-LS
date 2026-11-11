@@ -5,6 +5,8 @@
 **Documento de planejamento:** PR #171 (`cursor/cortely-fase1b-plan-7332`).  
 **Status:** consolidação arquitetural pós-revisão humana — **implementação ainda NÃO autorizada**.
 
+**Base de implementação (D11 / B6):** a **1.B.0** será desenvolvida em branch criada a partir de **`8ce23b1` (1.A)**, como **PR empilhado** sobre a 1.A — **sem merge** até autorização humana explícita. Este PR #171 permanece **somente documental**.
+
 **Fora de escopo até autorização explícita:** código funcional, adapters, testes funcionais, criação/aplicação de migrations, Supabase remoto, remoção de JSON, merge, publish, deploy, início de 1.B.0.
 
 ---
@@ -13,18 +15,19 @@
 
 | # | Decisão |
 |---|---|
-| D1 | **Após cutover de um domínio (ou conjunto), PostgreSQL é a fonte oficial.** Não há retorno automático PG→JSON. Rollback de aplicação **preserva** todos os dados já gravados no PG. Retorno excepcional a JSON: (1) PG **somente leitura** no grafo → (2) exportar e reconciliar escritas pós-cutover para JSON → (3) só então virar o registry do **grafo inteiro**. **Sem janela de dual-write.** Ver §3.3 (ponto sem retorno e pagamentos já capturados). |
-| D2 | **Registry versionado** (config e/ou tabela) indica a fonte oficial (`json` \| `postgres`) e o **estado** de cada domínio. R e W **nunca** divergem. Dual-write e bridges JSON↔PG em fluxos financeiros **proibidos**. Mudanças de registry são **auditadas**. Ver §3.2. |
-| D3 | **Grafo de vendas** (`sales` + `products`/`stock` + `cash` + `commissions` accrual) é **uma única unidade de cutover**. Idem OC (`purchasing`+`stock`+`payables`). Proibida execução financeira partida JSON+PG. |
-| D3a | **Prep ≠ cutover.** Schema/adapters/testes em PG sem alterar fonte oficial em produção. Enquanto `sales=json`, `products`/`stock`/`cash`/`commissions` (accrual) permanecem `json` em produção. |
-| D3b | **Fail-fast no boot:** combinações inválidas de registry **impedem** boot/execução — zero side-effects. |
-| D4 | Venda, pagamento (split permitido) e movimento de caixa são entidades **separadas**. Troco = movimento de **saída** de caixa ligado ao pagamento em dinheiro. Invariante: **`Σ pagamentos − troco = total`**. Valores em `NUMERIC(12,2)` (ou centavos inteiros, decisão P11). Estornos = **lançamentos compensatórios** — **sem** `UPDATE`/`DELETE` destrutivo do histórico. Ver §4.2. |
-| D5 | Multi-tenant: FKs **compostas** com `barbershop_id` (tenant); backfill → UNIQUE → FK → índices → RLS FORCE; preservar 1.A. |
-| D6 | Comissão paga: bloquear estorno da venda até clawback (default). Estornos/clawbacks = linhas compensatórias; **preservam** amounts originais; **idempotentes**; chave única anti-duplicidade. |
-| D7 | Gateway: `payment_intents` com `barbershop_id NOT NULL`, RLS, FKs compostas; webhook com assinatura **antes** de qualquer escrita; tenant derivado do **intent registrado** (nunca do payload); `UNIQUE (provider, provider_event_id)`; eventos inválidos → **quarentena**. Antecipação `payment_intents=postgres` só em modo isolado (1.B.3-G). |
+| D1 | **Após a primeira escrita operacional em `ops_core` pós-cutover, PostgreSQL é a fonte oficial definitiva.** Não há retorno a JSON depois disso. Rollback de aplicação = **redeploy mantendo PG** + correção *forward*. Retorno a JSON **só** durante o freeze do cutover, **antes** de qualquer escrita operacional. Sem dual-write. Ver §3.3. |
+| D2 | **Registry global** (não por tenant): tabela `ops_domain_registry` é a **fonte canônica** após o seed. Arquivo/env só fazem **seed inicial** e **nunca** promovem para `active_postgres`. Divergência env↔tabela → **fail-fast**. R=W; dual-write/bridges proibidos; mudanças **auditadas**. Ver §3.2 (P13 **fechado**). |
+| D3 | **`ops_core`** é a **única unidade de cutover** na 1.B.3: une o antigo sale_graph + oc_graph + package_graph (`sales`, `products`, `stock`, `cash`, `commissions`, `purchasing`, `payables`, `packages`). Proibida execução financeira partida JSON+PG. |
+| D3a | **Prep ≠ cutover.** Schema/adapters/testes (incl. purchasing/payables/packages) em PG **antes** da 1.B.3, sem alterar fonte oficial em produção. |
+| D3b | **Fail-fast no boot:** combinações inválidas **impedem** boot/execução — zero side-effects. |
+| D4 | Venda, pagamento (split) e movimento de caixa **separados**. `sale_payments`: `tendered_amount` + `applied_amount`. Troco = `cash_movements` de saída (`reason=change`) **só** em cash. Invariantes: `Σ applied_amount = sales.total`; `change = Σ(tendered − applied)` **apenas cash**; `tendered >= applied`; troco só cash. Estornos = **nova linha** compensatória — sem `UPDATE`/`DELETE` destrutivo. Ver §4.2. |
+| D5 | Multi-tenant: FKs **compostas** com `barbershop_id`; backfill → UNIQUE → FK → índices → RLS FORCE; preservar 1.A. |
+| D6 | Comissão paga: bloquear estorno até clawback (default). Reversão/clawback = **nova linha**; unique ativo `(barbershop_id, sale_item_id, barber_id)`; `UNIQUE (clawback_of) WHERE status='clawback'`; FK composta em `clawback_of`. |
+| D7 | Gateway: intents com `barbershop_id NOT NULL`, RLS, FKs compostas; assinatura **antes** de escrita; tenant do **intent**; `UNIQUE (provider, provider_event_id)`; intent inexistente / tenant inconsistente / schema inválido → **`payment_webhook_quarantine`** (sem tenant, sem FK, só service role). Passos 4–6 do pipeline em **uma TX**. |
 | D8 | Tenant da sessão desde **1.B.0**. `SHOP_ID` só em legado JSON + ETL até 1.B.9. |
 | D9 | **`units` adiadas** — ADR §11. |
-| D10 | Comissões: constraints anti-duplicidade (NULLS); FKs tenant em rules/entries/advances; ETL idempotente com `ops_shop_id_map` e reconciliação **por tenant**. |
+| D10 | Comissões + ETL idempotente (`ops_shop_id_map`) + reconcile por tenant. Tabelas de infraestrutura ops (`ops_domain_registry*`, `ops_idempotency_keys`, `ops_shop_id_map`) = **somente service role** (`REVOKE` anon/authenticated). Idempotency: `UNIQUE (barbershop_id, scope, key)`. |
+| D11 | **1.B.0** em branch a partir de `8ce23b1`, PR empilhado, **sem merge** até autorização. |
 
 ---
 
@@ -35,13 +38,13 @@
 | Camada | Fonte atual (demo) | Fonte atual (prod / não-demo) | Meta 1.B |
 |---|---|---|---|
 | Agenda / CRM / catálogo / loyalty / reminders / settings / staff profiles | JSON `demo` (`demoStore`) | **PostgreSQL** via Supabase service role | Manter Postgres; alinhar IDs com ops |
-| Ops PDV (caixa, vendas, estoque, financeiro, comissões, pacotes, marketing, etc.) | JSON `ops` (`opsStore`) | **ainda JSON `ops`** | Postgres oficial por **conjuntos de cutover** (registry) |
+| Ops PDV (caixa, vendas, estoque, financeiro, comissões, pacotes, marketing, etc.) | JSON `ops` (`opsStore`) | **ainda JSON `ops`** | Postgres oficial via cutover **`ops_core`** (registry) |
 | Auth staff | HMAC + demo staff | Supabase Auth + `profiles` + `session_generation` (1.A) | Intacta |
 | OTP / client proof / revoke | memória (± SQL) | memória + SQL | Endurecer; sem JSON |
 
-**Risco crítico:** `ops-store.ts` não consulta `isDemoMode()` nem Supabase. Em “produção” com Auth, a UI ops grava `cortely-store.json` (ou `/tmp`/memória). Tabelas SQL ops + RLS 1.A existem no repo e **não são usadas** pelo app. `SHOP_ID` fixo — PDV sem multi-tenant real hoje.
+**Risco crítico:** `ops-store.ts` não consulta `isDemoMode()` nem Supabase. Em “produção” com Auth, a UI ops grava `cortely-store.json`. Tabelas SQL ops + RLS 1.A existem e **não são usadas**. `SHOP_ID` fixo.
 
-**Acoplamento atual (relevante a D3):** `createSale` no JSON lê `currentCash()`, grava `cash_session_id`, items/payments, chama `adjustStock` e `accrueCommission`. `refundSale` devolve estoque. `appointment.completed` pode `openCash` + `createSale`. `receivePurchaseOrder` move estoque e cria payable. Esses grafos **não** admitem fonte oficial mista.
+**Acoplamento (D3):** `createSale` ↔ caixa ↔ stock ↔ comissões; `receivePurchaseOrder` ↔ stock ↔ payables; pacotes ↔ `createSale`. Esses fluxos exigem cutover **conjunto** (`ops_core`).
 
 ### Arquivo de persistência
 
@@ -61,7 +64,7 @@
 | Disco | `src/lib/persist.ts` | arquivo único | une demo+ops |
 | OTP / JTI / revoke / rate-limit / payment intents efêmeros | rotas/libs indicadas | memória (± SQL) | — |
 
-### 2.2 Call sites `opsStore` (validados por busca em `cortely/src`)
+### 2.2 Call sites `opsStore`
 
 | Rota / módulo | Uso |
 |---|---|
@@ -72,7 +75,7 @@
 | `api/client-lookup/route.ts` | leitura pacotes/assinaturas |
 | `ops-store.ts` (Proxy) | `persistOps` a cada mutação |
 
-Não há outros imports de `opsStore` no app. UI admin acessa via HTTP. Tip/troco/cancel dedicado **não** existem no JSON atual (`refundSale` sim; `cancelSale` não).
+Tip/troco/cancel dedicado **não** existem no JSON atual (`refundSale` sim; `cancelSale` não).
 
 ### 2.3 Já em PostgreSQL (app usa)
 
@@ -84,37 +87,35 @@ Não há outros imports de `opsStore` no app. UI admin acessa via HTTP. Tip/troc
 
 ### 2.5 Domínio sem tabela adequada
 
-commission_rules/entries, staff_advances, goals, client_packages, subscription_plans/client_subscriptions, coupons, deposits, purchase_orders(+items), payment_intents, payment_webhook_events, ops_idempotency_keys, ops_shop_id_map, ops_domain_registry (+ audit); **units adiadas (ADR)**.
+commission_rules/entries, staff_advances, goals, client_packages, subscription_plans/client_subscriptions, coupons, deposits, purchase_orders(+items), payment_intents, payment_webhook_events, payment_webhook_quarantine, ops_idempotency_keys, ops_shop_id_map, ops_domain_registry (+ audit); **units adiadas (ADR)**.
 
-### 2.6 Grafos transacionais (conjuntos de cutover — D3)
+### 2.6 Grafo transacional unificado — `ops_core` (D3)
 
-**Grafo Venda — única unidade de cutover (obrigatório):**
-```
-createSale / refundSale / appointment.completed(venda)
-  → sales + sale_items + sale_payments
-  → stock (adjustStock) + products.qty
-  → cash_sessions / cash_movements (incl. troco como saída)
-  → commission_entries (accrual)
-  → ops_audit_log (+ cupom se houver)
-```
-Domínios que flippam **juntos**: `sales`, `products`, `stock`, `cash`, `commissions` (accrual na TX).
+**Unidade única de cutover na 1.B.3** (substitui sale_graph + oc_graph + package_graph separados):
 
-**Grafo OC (cutover conjunto obrigatório):**
 ```
-receivePurchaseOrder → purchasing (OC) + stock + payables
+ops_core =
+  sales + sale_items + sale_payments
+  + products + stock (+ inventory_counts)
+  + cash_sessions + cash_movements
+  + commissions (accrual na TX de venda)
+  + purchasing (purchase_orders)
+  + payables
+  + packages (+ client_packages no caminho completed/sellPackage)
 ```
-Após o grafo Venda, `stock` já é `postgres`; cutover OC flipa `purchasing`+`payables` no mesmo go-live.
 
-**Grafo Pacote:** `sellPackageToClient` → packages + conjunto Venda.
+Fluxos cobertos no mesmo flip:
+- `createSale` / `refundSale` / `appointment.completed` (venda)
+- `receivePurchaseOrder` (stock + payable)
+- `sellPackageToClient` / completed via pacote
 
 **Grafo Gateway (antecipável isolado — 1.B.3-G):**
 ```
-payment_intents + payment_webhook_events
-  → atualiza APENAS intent/evento em PG
-  → NÃO cria/atualiza sales, deposits, cash, stock enquanto json
+payment_intents + payment_webhook_events (+ quarantine)
+  → NÃO cria/atualiza sales/deposits/cash/stock enquanto json
 ```
 
-Qualquer fluxo **só** executa com fonte homogênea no seu grafo; senão **fail-fast** (D3b).
+Qualquer fluxo de `ops_core` só executa com fonte homogênea; senão **fail-fast**.
 
 ---
 
@@ -122,140 +123,129 @@ Qualquer fluxo **só** executa com fonte homogênea no seu grafo; senão **fail-
 
 ### 3.1 Princípios
 
-1. PostgreSQL = fonte oficial após **cutover** do conjunto (D1).  
-2. `barbershop_id` só da sessão em código novo desde 1.B.0 (D8).  
-3. RLS 1.A (ENABLE+FORCE) + RBAC; service role com filtro de tenant.  
-4. Transações nos grafos D3; FKs compostas `(id, barbershop_id)`.  
-5. Idempotência: `ops_idempotency_keys`, uniques parciais, `provider_event_id`.  
+1. PostgreSQL = fonte oficial após cutover `ops_core` e primeira escrita (D1).  
+2. `barbershop_id` só da sessão desde 1.B.0 (D8).  
+3. RLS 1.A + FKs compostas `(id, barbershop_id)`.  
+4. Infra ops (`ops_domain_registry*`, `ops_idempotency_keys`, `ops_shop_id_map`) = **service role only**.  
+5. Idempotência: `UNIQUE (barbershop_id, scope, key)` em `ops_idempotency_keys`; `provider_event_id` em webhooks.  
 6. Concorrência: `FOR UPDATE`, unique cash open, `UPDATE stock WHERE qty >= n`.  
-7. Auditoria: `ops_audit_log` + **auditoria de mudanças do registry**.  
-8. Gateway: assinatura → resolve intent → tenant do intent → escrita idempotente (D7).  
-9. Prep sem flip de produção (D3a).  
-10. Valores monetários: `NUMERIC(12,2)` (alternativa: centavos `BIGINT` — P11).
+7. Auditoria de negócio + **audit de registry**.  
+8. Prep sem flip (D3a); 1.B.0 a partir de `8ce23b1` empilhado (D11).  
+9. Monetário: `NUMERIC(12,2)` (ou centavos — P11).
 
-### 3.2 Registry — fonte oficial versionada (D2 / P1)
+### 3.2 Registry — global, tabela canônica (D2 / P13 fechado)
 
-Arquitetura **obrigatória** para 1.B.0. O registry indica, por domínio: **fonte** (`json` \| `postgres`) e **estado**.
+**Decisão:** o registry é **global** (não por tenant). Uma única linha por domínio para todo o ambiente.
 
-#### 3.2.1 Representação (config versionada + tabela)
+#### 3.2.1 Representação
 
 | Camada | Papel |
 |---|---|
-| **Arquivo versionado** `cortely/config/ops-registry.json` e/ou env `CORTELY_OPS_REGISTRY` | Bootstrap / override de deploy; mesmo schema |
-| **Tabela `ops_domain_registry`** | Fonte canônica em runtime após 1.B.0 (seed a partir do arquivo no primeiro boot) |
-| **Tabela `ops_domain_registry_audit`** | Toda mudança: quem, quando, de→para, conjunto (`sale_graph`…), motivo, fingerprint |
-
-Schema lógico por domínio:
+| Arquivo `cortely/config/ops-registry.json` e/ou env `CORTELY_OPS_REGISTRY` | **Seed inicial apenas** |
+| **`ops_domain_registry`** | **Fonte canônica** após existir/seed |
+| **`ops_domain_registry_audit`** | Toda mudança: quem, quando, de→para, conjunto, motivo, fingerprint |
 
 ```text
 ops_domain_registry (
-  domain TEXT PRIMARY KEY,           -- lista fechada abaixo
+  domain TEXT PRIMARY KEY,
   source TEXT NOT NULL CHECK (source IN ('json','postgres')),
   state TEXT NOT NULL CHECK (state IN (
-    'active_json',                   -- produção na fonte json
-    'prep_pg',                       -- schema/adapters/testes; produção ainda json
-    'cutover_pending',               -- freeze / export em andamento
-    'active_postgres',               -- fonte oficial = postgres
-    'readonly_postgres_export'       -- rollback excepcional: PG só leitura
+    'active_json',
+    'prep_pg',
+    'cutover_pending',
+    'active_postgres',
+    'readonly_postgres_export'   -- só no freeze pré-escrita (§3.3)
   )),
   cutover_at TIMESTAMPTZ NULL,
   updated_at TIMESTAMPTZ NOT NULL,
-  updated_by TEXT NULL
+  updated_by TEXT NULL,
+  CONSTRAINT ops_registry_source_state_ck CHECK (
+    (source = 'json'     AND state IN ('active_json','prep_pg','cutover_pending'))
+    OR
+    (source = 'postgres' AND state IN ('active_postgres','readonly_postgres_export','cutover_pending'))
+  )
 )
+-- REVOKE ALL ON ops_domain_registry, ops_domain_registry_audit FROM anon, authenticated;
+-- GRANT apenas service_role
 ```
 
 **Domínios:** `products`, `stock`, `cash`, `sales`, `commissions`, `packages`, `purchasing`, `payables`, `receivables`, `coupons`, `deposits`, `campaigns`, `waitlist`, `reviews`, `fiscal`, `payment_intents`.
 
-Env sobrescreve arquivo no boot **somente** se passar na validação de grafos; em seguida persiste/atualiza a tabela + linha de audit.
+#### 3.2.2 Precedência e P13 (fechado)
 
-#### 3.2.2 Valores padrão
-
-| Ambiente | Default |
+| Situação | Comportamento |
 |---|---|
-| Produção (boot 1.B.0) | Todos `source=json`, `state=active_json` |
-| Demo / unit sem PG | Todos `json` / `active_json` |
-| CI/staging prep | Subconjuntos `postgres` + `prep_pg` **só** se grafos homogêneos |
+| Tabela **não existe** ainda | Usar arquivo/env interpretado como **all-json** / `active_json` (ou o mapa do arquivo **se** for all-json válido). **Não criar** tabela nem migrations neste momento de boot “pré-1.B.0”. |
+| Tabela existe (pós-`fase1b_00` + seed) | **Tabela vence.** Arquivo/env **não** sobrescrevem `source`/`state` em runtime. |
+| Env tenta promover para `active_postgres` | **Ignorado / rejeitado** — arquivo/env **nunca** promovem para `active_postgres`. Só API de cutover auditada (conjunto `ops_core`). |
+| Env/arquivo **divergem** da tabela | **Fail-fast no boot** (exit ≠ 0). |
+| Seed inicial | Uma vez: arquivo/env → INSERT na tabela (tudo `json`/`active_json` ou `prep_pg` onde permitido) + linha de audit `seed`. |
 
-Omitir domínio = `json` / `active_json`. Sem default implícito `postgres`.
+#### 3.2.3 Valores padrão e transições permitidas
 
-#### 3.2.3 Validação no boot (fail-fast)
+Default produção: todos `source=json`, `state=active_json`.
 
-1. Carregar arquivo/env → merge → ler/seed `ops_domain_registry`.  
-2. Validar `source`/`state`/domínios conhecidos.  
-3. Avaliar **conjuntos** (todos `json` ou todos `postgres` na fonte efetiva):
+| De | Para | Quando |
+|---|---|---|
+| `active_json` | `prep_pg` | Início de prep (schema/adapters); `source` permanece `json` |
+| `prep_pg` | `cutover_pending` | Freeze do cutover `ops_core` (ainda sem escrita PG operacional) |
+| `cutover_pending` + `source=json` | `active_json` | Abortar cutover **antes** de qualquer escrita operacional |
+| `cutover_pending` | `active_postgres` (`source=postgres`) | Flip `ops_core` no go-live |
+| `active_postgres` | — | **Sem retorno a json.** Correção = forward + redeploy |
 
-| Conjunto | Domínios homogêneos obrigatórios |
+Estados `readonly_postgres_export` / retorno a JSON **não** se aplicam após a primeira escrita operacional (§3.3).
+
+#### 3.2.4 Validação no boot (fail-fast)
+
+1. Se tabela existe: carregar tabela; se env/arquivo presentes e divergem → abortar.  
+2. Se tabela não existe: carregar arquivo/env all-json (ou abortar se mapa ilegal).  
+3. Validar CHECK source↔state e domínios.  
+4. Avaliar conjunto **`ops_core`**: todos os domínios abaixo homogêneos (`all json` ou `all postgres`):
+
+| Conjunto | Domínios |
 |---|---|
-| **`sale_graph`** | `sales`, `products`, `stock`, `cash`, `commissions` |
-| **`oc_graph`** | `purchasing`, `stock`, `payables` |
-| **`package_graph`** | `packages` + `sale_graph` |
-| **`deposit_effect`** | `deposits` (+ `sales`/`cash` se efeito financeiro ligado) |
+| **`ops_core`** | `sales`, `products`, `stock`, `cash`, `commissions`, `purchasing`, `payables`, `packages` |
+| **Gateway isolado** | `payment_intents=postgres` permitido com `ops_core=json` **somente** se efeitos de negócio desligados |
 
-4. Grafo partido → **abortar boot** (exit ≠ 0). Em request: erro estruturado, **zero** side-effects.  
-5. Logar fingerprint (hash do mapa) + versão do audit.
+5. `ops_core` partido → **abortar boot**.  
+6. Logar fingerprint + audit head.
 
-#### 3.2.4 Combinações inválidas (exemplos)
+#### 3.2.5 Combinações inválidas (exemplos)
 
 | Configuração | Resultado |
 |---|---|
-| `sales=json` + (`stock`\|`cash`\|`products`\|`commissions`)=`postgres` | **Rejeitada** |
-| `sales=postgres` + qualquer do grafo ainda `json` | **Rejeitada** |
-| `purchasing=postgres` + (`payables`\|`stock`)=`json` | **Rejeitada** |
-| Flip de um domínio isolado do `sale_graph` | **Rejeitada** |
-| `payment_intents=postgres` + efeitos em sales/deposits `json` | OK **só** em modo isolado 1.B.3-G (efeitos desligados) |
+| Qualquer subconjunto de `ops_core` misto json/postgres | **Rejeitada** |
+| Flip de um domínio isolado de `ops_core` | **Rejeitada** |
+| Env promovendo `active_postgres` | **Rejeitada** |
+| `payment_intents=postgres` com efeitos em sales/deposits json | OK só modo isolado 1.B.3-G |
 
-#### 3.2.5 R = W; sem dual-write; flip só por conjunto
+#### 3.2.6 R = W; flip só `ops_core`
 
 - `source(domain)` único para read e write.  
-- Sem `readSource`/`writeSource` separados.  
-- API interna de cutover aceita **apenas** conjuntos nomeados (`sale_graph`, `oc_graph`, …); aplica todos os domínios na **mesma** transação de registry + **uma** linha de audit por flip.  
-- Sem API pública de flip parcial.  
-- **Sem janela de dual-write** em nenhum cutover ou rollback.
+- API interna de cutover: conjunto nomeado **`ops_core`** (ou `payment_intents` isolado); uma TX de registry + audit.  
+- Sem dual-write.
 
-### 3.3 Rollback e ponto sem retorno (D1 + D2)
+### 3.3 Rollback e ponto sem retorno (D1)
 
-**Invariantes:** R=W; sem dual-write; sem apagar batch pós-cutover automaticamente; troca de fonte só por grafo completo.
+**Regra dura:** depois da **primeira escrita operacional** em qualquer domínio de `ops_core` com `source=postgres`, **não há retorno a JSON**.
 
-#### 3.3.1 Procedimento excepcional PG → JSON (sem dual-write)
-
-Ordem **obrigatória**:
-
-1. **Congelar escritas** do grafo (maintenance / feature flag).  
-2. Marcar domínios do grafo: `state=readonly_postgres_export` (PG **somente leitura**).  
-3. **Exportar** delta pós-`cutover_at` (e batches ativos) do PG.  
-4. **Reconciliar** no snapshot JSON (tolerância 0) + validação humana.  
-5. **Só então** virar registry do grafo inteiro → `source=json`, `state=active_json` (auditada).  
-6. Dados PG **permanecem** como histórico — **proibido** `TRUNCATE`/`DELETE` em massa do batch.
-
-#### 3.3.2 Ponto sem retorno
-
-| Momento | Significado |
+| Fase | Rollback permitido |
 |---|---|
-| **Antes** do flip `sale_graph` → `postgres` | Rollback de release simples; batches de import sem tráfego pós-import podem ser descartados com procedimento controlado |
-| **Após** flip `sale_graph` → `active_postgres` e existência de **qualquer** escrita operacional ou intent `paid` aplicado | **Ponto sem retorno operacional**: retorno a JSON só via §3.3.1 (export+reconcile+flip de grafo). Release rollback **não** pode apontar R→JSON sem esse procedimento |
+| Prep (`active_json` / `prep_pg`) | Redeploy; produção continua json |
+| Freeze `cutover_pending` **antes** de qualquer escrita PG operacional | Abortar: registry volta a `active_json` (grafo inteiro); **sem** dual-write; intents **não** são aplicados em JSON |
+| **Após** primeira escrita operacional em `ops_core` | **Ponto sem retorno.** Rollback = redeploy da app **mantendo** `source=postgres` + correção *forward*. Dados PG preservados. **Proibido** apontar registry para json; **proibido** aplicar intents em JSON |
 
-#### 3.3.3 Pagamentos já capturados (gateway)
+**Pagamentos já capturados (pós ponto sem retorno):** permanecem em PG; reconcile/forward fix na fonte postgres; chargebacks = lançamentos compensatórios em PG. **Não** há procedimento de “exportar para JSON e virar registry” após a primeira escrita.
 
-| Situação no rollback excepcional | Tratamento |
-|---|---|
-| Intent `paid` **já aplicado** a sale/deposit em PG | Incluir no export delta; reconciliar no JSON **antes** do flip; não “desfazer” captura no provedor automaticamente |
-| Intent `paid` **ainda não aplicado** (`paid_unapplied` / `applied_at` NULL) | Manter em PG; após flip do grafo Venda (ou no retorno a JSON), aplicar na fonte oficial coerente — **nunca** bridge parcial |
-| Intent `pending` | Continua no PG; webhooks seguem regras §4.6 (tenant do intent, assinatura, idempotência) |
-| Chargeback / estorno no provedor | Lançamentos compensatórios na fonte oficial vigente; audit; sem apagar intent/eventos |
-
-| Situação | Permitido | Proibido |
-|---|---|---|
-| Bug UI | Corrigir app; PG permanece | Truncar para “voltar” |
-| Rollback de release pós-cutover | Redeploy **mantendo** registry `postgres` coerente | R≠W; dual-write |
-| Desfazer import pré-cutover | Só batch sem tráfego pós-import e antes do flip | Apagar pós-cutover automaticamente |
+**Sem janela de dual-write** em nenhuma fase.
 
 ### 3.4 Isolamento / camadas
 
 ```
 Browser → API Next.js (session + RBAC + tenant bind)
-       → OpsRepository(registry + fail-fast graphs)
-       → Postgres | JSON legado (uma fonte R+W por domínio)
-       → payment_intents + webhook (assinatura → intent → tenant)
+       → OpsRepository(registry global + fail-fast ops_core)
+       → Postgres | JSON legado (R=W)
+       → payment_intents + webhook (assinatura → intent → tenant | quarantine)
 ```
 
 ---
@@ -270,65 +260,88 @@ products 1──* stock_movements | inventory_counts
 suppliers 1──* purchase_orders
 sales 1──* sale_items | sale_payments | commission_entries
 sales *──1 cash_sessions (open)
-sale_payments 1──0..1 cash_movements (troco / entrada cash)
+sale_payments 1──0..2 cash_movements
+  -- tipicamente: 0..1 entrada (cash in) + 0..1 saída (change)
 payment_intents *──? sales | appointments | deposits
 payment_intents 1──* payment_webhook_events
+payment_webhook_quarantine  -- sem FK / sem tenant
 ```
 
-### 4.2 Venda, pagamento, caixa e troco (D4)
+### 4.2 Venda, pagamento, caixa e troco (D4 / B1)
 
-**Entidades separadas (obrigatório):**
+**Entidades separadas:**
 
 | Entidade | Papel |
 |---|---|
-| **`sales`** | Cabeçalho: itens, `subtotal`, `discount`, `tip`, `total`, status |
-| **`sale_payments`** | Meios de pagamento (split permitido): `method`, `amount` (valor **aplicado** à venda) |
-| **`cash_movements`** | Movimentos de caixa da sessão: entrada (recebimento cash) e **saída (troco)** |
+| **`sales`** | Cabeçalho: `subtotal`, `discount`, `tip`, `total`, status |
+| **`sale_payments`** | Split: `method`, **`tendered_amount`**, **`applied_amount`** |
+| **`cash_movements`** | Entrada (recebimento cash) e/ou saída (**troco**) |
+
+**Colunas de pagamento (obrigatório — substitui `amount` único):**
+
+```text
+sale_payments (
+  …
+  method TEXT NOT NULL,                 -- 'cash' | 'card' | 'pix' | …
+  tendered_amount NUMERIC(12,2) NOT NULL CHECK (tendered_amount >= 0),
+  applied_amount  NUMERIC(12,2) NOT NULL CHECK (applied_amount  >= 0),
+  CHECK (tendered_amount >= applied_amount),
+  CHECK (method = 'cash' OR tendered_amount = applied_amount)
+  -- troco só em cash: para não-cash, tendered = applied
+)
+```
+
+**Invariantes (obrigatórios):**
+
+1. **`Σ sale_payments.applied_amount = sales.total`** (venda `paid`).  
+2. **`change = Σ (tendered_amount − applied_amount)`** calculado **apenas** sobre linhas `method = 'cash'`.  
+3. **`tendered_amount >= applied_amount`** em toda linha.  
+4. **Troco só em cash** — meios não-cash não geram `reason='change'`.
+
+**DDL `cash_movements`:**
+
+```text
+cash_movements (
+  id UUID,
+  barbershop_id UUID NOT NULL,
+  cash_session_id UUID NOT NULL,
+  sale_payment_id UUID NULL,
+  direction TEXT NOT NULL CHECK (direction IN ('in','out')),
+  reason TEXT NOT NULL CHECK (reason IN ('sale_cash_in','change','manual_in','manual_out','refund_out','refund_in')),
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  created_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE (id, barbershop_id),
+  FOREIGN KEY (cash_session_id, barbershop_id)
+    REFERENCES cash_sessions (id, barbershop_id),
+  FOREIGN KEY (sale_payment_id, barbershop_id)
+    REFERENCES sale_payments (id, barbershop_id),
+  CHECK (reason <> 'change' OR sale_payment_id IS NOT NULL),
+  CHECK (reason <> 'change' OR direction = 'out')
+)
+-- RLS ENABLE+FORCE por barbershop_id
+```
+
+Relação §4.1: um `sale_payment` cash pode ter **até 2** movements (entrada + troco) → `sale_payments 1──0..2 cash_movements`.
 
 **`sales.status`:** `draft?` (P2) \| `pending_payment` \| `paid` \| `canceled` \| `refunded`.  
-`pending_payment` **nunca** baixa estoque definitivo nem comissiona como paid.
+`pending_payment` nunca baixa estoque definitivo nem comissiona como paid.
 
-**Troco:**
-- Troco **não** é “campo solto” sem lastro: é um **`cash_movements`** de **saída** (`direction=out`, `reason=change`) ligado ao `sale_payment` em dinheiro que o originou (`sale_payment_id` NOT NULL).  
-- Opcionalmente denormalizar `sales.change_due` para leitura; a fonte de verdade do efeito em caixa é o movimento.
+**Estornos (append-only):** **nova linha** compensatória (payments, movements, stock, commissions). **Proibido** `UPDATE`/`DELETE` que apague ou zere histórico. Idempotência via `ops_idempotency_keys`.
 
-**Invariante monetário (obrigatório):**
+**Fechamento de caixa:** receita = Σ `applied_amount` por método; dinheiro ≈ entradas cash − saídas `change` ± manuais. Aceite: cash + split + close sem divergência.
 
-```
-Σ sale_payments.amount − change_due = sales.total
-```
+### 4.3 Sequência multi-tenant e FKs compostas (D5)
 
-Equivalente: `Σ amount_applied = total` e `change_due = Σ (tendered_cash − applied_cash)` ≥ 0.  
-Cartão/PIX: em geral sem troco (`tendered = applied`). Split: vários `sale_payments`; só meios cash-like geram movimento de troco.
-
-**Tipos numéricos:** todos os valores monetários em `NUMERIC(12,2)` **ou** centavos `BIGINT` (P11 — escolher um e padronizar). Sem `float`.
-
-**Estornos / cancelamentos (append-only financeiro):**
-- **Proibido** `UPDATE`/`DELETE` que apague ou zere histórico de payments, movements ou commission amounts.  
-- Estorno = **lançamentos compensatórios** (novas linhas: sale→`refunded`, payments/movements/stock/commissions de reversão) + audit.  
-- Idempotência via `ops_idempotency_keys` / unique parcial.
-
-**Fechamento de caixa:**
-- Receita por método = Σ `sale_payments.amount` das sales `paid` da sessão.  
-- Dinheiro em gaveta ≈ entradas cash − saídas de troco ± movimentos manuais.  
-- Aceite: cash + split + close **sem** divergência.
-
-### 4.3 Sequência multi-tenant e FKs compostas (D5 / integridade)
-
-Ordem **obrigatória** (preserva 1.A):
-
-1. `ADD COLUMN barbershop_id UUID NULL` nas tabelas filhas.  
-2. Backfill a partir do pai; quarentenar órfãos.  
-3. Zero NULL → `SET NOT NULL`.  
+1. `ADD COLUMN barbershop_id UUID NULL`.  
+2. Backfill; quarentenar órfãos.  
+3. `SET NOT NULL`.  
 4. `UNIQUE (id, barbershop_id)` no pai.  
 5. `FOREIGN KEY (parent_id, barbershop_id) REFERENCES parent (id, barbershop_id)`.  
-6. Índices `(barbershop_id)`, `(barbershop_id, parent_id)`.  
-7. Policies tenant + EXISTS mesmo shop; ENABLE+FORCE; grants 1.A.  
-8. Suite SQL A×B + asserts FK cruzada + **testes de isolamento entre tenants**.
+6. Índices; policies; ENABLE+FORCE; grants 1.A.  
+7. Suite A×B + isolamento multi-tenant.
 
-Aplicar o mesmo padrão a: `sale_items`, `sale_payments`, `cash_movements`, `commission_*`, `staff_advances`, `payment_intents`, `payment_webhook_events`, etc.
-
-### 4.4 DDL proposto — comissões (D10) + chave única anti-duplicidade
+### 4.4 DDL comissões (D6 / D10) — unique por sale_item + clawback
 
 ```text
 commission_rules (
@@ -342,61 +355,55 @@ commission_rules (
   FOREIGN KEY (barber_id, barbershop_id) REFERENCES barbers (id, barbershop_id),
   FOREIGN KEY (service_id, barbershop_id) REFERENCES services (id, barbershop_id)
 )
--- UNIQUE NULLS NOT DISTINCT (barbershop_id, barber_id, service_id)  -- PG 15+
+-- UNIQUE NULLS NOT DISTINCT (barbershop_id, barber_id, service_id)
 
 commission_entries (
-  id UUID PK,
+  id UUID,
   barbershop_id UUID NOT NULL,
   barber_id UUID NOT NULL,
   sale_id UUID NOT NULL,
-  amount NUMERIC(12,2) NOT NULL,   -- original; NÃO zerar
+  sale_item_id UUID NOT NULL,
+  amount NUMERIC(12,2) NOT NULL,   -- preservado; NÃO zerar
   basis NUMERIC(12,2) NOT NULL,
   percent NUMERIC(5,2) NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('pending','paid','reversed','clawback')),
   created_at TIMESTAMPTZ NOT NULL,
   paid_at TIMESTAMPTZ NULL,
   reversed_at TIMESTAMPTZ NULL,
-  clawback_of UUID NULL REFERENCES commission_entries(id),
+  clawback_of UUID NULL,
   payout_batch_id UUID NULL,
+  PRIMARY KEY (id),
+  UNIQUE (id, barbershop_id),
   FOREIGN KEY (sale_id, barbershop_id) REFERENCES sales (id, barbershop_id),
-  FOREIGN KEY (barber_id, barbershop_id) REFERENCES barbers (id, barbershop_id)
+  FOREIGN KEY (sale_item_id, barbershop_id) REFERENCES sale_items (id, barbershop_id),
+  FOREIGN KEY (barber_id, barbershop_id) REFERENCES barbers (id, barbershop_id),
+  FOREIGN KEY (clawback_of, barbershop_id)
+    REFERENCES commission_entries (id, barbershop_id)
 )
--- UNIQUE parcial anti-duplicidade:
---   (barbershop_id, sale_id, barber_id) WHERE status IN ('pending','paid')
--- Reverse/clawback = nova linha ou transição de status; amounts históricos preservados
-
-staff_advances (
-  id UUID PK,
-  barbershop_id UUID NOT NULL REFERENCES barbershops(id),
-  barber_id UUID NOT NULL,
-  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
-  reason TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('open','deducted','canceled')),
-  created_at TIMESTAMPTZ NOT NULL,
-  deducted_at TIMESTAMPTZ NULL,
-  FOREIGN KEY (barber_id, barbershop_id) REFERENCES barbers (id, barbershop_id)
-)
+-- UNIQUE parcial ativo (anti-duplicidade):
+--   (barbershop_id, sale_item_id, barber_id) WHERE status IN ('pending','paid')
+-- UNIQUE parcial clawback:
+--   (clawback_of) WHERE status = 'clawback'   -- um clawback por entry origem
+-- Reversão / clawback = SEMPRE nova linha (não UPDATE destrutivo de amount)
 ```
 
-Se `barbers`/`services` ainda não tiverem `UNIQUE (id, barbershop_id)`, migration auxiliar **antes** das FKs (P12).  
-RLS ENABLE+FORCE; REVOKE anon.
+`staff_advances`: FK composta `(barber_id, barbershop_id)`; RLS FORCE.  
+P12: garantir `UNIQUE (id, barbershop_id)` em `barbers`/`services` antes das FKs.
 
 ### 4.5 Política de comissão no estorno (D6)
 
-| Estado | Política |
+| Estado origem | Ação |
 |---|---|
-| `pending` | Compensação: status `reversed` (ou linha compensatória); preservar `amount`/`basis`/`percent` |
-| `paid` | **Bloquear** refund da venda até clawback liquidado (default P3); clawback = linha nova `clawback` — **sem** zerar amount da entry paga |
-| `reversed`/`clawback` | Idempotente: reaplicar não duplica ativos nem altera histórico |
+| `pending` | **Nova linha** `reversed` (ou marca origem + linha compensatória — preferência: **nova linha**); amounts originais intactos |
+| `paid` | Bloquear refund da venda até clawback; **nova linha** `clawback` com `clawback_of` → entry paga |
+| `reversed`/`clawback` | Idempotente; unique impede duplicar clawback |
 
-Código JSON atual (zerar amount) **não** será reproduzido. Payout/clawback via idempotency keys.
-
-### 4.6 `payment_intents`, webhooks e quarentena (D7)
+### 4.6 Payment intents, events e quarantine (D7 / B3)
 
 ```text
 payment_intents (
-  id UUID PK,
-  barbershop_id UUID NOT NULL REFERENCES barbershops(id),  -- tenant_id NOT NULL
+  id UUID,
+  barbershop_id UUID NOT NULL REFERENCES barbershops(id),
   provider TEXT NOT NULL,
   provider_ref TEXT NOT NULL,
   amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
@@ -409,69 +416,100 @@ payment_intents (
   idempotency_key TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE (id, barbershop_id),
   UNIQUE (provider, provider_ref),
-  UNIQUE (barbershop_id, idempotency_key),  -- onde key NOT NULL
+  UNIQUE (barbershop_id, idempotency_key),
   FOREIGN KEY (appointment_id, barbershop_id) REFERENCES appointments (id, barbershop_id),
-  FOREIGN KEY (sale_id, barbershop_id) REFERENCES sales (id, barbershop_id),       -- quando sales=postgres
-  FOREIGN KEY (deposit_id, barbershop_id) REFERENCES deposits (id, barbershop_id) -- quando deposits=postgres
+  FOREIGN KEY (sale_id, barbershop_id) REFERENCES sales (id, barbershop_id),
+  FOREIGN KEY (deposit_id, barbershop_id) REFERENCES deposits (id, barbershop_id)
 )
--- RLS ENABLE+FORCE por barbershop_id
+-- RLS ENABLE+FORCE
 
 payment_webhook_events (
   id UUID PK,
-  barbershop_id UUID NOT NULL,              -- copiado do intent registrado; NUNCA do payload
+  barbershop_id UUID NOT NULL,          -- do intent registrado; NUNCA do payload
   payment_intent_id UUID NOT NULL,
   provider TEXT NOT NULL,
   provider_event_id TEXT NOT NULL,
   signature_valid BOOLEAN NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('processed','duplicate','quarantined')),
+  status TEXT NOT NULL CHECK (status IN ('processed','duplicate')),
   raw_payload JSONB NOT NULL,
-  error_reason TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL,
-  UNIQUE (provider, provider_event_id),     -- idempotência de evento
+  UNIQUE (provider, provider_event_id),
   FOREIGN KEY (payment_intent_id, barbershop_id)
     REFERENCES payment_intents (id, barbershop_id)
 )
--- RLS ENABLE+FORCE; eventos quarantined não disparam efeitos de negócio
+-- RLS ENABLE+FORCE
+
+payment_webhook_quarantine (
+  id UUID PRIMARY KEY,
+  provider TEXT,
+  provider_event_id TEXT,
+  raw_payload JSONB NOT NULL,
+  error_reason TEXT NOT NULL,          -- intent_missing | tenant_inconsistent | schema_invalid | …
+  signature_valid BOOLEAN,
+  created_at TIMESTAMPTZ NOT NULL,
+  reprocessed_at TIMESTAMPTZ NULL,
+  reprocess_result TEXT NULL
+  -- SEM barbershop_id; SEM FK
+  -- REVOKE ALL FROM anon, authenticated; GRANT apenas service_role
+)
 ```
 
-#### Pipeline do webhook (ordem fixa)
+#### Pipeline do webhook
 
-1. **Validar assinatura** do provedor — **antes de qualquer escrita**. Falha → HTTP 4xx/401, **zero** write (ou só log externo fora do domínio ops).  
-2. Extrair `provider_event_id` + referência do intent; **lookup do `payment_intents` já registrado**.  
-3. **`barbershop_id` / tenant = do intent registrado** — **nunca** confiar em tenant/shop do payload.  
-4. `INSERT payment_webhook_events` com `UNIQUE (provider, provider_event_id)` — replay = `duplicate`, sem reaplicar efeitos.  
-5. Payload inválido, intent inexistente, tenant inconsistente, assinatura ok mas schema quebrado → `status=quarantined` + `error_reason`; **sem** efeitos financeiros.  
-6. Só então atualizar status da intent; efeito de negócio (sale/deposit/caixa) **somente** se registry do grafo permitir fonte única (senão fail-fast / `paid` sem aplicar — P10).
+1. **Validar assinatura** — antes de qualquer escrita. Falha → 4xx, zero write de domínio.  
+2. Extrair `provider_event_id` + ref do intent; **lookup** de `payment_intents`.  
+3. Se intent inexistente, tenant inconsistente (se houver claim) ou schema inválido → **INSERT `payment_webhook_quarantine`** (service role); **não** escrever em `payment_webhook_events` / intents; fim.  
+4–6. **Uma única transação:**  
+   - (4) `INSERT payment_webhook_events` (`UNIQUE (provider, provider_event_id)` → duplicate = no-op de efeito)  
+   - (5) Atualizar status da intent  
+   - (6) Efeito de negócio **somente** se `ops_core` (e deposits, se aplicável) homogêneo em postgres; senão só status da intent (modo isolado 1.B.3-G) — **nunca** aplicar em JSON pós ponto sem retorno  
 
-`simulated` **nunca** `paid`.
+**Reprocessamento de quarentena (manual/job service role):**  
+1. Revalidar assinatura e schema.  
+2. Se intent agora existe e é coerente → mover para pipeline 4–6 (TX) e marcar `reprocessed_at` + resultado.  
+3. Se ainda inválido → manter em quarentena; sem efeitos.  
+4. Idempotente: se `provider_event_id` já está em `payment_webhook_events`, só atualizar metadados da quarentena.
 
-#### Limites 1.B.3-G (pré-cutover Venda)
+#### Limites 1.B.3-G
 
 | Permitido | Proibido |
 |---|---|
-| Criar intent `pending` em PG | Criar/atualizar **vendas** ou **depósitos** em JSON |
-| Webhook: assinatura → evento idempotente → status da intent | Efeitos financeiros parciais (caixa, stock, comissão) |
-| Quarentena de inválidos | Bridges intent(PG) → opsStore(JSON) |
-| Consulta admin do status | Qualquer multi-fonte — fail-fast, zero side-effects fora de intents/events |
+| Intent pending + webhook → status | Criar/atualizar sales/deposits em JSON |
+| Quarentena sem tenant | Efeitos financeiros parciais / bridges |
+| Reprocessamento service role | Aplicar intents em JSON após rollback/redeploy |
 
-### 4.7 Outras tabelas planejadas
+### 4.7 Outras tabelas / grants de infra
 
-purchase_orders(+items), client_packages, subscription_plans/client_subscriptions, coupons, deposits, goals, ops_idempotency_keys, ops_shop_id_map, ops_migration_rejects, ops_domain_registry, ops_domain_registry_audit.
+```text
+ops_idempotency_keys (
+  barbershop_id UUID NOT NULL,
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  response_meta JSONB,
+  created_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (barbershop_id, scope, key)   -- UNIQUE por (barbershop_id, scope, key)
+)
+-- ops_shop_id_map, ops_domain_registry, ops_domain_registry_audit,
+-- ops_idempotency_keys, payment_webhook_quarantine:
+--   REVOKE ALL FROM anon, authenticated; service_role only
+```
 
-### 4.8 Migrations planejadas (repo only — **não criar/aplicar nesta autorização**)
+### 4.8 Migrations planejadas (repo only — **não criar/aplicar agora**)
 
+0. **`fase1b_00`** — `ops_domain_registry` + `ops_domain_registry_audit` + grants service_role + seed all-json  
 1. `fase1b_01` — sale tenant columns + FK composta + RLS  
-2. `fase1b_02` — sales/cash enrichment (tip, cancel, payments/troco como movement, counted_by_method)  
-3. `fase1b_03` — commissions + advances + unique parcial + FKs tenant  
+2. `fase1b_02` — payments `tendered_amount`/`applied_amount` + `cash_movements` (change CHECK)  
+3. `fase1b_03` — commissions (unique sale_item + clawback) + advances  
 4. `fase1b_04` — packages/subscriptions  
 5. `fase1b_05` — purchase_orders  
-6. `fase1b_06` — coupons, deposits, payment_intents, payment_webhook_events  
-7. `fase1b_07` — idempotency + registry tables + audit grants  
-8. `fase1b_08` — concurrency (cash open unique, stock checks)
+6. `fase1b_06` — coupons, deposits, payment_intents, events, quarantine  
+7. `fase1b_07` — `ops_idempotency_keys`, `ops_shop_id_map`, audit grants  
+8. `fase1b_08` — concurrency constraints  
 
-Cada uma: ENABLE+FORCE, `relforcerowsecurity`, grants 1.A.  
-Prep/CI **não** implica flip de registry em produção.
+Prep/CI **não** implica flip `ops_core` em produção.
 
 ---
 
@@ -479,60 +517,61 @@ Prep/CI **não** implica flip de registry em produção.
 
 | Contexto | Comportamento |
 |---|---|
-| Código novo desde **1.B.0** | `session.barbershop_id` — **nunca** constant |
-| JSON legado / seed demo | Constant `11111111-…-111` permitido |
-| ETL 1.B.8 | `ops_shop_id_map(legacy_id → barbershop_id)`; órfãos → quarentena |
-| Webhook | Tenant **só** do intent registrado |
-| **1.B.9** | Remover constant e writes JSON ops em prod |
+| Código novo desde 1.B.0 | `session.barbershop_id` — nunca constant |
+| JSON legado / demo | Constant permitida |
+| ETL | `ops_shop_id_map`; órfãos → quarentena |
+| Webhook | Tenant **só** do intent; senão → `payment_webhook_quarantine` |
+| 1.B.9 | Remover constant e writes JSON ops |
 
 ---
 
-## 6. Subetapas 1.B.0–1.B.9 (versão consolidada)
+## 6. Subetapas 1.B.0–1.B.9 (reordenado — `ops_core`)
 
-**Princípio:** prep em PG sem mudar fonte oficial em produção. Cutover = flip auditado do **conjunto** D3. Sem dual-write.
+**Princípio:** toda preparação de `ops_core` (sales/stock/cash/commissions/**purchasing/payables/packages**) ocorre **antes** do cutover único na **1.B.3**. 1.B.5 e 1.B.6 são **prep**, não cutovers separados.
 
 | Subetapa | Tipo | Escopo | Dependências | Critérios de aceite | Riscos |
 |---|---|---|---|---|---|
-| **1.B.0** | Prep | `OpsRepository` + registry (§3.2) + fail-fast + audit de mudanças + tenant session | 1.A | Default json; boot rejeita grafos partidos; R=W; flip só por conjunto; audit gravada; SHOP_ID ausente em código novo | Registry mal configurado |
-| **1.B.1** | Prep | products + stock_movements + inventory_counts (schema/adapters/testes) | 1.B.0 | CI/staging PG OK; **prod json**; createSale ainda JSON | Flip stock cedo |
-| **1.B.2** | Prep | cash_sessions + cash_movements (unique open, FOR UPDATE, troco como saída) | 1.B.1 | Testes caixa CI; **prod cash=json** | Flip cash cedo |
-| **1.B.3-G** | Gateway isolado | intents + webhook (assinatura, event_id, tenant do intent, quarentena) | 1.B.0 + mig | Assinatura antes de write; unique event; zero sales/deposits JSON; quarantine | Ligar efeitos cedo |
-| **1.B.3** | **Cutover `sale_graph`** | Flip atômico: sales+products+stock+cash+commissions → postgres; createSale/refund/troco/compensatórios; ligar intents aplicados | 1.B.1–2, 1.B.3-G, D4/D5 | Um flip; Σ pagamentos − troco = total; append-only estorno; RLS A×B; isolamento 3 tenants | Cutover parcial |
-| **1.B.4** | Cutover payout | Payout + advances + D6 | 1.B.3 | Unique comissões; clawback compensatório; refund bloqueado se paid | Double pay |
-| **1.B.5** | Packages | packages + completed no backend PG | 1.B.3 | Sem write JSON ops | Pacote+venda |
-| **1.B.6** | Cutover `oc_graph` | purchasing+payables (stock já pg) mesmo go-live | 1.B.3 | Sem fontes divididas | Flip só OC |
-| **1.B.7** | Restante leve | receivables, coupons, deposits (só registry coerente), campaigns, waitlist, reviews, fiscal | 1.B.3, 1.B.3-G | Deposit só intent paid + grafo OK | Bridge |
-| **1.B.8** | ETL + harden | ETL idempotente + map IDs + reconcile **por tenant**; registry ops postgres; JSON backup RO | anteriores + D1 | Reconcile 0/tenant; PG preservado | Truncate |
-| **1.B.9** | Limpeza | Remover SHOP_ID; ADR units | 1.B.8 | Multi-tenant ops real | — |
+| **1.B.0** | Prep | `OpsRepository` + registry global (§3.2) + fail-fast `ops_core` + audit; branch a partir de `8ce23b1`, PR empilhado **sem merge** (D11) | 1.A `8ce23b1` | Tabela canônica pós-seed; env não promove postgres; divergência fail-fast; R=W | Registry |
+| **1.B.1** | Prep | products + stock (+ inventory) | 1.B.0 + mig | CI PG; **prod json** | Flip cedo |
+| **1.B.2** | Prep | cash_sessions + cash_movements (troco) | 1.B.1 | CI caixa; **prod json** | Flip cedo |
+| **1.B.3-G** | Gateway isolado | intents + events + quarantine + pipeline TX 4–6 | 1.B.0 | Assinatura; event_id; quarantine; zero efeitos JSON | Efeitos cedo |
+| **1.B.4** | Prep | commissions DDL/unique/clawback + advances (adapters/testes; prod json) | 1.B.0 | Unique sale_item; clawback nova linha | — |
+| **1.B.5** | **Prep** (ex-cutover) | packages / client_packages schema+adapters+testes; **prod json** | 1.B.0 | Prep OK; sem flip | Confundir com cutover |
+| **1.B.6** | **Prep** (ex-cutover) | purchasing (OC) + payables schema+adapters+testes; **prod json** | 1.B.1 | Prep OK; sem flip | Confundir com cutover |
+| **1.B.3** | **Cutover único `ops_core`** | Flip atômico: sales+products+stock+cash+commissions+purchasing+payables+packages → postgres; createSale/refund/OC/pacote/troco; ligar intents aplicados **só em PG** | 1.B.1, 1.B.2, 1.B.3-G, 1.B.4, **1.B.5**, **1.B.6** | Um flip auditado; Σ applied = total; change só cash; append-only; isolamento 3 tenants; após 1ª escrita = ponto sem retorno | Cutover parcial |
+| **1.B.7** | Cutover leve | receivables, coupons, deposits (registry coerente), campaigns, waitlist, reviews, fiscal | 1.B.3, 1.B.3-G | Deposit só intent paid + PG | Bridge |
+| **1.B.8** | ETL + harden | ETL idempotente + map + reconcile por tenant; JSON RO backup | 1.B.3+ | Reconcile 0/tenant | Truncate |
+| **1.B.9** | Limpeza | Remover SHOP_ID; ADR units | 1.B.8 | Multi-tenant real | — |
 
-**WhatsApp:** fora desta etapa.
+**WhatsApp:** fora.
 
 ### Sequência de cutover (produção)
 
 ```
-[Prep 1.B.0 → 1.B.1 → 1.B.2 → 1.B.3-G*]  sale_graph = json
-        * payment_intents podem ser postgres isolados
+[Prep 1.B.0 → 1.B.1 → 1.B.2 → 1.B.3-G → 1.B.4 → 1.B.5 → 1.B.6]
+        ops_core = json  (payment_intents pode ser postgres isolado)
         ↓
-[1.B.3] flip auditado sale_graph → postgres   ← ponto sem retorno operacional
+[Freeze cutover_pending — ainda sem escrita PG]
+        ↓ abortável → active_json
         ↓
-[1.B.4 → 1.B.5] payout / packages
-        ↓
-[1.B.6] flip oc_graph (purchasing+payables; stock já postgres)
+[1.B.3] flip auditado ops_core → active_postgres
+        → primeira escrita operacional = PONTO SEM RETORNO
         ↓
 [1.B.7 → 1.B.8 → 1.B.9]
 ```
 
-### Critérios transversais de aceite
+### Critérios transversais
 
-1. Typecheck + build + security 1.A (quando CI aplicável).  
-2. Nenhuma rota aceita `barbershop_id` do cliente para escopo.  
-3. Registry R=W; fail-fast; flip só por conjunto; mudanças auditadas.  
-4. Sem dual-write; sem bridges.  
+1. CI/security 1.A quando aplicável.  
+2. Sem `barbershop_id` do cliente.  
+3. Registry global canônico; fail-fast; flip só `ops_core`.  
+4. Sem dual-write/bridges.  
 5. Prep não altera fonte oficial (exceto intents isolados).  
-6. Sem apply remoto de migrations sem autorização.  
-7. Revisão humana: **1.B.3-G, 1.B.3, 1.B.4, 1.B.6, 1.B.8**.  
-8. Rollback: PG RO → export/reconcile → flip grafo; pagamentos capturados tratados (§3.3).  
-9. Isolamento multi-tenant testado (SQL+API, ≥ 3 lojas).
+6. Sem apply remoto sem autorização.  
+7. Revisão humana: **1.B.3-G, 1.B.3, 1.B.8**.  
+8. Pós 1ª escrita: rollback = redeploy + forward (sem retorno JSON).  
+9. Isolamento ≥ 3 tenants.  
+10. 1.B.0 empilhado a partir de `8ce23b1`, sem merge até autorização.
 
 ---
 
@@ -542,63 +581,64 @@ Prep/CI **não** implica flip de registry em produção.
 
 Snapshot JSON + SHA-256; `pg_dump`/PITR; `migration_batch_id`.
 
-### 7.2 ETL idempotente (integridade)
+### 7.2 ETL idempotente
 
-- Parser `OpsSnapshot`; **`ops_shop_id_map`** (legacy → `barbershop_id`).  
-- Import **por tenant** (loop/barreira por `barbershop_id`).  
-- `ON CONFLICT` / `imported_from_batch`; segundo import só `--force` + novo batch.  
-- Rejeitos → `ops_migration_rejects` (quarentena).  
-- Reexecução do mesmo batch **não** duplica linhas (idempotente).
+Parser; `ops_shop_id_map`; import por tenant; `ON CONFLICT` / batch; rejeitos em `ops_migration_rejects`.
 
 ### 7.3 Dedup / validação
 
-Unique por id; sales com `Σ payments − change ≠ total` → quarentena; comissões violando unique parcial → rejeito.
+Unique por id. Quarentena se:
+- `Σ applied_amount ≠ sales.total`  
+- `tendered_amount < applied_amount`  
+- troco/`change` em método ≠ cash  
+- comissão violando unique `(barbershop_id, sale_item_id, barber_id)` ativo  
 
 ### 7.4 Import TX — ordem por FKs
 
-1. `ops_shop_id_map` / tenants (`barbershops`, `barbers`, `services`, `clients`, `appointments`)  
-2. `products`, `suppliers`  
+1. `ops_shop_id_map` / tenants  
+2. products, suppliers  
 3. packages / subscription_plans  
-4. `cash_sessions`  
-5. `sales`  
-6. `sale_items`, `sale_payments`  
-7. `cash_movements` (incl. troco → `sale_payment_id`)  
-8. `stock_movements`, `inventory_counts`  
-9. `commission_rules` → `commission_entries`  
-10. `staff_advances`  
-11. `purchase_orders`(+items) → `payables` / `receivables`  
-12. `coupons`, `deposits`, client_packages/subscriptions  
-13. `payment_intents` → `payment_webhook_events`  
-14. campaigns, waitlist, reviews, fiscal, `ops_audit_log`  
-15. `ops_idempotency_keys` / rejects / registry seed
-
-Stock: replay movements **ou** opening balance (P8).
+4. cash_sessions  
+5. sales  
+6. sale_items, sale_payments (`tendered_amount`/`applied_amount`)  
+7. cash_movements (incl. `reason=change` → `sale_payment_id`)  
+8. stock_movements, inventory_counts  
+9. commission_rules → commission_entries (por sale_item)  
+10. staff_advances  
+11. purchase_orders(+items) → payables / receivables  
+12. coupons, deposits, client_packages/subscriptions  
+13. payment_intents → payment_webhook_events (quarantine não importa de JSON)  
+14. campaigns, waitlist, reviews, fiscal, audit  
+15. ops_idempotency_keys / rejects / registry já seeded em `fase1b_00`
 
 ### 7.5 Reconciliação por tenant (tolerância 0)
 
-Para **cada** `barbershop_id`:
+Para cada `barbershop_id`:
 - `#sales` / Σ `total`  
-- `Σ payments.amount − Σ change = Σ total` (paid)  
-- Caixa: applied por método vs movimentos (entradas − troco)  
-- `stock_qty`; commissions pending/paid (unique ok)  
-- intents paid vs aplicados  
+- **`Σ applied_amount = Σ total`** (paid)  
+- **`Σ (tendered − applied)` só cash = Σ change / movements `reason=change`**  
+- Caixa: applied por método vs movements  
+- stock; commissions unique ok  
+- intents paid vs aplicados em PG  
 
-### 7.6 Rollback — ver §3.3
+### 7.6 Rollback — alinhado a §3.3
 
-PG RO → export delta → reconcile JSON → flip grafo; sem dual-write; sem delete de batch pós-cutover.
+- Durante freeze, **antes** da 1ª escrita: abortar cutover → `active_json`.  
+- **Depois** da 1ª escrita: **sem** retorno a JSON; redeploy + forward; **não** aplicar intents em JSON.  
+- Sem dual-write; sem delete automático de batch pós-cutover.
 
 ### 7.7 Cutover
 
-1. Prep 1.B.1–1.B.2–1.B.3-G; `sale_graph` ainda json.  
-2. Freeze (**sem** dual-write).  
-3. Import/reconcile delta **por tenant**.  
-4. Flip auditado `sale_graph` → postgres.  
-5. Monitor; ponto sem retorno (§3.3.2); ligar aplicação de intents.  
-6. Demais cutovers; 1.B.8 residual + JSON RO backup.
+1. Prep 1.B.0–1.B.6 + 1.B.3-G concluídas; `ops_core=json`.  
+2. Freeze `cutover_pending` (**sem** dual-write).  
+3. Import/reconcile delta por tenant.  
+4. Flip auditado `ops_core` → `active_postgres`.  
+5. Primeira escrita → ponto sem retorno.  
+6. 1.B.7–1.B.9.
 
 ### 7.8 Anti-duplicação
 
-`ON CONFLICT (id)`; `imported_from_batch`; **proibido** apagar automaticamente batch pós-cutover.
+`ON CONFLICT`; `imported_from_batch`; proibido apagar batch pós-cutover automaticamente.
 
 ---
 
@@ -606,22 +646,20 @@ PG RO → export delta → reconcile JSON → flip grafo; sem dual-write; sem de
 
 | Classe | Conteúdo |
 |---|---|
-| **Registry** | R=W; grafos legais; defaults json; flip parcial rejeitado; **audit** de mudança |
-| **Fail-fast** | `sales=json`+`stock=postgres` → boot/fluxo aborta; zero side-effects |
-| **Prep sem cutover** | createSale não escreve PG stock/cash |
-| **Webhook** | Assinatura inválida → zero write; tenant do intent; `UNIQUE (provider, provider_event_id)`; quarantine |
-| **1.B.3-G isolado** | `paid` não cria sale/deposit JSON |
-| **createSale pós-1.B.3** | Writes só PG; Σ payments − troco = total |
-| **Troco** | `cash_movements` out ligado ao payment cash; split OK |
-| **Estorno append-only** | Compensatórios; sem DELETE/UPDATE destrutivo; amounts preservados |
-| **Comissão unique** | Não duplica (sale, barber) ativo; clawback idempotente |
-| **Isolamento tenants** | 3 lojas: SQL A×B, API, FK cruzada, webhook tenant |
-| **ETL** | Idempotente; map IDs; reconcile por tenant = 0 |
-| **Rollback procedimental** | PG RO → export → flip; sem dual-write |
-| **Concorrência** | caixa unique; stock 409 |
+| **Registry** | Tabela canônica; env não promove postgres; divergência fail-fast; sem tabela → all-json; audit; global |
+| **Fail-fast ops_core** | Qualquer domínio do conjunto misto → abort |
+| **Prep sem cutover** | 1.B.5/1.B.6 prep: createSale/receive OC **não** escrevem PG em prod json |
+| **Webhook** | Assinatura; tenant do intent; event_id unique; quarantine sem tenant; reprocessamento; TX 4–6 atômica |
+| **1.B.3-G** | paid não cria sale/deposit JSON |
+| **createSale pós-ops_core** | Σ applied = total; tendered≥applied; change só cash; 0..2 movements |
+| **Troco DDL** | `reason=change` exige `sale_payment_id`; direction=out |
+| **Estorno** | Nova linha; sem DELETE destrutivo |
+| **Comissão** | Unique (barbershop, sale_item, barber); UNIQUE clawback_of; FK composta |
+| **Rollback** | Pós 1ª escrita: registry permanece postgres; sem apply intent→JSON |
+| **Isolamento tenants** | 3 lojas SQL+API+webhook |
+| **ETL** | Idempotente; reconcile por tenant |
+| **Infra grants** | anon/authenticated sem acesso a registry/idempotency/map/quarantine |
 | **Regressão** | phase0 + fase1a + build |
-
-Ambiente: Postgres service (CI 1.A) + seeds 3 tenants.
 
 ---
 
@@ -629,41 +667,33 @@ Ambiente: Postgres service (CI 1.A) + seeds 3 tenants.
 
 | Risco | Mitigação |
 |---|---|
-| Ops JSON em prod | Cutover conjunto `sale_graph`; alertas |
-| Flip parcial vendas/estoque/caixa/comissões | Unidade única D3; API de conjuntos; fail-fast |
-| Dual-write / R≠W | D2; §3.2; §3.3 |
-| Webhook sem assinatura / tenant do payload | Pipeline §4.6 |
-| Replay de evento | `UNIQUE (provider, provider_event_id)` |
-| Troco como receita | Troco = movimento de saída |
-| Estorno destrutivo | Append-only compensatório |
-| Comissão duplicada | Unique parcial |
-| ETL cross-tenant | Map + reconcile por tenant |
-| Rollback apagando PG | §3.3 — proibido |
-| Pagamentos capturados no retorno a JSON | Export/reconcile antes do flip (§3.3.3) |
-| Units / WhatsApp | Fora de escopo |
+| Cutover parcial | Unidade `ops_core` na 1.B.3 |
+| Env promovendo postgres | P13: só seed; fail-fast se diverge |
+| Dual-write / retorno JSON tardio | D1 / §3.3 |
+| Webhook sem intent | `payment_webhook_quarantine` |
+| Troco em cartão / applied ≠ total | Invariantes B1 + testes |
+| Comissão duplicada / double clawback | Unique sale_item + UNIQUE clawback_of |
+| Grants excessivos em infra | Service role only |
+| Merge prematuro 1.B.0 | D11: empilhado a partir de 8ce23b1, sem merge |
 
 ---
 
 ## 10. Critério de conclusão da Etapa 1.B (global)
 
-- Registry versionado com fonte+estado; R=W; grafos homogêneos; mudanças auditadas.  
+- Registry global canônico; `ops_core` em postgres; R=W; audit.  
 - JSON ops não escrito em produção.  
-- Isolamento ≥ 3 barbearias (SQL+API+webhook).  
-- `sale_graph` e `oc_graph` sem fontes mistas.  
-- ETL idempotente; reconcile 0 **por tenant**; `Σ payments − troco = total`.  
-- Gateway: assinatura, event_id único, tenant do intent, quarentena.  
-- Estornos compensatórios; comissões sem duplicidade.  
-- 1.A intacta; SHOP_ID removido (1.B.9).  
-- Nenhum batch pós-cutover apagado automaticamente.
+- Isolamento ≥ 3 tenants.  
+- Σ applied = total; change só cash; estornos compensatórios (nova linha).  
+- Gateway: assinatura, event_id, quarantine, TX 4–6.  
+- ETL idempotente; reconcile 0/tenant.  
+- 1.A intacta; SHOP_ID removido.  
+- Sem retorno a JSON após 1ª escrita operacional.
 
 ---
 
 ## 11. ADR — Adiamento de `units` (D9)
 
-**Status:** Aceito.  
-**Contexto:** `units` no JSON ops sem tabela/RLS; multi-tenant = `barbershops`.  
-**Decisão:** Não implementar `units` na 1.B; não bloqueia 1.B.8.  
-**Revisita:** pós-1.B.9 se houver requisito comercial.
+**Status:** Aceito. Não implementar `units` na 1.B; não bloqueia 1.B.8. Revisita pós-1.B.9.
 
 ---
 
@@ -671,18 +701,18 @@ Ambiente: Postgres service (CI 1.A) + seeds 3 tenants.
 
 | Pendência | Notas |
 |---|---|
+| ~~P13~~ | **Fechado:** tabela canônica após seed; arquivo/env só seed; nunca promovem `active_postgres`; divergência → fail-fast; sem tabela → all-json sem criar nada; registry **global** |
 | P2 | Status `draft` de sale? |
-| P3 | Clawback automático vs só bloqueio (default = **bloqueio**) — 1.B.4 |
+| P3 | Clawback automático vs só bloqueio (default = bloqueio) |
 | P4 | Caixa open obrigatório em toda sale `paid`? |
-| P5 | Provider(s) webhook (MP/Asaas) e segredos |
-| P6 | Profundidade do shadow log (fora do registry audit) |
-| P7 | Janela do job reconcile de intents |
-| P8 | Stock ETL: replay vs opening balance |
-| P9 | Duração do freeze no cutover 1.B.3 |
+| P5 | Provider(s) webhook e segredos |
+| P6 | Profundidade do shadow log |
+| P7 | Janela reconcile intents |
+| P8 | Stock ETL: replay vs opening |
+| P9 | Duração do freeze 1.B.3 |
 | P10 | `paid_unapplied` vs `paid` + `applied_at` |
-| P11 | `NUMERIC(12,2)` vs centavos `BIGINT`; nomes tendered/applied |
-| P12 | `UNIQUE (id, barbershop_id)` em `barbers`/`services` antes das FKs |
-| P13 | Precedência final arquivo vs tabela quando divergirem após 1.B.0 (default proposto: tabela vence após seed; env só com flag de emergência auditada) |
+| P11 | `NUMERIC(12,2)` vs centavos `BIGINT` |
+| P12 | `UNIQUE (id, barbershop_id)` em barbers/services |
 
 ---
 
@@ -701,7 +731,7 @@ Ambiente: Postgres service (CI 1.A) + seeds 3 tenants.
 | `supabase/migrations/20260327_*` … `20261111_06_*` | schema + RLS 1.A |
 | `docs/fase1a-rls-inventory.md` | inventário RLS |
 | `docs/fase1a-schema-privileges.md` | privilégios schema |
-| `config/ops-registry.json` (planejado) | registry versionado (bootstrap) |
+| `config/ops-registry.json` (planejado) | seed inicial do registry |
 
 ## Apêndice B — Limites desta autorização documental
 
@@ -710,8 +740,8 @@ Ambiente: Postgres service (CI 1.A) + seeds 3 tenants.
 - Não altera Supabase remoto / produção.  
 - Não remove JSON.  
 - Não faz merge/publish/deploy.  
-- **Não inicia 1.B.0** até aprovação formal humana deste plano consolidado.
+- **Não inicia 1.B.0** até aprovação formal. Quando autorizada, 1.B.0 parte de **`8ce23b1`** em PR empilhado (**sem merge** automático).
 
 ---
 
-**Próximo passo:** aprovação formal humana deste documento consolidado. Somente após autorização explícita iniciar **1.B.0** (registry versionado + OpsRepository + fail-fast + audit).
+**Próximo passo:** aprovação formal humana. Somente após autorização explícita iniciar **1.B.0** (branch desde `8ce23b1` + `fase1b_00` registry + OpsRepository + fail-fast), sem merge até novo OK humano.
