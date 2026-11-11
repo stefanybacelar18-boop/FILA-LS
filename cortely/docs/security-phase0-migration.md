@@ -51,3 +51,5 @@ Rollback: manter snapshot do JSON + dump SQL até N dias após cutover.
 - **Evolution:** `EVOLUTION_API_URL` + `EVOLUTION_API_KEY` + `EVOLUTION_INSTANCE`
 - `WHATSAPP_PROVIDER=meta|evolution` opcional
 - Não exigir IDs Meta para Evolution
+
+<!-- phase0: cortely-only commit to skip root Vercel after vercel.json ignore update -->
