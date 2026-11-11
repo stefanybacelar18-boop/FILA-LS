@@ -3,5 +3,5 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "ignoreCommand": "bash -c 'PREV=\"${VERCEL_GIT_PREVIOUS_SHA:-}\"; git fetch --deepen=10 2>/dev/null || true; if [ -z \"$PREV\" ] || ! git cat-file -e \"$PREV^{commit}\" 2>/dev/null; then if git rev-parse --verify HEAD^ >/dev/null 2>&1; then PREV=$(git rev-parse HEAD^); else exit 0; fi; fi; git diff --quiet \"$PREV\" HEAD -- . \":(exclude)frota-tms\" \":(exclude)frota-tms/**\" \":(exclude)cortely\" \":(exclude)cortely/**\" \":(exclude).github/workflows/cortely-ci.yml\" \":(exclude)vercel.json\"'"
+  "ignoreCommand": "bash scripts/vercel-ignore.sh"
 }
