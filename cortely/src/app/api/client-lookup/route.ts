@@ -7,9 +7,8 @@ import { onlyDigits } from "@/lib/utils";
 export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
   const phone = req.nextUrl.searchParams.get("phone");
-  const proof =
-    req.headers.get("x-cortely-client") ||
-    req.nextUrl.searchParams.get("client_token");
+  // Token só no header — nunca na query (evita vazamento em logs/Referer).
+  const proof = req.headers.get("x-cortely-client");
 
   if (!phone || onlyDigits(phone).length < 10) {
     return NextResponse.json({ error: "Informe um WhatsApp válido" }, { status: 400 });

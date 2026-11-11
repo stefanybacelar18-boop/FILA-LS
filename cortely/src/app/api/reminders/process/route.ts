@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (delivery.ok && delivery.mode === "api") {
-      await markReminderSent(reminder.id);
+      await markReminderSent(reminder.id, reminder.barbershop_id);
       results.push({ id: reminder.id, status: "sent", mode: "api" });
     } else if (delivery.ok && delivery.mode === "manual") {
       // Não devolve wa.me com PII — só sinaliza pendência manual
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         mode: "manual",
       });
     } else {
-      await markReminderFailed(reminder.id);
+      await markReminderFailed(reminder.id, reminder.barbershop_id);
       results.push({
         id: reminder.id,
         status: "failed",

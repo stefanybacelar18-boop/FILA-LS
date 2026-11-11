@@ -62,18 +62,14 @@ export function checkRateLimit(
   return { ok: true, remaining: opts.limit - bucket.count };
 }
 
+/**
+ * IP do cliente: só o último hop de X-Forwarded-For (o host acrescenta).
+ * Não confiar em x-real-ip / cf-connecting-ip / x-vercel-forwarded-for —
+ * o visitante pode forjá-los se a plataforma não os sobrescrever.
+ */
 export function clientIp(req: { headers: Headers }) {
-  // Preferir cabeçalhos definidos pelo host (não controlados pelo visitante).
-  const platform =
-    req.headers.get("x-real-ip") ||
-    req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-vercel-forwarded-for");
-  if (platform) {
-    return platform.split(",")[0]?.trim() || "unknown";
-  }
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) {
-    // Plataforma que acrescenta o IP real à direita; a esquerda o cliente controla.
     const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
     return parts[parts.length - 1] || "unknown";
   }

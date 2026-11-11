@@ -70,17 +70,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
       }
 
+      // Sem IP confiável do host, não disparamos WhatsApp pago.
       if (ip === "unknown") {
-        const untrusted = checkRateLimit("otp-send-untrusted", {
-          limit: 2,
-          windowMs: 60 * 60 * 1000,
-          lockMs: 60 * 60 * 1000,
-        });
-        if (!untrusted.ok) return rateFail(untrusted);
+        return NextResponse.json(
+          { error: "Não foi possível validar a origem do pedido" },
+          { status: 403 },
+        );
       }
 
       const ipLimit = checkRateLimit(sensitiveIpKey("otp-send-ip", ip), {
-        limit: 3,
+        limit: 2,
         windowMs: 60 * 60 * 1000,
         lockMs: 60 * 60 * 1000,
       });
@@ -93,12 +92,13 @@ export async function POST(req: NextRequest) {
       });
       if (!phoneLimit.ok) return rateFail(phoneLimit);
 
-      const globalLimit = checkRateLimit("otp-send-global", {
-        limit: 60,
+      // Teto por loja (não global compartilhado) — esgota e trava 1h.
+      const shopLimit = checkRateLimit(`otp-send-shop:${shop.shop.id}`, {
+        limit: 20,
         windowMs: 60 * 60 * 1000,
-        lockMs: 15 * 60 * 1000,
+        lockMs: 60 * 60 * 1000,
       });
-      if (!globalLimit.ok) return rateFail(globalLimit);
+      if (!shopLimit.ok) return rateFail(shopLimit);
 
       const code = String(randomInt(100000, 1000000));
       store().set(digits, {

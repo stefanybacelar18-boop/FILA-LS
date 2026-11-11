@@ -6,7 +6,9 @@ import {
   requirePermission,
   roleCan,
 } from "@/lib/auth";
+import { getAppointment } from "@/lib/data";
 import { opsStore } from "@/lib/ops-store";
+import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
@@ -419,11 +421,11 @@ export async function POST(req: NextRequest) {
       case "add_review": {
         const data = z
           .object({
-            client_name: z.string().min(2),
-            client_phone: z.string().min(10),
+            client_name: z.string().min(2).max(80),
+            client_phone: z.string().min(10).max(20),
             client_token: z.string().min(20).optional(),
             rating: z.number().int().min(1).max(5),
-            comment: z.string().nullable().optional(),
+            comment: z.string().max(500).nullable().optional(),
             appointment_id: z.string().uuid().nullable().optional(),
           })
           .parse(body);
@@ -438,12 +440,48 @@ export async function POST(req: NextRequest) {
             { status: 401 },
           );
         }
+        if (!staffOk) {
+          const ip = clientIp(req);
+          const reviewLimit = checkRateLimit(
+            sensitiveIpKey(`review:${digits}`, ip),
+            {
+              limit: 3,
+              windowMs: 60 * 60 * 1000,
+              lockMs: 60 * 60 * 1000,
+            },
+          );
+          if (!reviewLimit.ok) {
+            return NextResponse.json(
+              {
+                error: reviewLimit.error,
+                retryAfterSec: reviewLimit.retryAfterSec,
+              },
+              {
+                status: 429,
+                headers: { "Retry-After": String(reviewLimit.retryAfterSec) },
+              },
+            );
+          }
+          if (!data.appointment_id) {
+            return NextResponse.json(
+              { error: "Informe o agendamento avaliado" },
+              { status: 400 },
+            );
+          }
+          const appt = await getAppointment(data.appointment_id);
+          if (!appt || onlyDigits(appt.client_phone) !== digits) {
+            return NextResponse.json(
+              { error: "Agendamento inválido para este telefone" },
+              { status: 403 },
+            );
+          }
+        }
         return NextResponse.json({
           review: opsStore.addReview({
-            client_name: data.client_name,
+            client_name: data.client_name.slice(0, 80),
             client_phone: digits,
             rating: data.rating,
-            comment: data.comment,
+            comment: data.comment ? data.comment.slice(0, 500) : null,
             appointment_id: data.appointment_id,
           }),
         });

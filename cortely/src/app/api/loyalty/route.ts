@@ -11,9 +11,8 @@ export async function GET(req: NextRequest) {
   try {
     const slug = req.nextUrl.searchParams.get("slug") ?? "navalha-negra";
     const phone = req.nextUrl.searchParams.get("phone");
-    const proof =
-      req.headers.get("x-cortely-client") ||
-      req.nextUrl.searchParams.get("client_token");
+    // Token só no header — nunca na query (evita vazamento em logs/Referer).
+    const proof = req.headers.get("x-cortely-client");
     const bundle = await getShopBundle(slug);
 
     if (!bundle) {

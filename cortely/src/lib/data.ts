@@ -351,26 +351,28 @@ export async function listReminders(barbershopId: string): Promise<Reminder[]> {
   return (data ?? []) as Reminder[];
 }
 
-export async function markReminderSent(id: string) {
+export async function markReminderSent(id: string, barbershopId: string) {
   if (isDemoMode()) return demoStore.markReminderSent(id);
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("reminders")
     .update({ status: "sent" })
     .eq("id", id)
+    .eq("barbershop_id", barbershopId)
     .select("*")
     .single();
   if (error) throw new Error(error.message);
   return data as Reminder;
 }
 
-export async function markReminderFailed(id: string) {
+export async function markReminderFailed(id: string, barbershopId: string) {
   if (isDemoMode()) return demoStore.markReminderFailed(id);
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("reminders")
     .update({ status: "failed" })
     .eq("id", id)
+    .eq("barbershop_id", barbershopId)
     .select("*")
     .single();
   if (error) throw new Error(error.message);
@@ -477,10 +479,17 @@ export async function getScheduleBlock(id: string): Promise<ScheduleBlock | null
   return (data as ScheduleBlock | null) ?? null;
 }
 
-export async function deleteScheduleBlock(id: string) {
+export async function deleteScheduleBlock(id: string, barbershopId?: string) {
   if (isDemoMode()) return demoStore.deleteScheduleBlock(id);
+  if (!barbershopId) {
+    throw new Error("barbershop_id obrigatório para excluir bloqueio");
+  }
   const supabase = createServiceClient();
-  const { error } = await supabase.from("schedule_blocks").delete().eq("id", id);
+  const { error } = await supabase
+    .from("schedule_blocks")
+    .delete()
+    .eq("id", id)
+    .eq("barbershop_id", barbershopId);
   if (error) throw new Error(error.message);
 }
 
@@ -500,11 +509,15 @@ export async function upsertBarber(input: {
   specialties: string[];
   avatar_url?: string | null;
   is_active?: boolean;
+  barbershop_id?: string;
 }): Promise<Barber> {
   if (isDemoMode()) return demoStore.upsertBarber(input);
 
   const supabase = createServiceClient();
   if (input.id) {
+    if (!input.barbershop_id) {
+      throw new Error("barbershop_id obrigatório para atualizar barbeiro");
+    }
     const { data, error } = await supabase
       .from("barbers")
       .update({
@@ -514,6 +527,7 @@ export async function upsertBarber(input: {
         is_active: input.is_active,
       })
       .eq("id", input.id)
+      .eq("barbershop_id", input.barbershop_id)
       .select("*")
       .single();
     if (error) throw new Error(error.message);
@@ -536,10 +550,17 @@ export async function upsertService(input: {
   throw new Error("CRUD serviço via Supabase: configure o DEMO ou complete o admin SQL");
 }
 
-export async function deleteService(id: string) {
+export async function deleteService(id: string, barbershopId?: string) {
   if (isDemoMode()) return demoStore.deleteService(id);
+  if (!barbershopId) {
+    throw new Error("barbershop_id obrigatório para excluir serviço");
+  }
   const supabase = createServiceClient();
-  const { error } = await supabase.from("services").delete().eq("id", id);
+  const { error } = await supabase
+    .from("services")
+    .delete()
+    .eq("id", id)
+    .eq("barbershop_id", barbershopId);
   if (error) throw new Error(error.message);
 }
 

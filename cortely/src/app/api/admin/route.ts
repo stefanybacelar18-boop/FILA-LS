@@ -121,7 +121,12 @@ export async function POST(req: NextRequest) {
             is_active: z.boolean().optional(),
           })
           .parse(body);
-        return NextResponse.json({ barber: await upsertBarber(data) });
+        return NextResponse.json({
+          barber: await upsertBarber({
+            ...data,
+            barbershop_id: session!.barbershop_id,
+          }),
+        });
       }
       case "upsert_service": {
         requirePermission(session, "servicos");
@@ -141,7 +146,7 @@ export async function POST(req: NextRequest) {
       case "delete_service": {
         requirePermission(session, "servicos");
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
-        await deleteService(id);
+        await deleteService(id, session!.barbershop_id);
         return NextResponse.json({ ok: true });
       }
       case "set_hours": {
@@ -189,7 +194,9 @@ export async function POST(req: NextRequest) {
       case "mark_reminder_sent": {
         requirePermission(session, "lembretes");
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
-        return NextResponse.json({ reminder: await markReminderSent(id) });
+        return NextResponse.json({
+          reminder: await markReminderSent(id, session!.barbershop_id),
+        });
       }
       case "update_client": {
         requirePermission(session, "manage_clients");
@@ -243,16 +250,19 @@ export async function POST(req: NextRequest) {
       case "delete_block": {
         requirePermission(session, "manage_blocks");
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
+        const block = await getScheduleBlock(id);
+        if (!block || block.barbershop_id !== session!.barbershop_id) {
+          return NextResponse.json({ error: "Bloqueio não encontrado" }, { status: 404 });
+        }
         if (session!.role === "barber" && session!.barber_id) {
-          const block = await getScheduleBlock(id);
-          if (!block || block.barber_id !== session!.barber_id) {
+          if (block.barber_id !== session!.barber_id) {
             return NextResponse.json(
               { error: "Barbeiro só pode remover o próprio bloqueio" },
               { status: 403 },
             );
           }
         }
-        await deleteScheduleBlock(id);
+        await deleteScheduleBlock(id, session!.barbershop_id);
         return NextResponse.json({ ok: true });
       }
       default:
