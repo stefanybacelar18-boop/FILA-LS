@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     }
 
     const token = encodeSession(session);
-    const res = NextResponse.json({ user: session, token });
+    // Token só no cookie httpOnly — não devolver no JSON (evita sessionStorage/XSS).
+    const res = NextResponse.json({ user: session });
     res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",

@@ -2,7 +2,8 @@ import { randomInt } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { encodeClientProof } from "@/lib/auth";
-import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { getShopBundle } from "@/lib/data";
+import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
@@ -34,7 +35,7 @@ function rateFail(result: { retryAfterSec: number; error: string }) {
 /**
  * OTP por WhatsApp Business API.
  * Sem token: recusa. Código nunca volta na resposta.
- * Limite de envio e de tentativas de verificação.
+ * Exige slug de loja válida + limites apertados (IP/telefone/global).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -53,22 +54,51 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const { phone } = z.object({ phone: z.string().min(10) }).parse(body);
+      const { phone, slug } = z
+        .object({
+          phone: z.string().min(10).max(20),
+          slug: z.string().min(1).max(80),
+        })
+        .parse(body);
       const digits = onlyDigits(phone);
+      if (digits.length < 10 || digits.length > 13) {
+        return NextResponse.json({ error: "Telefone inválido" }, { status: 400 });
+      }
 
-      const ipLimit = checkRateLimit(`otp-send-ip:${ip}`, {
-        limit: 8,
+      const shop = await getShopBundle(slug);
+      if (!shop) {
+        return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+      }
+
+      if (ip === "unknown") {
+        const untrusted = checkRateLimit("otp-send-untrusted", {
+          limit: 2,
+          windowMs: 60 * 60 * 1000,
+          lockMs: 60 * 60 * 1000,
+        });
+        if (!untrusted.ok) return rateFail(untrusted);
+      }
+
+      const ipLimit = checkRateLimit(sensitiveIpKey("otp-send-ip", ip), {
+        limit: 3,
         windowMs: 60 * 60 * 1000,
         lockMs: 60 * 60 * 1000,
       });
       if (!ipLimit.ok) return rateFail(ipLimit);
 
       const phoneLimit = checkRateLimit(`otp-send-phone:${digits}`, {
-        limit: 3,
+        limit: 2,
         windowMs: 60 * 60 * 1000,
         lockMs: 60 * 60 * 1000,
       });
       if (!phoneLimit.ok) return rateFail(phoneLimit);
+
+      const globalLimit = checkRateLimit("otp-send-global", {
+        limit: 60,
+        windowMs: 60 * 60 * 1000,
+        lockMs: 15 * 60 * 1000,
+      });
+      if (!globalLimit.ok) return rateFail(globalLimit);
 
       const code = String(randomInt(100000, 1000000));
       store().set(digits, {
@@ -99,12 +129,26 @@ export async function POST(req: NextRequest) {
 
     if (action === "verify") {
       const data = z
-        .object({ phone: z.string().min(10), code: z.string().min(4).max(8) })
+        .object({
+          phone: z.string().min(10).max(20),
+          code: z.string().min(4).max(8),
+          slug: z.string().min(1).max(80).optional(),
+        })
         .parse(body);
       const digits = onlyDigits(data.phone);
+      if (digits.length < 10 || digits.length > 13) {
+        return NextResponse.json({ error: "Telefone inválido" }, { status: 400 });
+      }
 
-      const ipLimit = checkRateLimit(`otp-verify-ip:${ip}`, {
-        limit: 30,
+      if (data.slug) {
+        const shop = await getShopBundle(data.slug);
+        if (!shop) {
+          return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
+        }
+      }
+
+      const ipLimit = checkRateLimit(sensitiveIpKey("otp-verify-ip", ip), {
+        limit: 20,
         windowMs: 60 * 60 * 1000,
         lockMs: 30 * 60 * 1000,
       });

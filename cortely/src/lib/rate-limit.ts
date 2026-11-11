@@ -63,11 +63,25 @@ export function checkRateLimit(
 }
 
 export function clientIp(req: { headers: Headers }) {
+  // Preferir cabeçalhos definidos pelo host (não controlados pelo visitante).
+  const platform =
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-vercel-forwarded-for");
+  if (platform) {
+    return platform.split(",")[0]?.trim() || "unknown";
+  }
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) {
-    // Plataforma acrescenta o IP real à direita; a esquerda o cliente controla.
+    // Plataforma que acrescenta o IP real à direita; a esquerda o cliente controla.
     const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
     return parts[parts.length - 1] || "unknown";
   }
-  return req.headers.get("x-real-ip") || "unknown";
+  return "unknown";
+}
+
+/** Em rotas sensíveis, IP desconhecido usa limites mais rígidos. */
+export function sensitiveIpKey(prefix: string, ip: string) {
+  if (!ip || ip === "unknown") return `${prefix}:untrusted`;
+  return `${prefix}:${ip}`;
 }

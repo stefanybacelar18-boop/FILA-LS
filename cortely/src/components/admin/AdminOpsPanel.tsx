@@ -13,10 +13,12 @@ import type {
   Coupon,
   Payable,
   Product,
+  PurchaseOrder,
   Receivable,
   Sale,
   ServicePackage,
   ShopUnit,
+  StockMovement,
   SubscriptionPlan,
   Supplier,
   WaitlistEntry,
@@ -38,6 +40,8 @@ type OpsTab =
 type OpsPayload = {
   products: Product[];
   suppliers: Supplier[];
+  stockMovements: StockMovement[];
+  purchaseOrders: PurchaseOrder[];
   sales: Sale[];
   currentCash: CashSession | null;
   cashMovements: Array<{ id: string; type: string; amount: number; reason: string }>;
@@ -115,6 +119,19 @@ export function AdminOpsPanel({
     "all",
   );
   const [stockDelta, setStockDelta] = useState(5);
+  const [supplierForm, setSupplierForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    notes: "",
+  });
+  const [poForm, setPoForm] = useState({
+    supplier_id: "",
+    product_id: "",
+    quantity: 10,
+    unit_cost: 20,
+    notes: "",
+  });
 
   const [saleForm, setSaleForm] = useState({
     kind: "service" as "service" | "product",
@@ -705,8 +722,160 @@ export function AdminOpsPanel({
                 </div>
               </article>
             ))}
-            <div className="glass-panel rounded-2xl p-4 text-sm text-stone-400">
-              Fornecedores: {data.suppliers.map((s) => s.name).join(" · ") || "—"}
+            <div className="glass-panel space-y-3 rounded-2xl p-4">
+              <h4 className="font-medium text-stone-100">Fornecedores</h4>
+              <Input
+                placeholder="Nome"
+                value={supplierForm.name}
+                onChange={(e) =>
+                  setSupplierForm({ ...supplierForm, name: e.target.value })
+                }
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Telefone"
+                  value={supplierForm.phone}
+                  onChange={(e) =>
+                    setSupplierForm({ ...supplierForm, phone: e.target.value })
+                  }
+                />
+                <Input
+                  placeholder="E-mail"
+                  value={supplierForm.email}
+                  onChange={(e) =>
+                    setSupplierForm({ ...supplierForm, email: e.target.value })
+                  }
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() =>
+                  action({
+                    action: "upsert_supplier",
+                    name: supplierForm.name,
+                    phone: supplierForm.phone || null,
+                    email: supplierForm.email || null,
+                    notes: supplierForm.notes || null,
+                  })
+                    .then(() =>
+                      setSupplierForm({
+                        name: "",
+                        phone: "",
+                        email: "",
+                        notes: "",
+                      }),
+                    )
+                    .catch((e) => setError(e.message))
+                }
+              >
+                Salvar fornecedor
+              </Button>
+              <p className="text-sm text-stone-400">
+                {data.suppliers.map((s) => s.name).join(" · ") || "—"}
+              </p>
+            </div>
+            <div className="glass-panel space-y-3 rounded-2xl p-4">
+              <h4 className="font-medium text-stone-100">Ordem de compra</h4>
+              <select
+                className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                value={poForm.supplier_id || data.suppliers[0]?.id || ""}
+                onChange={(e) =>
+                  setPoForm({ ...poForm, supplier_id: e.target.value })
+                }
+              >
+                {data.suppliers.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-stone-900">
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm"
+                value={poForm.product_id || data.products[0]?.id || ""}
+                onChange={(e) =>
+                  setPoForm({ ...poForm, product_id: e.target.value })
+                }
+              >
+                {data.products.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-stone-900">
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  placeholder="Qtd"
+                  value={poForm.quantity}
+                  onChange={(e) =>
+                    setPoForm({ ...poForm, quantity: Number(e.target.value) })
+                  }
+                />
+                <Input
+                  type="number"
+                  placeholder="Custo unit."
+                  value={poForm.unit_cost}
+                  onChange={(e) =>
+                    setPoForm({ ...poForm, unit_cost: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() =>
+                  action({
+                    action: "create_purchase_order",
+                    supplier_id: poForm.supplier_id || data.suppliers[0]?.id,
+                    notes: poForm.notes || null,
+                    items: [
+                      {
+                        product_id: poForm.product_id || data.products[0]?.id,
+                        quantity: poForm.quantity,
+                        unit_cost: poForm.unit_cost,
+                      },
+                    ],
+                  }).catch((e) => setError(e.message))
+                }
+              >
+                Criar ordem
+              </Button>
+              {(data.purchaseOrders ?? []).slice(0, 6).map((order) => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm"
+                >
+                  <span>
+                    {order.status} · {formatBRL(order.total_cost)} ·{" "}
+                    {new Date(order.created_at).toLocaleDateString("pt-BR")}
+                  </span>
+                  {order.status !== "received" && order.status !== "canceled" && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        action({
+                          action: "receive_purchase_order",
+                          id: order.id,
+                        }).catch((e) => setError(e.message))
+                      }
+                    >
+                      Receber
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="glass-panel space-y-2 rounded-2xl p-4">
+              <h4 className="font-medium text-stone-100">Movimentos recentes</h4>
+              {(data.stockMovements ?? []).slice(0, 8).map((m) => {
+                const product = data.products.find((p) => p.id === m.product_id);
+                return (
+                  <p key={m.id} className="text-xs text-stone-400">
+                    {m.delta > 0 ? "+" : ""}
+                    {m.delta} {product?.name ?? "produto"} · {m.reason}
+                  </p>
+                );
+              })}
             </div>
           </div>
         </div>

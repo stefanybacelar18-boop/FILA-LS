@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { saveStaffToken } from "@/lib/staff-session";
+import { clearStaffToken } from "@/lib/staff-session";
 
 type Props = {
   onSuccess: () => void | Promise<void>;
@@ -35,9 +35,7 @@ export function AdminLogin({ onSuccess }: Props) {
               : "Falha no login"),
         );
       }
-      if (typeof data.token === "string" && data.token.includes(".")) {
-        saveStaffToken(data.token);
-      }
+      clearStaffToken();
       await onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro");

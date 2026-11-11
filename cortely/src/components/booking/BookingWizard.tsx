@@ -26,6 +26,10 @@ export function BookingWizard({ shop, barbers, services }: Props) {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [clientToken, setClientToken] = useState<string | null>(null);
+  const [otpBusy, setOtpBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null);
@@ -82,8 +86,56 @@ export function BookingWizard({ shop, barbers, services }: Props) {
     };
   }, [serviceId, barberId, date, shop.slug, bookingEnabled]);
 
+  async function sendOtp() {
+    setOtpBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/client-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send",
+          phone: onlyDigits(clientPhone),
+          slug: shop.slug,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao enviar OTP");
+      setOtpSent(true);
+      setClientToken(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro OTP");
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  async function verifyOtp() {
+    setOtpBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/client-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify",
+          phone: onlyDigits(clientPhone),
+          code: otpCode,
+          slug: shop.slug,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.token) throw new Error(data.error || "OTP inválido");
+      setClientToken(data.token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro OTP");
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
   async function confirmBooking() {
-    if (!serviceId || !barberId || !date || !time) return;
+    if (!serviceId || !barberId || !date || !time || !clientToken) return;
     setSubmitting(true);
     setError(null);
 
@@ -99,6 +151,7 @@ export function BookingWizard({ shop, barbers, services }: Props) {
           client_phone: onlyDigits(clientPhone),
           appointment_date: date,
           start_time: time,
+          client_token: clientToken,
         }),
       });
       const data = await res.json();
@@ -336,8 +389,48 @@ export function BookingWizard({ shop, barbers, services }: Props) {
             <Input
               placeholder="WhatsApp (DDD + número)"
               value={clientPhone}
-              onChange={(e) => setClientPhone(formatPhoneBR(e.target.value))}
+              onChange={(e) => {
+                setClientPhone(formatPhoneBR(e.target.value));
+                setClientToken(null);
+                setOtpSent(false);
+              }}
             />
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-white/10 p-4">
+            <p className="text-xs uppercase tracking-wide text-stone-500">
+              Confirmação WhatsApp (OTP)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={otpBusy || onlyDigits(clientPhone).length < 10}
+                onClick={sendOtp}
+              >
+                {otpBusy ? "Enviando…" : "Receber código"}
+              </Button>
+              {otpSent && (
+                <>
+                  <Input
+                    className="max-w-[140px]"
+                    placeholder="Código"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                  />
+                  <Button size="sm" disabled={otpBusy || !otpCode} onClick={verifyOtp}>
+                    Validar
+                  </Button>
+                </>
+              )}
+            </div>
+            {clientToken ? (
+              <p className="text-xs text-emerald-300">WhatsApp verificado.</p>
+            ) : (
+              <p className="text-xs text-stone-500">
+                Precisa da WhatsApp Business API configurada nos secrets do app.
+              </p>
+            )}
           </div>
 
           {error && <p className="text-sm text-rose-400">{error}</p>}
@@ -350,6 +443,7 @@ export function BookingWizard({ shop, barbers, services }: Props) {
               className="flex-1 cta-glow"
               disabled={
                 submitting ||
+                !clientToken ||
                 clientName.trim().length < 2 ||
                 onlyDigits(clientPhone).length < 10
               }

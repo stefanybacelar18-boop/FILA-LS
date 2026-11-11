@@ -41,6 +41,24 @@ export type StockMovement = {
   created_at: string;
 };
 
+export type PurchaseOrderItem = {
+  product_id: string;
+  quantity: number;
+  unit_cost: number;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  barbershop_id: string;
+  supplier_id: string;
+  status: "draft" | "ordered" | "received" | "canceled";
+  items: PurchaseOrderItem[];
+  notes: string | null;
+  total_cost: number;
+  created_at: string;
+  received_at: string | null;
+};
+
 export type CashSession = {
   id: string;
   barbershop_id: string;
@@ -273,6 +291,7 @@ export type OpsSnapshot = {
   products: Product[];
   suppliers: Supplier[];
   stockMovements: StockMovement[];
+  purchaseOrders: PurchaseOrder[];
   cashSessions: CashSession[];
   cashMovements: CashMovement[];
   sales: Sale[];

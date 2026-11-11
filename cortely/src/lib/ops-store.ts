@@ -15,6 +15,7 @@ import type {
   PaymentMethod,
   Product,
   Receivable,
+  PurchaseOrder,
   Review,
   Sale,
   SaleItem,
@@ -159,6 +160,7 @@ function seed(): OpsSnapshot {
     ],
     reviews: [],
     deposits: [],
+    purchaseOrders: [],
     units: [
       {
         id: SHOP_ID,
@@ -182,6 +184,7 @@ function seed(): OpsSnapshot {
 function state(): OpsSnapshot {
   if (!globalOps.__cortelyOpsV2) {
     const saved = loadPersistedStore().ops as OpsSnapshot | undefined;
+    if (saved && !saved.purchaseOrders) saved.purchaseOrders = [];
     globalOps.__cortelyOpsV2 = saved ?? seed();
     if (!saved) persistOps(globalOps.__cortelyOpsV2);
   }
@@ -491,6 +494,82 @@ const opsStoreImpl = {
     };
     s.suppliers.push(row);
     return { ...row };
+  },
+
+  listPurchaseOrders() {
+    return state().purchaseOrders.map((o) => ({
+      ...o,
+      items: o.items.map((i) => ({ ...i })),
+    }));
+  },
+
+  createPurchaseOrder(input: {
+    supplier_id: string;
+    items: Array<{ product_id: string; quantity: number; unit_cost: number }>;
+    notes?: string | null;
+  }) {
+    const s = state();
+    if (!s.suppliers.some((x) => x.id === input.supplier_id)) {
+      throw new Error("Fornecedor inválido");
+    }
+    if (!input.items.length) throw new Error("Adicione itens à ordem");
+    for (const item of input.items) {
+      if (!s.products.some((p) => p.id === item.product_id)) {
+        throw new Error("Produto inválido na ordem");
+      }
+      if (item.quantity <= 0 || item.unit_cost < 0) {
+        throw new Error("Quantidade/custo inválidos");
+      }
+    }
+    const total_cost = input.items.reduce(
+      (a, i) => a + i.quantity * i.unit_cost,
+      0,
+    );
+    const row: PurchaseOrder = {
+      id: randomUUID(),
+      barbershop_id: SHOP_ID,
+      supplier_id: input.supplier_id,
+      status: "ordered",
+      items: input.items.map((i) => ({ ...i })),
+      notes: input.notes ?? null,
+      total_cost,
+      created_at: new Date().toISOString(),
+      received_at: null,
+    };
+    s.purchaseOrders.unshift(row);
+    audit("sistema", "purchase.create", row.id);
+    commit();
+    return { ...row, items: row.items.map((i) => ({ ...i })) };
+  },
+
+  receivePurchaseOrder(id: string, actor: string) {
+    const s = state();
+    const order = s.purchaseOrders.find((o) => o.id === id);
+    if (!order) throw new Error("Ordem não encontrada");
+    if (order.status === "received") throw new Error("Ordem já recebida");
+    if (order.status === "canceled") throw new Error("Ordem cancelada");
+    for (const item of order.items) {
+      this.adjustStock({
+        product_id: item.product_id,
+        delta: item.quantity,
+        reason: `OC ${order.id.slice(0, 8)} · entrada`,
+      });
+    }
+    order.status = "received";
+    order.received_at = new Date().toISOString();
+    s.payables.push({
+      id: randomUUID(),
+      barbershop_id: SHOP_ID,
+      description: `Ordem de compra ${order.id.slice(0, 8)}`,
+      amount: order.total_cost,
+      due_date: new Date().toISOString().slice(0, 10),
+      category: "Estoque",
+      status: "open",
+      paid_at: null,
+    });
+    audit(actor, "purchase.receive", order.id);
+    commit();
+    return { ...order, items: order.items.map((i) => ({ ...i })) };
   },
 
   // —— Comissões ——
@@ -1019,6 +1098,7 @@ const OPS_READ = new Set([
   "listProducts",
   "lowStock",
   "listSuppliers",
+  "listPurchaseOrders",
   "ranking",
   "listPackages",
   "listSubscriptionPlans",

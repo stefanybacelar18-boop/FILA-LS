@@ -69,11 +69,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const createPublicSchema = createSchema.extend({
+  client_token: z.string().min(20).optional(),
+});
+
 export async function POST(req: NextRequest) {
   try {
     const ip = clientIp(req);
-    const limited = checkRateLimit(`book:${ip}`, {
-      limit: 20,
+    const limited = checkRateLimit(`book:${ip === "unknown" ? "untrusted" : ip}`, {
+      limit: ip === "unknown" ? 5 : 15,
       windowMs: 60 * 60 * 1000,
       lockMs: 60 * 60 * 1000,
     });
@@ -87,12 +91,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = createSchema.parse(await req.json());
+    const body = createPublicSchema.parse(await req.json());
+    const phoneDigits = onlyDigits(body.client_phone);
+    const staff = getRequestSession(req);
+    const staffCanBook = Boolean(
+      staff &&
+        (staff.role === "owner" ||
+          staff.role === "reception" ||
+          staff.role === "barber"),
+    );
+    const clientOk = Boolean(
+      body.client_token && parseClientProof(body.client_token, phoneDigits),
+    );
+    if (!staffCanBook && !clientOk) {
+      return NextResponse.json(
+        {
+          error:
+            "Confirme o WhatsApp com o código OTP antes de agendar (ou entre como equipe).",
+        },
+        { status: 401 },
+      );
+    }
+
     const bundle = await getShopBundle(body.slug);
     if (!bundle) {
       return NextResponse.json({ error: "Barbearia não encontrada" }, { status: 404 });
     }
-    if (bundle.shop.booking_link_enabled === false) {
+    if (staffCanBook && staff!.barbershop_id !== bundle.shop.id) {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+    if (!staffCanBook && bundle.shop.booking_link_enabled === false) {
       return NextResponse.json(
         { error: "Agendamento online está pausado nesta barbearia" },
         { status: 403 },
@@ -116,7 +144,7 @@ export async function POST(req: NextRequest) {
       barber_id: body.barber_id,
       service_id: body.service_id,
       client_name: clientName || "Cliente",
-      client_phone: onlyDigits(body.client_phone),
+      client_phone: phoneDigits,
       appointment_date: body.appointment_date,
       start_time: body.start_time,
       end_time: computeEndTime(body.start_time, service.duration_minutes),

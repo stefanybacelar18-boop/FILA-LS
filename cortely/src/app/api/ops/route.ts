@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
       products: permissions.estoque ? snap.products : [],
       suppliers: permissions.estoque ? snap.suppliers : [],
       stockMovements: permissions.estoque ? snap.stockMovements : [],
+      purchaseOrders: permissions.estoque ? snap.purchaseOrders : [],
       payables: permissions.financeiro ? snap.payables : [],
       receivables: permissions.financeiro ? snap.receivables : [],
       commissionRules: permissions.comissoes ? snap.commissionRules : [],
@@ -215,6 +216,34 @@ export async function POST(req: NextRequest) {
           })
           .parse(body);
         return NextResponse.json({ supplier: opsStore.upsertSupplier(data) });
+      }
+      case "create_purchase_order": {
+        requirePermission(session, "estoque");
+        const data = z
+          .object({
+            supplier_id: z.string().uuid(),
+            notes: z.string().nullable().optional(),
+            items: z
+              .array(
+                z.object({
+                  product_id: z.string().uuid(),
+                  quantity: z.number().int().positive(),
+                  unit_cost: z.number().nonnegative(),
+                }),
+              )
+              .min(1),
+          })
+          .parse(body);
+        return NextResponse.json({
+          order: opsStore.createPurchaseOrder(data),
+        });
+      }
+      case "receive_purchase_order": {
+        requirePermission(session, "estoque");
+        const { id } = z.object({ id: z.string().uuid() }).parse(body);
+        return NextResponse.json({
+          order: opsStore.receivePurchaseOrder(id, actor),
+        });
       }
       case "set_commission_rule": {
         // Só a dona altera regras (loja ou por barbeiro)

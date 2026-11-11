@@ -188,7 +188,11 @@ export function ClientLookup({ slug }: { slug: string }) {
             const res = await fetch("/api/client-otp", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "send", phone: onlyDigits(phone) }),
+              body: JSON.stringify({
+                action: "send",
+                phone: onlyDigits(phone),
+                slug,
+              }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -219,6 +223,7 @@ export function ClientLookup({ slug }: { slug: string }) {
                     action: "verify",
                     phone: onlyDigits(phone),
                     code: otpCode,
+                    slug,
                   }),
                 });
                 const data = await res.json();
@@ -360,6 +365,7 @@ export function ClientLookup({ slug }: { slug: string }) {
                               method: "pix",
                               appointment_id: item.id,
                               client_token: clientToken,
+                              slug,
                             }),
                           });
                           const data = await res.json();
