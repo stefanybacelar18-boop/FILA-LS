@@ -63,9 +63,10 @@ type SignedSession = SessionUser & { exp: number };
 function signingSecret() {
   const fromEnv = process.env.CORTELY_SESSION_SECRET?.trim();
   if (fromEnv && fromEnv.length >= 16) return fromEnv;
-  // Fallback estável entre instâncias serverless (evita cookie inválido no próximo request).
-  // Prefira sempre CORTELY_SESSION_SECRET nos secrets do app.
-  return "cortely-stable-demo-hmac-fallback-v1";
+  // Sem fallback hardcoded: sem secret não há sessão assinável.
+  throw new Error(
+    "CORTELY_SESSION_SECRET não configurado (mínimo 16 caracteres)",
+  );
 }
 
 function signBody(body: string) {

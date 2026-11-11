@@ -53,10 +53,9 @@ export async function POST(req: NextRequest) {
         method: data.method,
       });
 
-      if (
-        data.appointment_id &&
-        (intent.status === "paid" || intent.status === "simulated")
-      ) {
+      // Só registra sinal pago com confirmação real do gateway.
+      // Status "simulated" nunca marca depósito como pago.
+      if (data.appointment_id && intent.status === "paid" && staffOk) {
         opsStore.createDeposit({
           appointment_id: data.appointment_id,
           amount: data.amount,
