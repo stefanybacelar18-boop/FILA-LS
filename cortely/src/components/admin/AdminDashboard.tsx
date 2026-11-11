@@ -441,7 +441,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
   return (
     <div className="min-h-screen lg:flex">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-white/10 bg-[#12100e]/95 p-4 backdrop-blur-xl transition lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-white/10 bg-[#12100e]/95 p-4 backdrop-blur-xl transition lg:static lg:translate-x-0 ${
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -452,42 +452,44 @@ export function AdminDashboard({ slug }: { slug: string }) {
         <p className="mt-1 text-xs text-stone-500">
           {data.session.full_name} · {data.session.role}
         </p>
-        <nav className="mt-6 space-y-5 overflow-y-auto pb-20">
-          {navGroups.map((group) => (
-            <div key={group}>
-              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.2em] text-stone-500">
-                {group}
-              </p>
-              <div className="space-y-1">
-                {navItems
-                  .filter((n) => n.group === group)
-                  .map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => go(item.id)}
-                      className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                        tab === item.id
-                          ? "bg-amber-500/20 text-amber-100"
-                          : "text-stone-300 hover:bg-white/5"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+        <div className="mt-6 flex min-h-0 flex-1 flex-col">
+          <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
+            {navGroups.map((group) => (
+              <div key={group}>
+                <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.2em] text-stone-500">
+                  {group}
+                </p>
+                <div className="space-y-1">
+                  {navItems
+                    .filter((n) => n.group === group)
+                    .map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => go(item.id)}
+                        className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                          tab === item.id
+                            ? "bg-amber-500/20 text-amber-100"
+                            : "text-stone-300 hover:bg-white/5"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </nav>
-        <div className="absolute bottom-4 left-4 right-4 space-y-2">
-          <Link href={`/b/${slug}`} className="block">
-            <Button variant="outline" size="sm" className="w-full">
-              Página do cliente
+            ))}
+          </nav>
+          <div className="shrink-0 space-y-2 border-t border-white/10 pt-3">
+            <Link href={`/b/${slug}`} className="block">
+              <Button variant="outline" size="sm" className="w-full">
+                Página do cliente
+              </Button>
+            </Link>
+            <Button variant="secondary" size="sm" className="w-full" onClick={logout}>
+              Sair
             </Button>
-          </Link>
-          <Button variant="secondary" size="sm" className="w-full" onClick={logout}>
-            Sair
-          </Button>
+          </div>
         </div>
       </aside>
       {mobileNavOpen && (

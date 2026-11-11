@@ -1030,6 +1030,32 @@ export function AdminOpsPanel({
       )}
 
       {tab === "financeiro" && (
+        <div className="space-y-4">
+          {data.cashflow && (
+            <div className="glass-panel grid gap-2 rounded-2xl p-4 text-sm text-stone-300 sm:grid-cols-2 lg:grid-cols-4">
+              <p>
+                Faturamento{" "}
+                <strong>
+                  {formatBRL(data.cashflow.billing ?? data.cashflow.gross_revenue)}
+                </strong>
+              </p>
+              <p>
+                Recebido <strong>{formatBRL(data.cashflow.received ?? 0)}</strong>
+              </p>
+              <p>
+                Saldo caixa{" "}
+                <strong>{formatBRL(data.cashflow.cash_balance ?? 0)}</strong>
+              </p>
+              <p>
+                Lucro líquido{" "}
+                <strong>
+                  {formatBRL(
+                    data.cashflow.net_profit_strict ?? data.cashflow.net_profit,
+                  )}
+                </strong>
+              </p>
+            </div>
+          )}
         <div className="grid gap-4 lg:grid-cols-2">
           {panelMode !== "fiados" && (
             <div className="glass-panel space-y-3 rounded-2xl p-5">
@@ -1157,26 +1183,18 @@ export function AdminOpsPanel({
                   )}
                 </div>
               ))}
-              {panelMode === "all" && data.cashflow && (
-                <div className="space-y-2 rounded-xl bg-white/5 p-3 text-sm text-stone-300">
-                  <p className="font-medium text-stone-100">Indicadores separados</p>
-                  <p>
-                    Faturamento {formatBRL(data.cashflow.billing ?? data.cashflow.gross_revenue)}
-                  </p>
-                  <p>Recebido {formatBRL(data.cashflow.received ?? 0)}</p>
-                  <p>Saldo de caixa {formatBRL(data.cashflow.cash_balance ?? 0)}</p>
-                  <p>
-                    Lucro bruto {formatBRL(data.cashflow.gross_profit ?? 0)} · Lucro
-                    líquido {formatBRL(data.cashflow.net_profit_strict ?? data.cashflow.net_profit)}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    DRE: faturamento − CMV {formatBRL(data.cashflow.cogs)} − despesas{" "}
-                    {formatBRL(data.cashflow.expenses)}
-                  </p>
+              {data.cashflow && (
+                <div className="rounded-xl bg-white/5 p-3 text-xs text-stone-500">
+                  DRE: faturamento − CMV {formatBRL(data.cashflow.cogs)} − despesas{" "}
+                  {formatBRL(data.cashflow.expenses)} = lucro{" "}
+                  {formatBRL(
+                    data.cashflow.net_profit_strict ?? data.cashflow.net_profit,
+                  )}
                 </div>
               )}
             </div>
           )}
+        </div>
         </div>
       )}
 
