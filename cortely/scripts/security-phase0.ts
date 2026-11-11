@@ -85,6 +85,7 @@ async function main() {
     barbershopId: staff.barbershop_id,
     reason: "test_revoke",
   });
+  // iat <= revoked_at ⇒ inválido (evita flake de mesmo milissegundo)
   assert.equal(auth.parseSessionToken(sessionTok), null);
   ok("revoked staff session is rejected");
   revoke.clearStaffRevocation(staff.id);

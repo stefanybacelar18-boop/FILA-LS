@@ -84,7 +84,7 @@ async function main() {
     barber_id: staff.barber_id,
   });
   assert.ok(auth.parseSessionToken(after));
-  ok("new login after revoke is allowed (iat >= revoked_at)");
+  ok("new login after revoke is allowed (iat > revoked_at)");
   revoke.clearStaffRevocation(staff.id);
 
   // RBAC distinct

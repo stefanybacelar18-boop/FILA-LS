@@ -4,7 +4,7 @@
 
 - **Demo (`NEXT_PUBLIC_DEMO_MODE=true`):** login HMAC + senhas por papel (env). Sessões reconciliadas com `demoStore` e revogação por `iat`.
 - **Produção:** somente **Supabase Auth** (JWT em cookies `cortely_sb_access` / `cortely_sb_refresh`). Cookie `cortely_session` HMAC é **ignorado** (`parseSessionToken` → `null`).
-- **Gate:** `getLiveSession` em rotas admin/ops — profile ativo + `provisioning_status=ready` + revogação temporal (`iat >= revoked_at` permite novo login).
+- **Gate:** `getLiveSession` em rotas admin/ops — profile ativo + `provisioning_status=ready` + revogação temporal (`iat > revoked_at` permite novo login; `iat <= revoked_at` rejeita).
 - **Onboarding:** `POST /api/auth/register` → confirmação de e-mail → `POST /api/auth/complete-onboarding` → RPC `provision_owner_barbershop` (service_role, idempotente).
 - **RLS:** migrations `20261111_02`–`04` (helpers, ops RLS, RPC). **Não aplicadas remotamente** nesta entrega.
 

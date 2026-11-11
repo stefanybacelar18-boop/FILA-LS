@@ -156,8 +156,10 @@ export function parseSessionToken(token: string | undefined | null): SessionUser
     }
     if (parsed.exp < Date.now()) return null;
 
+    // Tokens emitidos no instante da revogação ou antes são inválidos.
+    // Novo login precisa de iat > revoked_at.
     const revokedAt = getStaffRevokedAt(parsed.id);
-    if (revokedAt != null && (parsed.iat ?? 0) < revokedAt) {
+    if (revokedAt != null && (parsed.iat ?? 0) <= revokedAt) {
       return null;
     }
 

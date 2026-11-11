@@ -108,8 +108,8 @@ export function getStaffRevokedAt(staffId: string): number | null {
 }
 
 /**
- * Revogação por marco temporal: tokens com iat < revoked_at são rejeitados.
- * Login novo (iat >= revoked_at) funciona sem limpar o registro de auditoria.
+ * Revogação por marco temporal: tokens com iat <= revoked_at são rejeitados.
+ * Login novo (iat > revoked_at) funciona sem limpar o registro de auditoria.
  * Fail-closed em produção se o DB estiver inacessível.
  */
 export async function isStaffSessionRevokedDurable(
@@ -118,7 +118,7 @@ export async function isStaffSessionRevokedDurable(
 ): Promise<boolean> {
   const memAt = getStaffRevokedAt(staffId);
   if (memAt != null) {
-    if (tokenIatMs != null && tokenIatMs >= memAt) return false;
+    if (tokenIatMs != null && tokenIatMs > memAt) return false;
     return true;
   }
   if (isDemoMode()) return false;
@@ -138,7 +138,7 @@ export async function isStaffSessionRevokedDurable(
       reason: "durable",
       revokedAt,
     });
-    if (tokenIatMs != null && tokenIatMs >= revokedAt) return false;
+    if (tokenIatMs != null && tokenIatMs > revokedAt) return false;
     return true;
   } catch {
     return true;
