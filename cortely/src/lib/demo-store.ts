@@ -16,7 +16,7 @@ import type {
 } from "@/lib/types";
 import { computeEndTime } from "@/lib/availability";
 import { loadPersistedStore, persistDemo } from "@/lib/persist";
-import { onlyDigits } from "@/lib/utils";
+import { onlyDigits, shopTodayISO } from "@/lib/utils";
 import {
   expectedPasswordForRole,
   passwordsMatch,
@@ -863,7 +863,7 @@ const demoStoreImpl = {
   },
 
   dashboard(barbershopId: string, session?: SessionUser | null) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = shopTodayISO();
     const s = state();
     let appointments = this.listAppointments({ barbershopId });
     if (session?.role === "barber" && session.barber_id) {

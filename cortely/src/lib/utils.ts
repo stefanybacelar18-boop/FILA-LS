@@ -36,6 +36,24 @@ export function addMinutesToTime(time: string, minutes: number) {
   return `${hh}:${mm}`;
 }
 
+/** YYYY-MM-DD no fuso da barbearia (padrão Brasil). Evita bug do toISOString UTC. */
+export function shopTodayISO(timeZone = "America/Sao_Paulo") {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** YYYY-MM-DD no fuso local do navegador/runtime. */
+export function localISODate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function timeToMinutes(time: string) {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;

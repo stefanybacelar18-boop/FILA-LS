@@ -37,7 +37,7 @@ import {
   clearStaffToken,
   staffAuthHeaders,
 } from "@/lib/staff-session";
-import { formatBRL, formatPhoneBR } from "@/lib/utils";
+import { formatBRL, formatPhoneBR, shopTodayISO } from "@/lib/utils";
 import { buildWhatsAppReminderUrl } from "@/lib/whatsapp";
 
 type Tab =
@@ -295,10 +295,7 @@ export function AdminDashboard({ slug }: { slug: string }) {
     return data.workingHours.filter((w) => w.barber_id === hoursBarberId);
   }, [data, hoursBarberId]);
 
-  const todayISO = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
+  const todayISO = useMemo(() => shopTodayISO(), []);
 
   if (authed === false) {
     return (

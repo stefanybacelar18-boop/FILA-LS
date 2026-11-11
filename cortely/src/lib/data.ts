@@ -13,7 +13,7 @@ import type {
   WorkingHours,
 } from "@/lib/types";
 import { createServiceClient, isDemoMode } from "@/lib/supabase/env";
-import { onlyDigits } from "@/lib/utils";
+import { onlyDigits, shopTodayISO } from "@/lib/utils";
 import { getWhatsAppDeliveryMode } from "@/lib/whatsapp";
 
 function mapShop(shop: Barbershop & { cancel_hours_before?: number }) {
@@ -287,7 +287,7 @@ export async function getDashboard(
     barbershopId,
     barberId: session?.role === "barber" ? session.barber_id ?? undefined : undefined,
   });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = shopTodayISO();
   const supabase = createServiceClient();
   const [{ data: loyalty }, { data: reminders }, { data: clients }] =
     await Promise.all([

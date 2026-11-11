@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Appointment, Barber, LoyaltyAccount, Service } from "@/lib/types";
-import { formatBRL, formatPhoneBR, onlyDigits } from "@/lib/utils";
+import { formatBRL, formatPhoneBR, localISODate, onlyDigits } from "@/lib/utils";
 
 export function ClientLookup({ slug }: { slug: string }) {
   const [phone, setPhone] = useState("");
@@ -32,7 +32,7 @@ export function ClientLookup({ slug }: { slug: string }) {
   const [slots, setSlots] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const minDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const minDate = useMemo(() => localISODate(), []);
   const verified = Boolean(clientToken);
 
   async function lookup(token = clientToken) {

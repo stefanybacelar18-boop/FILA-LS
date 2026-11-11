@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Barber, Barbershop, Service } from "@/lib/types";
-import { formatBRL, formatPhoneBR, onlyDigits } from "@/lib/utils";
+import { formatBRL, formatPhoneBR, localISODate, onlyDigits } from "@/lib/utils";
 
 type Props = {
   shop: Barbershop;
@@ -73,7 +73,7 @@ export function BookingWizard({
     return Array.from(map.entries());
   }, [services, groupByCategory]);
 
-  const minDate = new Date().toISOString().slice(0, 10);
+  const minDate = localISODate();
 
   useEffect(() => {
     if (!bookingEnabled || !serviceId || !barberId || !date) return;
