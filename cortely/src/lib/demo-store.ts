@@ -159,9 +159,10 @@ function seedState(): CatalogState {
     })),
   );
 
+  // IDs de staff gerados no seed (não fixos no código) — impede forjar sessão com UUIDs públicos.
   const staff: StaffUser[] = [
     {
-      id: "44444444-4444-4444-8444-444444444441",
+      id: randomUUID(),
       barbershop_id: SHOP_ID,
       email: "dono@cortely.demo",
       full_name: "Stefany — Dona",
@@ -169,7 +170,7 @@ function seedState(): CatalogState {
       barber_id: null,
     },
     {
-      id: "44444444-4444-4444-8444-444444444442",
+      id: randomUUID(),
       barbershop_id: SHOP_ID,
       email: "recepcao@cortely.demo",
       full_name: "Ana — Recepção",
@@ -177,7 +178,7 @@ function seedState(): CatalogState {
       barber_id: null,
     },
     {
-      id: "44444444-4444-4444-8444-444444444443",
+      id: randomUUID(),
       barbershop_id: SHOP_ID,
       email: "rafael@cortely.demo",
       full_name: "Rafael Costa",

@@ -13,7 +13,7 @@ export type PaymentIntent = {
 
 /**
  * Cria cobrança. Com MERCADOPAGO_ACCESS_TOKEN / ASAAS_API_KEY usa o provedor;
- * sem credencial, simula Pix pago (modo local/demo persistente).
+ * sem credencial, devolve Pix simulado em status "simulated" (nunca "paid").
  */
 export async function createPaymentIntent(input: {
   amount: number;
