@@ -250,5 +250,36 @@ BEGIN
     RAISE NOTICE 'PASS: authenticated sem escrita em commission_rules';
   END;
 
+  -- Ranking exclui clawback
+  INSERT INTO public.sales (id, barbershop_id, barber_id, total, status)
+  VALUES ('a1000004-0004-4004-8004-000000000004', shop_a, barber_a, 100, 'paid');
+  INSERT INTO public.sale_items (
+    id, sale_id, barbershop_id, kind, ref_id, description, quantity, unit_price, total
+  ) VALUES (
+    'a2000005-0005-4005-8005-000000000005',
+    'a1000004-0004-4004-8004-000000000004',
+    shop_a, 'service', 'rk', 'Rank', 1, 100, 100
+  );
+  PERFORM public.ops_accrue_commission(shop_a, 'a1000004-0004-4004-8004-000000000004');
+  PERFORM public.ops_pay_commissions(shop_a, barber_a, 'rank-test');
+  SELECT id INTO entry_paid FROM public.commission_entries
+  WHERE barbershop_id = shop_a
+    AND sale_id = 'a1000004-0004-4004-8004-000000000004'
+    AND status = 'paid';
+  SELECT coalesce(sum(commission), 0) INTO adv_amt
+  FROM public.ops_barber_ranking(shop_a, to_char(now(), 'YYYY-MM'))
+  WHERE barber_id = barber_a;
+  IF adv_amt < 40 THEN
+    RAISE EXCEPTION 'FAIL: ranking antes do clawback commission=%', adv_amt;
+  END IF;
+  PERFORM public.ops_clawback_commission(shop_a, entry_paid, 'rank-test');
+  SELECT coalesce(sum(commission), 0) INTO adv_amt
+  FROM public.ops_barber_ranking(shop_a, to_char(now(), 'YYYY-MM'))
+  WHERE barber_id = barber_a;
+  IF adv_amt <> 0 THEN
+    RAISE EXCEPTION 'FAIL: ranking após clawback commission=% want 0', adv_amt;
+  END IF;
+  RAISE NOTICE 'PASS: ranking exclui entries com clawback';
+
   RAISE NOTICE 'FASE1B4_COMMISSIONS_SQL_PASSED';
 END $$;

@@ -64,20 +64,28 @@ CREATE TABLE IF NOT EXISTS public.commission_rules (
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'commission_rules_barber_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'commission_rules_barber_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição barbers_id_barbershop_uidx ausente (FK rules)';
+    END IF;
     ALTER TABLE public.commission_rules
       ADD CONSTRAINT commission_rules_barber_tenant_fkey
       FOREIGN KEY (barber_id, barbershop_id)
       REFERENCES public.barbers (id, barbershop_id)
       ON DELETE RESTRICT;
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'services_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'commission_rules_service_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'commission_rules_service_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'services_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição services_id_barbershop_uidx ausente (FK rules)';
+    END IF;
     ALTER TABLE public.commission_rules
       ADD CONSTRAINT commission_rules_service_tenant_fkey
       FOREIGN KEY (service_id, barbershop_id)
@@ -105,10 +113,14 @@ CREATE TABLE IF NOT EXISTS public.commission_payouts (
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'commission_payouts_barber_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'commission_payouts_barber_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição barbers_id_barbershop_uidx ausente (FK payouts)';
+    END IF;
     ALTER TABLE public.commission_payouts
       ADD CONSTRAINT commission_payouts_barber_tenant_fkey
       FOREIGN KEY (barber_id, barbershop_id)
@@ -148,28 +160,40 @@ CREATE TABLE IF NOT EXISTS public.commission_entries (
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sales_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'commission_entries_sale_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'commission_entries_sale_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'sales_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição sales_id_barbershop_uidx ausente (FK entries)';
+    END IF;
     ALTER TABLE public.commission_entries
       ADD CONSTRAINT commission_entries_sale_tenant_fkey
       FOREIGN KEY (sale_id, barbershop_id)
       REFERENCES public.sales (id, barbershop_id) ON DELETE RESTRICT;
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sale_items_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'commission_entries_item_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'commission_entries_item_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'sale_items_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição sale_items_id_barbershop_uidx ausente (FK entries)';
+    END IF;
     ALTER TABLE public.commission_entries
       ADD CONSTRAINT commission_entries_item_tenant_fkey
       FOREIGN KEY (sale_item_id, barbershop_id)
       REFERENCES public.sale_items (id, barbershop_id) ON DELETE RESTRICT;
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'commission_entries_barber_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'commission_entries_barber_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição barbers_id_barbershop_uidx ausente (FK entries)';
+    END IF;
     ALTER TABLE public.commission_entries
       ADD CONSTRAINT commission_entries_barber_tenant_fkey
       FOREIGN KEY (barber_id, barbershop_id)
@@ -234,10 +258,14 @@ CREATE TABLE IF NOT EXISTS public.staff_advances (
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'staff_advances_barber_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'staff_advances_barber_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição barbers_id_barbershop_uidx ausente (FK advances)';
+    END IF;
     ALTER TABLE public.staff_advances
       ADD CONSTRAINT staff_advances_barber_tenant_fkey
       FOREIGN KEY (barber_id, barbershop_id)
@@ -274,10 +302,14 @@ CREATE TABLE IF NOT EXISTS public.barber_goals (
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx')
-     AND NOT EXISTS (
-       SELECT 1 FROM pg_constraint WHERE conname = 'barber_goals_barber_tenant_fkey'
-     ) THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'barber_goals_barber_tenant_fkey'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'barbers_id_barbershop_uidx'
+    ) THEN
+      RAISE EXCEPTION 'fase1b_04: pré-condição barbers_id_barbershop_uidx ausente (FK goals)';
+    END IF;
     ALTER TABLE public.barber_goals
       ADD CONSTRAINT barber_goals_barber_tenant_fkey
       FOREIGN KEY (barber_id, barbershop_id)
@@ -460,14 +492,20 @@ BEGIN
       CONTINUE;
     END IF;
 
-    INSERT INTO public.commission_entries (
-      barbershop_id, barber_id, sale_id, sale_item_id, kind,
-      amount, basis, percent, status
-    ) VALUES (
-      p_barbershop_id, v_barber, p_sale_id, v_item.id, v_kind,
-      v_amount, v_basis, v_pct, 'pending'
-    )
-    RETURNING id INTO v_id;
+    BEGIN
+      INSERT INTO public.commission_entries (
+        barbershop_id, barber_id, sale_id, sale_item_id, kind,
+        amount, basis, percent, status
+      ) VALUES (
+        p_barbershop_id, v_barber, p_sale_id, v_item.id, v_kind,
+        v_amount, v_basis, v_pct, 'pending'
+      )
+      RETURNING id INTO v_id;
+    EXCEPTION
+      WHEN unique_violation THEN
+        -- Corrida: outra TX já inseriu pending/paid para o item — no-op
+        CONTINUE;
+    END;
 
     entry_id := v_id;
     sale_item_id := v_item.id;
@@ -605,28 +643,41 @@ DECLARE
   v_entry RECORD;
   v_take NUMERIC;
   v_n INT := 0;
+  v_locked UUID[] := '{}';
   v_ids UUID[] := '{}';
   v_adv_ids UUID[] := '{}';
   v_adv_amts NUMERIC[] := '{}';
   i INT;
 BEGIN
+  -- 1) Trava candidates pending. Reverse só INSERE (origem não muda), então
+  --    FOR UPDATE NÃO reavalia NOT EXISTS após wait — ver passo 2.
   FOR v_entry IN
-    SELECT ce.id, ce.amount
+    SELECT ce.id
     FROM public.commission_entries ce
     WHERE ce.barbershop_id = p_barbershop_id
       AND ce.barber_id = p_barber_id
       AND ce.status = 'pending'
-      AND NOT EXISTS (
-        SELECT 1 FROM public.commission_entries r
-        WHERE r.barbershop_id = p_barbershop_id
-          AND r.status = 'reversed' AND r.reversal_of = ce.id
-      )
     ORDER BY ce.created_at ASC
     FOR UPDATE OF ce
   LOOP
-    v_ids := array_append(v_ids, v_entry.id);
-    v_gross := v_gross + v_entry.amount;
+    v_locked := array_append(v_locked, v_entry.id);
   END LOOP;
+
+  -- 2) Novo statement (novo snapshot READ COMMITTED): exclui reversões
+  --    commitadas enquanto esperávamos o lock.
+  SELECT
+    coalesce(array_agg(ce.id ORDER BY ce.created_at), '{}'::uuid[]),
+    coalesce(sum(ce.amount), 0)
+  INTO v_ids, v_gross
+  FROM public.commission_entries ce
+  WHERE ce.id = ANY (v_locked)
+    AND ce.barbershop_id = p_barbershop_id
+    AND ce.status = 'pending'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.commission_entries r
+      WHERE r.barbershop_id = p_barbershop_id
+        AND r.status = 'reversed' AND r.reversal_of = ce.id
+    );
 
   IF coalesce(array_length(v_ids, 1), 0) = 0 THEN
     payout_id := NULL;
@@ -697,7 +748,12 @@ BEGIN
     payout_batch_id = v_payout
   WHERE ce.id = ANY (v_ids)
     AND ce.barbershop_id = p_barbershop_id
-    AND ce.status = 'pending';
+    AND ce.status = 'pending'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.commission_entries r
+      WHERE r.barbershop_id = p_barbershop_id
+        AND r.status = 'reversed' AND r.reversal_of = ce.id
+    );
 
   GET DIAGNOSTICS v_n = ROW_COUNT;
 
@@ -709,6 +765,10 @@ BEGIN
   RETURN NEXT;
 END;
 $$;
+
+COMMENT ON FUNCTION public.ops_pay_commissions(uuid, uuid, text) IS
+  'Paga pending do barbeiro. Após FOR UPDATE, refiltra reversões em novo statement '
+  '(READ COMMITTED) — reverse só INSERE e não dispara recheck do FOR UPDATE.';
 
 CREATE OR REPLACE FUNCTION public.ops_barber_ranking(
   p_barbershop_id UUID,
@@ -754,6 +814,11 @@ BEGIN
         SELECT 1 FROM public.commission_entries r
         WHERE r.barbershop_id = p_barbershop_id
           AND r.status = 'reversed' AND r.reversal_of = ce.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.commission_entries c
+        WHERE c.barbershop_id = p_barbershop_id
+          AND c.status = 'clawback' AND c.clawback_of = ce.id
       )
     GROUP BY ce.barber_id
   ),

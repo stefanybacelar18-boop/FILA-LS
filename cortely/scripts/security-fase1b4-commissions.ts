@@ -424,6 +424,145 @@ async function main() {
     assert.equal(Number(payouts.rows[0].g), 200);
     ok("pagamento concorrente: cada entry paga uma única vez");
 
+    // Accrual concorrente: UNIQUE → no-op, sem falha
+    const shopAcc = randomUUID();
+    const barberAcc = randomUUID();
+    const saleAcc = randomUUID();
+    const itemAcc = randomUUID();
+    await pool.query(
+      `INSERT INTO public.barbershops (id, name, slug) VALUES ($1,'Acc','acc-comm')`,
+      [shopAcc],
+    );
+    await pool.query(
+      `INSERT INTO public.barbers (id, barbershop_id, name) VALUES ($1,$2,'A')`,
+      [barberAcc, shopAcc],
+    );
+    await pool.query(
+      `INSERT INTO public.commission_rules (
+         barbershop_id, barber_id, service_percent, product_percent
+       ) VALUES ($1,NULL,40,0)`,
+      [shopAcc],
+    );
+    await pool.query(
+      `INSERT INTO public.sales (id, barbershop_id, barber_id, total, status)
+       VALUES ($1,$2,$3,100,'paid')`,
+      [saleAcc, shopAcc, barberAcc],
+    );
+    await pool.query(
+      `INSERT INTO public.sale_items (
+         id, sale_id, barbershop_id, kind, ref_id, description, quantity, unit_price, total
+       ) VALUES ($1,$2,$3,'service','s','S',1,100,100)`,
+      [itemAcc, saleAcc, shopAcc],
+    );
+    const accResults = await Promise.allSettled([
+      pool.query(`SELECT * FROM public.ops_accrue_commission($1,$2)`, [
+        shopAcc,
+        saleAcc,
+      ]),
+      pool.query(`SELECT * FROM public.ops_accrue_commission($1,$2)`, [
+        shopAcc,
+        saleAcc,
+      ]),
+    ]);
+    assert.equal(
+      accResults.filter((r) => r.status === "fulfilled").length,
+      2,
+      `accrue paralelo falhou: ${accResults.map((r) => (r.status === "rejected" ? String(r.reason) : "ok")).join(" | ")}`,
+    );
+    const accCount = await pool.query(
+      `SELECT count(*)::int AS n FROM public.commission_entries
+       WHERE barbershop_id = $1 AND sale_id = $2 AND status = 'pending'`,
+      [shopAcc, saleAcc],
+    );
+    assert.equal(Number(accCount.rows[0].n), 1);
+    ok("accrual concorrente: sem falha, 1 entry por item");
+
+    // Corrida reverse × pay: reverse segura TX; pay bloqueia; após commit pay não paga
+    const shopRevPay = randomUUID();
+    const barberRevPay = randomUUID();
+    const saleRevPay = randomUUID();
+    const itemRevPay = randomUUID();
+    await pool.query(
+      `INSERT INTO public.barbershops (id, name, slug) VALUES ($1,'RevPay','revpay')`,
+      [shopRevPay],
+    );
+    await pool.query(
+      `INSERT INTO public.barbers (id, barbershop_id, name) VALUES ($1,$2,'R')`,
+      [barberRevPay, shopRevPay],
+    );
+    await pool.query(
+      `INSERT INTO public.commission_rules (
+         barbershop_id, barber_id, service_percent, product_percent
+       ) VALUES ($1,NULL,50,0)`,
+      [shopRevPay],
+    );
+    await pool.query(
+      `INSERT INTO public.sales (id, barbershop_id, barber_id, total, status)
+       VALUES ($1,$2,$3,200,'paid')`,
+      [saleRevPay, shopRevPay, barberRevPay],
+    );
+    await pool.query(
+      `INSERT INTO public.sale_items (
+         id, sale_id, barbershop_id, kind, ref_id, description, quantity, unit_price, total
+       ) VALUES ($1,$2,$3,'service','s','S',1,200,200)`,
+      [itemRevPay, saleRevPay, shopRevPay],
+    );
+    await pool.query(`SELECT * FROM public.ops_accrue_commission($1,$2)`, [
+      shopRevPay,
+      saleRevPay,
+    ]);
+
+    const clientA = await pool.connect();
+    const clientB = await pool.connect();
+    try {
+      await clientA.query("BEGIN");
+      const rev = await clientA.query(
+        `SELECT * FROM public.ops_reverse_pending_commissions($1,$2)`,
+        [shopRevPay, saleRevPay],
+      );
+      assert.ok(rev.rowCount && rev.rowCount >= 1);
+
+      let payDone = false;
+      let payRow: { count: number; gross: string | number } | null = null;
+      const payPromise = clientB
+        .query(`SELECT * FROM public.ops_pay_commissions($1,$2,$3)`, [
+          shopRevPay,
+          barberRevPay,
+          "race-b",
+        ])
+        .then((res) => {
+          payDone = true;
+          payRow = res.rows[0] as { count: number; gross: string | number };
+          return res;
+        });
+
+      // Pay deve estar bloqueado enquanto A segura a TX
+      await new Promise((r) => setTimeout(r, 400));
+      assert.equal(payDone, false, "pay não deveria concluir antes do commit da reverse");
+
+      await clientA.query("COMMIT");
+      await payPromise;
+      assert.ok(payRow);
+      assert.equal(Number(payRow!.count), 0);
+      assert.equal(Number(payRow!.gross), 0);
+
+      const paidN = await pool.query(
+        `SELECT count(*)::int AS n FROM public.commission_entries
+         WHERE barbershop_id = $1 AND status = 'paid'`,
+        [shopRevPay],
+      );
+      assert.equal(Number(paidN.rows[0].n), 0);
+      ok("corrida reverse×pay: após commit da reverse, pay não paga (gross=0)");
+    } finally {
+      try {
+        await clientA.query("ROLLBACK");
+      } catch {
+        /* already committed */
+      }
+      clientA.release();
+      clientB.release();
+    }
+
     // OpsRepository: PG só com commissions=postgres
     const allJson = loadRegistry({
       tableExists: false,
