@@ -263,21 +263,96 @@ async function main() {
   );
   ok("transições permitidas/proibidas (§3.2.3) — função pura");
 
-  // --- resolveRegistryAtBoot: sem Supabase → arquivo ---
+  // --- Seed embutido no bundle (sem fs) ---
+  assert.equal(
+    reg.bundledRegistrySeedText(),
+    JSON.stringify(reg.bundledRegistrySeedObject()),
+  );
+  assert.deepEqual(
+    JSON.parse(reg.bundledRegistrySeedText()),
+    JSON.parse(seedText),
+  );
+  ok("seed embutido via import estático bate com config/ops-registry.json");
+
+  // --- resolveRegistryAtBoot: sem Supabase → seed embutido (sem fs) ---
   reg.clearRegistryBootCache();
   const logs: string[] = [];
   const bootFile = await reg.resolveRegistryAtBoot({
     env: {
       NEXT_PUBLIC_DEMO_MODE: "true",
     } as unknown as NodeJS.ProcessEnv,
-    readSeedFile: () => seedText,
+    // sem readSeedFile → usa bundledRegistrySeedText (sem fs/process.cwd)
     log: (m) => logs.push(m),
   });
   assert.equal(bootFile.loadedFrom, "file");
   assert.equal(bootFile.fingerprint, expectedFp);
   assert.ok(logs.some((l) => /loadedFrom=file/.test(l)));
   assert.equal(reg.getCachedRegistrySnapshot()?.fingerprint, expectedFp);
-  ok("boot sem Supabase → arquivo seed");
+  ok("boot sem Supabase → seed embutido (sem acesso a fs)");
+
+  // --- isRelationMissingError estrito (só 42P01 / PGRST205) ---
+  assert.equal(reg.isRelationMissingError({ code: "42P01" }), true);
+  assert.equal(reg.isRelationMissingError({ code: "PGRST205" }), true);
+  assert.equal(
+    reg.isRelationMissingError({
+      code: "42703",
+      message: 'column "nope" of relation "ops_domain_registry" does not exist',
+    }),
+    false,
+  );
+  assert.equal(
+    reg.isRelationMissingError({
+      message: 'relation "ops_domain_registry" does not exist',
+    }),
+    false,
+  );
+  ok("isRelationMissingError: só 42P01/PGRST205 (sem fallback de mensagem)");
+
+  // --- 42703 / mensagem sem código → fail-fast via boot (não relation_missing) ---
+  await assert.rejects(
+    () =>
+      reg.resolveRegistryAtBoot({
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+        } as unknown as NodeJS.ProcessEnv,
+        readSeedFile: () => {
+          throw new Error("seed não deve ser usado para 42703");
+        },
+        fetchTable: async () => ({
+          ok: false,
+          kind: "error",
+          message: "42703: column does not exist",
+        }),
+        log: () => {},
+      }),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError && /42703/.test((e as Error).message),
+  );
+  ok("boot 42703 (coluna inexistente) → fail-fast");
+
+  await assert.rejects(
+    () =>
+      reg.resolveRegistryAtBoot({
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+        } as unknown as NodeJS.ProcessEnv,
+        readSeedFile: () => {
+          throw new Error('seed não deve ser usado para "does not exist" sem código');
+        },
+        fetchTable: async () => ({
+          ok: false,
+          kind: "error",
+          message: 'ERR: relation "ops_domain_registry" does not exist',
+        }),
+        log: () => {},
+      }),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError &&
+      /does not exist/.test((e as Error).message),
+  );
+  ok('boot mensagem "does not exist" sem código → fail-fast');
 
   // --- resolveRegistryAtBoot: tabela inexistente (42P01) → arquivo ---
   reg.clearRegistryBootCache();
@@ -292,6 +367,27 @@ async function main() {
   });
   assert.equal(bootMissing.loadedFrom, "file");
   ok("boot tabela inexistente → arquivo");
+
+  // --- REQUIRE_TABLE + relation_missing → fail-fast ---
+  await assert.rejects(
+    () =>
+      reg.resolveRegistryAtBoot({
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+          CORTELY_OPS_REGISTRY_REQUIRE_TABLE: "true",
+        } as unknown as NodeJS.ProcessEnv,
+        readSeedFile: () => {
+          throw new Error("seed não deve ser usado com REQUIRE_TABLE");
+        },
+        fetchTable: async () => ({ ok: false, kind: "relation_missing" }),
+        log: () => {},
+      }),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError &&
+      /REQUIRE_TABLE/.test((e as Error).message),
+  );
+  ok("REQUIRE_TABLE + relation_missing → fail-fast");
 
   // --- resolveRegistryAtBoot: erro de rede → fail-fast (nunca arquivo) ---
   reg.clearRegistryBootCache();

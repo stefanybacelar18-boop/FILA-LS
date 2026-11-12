@@ -106,3 +106,9 @@ jobs:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
           NEXT_PUBLIC_DEMO_MODE: "true"
         run: npm run build
+
+      - name: Smoke fase 1.B.0 boot fail-fast (next start)
+        env:
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: npx tsx scripts/smoke-fase1b0-boot.ts

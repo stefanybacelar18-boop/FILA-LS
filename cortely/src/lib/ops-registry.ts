@@ -2,11 +2,14 @@
  * Cortely 1.B.0 — registry global de fontes ops (json | postgres).
  * Carregamento e validação conforme plano §3.2.2 / §3.2.3 / §3.2.4.
  * Sem API de flip nesta etapa — apenas função pura de transição (testada).
+ *
+ * Seed all-json: embutido no bundle via import estático (Vercel/CI).
+ * CORTELY_OPS_REGISTRY_REQUIRE_TABLE=true → relation_missing vira fail-fast
+ * (ligar quando 20261112_fase1b_00 for aplicada no remoto; não agora).
  */
 
 import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import opsRegistrySeed from "../../config/ops-registry.json";
 
 export const OPS_DOMAINS = [
   "products",
@@ -316,19 +319,17 @@ export function loadRegistry(input: LoadRegistryInput): RegistrySnapshot {
   };
 }
 
-export function defaultRegistryFilePath(): string {
-  return join(process.cwd(), "config", "ops-registry.json");
+/** Snapshot canônico all-json embutido no bundle (resolveJsonModule). */
+export function bundledRegistrySeedObject(): Record<
+  string,
+  DomainRegistryEntry
+> {
+  return opsRegistrySeed as Record<string, DomainRegistryEntry>;
 }
 
-export function readRegistrySeedFile(
-  path: string = defaultRegistryFilePath(),
-): string {
-  if (!existsSync(path)) {
-    throw new RegistryFailFastError(
-      `Registry: arquivo seed ausente em ${path}`,
-    );
-  }
-  return readFileSync(path, "utf8");
+/** Texto JSON do seed embutido — default de readSeedFile no boot. */
+export function bundledRegistrySeedText(): string {
+  return JSON.stringify(opsRegistrySeed);
 }
 
 export function sourceOf(
@@ -379,23 +380,20 @@ export function clearRegistryBootCache(): void {
   cachedSnapshot = null;
 }
 
-function isRelationMissingError(err: unknown): boolean {
-  const e = err as {
-    code?: string;
-    message?: string;
-    details?: string;
-    hint?: string;
-  };
-  const code = String(e?.code || "");
-  const blob = `${e?.message || ""} ${e?.details || ""} ${e?.hint || ""}`;
-  if (code === "42P01" || code === "PGRST205") return true;
-  if (/does not exist/i.test(blob) && /ops_domain_registry/i.test(blob)) {
-    return true;
-  }
-  if (/Could not find the table/i.test(blob) && /ops_domain_registry/i.test(blob)) {
-    return true;
-  }
-  return false;
+/**
+ * Tabela inexistente: SOMENTE códigos Postgres/PostgREST canônicos.
+ * Mensagens ("does not exist", etc.) sem esses códigos → NÃO são relation_missing.
+ */
+export function isRelationMissingError(err: unknown): boolean {
+  const code = String((err as { code?: string } | null | undefined)?.code || "");
+  return code === "42P01" || code === "PGRST205";
+}
+
+/** True quando CORTELY_OPS_REGISTRY_REQUIRE_TABLE=true (pós-migration remota). */
+export function requireRegistryTable(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return String(env.CORTELY_OPS_REGISTRY_REQUIRE_TABLE || "").trim() === "true";
 }
 
 async function defaultFetchRegistryTable(): Promise<FetchRegistryTableResult> {
@@ -423,8 +421,9 @@ async function defaultFetchRegistryTable(): Promise<FetchRegistryTableResult> {
 
 /**
  * Boot real (§3.2.2/§3.2.4):
- * a) sem Supabase (demo/sem service role) → arquivo seed
- * b) com Supabase → SELECT; só 42P01/PGRST205 → arquivo; qualquer outro erro → fail-fast
+ * a) sem Supabase (demo/sem service role) → seed embutido (ou CORTELY_OPS_REGISTRY)
+ * b) com Supabase → SELECT; só 42P01/PGRST205 → seed (salvo REQUIRE_TABLE=true);
+ *    qualquer outro erro → fail-fast (nunca seed por rede/auth/timeout/coluna)
  * c) loadRegistry + cache + log fingerprint/loadedFrom
  */
 export async function resolveRegistryAtBoot(
@@ -432,8 +431,7 @@ export async function resolveRegistryAtBoot(
 ): Promise<RegistrySnapshot> {
   const env = deps.env ?? process.env;
   const log = deps.log ?? ((m: string) => console.info(m));
-  const readSeed =
-    deps.readSeedFile ?? (() => readRegistrySeedFile(defaultRegistryFilePath()));
+  const readSeed = deps.readSeedFile ?? bundledRegistrySeedText;
 
   let snapshot: RegistrySnapshot;
 
@@ -456,6 +454,11 @@ export async function resolveRegistryAtBoot(
       );
     }
     if (!result.ok && result.kind === "relation_missing") {
+      if (requireRegistryTable(env)) {
+        throw new RegistryFailFastError(
+          "Registry fail-fast: CORTELY_OPS_REGISTRY_REQUIRE_TABLE=true e ops_domain_registry ausente (42P01/PGRST205)",
+        );
+      }
       snapshot = loadRegistry({
         tableExists: false,
         fileContents: readSeed(),
