@@ -134,6 +134,18 @@ jobs:
           CORTELY_FASE1B2_ORPHAN_DB: cortely_fase1b2_orphan_test
         run: npx tsx scripts/security-fase1b2-cash.ts
 
+      - name: Security fase 1.B.3-G gateway isolado
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          NEXT_PUBLIC_DEMO_MODE: "true"
+          CORTELY_FAKE_PAYMENT_SECRET: cortely-fake-test-secret
+          CORTELY_FASE1B3G_TEST_DB: cortely_fase1b3g_gateway_test
+        run: npx tsx scripts/security-fase1b3g-gateway.ts
+
       - name: Production build
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars

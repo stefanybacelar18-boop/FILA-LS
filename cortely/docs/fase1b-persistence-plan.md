@@ -27,7 +27,8 @@
 | D8 | Tenant da sessão desde **1.B.0**. `SHOP_ID` só em legado JSON + ETL até 1.B.9. |
 | D9 | **`units` adiadas** — ADR §11. |
 | D10 | Comissões + ETL idempotente (`ops_shop_id_map`) + reconcile por tenant. Tabelas de infraestrutura ops (`ops_domain_registry*`, `ops_idempotency_keys`, `ops_shop_id_map`) = **somente service role** (`REVOKE` anon/authenticated). Idempotency: `UNIQUE (barbershop_id, scope, key)`. |
-| D11 | **1.B.0** em branch a partir de `8ce23b1`, PR empilhado, **sem merge** até autorização. |
+| D11 | **1.B.0** em branch a partir de `8ce23b1`, PR empilhado, **sem merge** até autorização. *(política de stack cumprida nas preps 1.B.0–1.B.3-G.)* |
+| D12 | **Conta conectada por barbearia:** o dinheiro do cliente final vai **direto** para a conta/subconta da barbearia. O Cortely **nunca** recebe e repassa. Credencial global única é **proibida** para cobrança de cliente. Provedor escolhido depois (P5); 1.B.3-G só interface + FakeProvider. *(autorização humana 1.B.3-G referiu “D11”; no plano D11 já era stack — esta regra = D12.)* |
 
 ---
 
@@ -415,11 +416,14 @@ payment_intents (
   provider TEXT NOT NULL,
   provider_ref TEXT NOT NULL,
   amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  method TEXT NOT NULL CHECK (method IN ('pix','credit','debit')),
+  currency TEXT NOT NULL DEFAULT 'BRL' CHECK (currency = 'BRL'),
   status TEXT NOT NULL CHECK (status IN ('pending','paid','failed','canceled')),
+  -- paid/canceled TERMINAIS (nunca regridem); evento fora de ordem não regride
   purpose TEXT NOT NULL CHECK (purpose IN ('sale','deposit','appointment','other')),
   appointment_id UUID NULL,
   sale_id UUID NULL,
-  deposit_id UUID NULL,
+  deposit_id UUID NULL,                 -- SEM FK até 1.B.7 (deposits)
   applied_at TIMESTAMPTZ NULL,
   idempotency_key TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL,
@@ -429,10 +433,21 @@ payment_intents (
   UNIQUE (provider, provider_ref),
   UNIQUE (barbershop_id, idempotency_key),
   FOREIGN KEY (appointment_id, barbershop_id) REFERENCES appointments (id, barbershop_id),
-  FOREIGN KEY (sale_id, barbershop_id) REFERENCES sales (id, barbershop_id),
-  FOREIGN KEY (deposit_id, barbershop_id) REFERENCES deposits (id, barbershop_id)
+  FOREIGN KEY (sale_id, barbershop_id) REFERENCES sales (id, barbershop_id)
+  -- deposit_id: FK composta adiada → 1.B.7
 )
--- RLS ENABLE+FORCE
+-- RLS ENABLE+FORCE; authenticated SELECT próprio tenant; escrita só service_role
+
+payment_provider_accounts (
+  id UUID PK,
+  barbershop_id UUID NOT NULL REFERENCES barbershops(id),
+  provider TEXT NOT NULL,
+  external_account_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (barbershop_id, provider)
+  -- SEM credenciais/segredos nesta etapa (D12)
+)
 
 payment_webhook_events (
   id UUID PK,
@@ -448,22 +463,27 @@ payment_webhook_events (
   FOREIGN KEY (payment_intent_id, barbershop_id)
     REFERENCES payment_intents (id, barbershop_id)
 )
--- RLS ENABLE+FORCE
+-- RLS ENABLE+FORCE; escrita só service_role; sem acesso anon/authenticated
 
 payment_webhook_quarantine (
   id UUID PRIMARY KEY,
   provider TEXT,
   provider_event_id TEXT,
   raw_payload JSONB NOT NULL,
-  error_reason TEXT NOT NULL,          -- intent_missing | tenant_inconsistent | schema_invalid | …
+  error_reason TEXT NOT NULL,          -- intent_missing | tenant_inconsistent | schema_invalid | amount_mismatch | …
   signature_valid BOOLEAN,
+  attempts INT NOT NULL DEFAULT 1,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL,
   reprocessed_at TIMESTAMPTZ NULL,
-  reprocess_result TEXT NULL
-  -- SEM barbershop_id; SEM FK
+  reprocess_result TEXT NULL,
+  UNIQUE (provider, provider_event_id) WHERE provider_event_id IS NOT NULL
+  -- repetição → attempts++ (P16); SEM barbershop_id; SEM FK
   -- REVOKE ALL FROM anon, authenticated; GRANT apenas service_role
 )
 ```
+
+**Pendência 1.B.7:** FK composta `payment_intents.deposit_id` → `deposits (id, barbershop_id)`.
 
 #### Pipeline do webhook
 
@@ -510,6 +530,7 @@ ops_idempotency_keys (
 0. **`fase1b_00`** — `ops_domain_registry` + `ops_domain_registry_audit` + grants service_role + seed all-json  
 1. `fase1b_01` — products/stock/inventory (FKs compostas, CHECKs, `ops_adjust_stock` / `ops_register_inventory_count`)  
 2. `fase1b_02` — sale tenant columns (`sale_items`/`sale_payments`) + payments `tendered_amount`/`applied_amount` + `cash_sessions`/`cash_movements` (`kind`/`direction`, troco CHECK) + `ops_*_cash` (EXECUTE só `service_role`)  
+2g. `fase1b_03g` — gateway isolado: `payment_intents` + `payment_provider_accounts` + events/quarantine (P16) + `ops_apply_payment_webhook` (sem efeito de negócio)  
 3. `fase1b_03` — commissions (unique sale_item + clawback) + advances  
 4. `fase1b_04` — packages/subscriptions  
 5. `fase1b_05` — purchase_orders  
@@ -712,7 +733,7 @@ Para cada `barbershop_id`:
 | P2 | Status `draft` de sale? |
 | P3 | Clawback automático vs só bloqueio (default = bloqueio) |
 | P4 | Caixa open obrigatório em toda sale `paid`? |
-| P5 | Provider(s) webhook e segredos |
+| P5 | **Aberto:** provedor ainda não escolhido (Asaas **ou** Mercado Pago). **1.B.3-G:** só interface `PaymentProvider` + **FakeProvider** (HMAC de teste). Nenhum provedor real / credencial real / chamada externa no CI. |
 | P6 | Profundidade do shadow log |
 | P7 | Janela reconcile intents |
 | P8 | Stock ETL: replay vs opening |
@@ -722,7 +743,7 @@ Para cada `barbershop_id`:
 | P12 | `UNIQUE (id, barbershop_id)` em barbers/services |
 | P14 | Coupons/deposits que afetam venda: incluir em `ops_core` **ou** bloquear o uso até a 1.B.7 — **decidir antes da 1.B.3** |
 | P15 | Reversão de comissão `pending`: coluna `reversal_of` + UNIQUE e payout excluindo entries revertidas — **decidir na 1.B.4** |
-| P16 | `UNIQUE (provider, provider_event_id)` na quarentena com contador de tentativas — **decidir na 1.B.3-G** |
+| ~~P16~~ | **Fechado (1.B.3-G):** `payment_webhook_quarantine` com `UNIQUE (provider, provider_event_id) WHERE provider_event_id IS NOT NULL` + `attempts INT` + `last_seen_at`; repetição → `attempts++` (sem nova linha). |
 | P17 | `cash_movements` com `kind=sale_cash_in`: `amount = tendered_amount` do `sale_payment` cash correspondente |
 | P18 | Escrita de estoque/financeiro só via service role (servidor); revogar de `authenticated` o `EXECUTE` das funções `ops_*`, o `INSERT` em `stock_movements` e o `UPDATE` de `products.stock_qty` — **decidir antes da 1.B.3**. **1.B.2 antecipa só para funções novas de caixa** (`ops_open_cash`, `ops_add_cash_movement`, `ops_cash_conference`, `ops_close_cash`): EXECUTE concedido **somente** a `service_role` (nem `anon` nem `authenticated`). |
 | P19 | **ETL (1.B.8):** gerar `cash_movements` `kind='sale_cash_in'` (`amount = tendered_amount`) para cada `sale_payment` cash histórico, para que o esperado do caixa importado bata com o JSON; incluir na reconciliação por tenant. |

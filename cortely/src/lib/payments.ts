@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { isDemoMode } from "@/lib/supabase/env";
 
 export type PaymentIntent = {
   id: string;
@@ -11,9 +12,20 @@ export type PaymentIntent = {
   created_at: string;
 };
 
+/** Provedor indisponível fora do demo — rota deve responder 503. */
+export class PaymentProviderUnavailableError extends Error {
+  readonly status = 503;
+  constructor(message = "Provedor de pagamento indisponível") {
+    super(message);
+    this.name = "PaymentProviderUnavailableError";
+  }
+}
+
 /**
- * Cria cobrança. Com MERCADOPAGO_ACCESS_TOKEN / ASAAS_API_KEY usa o provedor;
- * sem credencial, devolve Pix simulado em status "simulated" (nunca "paid").
+ * Cria cobrança.
+ * - Com NEXT_PUBLIC_DEMO_MODE=true: Pix simulado (status "simulated") se sem credencial.
+ * - Fora do demo: NUNCA devolve QR/status simulado; falha do provedor → 503.
+ * (1.B.3-G — provedor real ainda não ligado; P5 aberto.)
  */
 export async function createPaymentIntent(input: {
   amount: number;
@@ -25,6 +37,7 @@ export async function createPaymentIntent(input: {
   const method = input.method ?? "pix";
   const mp = process.env.MERCADOPAGO_ACCESS_TOKEN;
   const asaas = process.env.ASAAS_API_KEY;
+  const demo = isDemoMode();
 
   if (mp) {
     try {
@@ -44,23 +57,38 @@ export async function createPaymentIntent(input: {
           },
         }),
       });
-      const json = (await res.json()) as {
-        id?: number;
-        status?: string;
-        point_of_interaction?: { transaction_data?: { qr_code?: string } };
-      };
-      return {
-        id: String(json.id ?? randomUUID()),
-        amount: input.amount,
-        method,
-        status: json.status === "approved" ? "paid" : "pending",
-        checkout_url: null,
-        qr_code: json.point_of_interaction?.transaction_data?.qr_code ?? null,
-        provider: "mercadopago",
-        created_at: new Date().toISOString(),
-      };
-    } catch {
-      // fall through to simulated
+      if (!res.ok) {
+        if (demo) {
+          /* fall through to simulated */
+        } else {
+          throw new PaymentProviderUnavailableError(
+            "Falha no provedor Mercado Pago",
+          );
+        }
+      } else {
+        const json = (await res.json()) as {
+          id?: number;
+          status?: string;
+          point_of_interaction?: { transaction_data?: { qr_code?: string } };
+        };
+        return {
+          id: String(json.id ?? randomUUID()),
+          amount: input.amount,
+          method,
+          status: json.status === "approved" ? "paid" : "pending",
+          checkout_url: null,
+          qr_code: json.point_of_interaction?.transaction_data?.qr_code ?? null,
+          provider: "mercadopago",
+          created_at: new Date().toISOString(),
+        };
+      }
+    } catch (e) {
+      if (e instanceof PaymentProviderUnavailableError) throw e;
+      if (!demo) {
+        throw new PaymentProviderUnavailableError(
+          "Falha no provedor Mercado Pago",
+        );
+      }
     }
   }
 
@@ -79,24 +107,39 @@ export async function createPaymentIntent(input: {
           dueDate: new Date().toISOString().slice(0, 10),
         }),
       });
-      const json = (await res.json()) as {
-        id?: string;
-        status?: string;
-        invoiceUrl?: string;
-      };
-      return {
-        id: json.id ?? randomUUID(),
-        amount: input.amount,
-        method,
-        status: json.status === "RECEIVED" ? "paid" : "pending",
-        checkout_url: json.invoiceUrl ?? null,
-        qr_code: null,
-        provider: "asaas",
-        created_at: new Date().toISOString(),
-      };
-    } catch {
-      // fall through
+      if (!res.ok) {
+        if (!demo) {
+          throw new PaymentProviderUnavailableError("Falha no provedor Asaas");
+        }
+      } else {
+        const json = (await res.json()) as {
+          id?: string;
+          status?: string;
+          invoiceUrl?: string;
+        };
+        return {
+          id: json.id ?? randomUUID(),
+          amount: input.amount,
+          method,
+          status: json.status === "RECEIVED" ? "paid" : "pending",
+          checkout_url: json.invoiceUrl ?? null,
+          qr_code: null,
+          provider: "asaas",
+          created_at: new Date().toISOString(),
+        };
+      }
+    } catch (e) {
+      if (e instanceof PaymentProviderUnavailableError) throw e;
+      if (!demo) {
+        throw new PaymentProviderUnavailableError("Falha no provedor Asaas");
+      }
     }
+  }
+
+  if (!demo) {
+    throw new PaymentProviderUnavailableError(
+      "Nenhum provedor de pagamento configurado",
+    );
   }
 
   return {

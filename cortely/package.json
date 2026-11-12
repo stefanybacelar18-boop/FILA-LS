@@ -17,6 +17,7 @@
     "test:security:fase1b1-products-stock": "tsx scripts/security-fase1b1-products-stock.ts",
     "test:security:fase1b1-ops-route": "tsx scripts/security-fase1b1-ops-route-regression.ts",
     "test:security:fase1b2-cash": "tsx scripts/security-fase1b2-cash.ts",
+    "test:security:fase1b3g-gateway": "tsx scripts/security-fase1b3g-gateway.ts",
     "test:smoke:fase1b0-boot": "tsx scripts/smoke-fase1b0-boot.ts"
   },
   "dependencies": {

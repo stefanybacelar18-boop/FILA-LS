@@ -7,7 +7,10 @@ import {
   verifyClientProof,
 } from "@/lib/auth";
 import { getAppointment, getShopBundle } from "@/lib/data";
-import { createPaymentIntent } from "@/lib/payments";
+import {
+  createPaymentIntent,
+  PaymentProviderUnavailableError,
+} from "@/lib/payments";
 import { opsStore } from "@/lib/ops-store";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
@@ -151,6 +154,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
   } catch (error) {
+    if (error instanceof PaymentProviderUnavailableError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503 },
+      );
+    }
     const message = error instanceof Error ? error.message : "Erro pagamento";
     return NextResponse.json({ error: message }, { status: 400 });
   }
