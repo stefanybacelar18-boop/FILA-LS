@@ -1,5 +1,5 @@
 /**
- * Cortely 1.B.0–1.B.5 — fachada OpsRepository.
+ * Cortely 1.B.0–1.B.6 — fachada OpsRepository.
  * Com ops_core=json delega ao opsStore atual sem mudar comportamento.
  * PG adapters só se registry=postgres (impossível em prod nesta etapa).
  * Código novo usa barbershop_id da sessão — sem SHOP_ID neste módulo.
@@ -34,6 +34,14 @@ import {
   type PgQueryable,
   type ProductsStockRepository,
 } from "./products-stock-repository";
+import {
+  createJsonPayablesRepository,
+  createJsonPurchasingRepository,
+  createPgPayablesRepository,
+  createPgPurchasingRepository,
+  type PayablesRepository,
+  type PurchasingRepository,
+} from "./purchasing-repository";
 
 export class OpsRepositoryError extends Error {
   constructor(message: string) {
@@ -172,6 +180,30 @@ export class OpsRepository {
       return createPgPackagesRepository(this.pg, this.sessionBarbershopId);
     }
     return createJsonPackagesRepository(opsStore, this.sessionBarbershopId);
+  }
+
+  purchasing(): PurchasingRepository {
+    if (this.source("purchasing") === "postgres") {
+      if (!this.pg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: adapter PG de compras exige cliente Postgres",
+        );
+      }
+      return createPgPurchasingRepository(this.pg, this.sessionBarbershopId);
+    }
+    return createJsonPurchasingRepository(opsStore, this.sessionBarbershopId);
+  }
+
+  payables(): PayablesRepository {
+    if (this.source("payables") === "postgres") {
+      if (!this.pg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: adapter PG de payables exige cliente Postgres",
+        );
+      }
+      return createPgPayablesRepository(this.pg, this.sessionBarbershopId);
+    }
+    return createJsonPayablesRepository(opsStore, this.sessionBarbershopId);
   }
 }
 

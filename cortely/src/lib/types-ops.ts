@@ -254,7 +254,8 @@ export type Payable = {
   amount: number;
   due_date: string;
   category: string;
-  status: "open" | "paid";
+  /** `canceled` só no adapter PG (1.B.6). */
+  status: "open" | "paid" | "canceled";
   paid_at: string | null;
 };
 

@@ -536,7 +536,7 @@ ops_idempotency_keys (
 2g. `fase1b_03g` — gateway isolado: `payment_intents` + `payment_provider_accounts` + events/quarantine (P16) + `ops_apply_payment_webhook` (sem efeito de negócio)  
 3. `fase1b_04` — commissions (unique sale_item + clawback/reversal P15) + advances/payouts/goals + `ops_accrue/reverse/clawback/pay/ranking`  
 4. `fase1b_05` — packages/subscriptions (`service_package_services` substitui array `service_ids` no cutover; coluna legada mantida na prep) + `ops_sell/consume/revert/cancel` (P25–P27 documentados)  
-5. `fase1b_06` — purchase_orders  
+5. `fase1b_06` — purchase_orders + payables endurecidos (`purchase_order_id`, imutabilidade) + `ops_create/receive/cancel_po` + `ops_*_payable` (P29–P31)  
 6. `fase1b_07` — coupons, deposits (intents/events já em 03g; restante)  
 7. `fase1b_07` — `ops_idempotency_keys`, `ops_shop_id_map`, audit grants  
 8. `fase1b_08` — concurrency constraints  
@@ -759,6 +759,9 @@ Para cada `barbershop_id`:
 | P26 | **JSON `consumePackageCredit` (defeito, não muda nesta etapa):** sem `appointment_id`, sem trava; dois consumos simultâneos podem passar do saldo. PG: `FOR UPDATE` + `client_package_consumptions` + unique parcial por agendamento. |
 | P27 | **JSON `subscribeClient` (defeito, não muda nesta etapa):** cria assinatura sem cobrança. Cobrança recorrente depende da P5 — fora desta etapa. |
 | P28 | **Pacote multi-unidade:** `ops_sell_package` exige `sale_items.quantity = 1` para o item `package` (`PACKAGE_QUANTITY_UNSUPPORTED`). Venda de N pacotes na mesma linha fica para depois do cutover. |
+| P29 | **JSON receivable de OC (defeito, não muda):** conta a pagar do recebimento liga-se à OC só pelo texto da descrição. PG: `payables.purchase_order_id` FK + UNIQUE parcial. |
+| P30 | **JSON payables (defeito, não muda):** `upsertPayable` edita conta paga; `payPayable` re-paga. PG: trigger só `open→paid` / `open→canceled`; `ops_pay_payable` 409 se já paga. |
+| P31 | **Pagamento de conta × caixa:** decidir antes da 1.B.3 se pagar conta “em dinheiro” gera `cash_movements kind='manual_out'` vinculado ou só banco — **aberto**. |
 
 ---
 
