@@ -135,20 +135,26 @@ export async function POST(req: NextRequest) {
 
     // Ops JSON é single-tenant (loja seed) até migração Postgres.
     // Staff de outra empresa nunca escreve no store compartilhado.
+    // Sem sessão ainda é válido para ações cliente (ex.: add_review + OTP).
     if (session && session.barbershop_id !== DEMO_SHOP_ID) {
       return NextResponse.json(
         { error: "Sem acesso operacional a esta barbearia" },
         { status: 403 },
       );
     }
-    if (!session?.barbershop_id) {
-      return NextResponse.json({ error: "Faça login" }, { status: 401 });
-    }
-    const opsStore = getOpsStoreViaRepository(session.barbershop_id);
+
+    const staffOpsStore = () => {
+      if (!session?.barbershop_id) {
+        throw new Error("Faça login para continuar");
+      }
+      return getOpsStoreViaRepository(session.barbershop_id);
+    };
 
     switch (action) {
       case "open_cash": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({ opening_amount: z.number().nonnegative(), notes: z.string().optional() })
           .parse(body);
@@ -162,6 +168,8 @@ export async function POST(req: NextRequest) {
       }
       case "close_cash": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             closing_amount: z.number().nonnegative(),
@@ -178,10 +186,14 @@ export async function POST(req: NextRequest) {
       }
       case "cash_conference": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         return NextResponse.json({ conference: opsStore.cashConference() });
       }
       case "cash_movement": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             type: z.enum(["sangria", "suprimento"]),
@@ -195,6 +207,8 @@ export async function POST(req: NextRequest) {
       }
       case "create_sale": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             client_id: z.string().uuid().nullable().optional(),
@@ -231,6 +245,8 @@ export async function POST(req: NextRequest) {
       }
       case "refund_sale": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid(),
@@ -243,6 +259,8 @@ export async function POST(req: NextRequest) {
       }
       case "cancel_sale": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid(),
@@ -255,6 +273,8 @@ export async function POST(req: NextRequest) {
       }
       case "inventory_count": {
         requirePermission(session, "estoque");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             product_id: z.string().uuid(),
@@ -270,6 +290,8 @@ export async function POST(req: NextRequest) {
       }
       case "draft_fiscal": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             sale_id: z.string().uuid(),
@@ -285,6 +307,8 @@ export async function POST(req: NextRequest) {
       }
       case "upsert_product": {
         requirePermission(session, "estoque");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid().optional(),
@@ -303,6 +327,8 @@ export async function POST(req: NextRequest) {
       }
       case "adjust_stock": {
         requirePermission(session, "estoque");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             product_id: z.string().uuid(),
@@ -314,6 +340,8 @@ export async function POST(req: NextRequest) {
       }
       case "upsert_supplier": {
         requirePermission(session, "estoque");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid().optional(),
@@ -327,6 +355,8 @@ export async function POST(req: NextRequest) {
       }
       case "create_purchase_order": {
         requirePermission(session, "estoque");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             supplier_id: z.string().uuid(),
@@ -348,6 +378,8 @@ export async function POST(req: NextRequest) {
       }
       case "receive_purchase_order": {
         requirePermission(session, "estoque");
+
+        const opsStore = staffOpsStore();
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
         return NextResponse.json({
           order: opsStore.receivePurchaseOrder(id, actor),
@@ -362,6 +394,8 @@ export async function POST(req: NextRequest) {
           );
         }
         requirePermission(session, "comissoes");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             barber_id: z.string().uuid().nullable().optional(),
@@ -373,6 +407,8 @@ export async function POST(req: NextRequest) {
       }
       case "create_staff_advance": {
         requirePermission(session, "comissoes");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             barber_id: z.string().uuid(),
@@ -392,6 +428,8 @@ export async function POST(req: NextRequest) {
           );
         }
         requirePermission(session, "comissoes");
+
+        const opsStore = staffOpsStore();
         const data = z.object({ barber_id: z.string().uuid() }).parse(body);
         return NextResponse.json(opsStore.payCommissions(data.barber_id, actor));
       }
@@ -403,6 +441,8 @@ export async function POST(req: NextRequest) {
           );
         }
         requirePermission(session, "comissoes");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             barber_id: z.string().uuid(),
@@ -415,6 +455,8 @@ export async function POST(req: NextRequest) {
       }
       case "upsert_package": {
         requirePermission(session, "pacotes");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid().optional(),
@@ -430,6 +472,8 @@ export async function POST(req: NextRequest) {
       }
       case "sell_package": {
         requirePermission(session, "pacotes");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             client_id: z.string().uuid(),
@@ -442,6 +486,8 @@ export async function POST(req: NextRequest) {
       }
       case "subscribe_client": {
         requirePermission(session, "pacotes");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({ client_id: z.string().uuid(), plan_id: z.string().uuid() })
           .parse(body);
@@ -451,6 +497,8 @@ export async function POST(req: NextRequest) {
       }
       case "add_waitlist": {
         requirePermission(session, "waitlist");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             client_name: z.string().min(2),
@@ -465,6 +513,8 @@ export async function POST(req: NextRequest) {
       }
       case "waitlist_status": {
         requirePermission(session, "waitlist");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid(),
@@ -477,6 +527,8 @@ export async function POST(req: NextRequest) {
       }
       case "offer_waitlist": {
         requirePermission(session, "waitlist");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid(),
@@ -488,6 +540,8 @@ export async function POST(req: NextRequest) {
       }
       case "upsert_payable": {
         requirePermission(session, "financeiro");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             description: z.string().min(2),
@@ -500,11 +554,15 @@ export async function POST(req: NextRequest) {
       }
       case "pay_payable": {
         requirePermission(session, "financeiro");
+
+        const opsStore = staffOpsStore();
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
         return NextResponse.json({ payable: opsStore.payPayable(id) });
       }
       case "upsert_receivable": {
         requirePermission(session, "financeiro");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             client_name: z.string().min(2),
@@ -518,11 +576,15 @@ export async function POST(req: NextRequest) {
       }
       case "pay_receivable": {
         requirePermission(session, "financeiro");
+
+        const opsStore = staffOpsStore();
         const { id } = z.object({ id: z.string().uuid() }).parse(body);
         return NextResponse.json({ receivable: opsStore.payReceivable(id) });
       }
       case "create_campaign": {
         requirePermission(session, "marketing");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             name: z.string().min(2),
@@ -534,6 +596,8 @@ export async function POST(req: NextRequest) {
       }
       case "send_campaign": {
         requirePermission(session, "marketing");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             id: z.string().uuid(),
@@ -558,6 +622,8 @@ export async function POST(req: NextRequest) {
       }
       case "upsert_coupon": {
         requirePermission(session, "marketing");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             code: z.string().min(3),
@@ -640,6 +706,21 @@ export async function POST(req: NextRequest) {
             );
           }
         }
+        // Tenant: sessão staff OU appointment já verificado pela prova (nunca body).
+        let shopId: string;
+        if (staffOk) {
+          shopId = session!.barbershop_id;
+        } else {
+          const appt = await getAppointment(data.appointment_id!);
+          if (!appt?.barbershop_id) {
+            return NextResponse.json(
+              { error: "Agendamento inválido para este telefone" },
+              { status: 403 },
+            );
+          }
+          shopId = appt.barbershop_id;
+        }
+        const opsStore = getOpsStoreViaRepository(shopId);
         return NextResponse.json({
           review: opsStore.addReview({
             client_name: data.client_name.slice(0, 80),
@@ -652,6 +733,8 @@ export async function POST(req: NextRequest) {
       }
       case "create_deposit": {
         requirePermission(session, "caixa");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             appointment_id: z.string().uuid(),
@@ -663,6 +746,8 @@ export async function POST(req: NextRequest) {
       }
       case "add_unit": {
         requirePermission(session, "unidades");
+
+        const opsStore = staffOpsStore();
         const data = z
           .object({
             name: z.string().min(2),

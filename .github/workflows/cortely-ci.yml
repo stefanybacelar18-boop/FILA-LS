@@ -47,6 +47,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Typecheck scripts
+        run: npx tsc --noEmit -p tsconfig.scripts.json
+
       - name: Security phase 0 tests
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
@@ -111,6 +114,13 @@ jobs:
           NEXT_PUBLIC_DEMO_MODE: "true"
           CORTELY_FASE1B1_TEST_DB: cortely_fase1b1_stock_test
         run: npx tsx scripts/security-fase1b1-products-stock.ts
+
+      - name: Security fase 1.B.1 ops route regression
+        env:
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          CORTELY_OWNER_PASSWORD: ownerpass123
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: npx tsx scripts/security-fase1b1-ops-route-regression.ts
 
       - name: Production build
         env:
