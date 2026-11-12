@@ -523,16 +523,17 @@ async function main() {
       assert.ok(rev.rowCount && rev.rowCount >= 1);
 
       let payDone = false;
-      let payRow: { count: number; gross: string | number } | null = null;
+      type PayRow = { count: number; gross: string | number };
+      let payRow: PayRow | undefined;
       const payPromise = clientB
-        .query(`SELECT * FROM public.ops_pay_commissions($1,$2,$3)`, [
+        .query<PayRow>(`SELECT * FROM public.ops_pay_commissions($1,$2,$3)`, [
           shopRevPay,
           barberRevPay,
           "race-b",
         ])
         .then((res) => {
           payDone = true;
-          payRow = res.rows[0] as { count: number; gross: string | number };
+          payRow = res.rows[0];
           return res;
         });
 
@@ -542,9 +543,9 @@ async function main() {
 
       await clientA.query("COMMIT");
       await payPromise;
-      assert.ok(payRow);
-      assert.equal(Number(payRow!.count), 0);
-      assert.equal(Number(payRow!.gross), 0);
+      assert.ok(payRow, "pay deveria retornar row");
+      assert.equal(Number(payRow.count), 0);
+      assert.equal(Number(payRow.gross), 0);
 
       const paidN = await pool.query(
         `SELECT count(*)::int AS n FROM public.commission_entries
