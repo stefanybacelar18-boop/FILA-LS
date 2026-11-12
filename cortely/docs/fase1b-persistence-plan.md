@@ -424,7 +424,8 @@ payment_intents (
   appointment_id UUID NULL,
   sale_id UUID NULL,
   deposit_id UUID NULL,                 -- SEM FK até 1.B.7 (deposits)
-  applied_at TIMESTAMPTZ NULL,
+  paid_at TIMESTAMPTZ NULL,              -- quando status virou paid (P10)
+  applied_at TIMESTAMPTZ NULL,           -- efeito de negócio; NULL na 1.B.3-G
   idempotency_key TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
@@ -432,6 +433,8 @@ payment_intents (
   UNIQUE (id, barbershop_id),
   UNIQUE (provider, provider_ref),
   UNIQUE (barbershop_id, idempotency_key),
+  CHECK (status = 'paid' OR applied_at IS NULL),
+  CHECK (applied_at IS NULL OR paid_at IS NOT NULL),
   FOREIGN KEY (appointment_id, barbershop_id) REFERENCES appointments (id, barbershop_id),
   FOREIGN KEY (sale_id, barbershop_id) REFERENCES sales (id, barbershop_id)
   -- deposit_id: FK composta adiada → 1.B.7
@@ -738,7 +741,7 @@ Para cada `barbershop_id`:
 | P7 | Janela reconcile intents |
 | P8 | Stock ETL: replay vs opening |
 | P9 | Duração do freeze 1.B.3 |
-| P10 | `paid_unapplied` vs `paid` + `applied_at` |
+| ~~P10~~ | **Fechado (1.B.3-G):** status `paid` + `paid_at` preenchido; `applied_at NULL` = pago e ainda **não** aplicado (efeito de negócio só na 1.B.3/1.B.7). |
 | P11 | `NUMERIC(12,2)` vs centavos `BIGINT` |
 | P12 | `UNIQUE (id, barbershop_id)` em barbers/services |
 | P14 | Coupons/deposits que afetam venda: incluir em `ops_core` **ou** bloquear o uso até a 1.B.7 — **decidir antes da 1.B.3** |
@@ -748,6 +751,8 @@ Para cada `barbershop_id`:
 | P18 | Escrita de estoque/financeiro só via service role (servidor); revogar de `authenticated` o `EXECUTE` das funções `ops_*`, o `INSERT` em `stock_movements` e o `UPDATE` de `products.stock_qty` — **decidir antes da 1.B.3**. **1.B.2 antecipa só para funções novas de caixa** (`ops_open_cash`, `ops_add_cash_movement`, `ops_cash_conference`, `ops_close_cash`): EXECUTE concedido **somente** a `service_role` (nem `anon` nem `authenticated`). |
 | P19 | **ETL (1.B.8):** gerar `cash_movements` `kind='sale_cash_in'` (`amount = tendered_amount`) para cada `sale_payment` cash histórico, para que o esperado do caixa importado bata com o JSON; incluir na reconciliação por tenant. |
 | P20 | **Venda (1.B.3):** a função de venda grava, na mesma TX, `sale_cash_in = tendered` e `change = tendered − applied` (se > 0); teste de contrato JSON×PG do caixa esperado com vendas em dinheiro. |
+| P21 | **Adapters PG em produção:** como conectam (pooler Supabase, papel dedicado de privilégio mínimo, **nunca** superusuário; pool adequado a serverless) — **decidir antes da 1.B.3**. |
+| P22 | **Remover** de `createPaymentIntent` o caminho de credencial global (`MERCADOPAGO_ACCESS_TOKEN` / `ASAAS_API_KEY`) antes de ligar um provedor real (D12) — decidir com a P5. |
 
 ---
 

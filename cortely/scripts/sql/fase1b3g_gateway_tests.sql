@@ -49,6 +49,13 @@ BEGIN
   );
   SELECT status INTO st FROM public.payment_intents WHERE id = intent_a;
   IF st <> 'paid' THEN RAISE EXCEPTION 'FAIL: not paid'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.payment_intents
+    WHERE id = intent_a AND paid_at IS NOT NULL AND applied_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'FAIL: paid_at deve estar preenchido e applied_at NULL';
+  END IF;
+  RAISE NOTICE 'PASS: webhook paid → paid_at preenchido, applied_at NULL';
 
   PERFORM public.ops_apply_payment_webhook(
     'fake', 'evt-pending-late', 'ref-a-1', 'pending', 50,

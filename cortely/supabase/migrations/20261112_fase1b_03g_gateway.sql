@@ -71,19 +71,28 @@ CREATE TABLE IF NOT EXISTS public.payment_intents (
   appointment_id UUID NULL,
   sale_id UUID NULL,
   deposit_id UUID NULL, -- FK adiada: deposits é 1.B.7
-  applied_at TIMESTAMPTZ NULL,
+  paid_at TIMESTAMPTZ NULL,
+  applied_at TIMESTAMPTZ NULL, -- efeito de negócio; NULL na 1.B.3-G (P10)
   idempotency_key TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (id, barbershop_id),
   UNIQUE (provider, provider_ref),
-  UNIQUE (barbershop_id, idempotency_key)
+  UNIQUE (barbershop_id, idempotency_key),
+  CONSTRAINT payment_intents_applied_requires_paid_status_ck
+    CHECK (status = 'paid' OR applied_at IS NULL),
+  CONSTRAINT payment_intents_applied_requires_paid_at_ck
+    CHECK (applied_at IS NULL OR paid_at IS NOT NULL)
 );
 
 COMMENT ON COLUMN public.payment_intents.deposit_id IS
   'Pendência 1.B.7: FK composta → deposits(id, barbershop_id).';
 COMMENT ON COLUMN public.payment_intents.status IS
   'paid/canceled são TERMINAIS — eventos fora de ordem não regridem.';
+COMMENT ON COLUMN public.payment_intents.paid_at IS
+  'Momento em que status virou paid (P10).';
+COMMENT ON COLUMN public.payment_intents.applied_at IS
+  'Efeito de negócio aplicado (sale/deposit). NULL nesta etapa — só 1.B.3/1.B.7.';
 
 DO $$
 BEGIN
@@ -370,10 +379,11 @@ BEGIN
     SET
       status = v_new_status,
       updated_at = now(),
-      applied_at = CASE
-        WHEN v_new_status = 'paid' THEN COALESCE(pi.applied_at, now())
-        ELSE pi.applied_at
+      paid_at = CASE
+        WHEN v_new_status = 'paid' THEN COALESCE(pi.paid_at, now())
+        ELSE pi.paid_at
       END
+      -- applied_at permanece NULL nesta etapa (efeito de negócio = 1.B.3/1.B.7)
     WHERE pi.id = v_intent.id AND pi.barbershop_id = v_intent.barbershop_id;
   END IF;
 

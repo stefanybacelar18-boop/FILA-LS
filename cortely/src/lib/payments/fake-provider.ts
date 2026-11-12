@@ -1,6 +1,6 @@
 /**
- * FakeProvider — HMAC-SHA256 com segredo de teste (só testes/CI).
- * Sem chamadas externas.
+ * FakeProvider — HMAC-SHA256 com segredo de teste (só testes/CI/demo explícito).
+ * Sem chamadas externas. Sem segredo padrão embutido.
  */
 import { createHmac, timingSafeEqual } from "crypto";
 import type {
@@ -12,6 +12,43 @@ import type {
 } from "./types";
 
 export const FAKE_PROVIDER_NAME = "fake";
+
+export class FakePaymentBootError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FakePaymentBootError";
+  }
+}
+
+/** Flag + (NODE_ENV=test OU demo). Sem isso, "fake"/"test" não existem. */
+export function isFakePaymentProviderAllowed(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (String(env.CORTELY_ENABLE_FAKE_PAYMENT_PROVIDER || "").trim() !== "true") {
+    return false;
+  }
+  if (env.NODE_ENV === "test") return true;
+  if (String(env.NEXT_PUBLIC_DEMO_MODE || "").trim() === "true") return true;
+  return false;
+}
+
+/**
+ * Produção (NODE_ENV=production, sem demo) + flag fake → fail-fast no boot.
+ */
+export function assertFakePaymentProviderSafeAtBoot(
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (String(env.CORTELY_ENABLE_FAKE_PAYMENT_PROVIDER || "").trim() !== "true") {
+    return;
+  }
+  const isProd = env.NODE_ENV === "production";
+  const isDemo = String(env.NEXT_PUBLIC_DEMO_MODE || "").trim() === "true";
+  if (isProd && !isDemo) {
+    throw new FakePaymentBootError(
+      "cortely fail-fast: CORTELY_ENABLE_FAKE_PAYMENT_PROVIDER=true em produção (sem demo)",
+    );
+  }
+}
 
 export function fakeSign(rawBody: string | Buffer, secret: string): string {
   return createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -36,7 +73,7 @@ export class FakeProvider implements PaymentProvider {
 
   constructor(private readonly secret: string) {
     if (!secret || secret.length < 8) {
-      throw new Error("FakeProvider: segredo de teste obrigatório (≥8 chars)");
+      throw new Error("FakeProvider: CORTELY_FAKE_PAYMENT_SECRET obrigatório (≥8 chars)");
     }
   }
 
@@ -102,10 +139,12 @@ export class FakeProvider implements PaymentProvider {
   }
 }
 
+/** null se flag off, ambiente inválido ou sem CORTELY_FAKE_PAYMENT_SECRET. */
 export function createFakeProviderFromEnv(
   env: NodeJS.ProcessEnv = process.env,
-): FakeProvider {
-  const secret =
-    env.CORTELY_FAKE_PAYMENT_SECRET?.trim() || "cortely-fake-test-secret";
+): FakeProvider | null {
+  if (!isFakePaymentProviderAllowed(env)) return null;
+  const secret = env.CORTELY_FAKE_PAYMENT_SECRET?.trim();
+  if (!secret) return null;
   return new FakeProvider(secret);
 }

@@ -12,6 +12,9 @@ import {
   fakeSign,
   handlePaymentWebhook,
   reprocessQuarantine,
+  resolveProvider,
+  assertFakePaymentProviderSafeAtBoot,
+  FakePaymentBootError,
 } from "../src/lib/payments/index";
 import {
   bundledRegistrySeedText,
@@ -31,6 +34,18 @@ const MIG_DIR = join(ROOT, "supabase/migrations");
 const EVIDENCE = "/tmp/cortely-fase1b3g-gateway-evidence.txt";
 const DB = process.env.CORTELY_FASE1B3G_TEST_DB || "cortely_fase1b3g_gateway_test";
 const SECRET = "cortely-fake-test-secret";
+
+/** Env permitido para FakeProvider nos testes. */
+function testFakeEnv(
+  extra: Record<string, string | undefined> = {},
+): NodeJS.ProcessEnv {
+  return {
+    NODE_ENV: "test",
+    CORTELY_ENABLE_FAKE_PAYMENT_PROVIDER: "true",
+    CORTELY_FAKE_PAYMENT_SECRET: SECRET,
+    ...extra,
+  } as NodeJS.ProcessEnv;
+}
 
 const useTcp = Boolean(process.env.PGHOST) || Boolean(process.env.PGPASSWORD);
 const SHOP_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -222,15 +237,56 @@ async function main() {
     status: "paid",
     amount: 80,
   });
+  // Fake inacessível: produção / sem segredo → 404
+  const prodFake = await handlePaymentWebhook({
+    providerName: "fake",
+    headers: {},
+    rawBody: "{}",
+    db,
+    paymentIntentsIsPostgres: true,
+    env: testFakeEnv({
+      NODE_ENV: "production",
+      NEXT_PUBLIC_DEMO_MODE: "false",
+      CORTELY_ENABLE_FAKE_PAYMENT_PROVIDER: "true",
+    }),
+  });
+  assert.equal(prodFake.httpStatus, 404);
+  assert.deepEqual(prodFake.body, { ok: false, error: "provider unknown" });
+  ok("produção + fake → 404");
+
+  const noSecret = await handlePaymentWebhook({
+    providerName: "fake",
+    headers: {},
+    rawBody: "{}",
+    db,
+    paymentIntentsIsPostgres: true,
+    env: testFakeEnv({ CORTELY_FAKE_PAYMENT_SECRET: "" }),
+  });
+  assert.equal(noSecret.httpStatus, 404);
+  assert.equal(resolveProvider("fake", testFakeEnv({ CORTELY_FAKE_PAYMENT_SECRET: "" })), null);
+  ok("sem CORTELY_FAKE_PAYMENT_SECRET → 404");
+
+  assert.throws(
+    () =>
+      assertFakePaymentProviderSafeAtBoot({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_DEMO_MODE: "false",
+        CORTELY_ENABLE_FAKE_PAYMENT_PROVIDER: "true",
+      } as NodeJS.ProcessEnv),
+    (e: unknown) => e instanceof FakePaymentBootError,
+  );
+  ok("boot produção + flag fake → fail-fast");
+
   const bad = await handlePaymentWebhook({
     providerName: "fake",
     headers: { "x-cortely-fake-signature": "deadbeef" },
     rawBody: badBody,
     db,
     paymentIntentsIsPostgres: true,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
   assert.equal(bad.httpStatus, 401);
+  assert.deepEqual(bad.body, { ok: false, error: "invalid signature" });
   const afterBad = await counts(pool);
   assert.deepEqual(afterBad, beforeBad);
   ok("assinatura inválida → 401 e zero escrita");
@@ -253,9 +309,10 @@ async function main() {
       rawBody: raw,
       db,
       paymentIntentsIsPostgres: true,
-      env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+      env: testFakeEnv(),
     });
     assert.equal(r.httpStatus, 202);
+    assert.deepEqual(r.body, { ok: true });
   }
   const miss = await pool.query(
     `SELECT attempts, count(*) OVER() AS rows
@@ -282,7 +339,7 @@ async function main() {
       rawBody: dupBody,
       db,
       paymentIntentsIsPostgres: true,
-      env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+      env: testFakeEnv(),
     }),
     handlePaymentWebhook({
       providerName: "fake",
@@ -290,12 +347,10 @@ async function main() {
       rawBody: dupBody,
       db,
       paymentIntentsIsPostgres: true,
-      env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+      env: testFakeEnv(),
     }),
   ]);
-  const results = parallel.map((p) => String(p.body.result));
-  assert.ok(results.includes("processed") || results.includes("duplicate"));
-  assert.ok(results.filter((r) => r === "processed" || r === "duplicate").length === 2);
+  assert.ok(parallel.every((p) => p.httpStatus === 200 && p.body.ok === true));
   const evCount = await pool.query(
     `SELECT count(*)::int AS n FROM public.payment_webhook_events
      WHERE provider_event_id = $1`,
@@ -308,10 +363,18 @@ async function main() {
     rawBody: dupBody,
     db,
     paymentIntentsIsPostgres: true,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
-  assert.equal(third.body.result, "duplicate");
-  ok("duplicado / paralelo → um processado; terceiro duplicate");
+  assert.deepEqual(third.body, { ok: true });
+  // paid_at preenchido, applied_at NULL
+  const paidCols = await pool.query(
+    `SELECT status, paid_at, applied_at FROM public.payment_intents WHERE provider_ref = $1`,
+    [ref],
+  );
+  assert.equal(paidCols.rows[0].status, "paid");
+  assert.ok(paidCols.rows[0].paid_at);
+  assert.equal(paidCols.rows[0].applied_at, null);
+  ok("duplicado / paralelo → um event; paid_at set, applied_at NULL");
 
   // Payload alegando outro barbershop → tenant da intent
   const ref2 = `ref-tenant-${randomUUID().slice(0, 8)}`;
@@ -334,12 +397,17 @@ async function main() {
     rawBody: tenantBody,
     db,
     paymentIntentsIsPostgres: true,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
   assert.equal(tenantRes.httpStatus, 200);
-  assert.equal(tenantRes.body.barbershop_id, shop);
-  assert.equal(tenantRes.body.ignored_claimed_barbershop_id, SHOP_B);
-  ok("payload com outro barbershop → tenant da intent prevalece");
+  assert.deepEqual(tenantRes.body, { ok: true });
+  const tenantRow = await pool.query(
+    `SELECT barbershop_id, status FROM public.payment_intents WHERE provider_ref = $1`,
+    [ref2],
+  );
+  assert.equal(tenantRow.rows[0].barbershop_id, shop);
+  assert.equal(tenantRow.rows[0].status, "paid");
+  ok("payload com outro barbershop → tenant da intent prevalece (resposta mínima)");
 
   // amount_mismatch
   const ref3 = `ref-amt-${randomUUID().slice(0, 8)}`;
@@ -361,14 +429,20 @@ async function main() {
     rawBody: amtBody,
     db,
     paymentIntentsIsPostgres: true,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
-  assert.equal(amtRes.body.result, "quarantined_amount_mismatch");
+  assert.equal(amtRes.httpStatus, 202);
+  assert.deepEqual(amtRes.body, { ok: true });
   const st = await pool.query(
     `SELECT status FROM public.payment_intents WHERE provider_ref = $1`,
     [ref3],
   );
   assert.equal(st.rows[0].status, "pending");
+  const amtQ = await pool.query(
+    `SELECT error_reason FROM public.payment_webhook_quarantine
+     WHERE error_reason = 'amount_mismatch' ORDER BY created_at DESC LIMIT 1`,
+  );
+  assert.equal(amtQ.rows[0].error_reason, "amount_mismatch");
   ok("amount_mismatch → quarentena; intent inalterada");
 
   // Fora de ordem: paid depois pending
@@ -391,7 +465,7 @@ async function main() {
     rawBody: paidBody,
     db,
     paymentIntentsIsPostgres: true,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
   const pendBody = JSON.stringify({
     provider_event_id: `evt-oo-pend-${randomUUID().slice(0, 8)}`,
@@ -405,14 +479,16 @@ async function main() {
     rawBody: pendBody,
     db,
     paymentIntentsIsPostgres: true,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
   const oo = await pool.query(
-    `SELECT status FROM public.payment_intents WHERE provider_ref = $1`,
+    `SELECT status, paid_at, applied_at FROM public.payment_intents WHERE provider_ref = $1`,
     [ref4],
   );
   assert.equal(oo.rows[0].status, "paid");
-  ok("fora de ordem: paid depois pending → continua paid");
+  assert.ok(oo.rows[0].paid_at);
+  assert.equal(oo.rows[0].applied_at, null);
+  ok("fora de ordem: paid depois pending → continua paid; applied_at NULL");
 
   // Reprocessar quarentena após intent existir
   const ref5 = `ref-rep-${randomUUID().slice(0, 8)}`;
@@ -457,9 +533,10 @@ async function main() {
     rawBody: body503,
     db,
     paymentIntentsIsPostgres: false,
-    env: { CORTELY_FAKE_PAYMENT_SECRET: SECRET },
+    env: testFakeEnv(),
   });
   assert.equal(r503.httpStatus, 503);
+  assert.equal(r503.body.ok, false);
   assert.deepEqual(await counts(pool), before503);
   ok("payment_intents=json → 503, zero escrita");
 

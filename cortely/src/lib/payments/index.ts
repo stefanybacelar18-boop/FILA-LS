@@ -12,6 +12,9 @@ export {
   FAKE_PROVIDER_NAME,
   fakeSign,
   createFakeProviderFromEnv,
+  isFakePaymentProviderAllowed,
+  assertFakePaymentProviderSafeAtBoot,
+  FakePaymentBootError,
 } from "./fake-provider";
 export {
   handlePaymentWebhook,

@@ -5,13 +5,18 @@ import {
   resolveRegistryAtBoot,
   RegistryFailFastError,
 } from "@/lib/ops-registry";
+import {
+  assertFakePaymentProviderSafeAtBoot,
+  FakePaymentBootError,
+} from "@/lib/payments/fake-provider";
 
 export async function registerNodeRegistryBoot(): Promise<void> {
   try {
+    assertFakePaymentProviderSafeAtBoot();
     await resolveRegistryAtBoot();
   } catch (err) {
     const message =
-      err instanceof RegistryFailFastError
+      err instanceof RegistryFailFastError || err instanceof FakePaymentBootError
         ? err.message
         : err instanceof Error
           ? err.message

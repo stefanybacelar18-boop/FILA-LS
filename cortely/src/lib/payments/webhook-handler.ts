@@ -2,6 +2,7 @@
  * Pipeline webhook 1.B.3-G (D7):
  * assinatura → lookup intent → quarentena | ops_apply_payment_webhook.
  * Tenant SEMPRE da intent. Sem efeito de negócio.
+ * Resposta HTTP mínima: {ok:true} | {ok:false,error} — detalhes só em log.
  */
 import type { PaymentProvider } from "./types";
 import type { PgQueryable } from "./pg";
@@ -14,8 +15,20 @@ export const MAX_WEBHOOK_BODY_BYTES = 64 * 1024;
 
 export type WebhookHandlerResult = {
   httpStatus: number;
-  body: Record<string, unknown>;
+  body: { ok: true } | { ok: false; error: string };
 };
+
+function okTrue(status = 200): WebhookHandlerResult {
+  return { httpStatus: status, body: { ok: true } };
+}
+
+function okFalse(status: number, error: string): WebhookHandlerResult {
+  return { httpStatus: status, body: { ok: false, error } };
+}
+
+function logWebhook(detail: Record<string, unknown>) {
+  console.info("cortely payment-webhook", JSON.stringify(detail));
+}
 
 export function resolveProvider(
   name: string,
@@ -37,34 +50,40 @@ export async function handlePaymentWebhook(opts: {
   paymentIntentsIsPostgres: boolean;
   env?: NodeJS.ProcessEnv;
 }): Promise<WebhookHandlerResult> {
+  const env = opts.env ?? process.env;
+
   if (!opts.paymentIntentsIsPostgres) {
-    return {
-      httpStatus: 503,
-      body: {
-        error: "payment_intents não está em postgres (gateway isolado off)",
-      },
-    };
+    logWebhook({ event: "registry_not_postgres" });
+    return okFalse(
+      503,
+      "payment_intents não está em postgres (gateway isolado off)",
+    );
   }
 
   if (Buffer.byteLength(opts.rawBody, "utf8") > MAX_WEBHOOK_BODY_BYTES) {
-    return { httpStatus: 413, body: { error: "payload too large" } };
+    return okFalse(413, "payload too large");
   }
 
-  const provider = resolveProvider(opts.providerName, opts.env);
+  const provider = resolveProvider(opts.providerName, env);
   if (!provider) {
-    return { httpStatus: 404, body: { error: "provider unknown" } };
+    logWebhook({
+      event: "provider_unknown",
+      provider: opts.providerName,
+    });
+    return okFalse(404, "provider unknown");
   }
 
   // 1) Assinatura ANTES de qualquer escrita — corpo bruto
-  const ok = provider.verifyWebhook(opts.headers, opts.rawBody);
-  if (!ok) {
-    return { httpStatus: 401, body: { error: "invalid signature" } };
+  const sigOk = provider.verifyWebhook(opts.headers, opts.rawBody);
+  if (!sigOk) {
+    logWebhook({ event: "invalid_signature", provider: provider.name });
+    return okFalse(401, "invalid signature");
   }
 
   let parsed;
   try {
     parsed = provider.parseEvent(opts.rawBody);
-  } catch {
+  } catch (err) {
     const rawJson = safeJson(opts.rawBody);
     await opts.db.query(
       `SELECT * FROM public.ops_quarantine_payment_webhook($1,$2,$3::jsonb,$4,$5)`,
@@ -76,10 +95,12 @@ export async function handlePaymentWebhook(opts: {
         true,
       ],
     );
-    return {
-      httpStatus: 202,
-      body: { result: "quarantined", reason: "schema_invalid" },
-    };
+    logWebhook({
+      event: "quarantined",
+      reason: "schema_invalid",
+      detail: err instanceof Error ? err.message : String(err),
+    });
+    return okTrue(202);
   }
 
   // Lookup intent por (provider, provider_ref) — tenant da intent
@@ -107,10 +128,12 @@ export async function handlePaymentWebhook(opts: {
         true,
       ],
     );
-    return {
-      httpStatus: 202,
-      body: { result: "quarantined", reason: "intent_missing" },
-    };
+    logWebhook({
+      event: "quarantined",
+      reason: "intent_missing",
+      provider_event_id: parsed.provider_event_id,
+    });
+    return okTrue(202);
   }
 
   // Payload pode alegar outro barbershop — ignorado (tenant = intent)
@@ -132,17 +155,19 @@ export async function handlePaymentWebhook(opts: {
     ],
   );
   const row = apply.rows[0];
-  return {
-    httpStatus: 200,
-    body: {
-      result: row?.result ?? "processed",
-      intent_id: row?.intent_id ?? intent.id,
-      barbershop_id: row?.barbershop_id ?? intent.barbershop_id,
-      intent_status: row?.intent_status ?? intent.status,
-      // claimed tenant no payload é ignorado de propósito
-      ignored_claimed_barbershop_id: parsed.claimed_barbershop_id ?? null,
-    },
-  };
+  logWebhook({
+    event: "applied",
+    result: row?.result ?? "processed",
+    intent_id: row?.intent_id ?? intent.id,
+    barbershop_id: row?.barbershop_id ?? intent.barbershop_id,
+    intent_status: row?.intent_status ?? intent.status,
+    ignored_claimed_barbershop_id: parsed.claimed_barbershop_id ?? null,
+  });
+
+  if (row?.result?.startsWith("quarantined")) {
+    return okTrue(202);
+  }
+  return okTrue(200);
 }
 
 export async function reprocessQuarantine(
