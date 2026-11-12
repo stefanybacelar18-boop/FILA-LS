@@ -86,6 +86,21 @@ jobs:
           CORTELY_RLS_TEST_DB: cortely_fase1a_rls_test
         run: npx tsx scripts/security-fase1a-rls-sql.ts
 
+      - name: Security fase 1.B.0 registry tests
+        env:
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          NEXT_PUBLIC_DEMO_MODE: "true"
+        run: npx tsx scripts/security-fase1b0.ts
+
+      - name: Security fase 1.B.0 registry SQL (CHECK + grants)
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          CORTELY_REGISTRY_TEST_DB: cortely_fase1b0_registry_test
+        run: npx tsx scripts/security-fase1b0-registry-sql.ts
+
       - name: Production build
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars

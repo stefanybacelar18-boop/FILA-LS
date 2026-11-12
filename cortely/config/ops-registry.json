@@ -1,0 +1,18 @@
+{
+  "products": { "source": "json", "state": "active_json" },
+  "stock": { "source": "json", "state": "active_json" },
+  "cash": { "source": "json", "state": "active_json" },
+  "sales": { "source": "json", "state": "active_json" },
+  "commissions": { "source": "json", "state": "active_json" },
+  "packages": { "source": "json", "state": "active_json" },
+  "purchasing": { "source": "json", "state": "active_json" },
+  "payables": { "source": "json", "state": "active_json" },
+  "receivables": { "source": "json", "state": "active_json" },
+  "coupons": { "source": "json", "state": "active_json" },
+  "deposits": { "source": "json", "state": "active_json" },
+  "campaigns": { "source": "json", "state": "active_json" },
+  "waitlist": { "source": "json", "state": "active_json" },
+  "reviews": { "source": "json", "state": "active_json" },
+  "fiscal": { "source": "json", "state": "active_json" },
+  "payment_intents": { "source": "json", "state": "active_json" }
+}
