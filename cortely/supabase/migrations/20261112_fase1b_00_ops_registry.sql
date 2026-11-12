@@ -1,11 +1,16 @@
 -- Fase 1.B.0 — Registry global de fontes ops (ops_domain_registry)
 -- Aplicar SOMENTE em Postgres local/CI. Nunca no Supabase remoto nesta autorização.
--- Tabelas de infraestrutura: ENABLE+FORCE RLS; REVOKE anon/authenticated; service_role only.
+-- Infra: ENABLE+FORCE RLS; REVOKE anon/authenticated; service_role append-friendly.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS public.ops_domain_registry (
-  domain TEXT PRIMARY KEY,
+  domain TEXT PRIMARY KEY
+    CHECK (domain IN (
+      'products', 'stock', 'cash', 'sales', 'commissions', 'packages',
+      'purchasing', 'payables', 'receivables', 'coupons', 'deposits',
+      'campaigns', 'waitlist', 'reviews', 'fiscal', 'payment_intents'
+    )),
   source TEXT NOT NULL CHECK (source IN ('json', 'postgres')),
   state TEXT NOT NULL CHECK (state IN (
     'active_json',
@@ -20,6 +25,9 @@ CREATE TABLE IF NOT EXISTS public.ops_domain_registry (
     (source = 'json' AND state IN ('active_json', 'prep_pg', 'cutover_pending'))
     OR
     (source = 'postgres' AND state = 'active_postgres')
+  ),
+  CONSTRAINT ops_registry_cutover_at_ck CHECK (
+    state <> 'active_postgres' OR cutover_at IS NOT NULL
   )
 );
 
@@ -42,18 +50,13 @@ CREATE TABLE IF NOT EXISTS public.ops_domain_registry_audit (
 COMMENT ON TABLE public.ops_domain_registry IS
   'Cortely 1.B.0: registry global (não por tenant) da fonte oficial por domínio ops';
 COMMENT ON TABLE public.ops_domain_registry_audit IS
-  'Cortely 1.B.0: auditoria de mudanças do registry (seed/transições)';
+  'Cortely 1.B.0: auditoria append-only do registry (seed/transições)';
 
--- ENABLE + FORCE RLS
 ALTER TABLE public.ops_domain_registry ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ops_domain_registry FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.ops_domain_registry_audit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ops_domain_registry_audit FORCE ROW LEVEL SECURITY;
 
--- Sem policies para anon/authenticated: com FORCE RLS, sem policy = sem acesso.
--- service_role bypassa RLS (Supabase); grants explícitos abaixo.
-
--- Verificação FORCE
 DO $$
 DECLARE
   r RECORD;
@@ -74,7 +77,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Grants: REVOKE ALL de PUBLIC/anon/authenticated; GRANT service_role
+-- Revoga herança de DEFAULT PRIVILEGES / PUBLIC
 REVOKE ALL ON TABLE public.ops_domain_registry FROM PUBLIC;
 REVOKE ALL ON TABLE public.ops_domain_registry_audit FROM PUBLIC;
 
@@ -88,13 +91,15 @@ BEGIN
     EXECUTE 'REVOKE ALL ON TABLE public.ops_domain_registry FROM authenticated';
     EXECUTE 'REVOKE ALL ON TABLE public.ops_domain_registry_audit FROM authenticated';
   END IF;
+  -- Append-only: registry sem DELETE; audit só SELECT+INSERT
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ops_domain_registry TO service_role';
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ops_domain_registry_audit TO service_role';
+    EXECUTE 'REVOKE ALL ON TABLE public.ops_domain_registry FROM service_role';
+    EXECUTE 'REVOKE ALL ON TABLE public.ops_domain_registry_audit FROM service_role';
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.ops_domain_registry TO service_role';
+    EXECUTE 'GRANT SELECT, INSERT ON TABLE public.ops_domain_registry_audit TO service_role';
   END IF;
 END $$;
 
--- Seed: 16 domínios json/active_json (idempotente)
 INSERT INTO public.ops_domain_registry (domain, source, state, updated_at, updated_by)
 VALUES
   ('products', 'json', 'active_json', now(), 'fase1b_00_seed'),
@@ -115,7 +120,7 @@ VALUES
   ('payment_intents', 'json', 'active_json', now(), 'fase1b_00_seed')
 ON CONFLICT (domain) DO NOTHING;
 
--- Uma linha de audit 'seed' (só se ainda não houver seed)
+-- Fingerprint idêntico ao TS: sha256(hex).slice(0,16) na ordem OPS_DOMAINS
 INSERT INTO public.ops_domain_registry_audit (
   changed_by, action, cutover_set, reason, fingerprint, details
 )
@@ -124,7 +129,21 @@ SELECT
   'seed',
   NULL,
   'initial all-json registry',
-  md5(string_agg(domain || ':' || source || ':' || state, ',' ORDER BY domain)),
+  left(encode(digest(
+    string_agg(
+      domain || ':' || source || ':' || state,
+      ','
+      ORDER BY array_position(
+        ARRAY[
+          'products','stock','cash','sales','commissions','packages',
+          'purchasing','payables','receivables','coupons','deposits',
+          'campaigns','waitlist','reviews','fiscal','payment_intents'
+        ]::text[],
+        domain
+      )
+    ),
+    'sha256'
+  ), 'hex'), 16),
   jsonb_build_object(
     'domains', (SELECT count(*)::int FROM public.ops_domain_registry),
     'migration', '20261112_fase1b_00_ops_registry'

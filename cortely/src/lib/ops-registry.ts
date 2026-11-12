@@ -86,7 +86,6 @@ export function isValidSourceState(
       state === "cutover_pending"
     );
   }
-  // postgres → somente active_postgres (autorização 1.B.0)
   return state === "active_postgres";
 }
 
@@ -108,23 +107,28 @@ export function isAllowedRegistryTransition(
 
   const key = `${from.source}:${from.state}->${to.source}:${to.state}`;
   const allowed = new Set([
-    // prep
     "json:active_json->json:prep_pg",
-    // freeze
     "json:prep_pg->json:cutover_pending",
-    // abort cutover before flip
     "json:cutover_pending->json:active_json",
-    // flip = ponto sem retorno
     "json:cutover_pending->postgres:active_postgres",
   ]);
   return allowed.has(key);
 }
 
+/** Payload canônico — mesma ordem OPS_DOMAINS no SQL e no TS. */
+export function fingerprintCanonicalPayload(map: RegistryMap): string {
+  return OPS_DOMAINS.map((d) => `${d}:${map[d].source}:${map[d].state}`).join(
+    ",",
+  );
+}
+
+/** sha256 hex, primeiros 16 chars — idêntico a left(encode(digest(...),'hex'),16) no PG. */
+export function fingerprintFromCanonicalPayload(payload: string): string {
+  return createHash("sha256").update(payload).digest("hex").slice(0, 16);
+}
+
 export function fingerprintRegistryMap(map: RegistryMap): string {
-  const raw = OPS_DOMAINS.map(
-    (d) => `${d}:${map[d].source}:${map[d].state}`,
-  ).join(",");
-  return createHash("sha256").update(raw).digest("hex").slice(0, 16);
+  return fingerprintFromCanonicalPayload(fingerprintCanonicalPayload(map));
 }
 
 function assertEntry(
@@ -158,6 +162,14 @@ function assertEntry(
     throw new RegistryFailFastError(
       `Registry: source↔state inválido em '${domain}': ${source}/${state}`,
     );
+  }
+  if (state === "active_postgres") {
+    const cutover = e.cutover_at;
+    if (cutover === undefined || cutover === null || cutover === "") {
+      throw new RegistryFailFastError(
+        `Registry: active_postgres exige cutover_at em '${domain}'`,
+      );
+    }
   }
 }
 
@@ -196,13 +208,11 @@ export function validateRegistryMap(
 }
 
 export function assertOpsCoreHomogeneous(map: RegistryMap): void {
-  const sources = new Set(
-    OPS_CORE_DOMAINS.map((d) => map[d].source),
-  );
+  const sources = new Set(OPS_CORE_DOMAINS.map((d) => map[d].source));
   if (sources.size !== 1) {
-    const detail = OPS_CORE_DOMAINS.map(
-      (d) => `${d}=${map[d].source}`,
-    ).join(", ");
+    const detail = OPS_CORE_DOMAINS.map((d) => `${d}=${map[d].source}`).join(
+      ", ",
+    );
     throw new RegistryFailFastError(
       `Registry: ops_core misto (deve ser all json ou all postgres): ${detail}`,
     );
@@ -225,7 +235,6 @@ export function parseRegistryJsonObject(
 }
 
 export type LoadRegistryInput = {
-  /** Se true, carrega só da tabela; arquivo é ignorado. */
   tableExists: boolean;
   tableRows?: Array<{
     domain: string;
@@ -235,9 +244,7 @@ export type LoadRegistryInput = {
     updated_at?: string | null;
     updated_by?: string | null;
   }>;
-  /** Valor de process.env.CORTELY_OPS_REGISTRY (string JSON). */
   envRegistry?: string | undefined;
-  /** Conteúdo do arquivo seed (só usado se tableExists=false). */
   fileContents?: string | undefined;
 };
 
@@ -256,7 +263,6 @@ export function loadRegistry(input: LoadRegistryInput): RegistrySnapshot {
         "Registry fail-fast: CORTELY_OPS_REGISTRY definido enquanto ops_domain_registry existe",
       );
     }
-    // arquivo intencionalmente ignorado (não comparado)
     if (!input.tableRows || input.tableRows.length === 0) {
       throw new RegistryFailFastError(
         "Registry: tabela existe mas nenhuma linha fornecida",
@@ -280,12 +286,9 @@ export function loadRegistry(input: LoadRegistryInput): RegistrySnapshot {
     };
   }
 
-  // Sem tabela: env ou arquivo; não criar tabela
   const fromEnv =
     input.envRegistry !== undefined && String(input.envRegistry).trim() !== "";
-  const text = fromEnv
-    ? String(input.envRegistry)
-    : input.fileContents;
+  const text = fromEnv ? String(input.envRegistry) : input.fileContents;
   if (text === undefined || text.trim() === "") {
     throw new RegistryFailFastError(
       "Registry: sem tabela e sem arquivo/env all-json",
@@ -299,7 +302,6 @@ export function loadRegistry(input: LoadRegistryInput): RegistrySnapshot {
   }
   const raw = parseRegistryJsonObject(parsed);
   const map = validateRegistryMap(raw);
-  // Seed file/env nunca devem promover active_postgres
   for (const d of OPS_DOMAINS) {
     if (map[d].source === "postgres" || map[d].state === "active_postgres") {
       throw new RegistryFailFastError(
@@ -318,7 +320,6 @@ export function defaultRegistryFilePath(): string {
   return join(process.cwd(), "config", "ops-registry.json");
 }
 
-/** Lê o arquivo seed do disco (não cria nada). */
 export function readRegistrySeedFile(
   path: string = defaultRegistryFilePath(),
 ): string {
@@ -335,4 +336,147 @@ export function sourceOf(
   domain: OpsDomain,
 ): OpsSource {
   return snapshot.map[domain].source;
+}
+
+/** True quando há URL + service role para consultar a tabela. */
+export function canQueryRegistryViaServiceRole(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return Boolean(
+    env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+  );
+}
+
+export type RegistryTableRow = {
+  domain: string;
+  source: string;
+  state: string;
+  cutover_at?: string | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+};
+
+export type FetchRegistryTableResult =
+  | { ok: true; rows: RegistryTableRow[] }
+  | { ok: false; kind: "relation_missing" }
+  | { ok: false; kind: "error"; message: string };
+
+export type ResolveRegistryBootDeps = {
+  env?: NodeJS.ProcessEnv;
+  readSeedFile?: () => string;
+  fetchTable?: () => Promise<FetchRegistryTableResult>;
+  log?: (msg: string) => void;
+};
+
+let cachedSnapshot: RegistrySnapshot | null = null;
+
+export function getCachedRegistrySnapshot(): RegistrySnapshot | null {
+  return cachedSnapshot;
+}
+
+export function clearRegistryBootCache(): void {
+  cachedSnapshot = null;
+}
+
+function isRelationMissingError(err: unknown): boolean {
+  const e = err as {
+    code?: string;
+    message?: string;
+    details?: string;
+    hint?: string;
+  };
+  const code = String(e?.code || "");
+  const blob = `${e?.message || ""} ${e?.details || ""} ${e?.hint || ""}`;
+  if (code === "42P01" || code === "PGRST205") return true;
+  if (/does not exist/i.test(blob) && /ops_domain_registry/i.test(blob)) {
+    return true;
+  }
+  if (/Could not find the table/i.test(blob) && /ops_domain_registry/i.test(blob)) {
+    return true;
+  }
+  return false;
+}
+
+async function defaultFetchRegistryTable(): Promise<FetchRegistryTableResult> {
+  const { createClient } = await import("@supabase/supabase-js");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
+  const client = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await client
+    .from("ops_domain_registry")
+    .select("domain,source,state,cutover_at,updated_at,updated_by");
+  if (error) {
+    if (isRelationMissingError(error)) {
+      return { ok: false, kind: "relation_missing" };
+    }
+    return {
+      ok: false,
+      kind: "error",
+      message: `${error.code || "ERR"}: ${error.message}`,
+    };
+  }
+  return { ok: true, rows: (data || []) as RegistryTableRow[] };
+}
+
+/**
+ * Boot real (§3.2.2/§3.2.4):
+ * a) sem Supabase (demo/sem service role) → arquivo seed
+ * b) com Supabase → SELECT; só 42P01/PGRST205 → arquivo; qualquer outro erro → fail-fast
+ * c) loadRegistry + cache + log fingerprint/loadedFrom
+ */
+export async function resolveRegistryAtBoot(
+  deps: ResolveRegistryBootDeps = {},
+): Promise<RegistrySnapshot> {
+  const env = deps.env ?? process.env;
+  const log = deps.log ?? ((m: string) => console.info(m));
+  const readSeed =
+    deps.readSeedFile ?? (() => readRegistrySeedFile(defaultRegistryFilePath()));
+
+  let snapshot: RegistrySnapshot;
+
+  if (!canQueryRegistryViaServiceRole(env)) {
+    snapshot = loadRegistry({
+      tableExists: false,
+      fileContents: readSeed(),
+      envRegistry: env.CORTELY_OPS_REGISTRY,
+    });
+  } else {
+    const fetchTable = deps.fetchTable ?? defaultFetchRegistryTable;
+    let result: FetchRegistryTableResult;
+    try {
+      result = await fetchTable();
+    } catch (err) {
+      throw new RegistryFailFastError(
+        `Registry fail-fast: falha ao consultar ops_domain_registry (${
+          err instanceof Error ? err.message : String(err)
+        })`,
+      );
+    }
+    if (!result.ok && result.kind === "relation_missing") {
+      snapshot = loadRegistry({
+        tableExists: false,
+        fileContents: readSeed(),
+        envRegistry: env.CORTELY_OPS_REGISTRY,
+      });
+    } else if (!result.ok) {
+      throw new RegistryFailFastError(
+        `Registry fail-fast: erro ao ler ops_domain_registry (${result.message})`,
+      );
+    } else {
+      snapshot = loadRegistry({
+        tableExists: true,
+        tableRows: result.rows,
+        envRegistry: env.CORTELY_OPS_REGISTRY,
+      });
+    }
+  }
+
+  cachedSnapshot = snapshot;
+  log(
+    `cortely ops-registry boot: loadedFrom=${snapshot.loadedFrom} fingerprint=${snapshot.fingerprint}`,
+  );
+  return snapshot;
 }

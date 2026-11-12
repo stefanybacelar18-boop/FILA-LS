@@ -5,14 +5,14 @@
  * Código novo usa barbershop_id da sessão — sem SHOP_ID neste módulo.
  */
 
-import { opsStore } from "@/lib/ops-store";
+import { opsStore } from "./ops-store";
 import {
   OPS_CORE_DOMAINS,
   OPS_DOMAINS,
   type OpsDomain,
   type RegistrySnapshot,
   sourceOf,
-} from "@/lib/ops-registry";
+} from "./ops-registry";
 
 export class OpsRepositoryError extends Error {
   constructor(message: string) {

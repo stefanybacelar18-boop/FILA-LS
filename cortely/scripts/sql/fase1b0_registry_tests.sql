@@ -1,35 +1,13 @@
--- Fase 1.B.0 — asserts SQL do registry (CHECK + grants)
--- Executado após migration 20261112_fase1b_00_ops_registry.sql
-
-DO $$
-BEGIN
-  -- Roles de teste (espelha harness 1.A se já existirem)
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    CREATE ROLE anon NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    CREATE ROLE authenticated NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
-    CREATE ROLE service_role NOLOGIN BYPASSRLS;
-  END IF;
-END $$;
-
--- Re-aplicar grants da migration (service_role pode ter sido criado depois)
-REVOKE ALL ON TABLE public.ops_domain_registry FROM PUBLIC;
-REVOKE ALL ON TABLE public.ops_domain_registry FROM anon;
-REVOKE ALL ON TABLE public.ops_domain_registry FROM authenticated;
-REVOKE ALL ON TABLE public.ops_domain_registry_audit FROM PUBLIC;
-REVOKE ALL ON TABLE public.ops_domain_registry_audit FROM anon;
-REVOKE ALL ON TABLE public.ops_domain_registry_audit FROM authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ops_domain_registry TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ops_domain_registry_audit TO service_role;
+-- Fase 1.B.0 — asserts SQL do registry (CHECK + grants).
+-- SOMENTE verificação: sem REVOKE/GRANT neste arquivo.
+-- Roles e DEFAULT PRIVILEGES são preparados no runner TS antes da migration.
 
 DO $$
 DECLARE
   r RECORD;
   n INT;
   ok BOOLEAN;
+  fp TEXT;
 BEGIN
   -- Seed: 16 domínios
   SELECT count(*) INTO n FROM public.ops_domain_registry;
@@ -65,46 +43,80 @@ BEGIN
   END IF;
   RAISE NOTICE 'PASS: ops_domain_registry_audit ENABLE+FORCE RLS';
 
-  -- CHECK: postgres + prep_pg rejeitado
+  -- CHECK: postgres + prep_pg rejeitado (via UPDATE em domínio válido)
   BEGIN
-    INSERT INTO public.ops_domain_registry(domain, source, state)
-    VALUES ('__chk_pg_prep', 'postgres', 'prep_pg');
+    UPDATE public.ops_domain_registry
+    SET source = 'postgres', state = 'prep_pg', cutover_at = now()
+    WHERE domain = 'sales';
     RAISE EXCEPTION 'FAIL: CHECK allowed postgres/prep_pg';
   EXCEPTION WHEN check_violation THEN
     RAISE NOTICE 'PASS: CHECK rejects postgres/prep_pg';
   END;
 
-  -- CHECK: postgres + cutover_pending rejeitado
   BEGIN
-    INSERT INTO public.ops_domain_registry(domain, source, state)
-    VALUES ('__chk_pg_cut', 'postgres', 'cutover_pending');
+    UPDATE public.ops_domain_registry
+    SET source = 'postgres', state = 'cutover_pending', cutover_at = now()
+    WHERE domain = 'sales';
     RAISE EXCEPTION 'FAIL: CHECK allowed postgres/cutover_pending';
   EXCEPTION WHEN check_violation THEN
     RAISE NOTICE 'PASS: CHECK rejects postgres/cutover_pending';
   END;
 
-  -- CHECK: json + active_postgres rejeitado
   BEGIN
-    INSERT INTO public.ops_domain_registry(domain, source, state)
-    VALUES ('__chk_json_pg', 'json', 'active_postgres');
+    UPDATE public.ops_domain_registry
+    SET source = 'json', state = 'active_postgres', cutover_at = now()
+    WHERE domain = 'sales';
     RAISE EXCEPTION 'FAIL: CHECK allowed json/active_postgres';
   EXCEPTION WHEN check_violation THEN
     RAISE NOTICE 'PASS: CHECK rejects json/active_postgres';
   END;
 
-  -- CHECK: json + cutover_pending OK (depois remove)
-  INSERT INTO public.ops_domain_registry(domain, source, state)
-  VALUES ('__chk_json_cut', 'json', 'cutover_pending');
-  DELETE FROM public.ops_domain_registry WHERE domain = '__chk_json_cut';
+  -- active_postgres sem cutover_at rejeitado
+  BEGIN
+    UPDATE public.ops_domain_registry
+    SET source = 'postgres', state = 'active_postgres', cutover_at = NULL
+    WHERE domain = 'sales';
+    RAISE EXCEPTION 'FAIL: CHECK allowed active_postgres without cutover_at';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS: CHECK rejects active_postgres without cutover_at';
+  END;
+
+  -- domain desconhecido rejeitado
+  BEGIN
+    INSERT INTO public.ops_domain_registry(domain, source, state)
+    VALUES ('units', 'json', 'active_json');
+    RAISE EXCEPTION 'FAIL: CHECK allowed unknown domain units';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS: CHECK rejects unknown domain';
+  END;
+
+  -- json/cutover_pending OK (rollback via exceção de restore desnecessário — savepoint)
+  BEGIN
+    UPDATE public.ops_domain_registry
+    SET source = 'json', state = 'cutover_pending', cutover_at = NULL
+    WHERE domain = 'sales';
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'FAIL: sales missing';
+    END IF;
+    -- desfaz
+    UPDATE public.ops_domain_registry
+    SET source = 'json', state = 'active_json', cutover_at = NULL, updated_by = 'fase1b_00_seed'
+    WHERE domain = 'sales';
+  END;
   RAISE NOTICE 'PASS: CHECK allows json/cutover_pending';
 
-  -- CHECK: postgres + active_postgres OK (depois remove)
-  INSERT INTO public.ops_domain_registry(domain, source, state)
-  VALUES ('__chk_pg_ok', 'postgres', 'active_postgres');
-  DELETE FROM public.ops_domain_registry WHERE domain = '__chk_pg_ok';
-  RAISE NOTICE 'PASS: CHECK allows postgres/active_postgres';
+  -- postgres/active_postgres com cutover_at OK, depois restaura
+  BEGIN
+    UPDATE public.ops_domain_registry
+    SET source = 'postgres', state = 'active_postgres', cutover_at = now()
+    WHERE domain = 'sales';
+    UPDATE public.ops_domain_registry
+    SET source = 'json', state = 'active_json', cutover_at = NULL, updated_by = 'fase1b_00_seed'
+    WHERE domain = 'sales';
+  END;
+  RAISE NOTICE 'PASS: CHECK allows postgres/active_postgres with cutover_at';
 
-  -- Grants: anon sem privilegios
+  -- Grants: anon sem privilégios (migration deve ter revogado DEFAULT PRIVILEGES)
   ok := has_table_privilege('anon', 'public.ops_domain_registry', 'SELECT')
      OR has_table_privilege('anon', 'public.ops_domain_registry', 'INSERT')
      OR has_table_privilege('anon', 'public.ops_domain_registry', 'UPDATE')
@@ -115,7 +127,9 @@ BEGIN
   RAISE NOTICE 'PASS: anon sem acesso a ops_domain_registry';
 
   ok := has_table_privilege('anon', 'public.ops_domain_registry_audit', 'SELECT')
-     OR has_table_privilege('anon', 'public.ops_domain_registry_audit', 'INSERT');
+     OR has_table_privilege('anon', 'public.ops_domain_registry_audit', 'INSERT')
+     OR has_table_privilege('anon', 'public.ops_domain_registry_audit', 'UPDATE')
+     OR has_table_privilege('anon', 'public.ops_domain_registry_audit', 'DELETE');
   IF ok THEN
     RAISE EXCEPTION 'FAIL: anon still has privileges on ops_domain_registry_audit';
   END IF;
@@ -131,17 +145,76 @@ BEGIN
   RAISE NOTICE 'PASS: authenticated sem acesso a ops_domain_registry';
 
   ok := has_table_privilege('authenticated', 'public.ops_domain_registry_audit', 'SELECT')
-     OR has_table_privilege('authenticated', 'public.ops_domain_registry_audit', 'INSERT');
+     OR has_table_privilege('authenticated', 'public.ops_domain_registry_audit', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.ops_domain_registry_audit', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.ops_domain_registry_audit', 'DELETE');
   IF ok THEN
     RAISE EXCEPTION 'FAIL: authenticated still has privileges on audit';
   END IF;
   RAISE NOTICE 'PASS: authenticated sem acesso a ops_domain_registry_audit';
 
-  -- service_role tem acesso
+  -- service_role: registry SELECT+INSERT+UPDATE, sem DELETE
   IF NOT has_table_privilege('service_role', 'public.ops_domain_registry', 'SELECT') THEN
     RAISE EXCEPTION 'FAIL: service_role missing SELECT on registry';
   END IF;
-  RAISE NOTICE 'PASS: service_role SELECT on ops_domain_registry';
+  IF NOT has_table_privilege('service_role', 'public.ops_domain_registry', 'INSERT') THEN
+    RAISE EXCEPTION 'FAIL: service_role missing INSERT on registry';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.ops_domain_registry', 'UPDATE') THEN
+    RAISE EXCEPTION 'FAIL: service_role missing UPDATE on registry';
+  END IF;
+  IF has_table_privilege('service_role', 'public.ops_domain_registry', 'DELETE') THEN
+    RAISE EXCEPTION 'FAIL: service_role must NOT have DELETE on registry';
+  END IF;
+  RAISE NOTICE 'PASS: service_role registry SELECT/INSERT/UPDATE sem DELETE';
+
+  -- service_role: audit SELECT+INSERT, sem UPDATE/DELETE
+  IF NOT has_table_privilege('service_role', 'public.ops_domain_registry_audit', 'SELECT') THEN
+    RAISE EXCEPTION 'FAIL: service_role missing SELECT on audit';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.ops_domain_registry_audit', 'INSERT') THEN
+    RAISE EXCEPTION 'FAIL: service_role missing INSERT on audit';
+  END IF;
+  IF has_table_privilege('service_role', 'public.ops_domain_registry_audit', 'UPDATE') THEN
+    RAISE EXCEPTION 'FAIL: service_role must NOT have UPDATE on audit';
+  END IF;
+  IF has_table_privilege('service_role', 'public.ops_domain_registry_audit', 'DELETE') THEN
+    RAISE EXCEPTION 'FAIL: service_role must NOT have DELETE on audit';
+  END IF;
+  RAISE NOTICE 'PASS: service_role audit SELECT/INSERT sem UPDATE/DELETE';
+
+  -- Fingerprint SQL (mesmo algoritmo/ordem do TS)
+  SELECT left(encode(digest(
+    string_agg(
+      domain || ':' || source || ':' || state,
+      ','
+      ORDER BY array_position(
+        ARRAY[
+          'products','stock','cash','sales','commissions','packages',
+          'purchasing','payables','receivables','coupons','deposits',
+          'campaigns','waitlist','reviews','fiscal','payment_intents'
+        ]::text[],
+        domain
+      )
+    ),
+    'sha256'
+  ), 'hex'), 16)
+  INTO fp
+  FROM public.ops_domain_registry;
+
+  IF fp IS NULL OR length(fp) <> 16 THEN
+    RAISE EXCEPTION 'FAIL: fingerprint sql invalid: %', fp;
+  END IF;
+  RAISE NOTICE 'PASS: fingerprint sql=%', fp;
+
+  -- Audit seed fingerprint bate com o cálculo
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ops_domain_registry_audit
+    WHERE action = 'seed' AND fingerprint = fp
+  ) THEN
+    RAISE EXCEPTION 'FAIL: seed audit fingerprint mismatch (got sql fp=%)', fp;
+  END IF;
+  RAISE NOTICE 'PASS: seed audit fingerprint matches sql algorithm';
 
   RAISE NOTICE 'FASE1B0_REGISTRY_SQL_PASSED';
 END $$;

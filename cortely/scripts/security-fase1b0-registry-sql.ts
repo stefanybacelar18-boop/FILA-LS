@@ -1,15 +1,37 @@
 /**
  * Etapa 1.B.0 — aplica migration registry no Postgres local/CI e roda asserts SQL.
+ * Roles + DEFAULT PRIVILEGES (padrão Supabase) ANTES da migration.
+ * O arquivo fase1b0_registry_tests.sql só verifica (sem REVOKE/GRANT).
  */
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 const ROOT = resolve(__dirname, "..");
 const SQL_DIR = join(ROOT, "scripts/sql");
 const MIG_DIR = join(ROOT, "supabase/migrations");
 const EVIDENCE = "/tmp/cortely-fase1b0-registry-sql-evidence.txt";
 const DB = process.env.CORTELY_REGISTRY_TEST_DB || "cortely_fase1b0_registry_test";
+
+const OPS_DOMAINS = [
+  "products",
+  "stock",
+  "cash",
+  "sales",
+  "commissions",
+  "packages",
+  "purchasing",
+  "payables",
+  "receivables",
+  "coupons",
+  "deposits",
+  "campaigns",
+  "waitlist",
+  "reviews",
+  "fiscal",
+  "payment_intents",
+] as const;
 
 const useTcp =
   Boolean(process.env.PGHOST) || Boolean(process.env.PGPASSWORD);
@@ -79,6 +101,30 @@ function ensurePostgres() {
   }
 }
 
+/** Simula roles + DEFAULT PRIVILEGES do Supabase ANTES da migration. */
+function prepareSupabaseLikeRoles(db: string) {
+  psqlCmd(
+    db,
+    `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN BYPASSRLS;
+  END IF;
+END $$;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL ON TABLES TO anon, authenticated;
+`,
+  );
+}
+
 function main() {
   const evidence: string[] = [];
   const note = (l: string) => {
@@ -107,11 +153,15 @@ function main() {
     }
   }
 
+  note("Preparing anon/authenticated/service_role + DEFAULT PRIVILEGES (before migration)…");
+  prepareSupabaseLikeRoles(DB);
+  note("roles + DEFAULT PRIVILEGES OK");
+
   note("Applying migration 20261112_fase1b_00_ops_registry…");
   psqlFileAll(DB, mig);
   note("migration OK");
 
-  note("Running registry SQL asserts…");
+  note("Running registry SQL asserts (verify-only)…");
   let out: string;
   try {
     out = psqlFileAll(DB, tests);
@@ -131,10 +181,25 @@ function main() {
     console.error("missing FASE1B0_REGISTRY_SQL_PASSED");
     process.exit(1);
   }
-  if (passes < 10) {
-    console.error(`expected >=10 PASS notices, got ${passes}`);
+  if (passes < 15) {
+    console.error(`expected >=15 PASS notices, got ${passes}`);
     process.exit(1);
   }
+
+  // Paridade fingerprint TS ↔ SQL (mesmo algoritmo, mesma ordem)
+  const m = out.match(/fingerprint sql=([0-9a-f]{16})/);
+  if (!m) {
+    console.error("missing fingerprint sql= in NOTICE output");
+    process.exit(1);
+  }
+  const sqlFp = m[1];
+  const payload = OPS_DOMAINS.map((d) => `${d}:json:active_json`).join(",");
+  const tsFp = createHash("sha256").update(payload).digest("hex").slice(0, 16);
+  if (sqlFp !== tsFp) {
+    console.error(`fingerprint mismatch sql=${sqlFp} ts=${tsFp}`);
+    process.exit(1);
+  }
+  note(`PASS: fingerprint SQL↔TS parity (${tsFp})`);
 
   writeFileSync(EVIDENCE, evidence.join("\n") + "\nPASSED=true\n", "utf8");
   if (existsSync("/opt/cursor")) {
@@ -145,7 +210,7 @@ function main() {
     );
   }
   note(`EVIDENCE ${EVIDENCE}`);
-  note(`Security fase 1.B.0 registry SQL: PASSED (${passes} asserts)`);
+  note(`Security fase 1.B.0 registry SQL: PASSED (${passes} asserts + fingerprint parity)`);
 }
 
 main();

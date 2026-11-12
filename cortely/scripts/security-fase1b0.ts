@@ -1,10 +1,11 @@
 /**
- * Testes Etapa 1.B.0 — registry (boot, fail-fast, transições) + OpsRepository.
+ * Testes Etapa 1.B.0 — registry (boot fail-fast, transições) + OpsRepository.
  * Executar: npx tsx scripts/security-fase1b0.ts
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 process.env.CORTELY_SESSION_SECRET ??=
   "ci-session-secret-at-least-16-chars";
@@ -43,22 +44,33 @@ async function main() {
   assert.equal(Object.keys(seedJson).length, reg.OPS_DOMAINS.length);
   ok("ops-registry.json all-json com 16 domínios");
 
-  // --- Load sem tabela (arquivo) ---
+  // --- Fingerprint TS (algoritmo canônico) ---
   const fromFile = reg.loadRegistry({
     tableExists: false,
     fileContents: seedText,
   });
   assert.equal(fromFile.loadedFrom, "file");
   assert.equal(fromFile.map.sales.source, "json");
-  ok("load sem tabela usa arquivo all-json");
+  const expectedPayload = reg.OPS_DOMAINS.map(
+    (d) => `${d}:json:active_json`,
+  ).join(",");
+  assert.equal(reg.fingerprintCanonicalPayload(fromFile.map), expectedPayload);
+  const expectedFp = createHash("sha256")
+    .update(expectedPayload)
+    .digest("hex")
+    .slice(0, 16);
+  assert.equal(fromFile.fingerprint, expectedFp);
+  assert.equal(reg.fingerprintFromCanonicalPayload(expectedPayload), expectedFp);
+  ok("fingerprint TS: sha256 hex[:16] na ordem OPS_DOMAINS");
 
   // --- Load com tabela: arquivo ignorado (boot pós-cutover + arquivo all-json) ---
+  const cutoverAt = "2026-11-12T00:00:00.000Z";
   const tableRows = reg.OPS_DOMAINS.map((domain) => ({
     domain,
     source: "postgres" as const,
     state: "active_postgres" as const,
+    cutover_at: cutoverAt,
   }));
-  // ops_core all postgres — payment_intents também postgres neste fixture
   const postCutover = reg.loadRegistry({
     tableExists: true,
     tableRows,
@@ -71,7 +83,7 @@ async function main() {
   note(
     "EVIDENCE boot pós-cutover: arquivo seed all-json presente e ignorado; tabela active_postgres prevalece",
   );
-  ok("Boot pós-cutover + arquivo all-json sobe normalmente (arquivo ignorado)");
+  ok("tabela active_postgres + arquivo all-json → sobe (arquivo ignorado)");
 
   // --- CORTELY_OPS_REGISTRY + tabela → fail-fast ---
   assert.throws(
@@ -85,18 +97,26 @@ async function main() {
       e instanceof reg.RegistryFailFastError &&
       /CORTELY_OPS_REGISTRY/.test((e as Error).message),
   );
-  ok("CORTELY_OPS_REGISTRY + tabela → fail-fast");
+  ok("env + tabela → fail-fast");
 
   // --- ops_core misto → abort ---
-  const mixedMap: Record<string, { source: string; state: string }> = {};
+  const mixedMap: Record<
+    string,
+    { source: string; state: string; cutover_at?: string }
+  > = {};
   for (const d of reg.OPS_DOMAINS) {
     mixedMap[d] = { source: "json", state: "active_json" };
   }
-  mixedMap.sales = { source: "postgres", state: "active_postgres" };
+  mixedMap.sales = {
+    source: "postgres",
+    state: "active_postgres",
+    cutover_at: cutoverAt,
+  };
   assert.throws(
     () => reg.validateRegistryMap(mixedMap as never),
     (e: unknown) =>
-      e instanceof reg.RegistryFailFastError && /ops_core misto/.test((e as Error).message),
+      e instanceof reg.RegistryFailFastError &&
+      /ops_core misto/.test((e as Error).message),
   );
   assert.throws(
     () =>
@@ -106,11 +126,12 @@ async function main() {
           domain,
           source: v.source,
           state: v.state,
+          cutover_at: v.cutover_at,
         })),
       }),
     (e: unknown) => e instanceof reg.RegistryFailFastError,
   );
-  ok("ops_core misto → abort");
+  ok("ops_core misto → fail-fast");
 
   // --- domínio desconhecido → abort ---
   assert.throws(
@@ -152,14 +173,38 @@ async function main() {
   );
   ok("source↔state inválido → abort");
 
+  // --- active_postgres sem cutover_at → abort ---
+  assert.throws(
+    () =>
+      reg.validateRegistryMap({
+        ...Object.fromEntries(
+          reg.OPS_DOMAINS.map((d) => [
+            d,
+            {
+              source: "postgres",
+              state: "active_postgres",
+              cutover_at: cutoverAt,
+            },
+          ]),
+        ),
+        sales: {
+          source: "postgres",
+          state: "active_postgres",
+          cutover_at: null,
+        },
+      } as never),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError &&
+      /cutover_at/.test((e as Error).message),
+  );
+  ok("active_postgres sem cutover_at → fail-fast");
+
   // --- Arquivo/env não promovem postgres ---
-  const promote = JSON.parse(seedText) as Record<
-    string,
-    { source: string; state: string }
-  >;
+  const promote = JSON.parse(seedText) as Record<string, Record<string, unknown>>;
   promote.payment_intents = {
     source: "postgres",
     state: "active_postgres",
+    cutover_at: cutoverAt,
   };
   assert.throws(
     () =>
@@ -218,6 +263,114 @@ async function main() {
   );
   ok("transições permitidas/proibidas (§3.2.3) — função pura");
 
+  // --- resolveRegistryAtBoot: sem Supabase → arquivo ---
+  reg.clearRegistryBootCache();
+  const logs: string[] = [];
+  const bootFile = await reg.resolveRegistryAtBoot({
+    env: {
+      NEXT_PUBLIC_DEMO_MODE: "true",
+    } as unknown as NodeJS.ProcessEnv,
+    readSeedFile: () => seedText,
+    log: (m) => logs.push(m),
+  });
+  assert.equal(bootFile.loadedFrom, "file");
+  assert.equal(bootFile.fingerprint, expectedFp);
+  assert.ok(logs.some((l) => /loadedFrom=file/.test(l)));
+  assert.equal(reg.getCachedRegistrySnapshot()?.fingerprint, expectedFp);
+  ok("boot sem Supabase → arquivo seed");
+
+  // --- resolveRegistryAtBoot: tabela inexistente (42P01) → arquivo ---
+  reg.clearRegistryBootCache();
+  const bootMissing = await reg.resolveRegistryAtBoot({
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+    } as unknown as NodeJS.ProcessEnv,
+    readSeedFile: () => seedText,
+    fetchTable: async () => ({ ok: false, kind: "relation_missing" }),
+    log: () => {},
+  });
+  assert.equal(bootMissing.loadedFrom, "file");
+  ok("boot tabela inexistente → arquivo");
+
+  // --- resolveRegistryAtBoot: erro de rede → fail-fast (nunca arquivo) ---
+  reg.clearRegistryBootCache();
+  await assert.rejects(
+    () =>
+      reg.resolveRegistryAtBoot({
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+        } as unknown as NodeJS.ProcessEnv,
+        readSeedFile: () => seedText,
+        fetchTable: async () => ({
+          ok: false,
+          kind: "error",
+          message: "ENOTFOUND: network",
+        }),
+        log: () => {},
+      }),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError &&
+      /fail-fast/.test((e as Error).message) &&
+      /network|ENOTFOUND|ops_domain_registry/.test((e as Error).message),
+  );
+  ok("boot erro de rede → fail-fast (sem cair no arquivo)");
+
+  // --- resolveRegistryAtBoot: throw na fetch → fail-fast ---
+  await assert.rejects(
+    () =>
+      reg.resolveRegistryAtBoot({
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+        } as unknown as NodeJS.ProcessEnv,
+        readSeedFile: () => {
+          throw new Error("seed should not be read on network throw");
+        },
+        fetchTable: async () => {
+          throw new Error("timeout");
+        },
+        log: () => {},
+      }),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError && /timeout/.test((e as Error).message),
+  );
+  ok("boot throw/timeout → fail-fast");
+
+  // --- resolveRegistryAtBoot: tabela ok + env → fail-fast ---
+  await assert.rejects(
+    () =>
+      reg.resolveRegistryAtBoot({
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+          CORTELY_OPS_REGISTRY: seedText,
+        } as unknown as NodeJS.ProcessEnv,
+        fetchTable: async () => ({ ok: true, rows: tableRows }),
+        log: () => {},
+      }),
+    (e: unknown) =>
+      e instanceof reg.RegistryFailFastError &&
+      /CORTELY_OPS_REGISTRY/.test((e as Error).message),
+  );
+  ok("boot env + tabela → fail-fast");
+
+  // --- resolveRegistryAtBoot: tabela active_postgres → sobe ---
+  reg.clearRegistryBootCache();
+  const bootTable = await reg.resolveRegistryAtBoot({
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+    } as unknown as NodeJS.ProcessEnv,
+    readSeedFile: () => seedText,
+    fetchTable: async () => ({ ok: true, rows: tableRows }),
+    log: (m) => logs.push(m),
+  });
+  assert.equal(bootTable.loadedFrom, "table");
+  assert.equal(bootTable.map.sales.source, "postgres");
+  ok("boot tabela active_postgres + arquivo all-json → sobe");
+
   // --- OpsRepository delega com all-json ---
   const sessionBarbershopId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
   const repo = createOpsRepository({
@@ -227,9 +380,10 @@ async function main() {
   assert.equal(repo.sessionBarbershopId, sessionBarbershopId);
   assert.equal(repo.source("sales"), "json");
   const store = repo.jsonStore;
+  // Mesmo módulo (imports relativos) — identidade funcional + referência
+  assert.equal(typeof store.listProducts, "function");
+  assert.deepEqual(store.listProducts(), opsStore.listProducts());
   assert.equal(store, opsStore);
-  const products = store.listProducts();
-  assert.ok(Array.isArray(products));
   ok("OpsRepository com ops_core=json delega ao opsStore");
 
   // --- OpsRepository erro se domínio postgres ---
@@ -257,6 +411,21 @@ async function main() {
     (e: unknown) => e instanceof Error && /sessionBarbershopId/.test(e.message),
   );
   ok("OpsRepository exige barbershop_id da sessão (sem SHOP_ID)");
+
+  // --- instrumentation registra boot fail-fast (nodejs) ---
+  const instr = readFileSync(
+    join(process.cwd(), "src", "instrumentation.ts"),
+    "utf8",
+  );
+  const instrNode = readFileSync(
+    join(process.cwd(), "src", "instrumentation.node.ts"),
+    "utf8",
+  );
+  assert.match(instr, /NEXT_RUNTIME/);
+  assert.match(instr, /instrumentation\.node/);
+  assert.match(instrNode, /resolveRegistryAtBoot/);
+  assert.match(instrNode, /RegistryFailFastError/);
+  ok("instrumentation.ts registra boot fail-fast (nodejs)");
 
   note(`Security fase 1.B.0 registry: PASSED (${passed} asserts)`);
 }
