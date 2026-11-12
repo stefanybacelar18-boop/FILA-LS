@@ -1,5 +1,5 @@
 /**
- * Cortely 1.B.0–1.B.4 — fachada OpsRepository.
+ * Cortely 1.B.0–1.B.5 — fachada OpsRepository.
  * Com ops_core=json delega ao opsStore atual sem mudar comportamento.
  * PG adapters só se registry=postgres (impossível em prod nesta etapa).
  * Código novo usa barbershop_id da sessão — sem SHOP_ID neste módulo.
@@ -23,6 +23,11 @@ import {
   createPgCommissionsRepository,
   type CommissionsRepository,
 } from "./commissions-repository";
+import {
+  createJsonPackagesRepository,
+  createPgPackagesRepository,
+  type PackagesRepository,
+} from "./packages-repository";
 import {
   createJsonProductsStockRepository,
   createPgProductsStockRepository,
@@ -151,6 +156,22 @@ export class OpsRepository {
       return createPgCommissionsRepository(this.pg, this.sessionBarbershopId);
     }
     return createJsonCommissionsRepository(opsStore, this.sessionBarbershopId);
+  }
+
+  /**
+   * Adapter pacotes/assinaturas.
+   * PG só se packages=postgres (impossível em prod nesta etapa — prep only).
+   */
+  packages(): PackagesRepository {
+    if (this.source("packages") === "postgres") {
+      if (!this.pg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: adapter PG de pacotes exige cliente Postgres",
+        );
+      }
+      return createPgPackagesRepository(this.pg, this.sessionBarbershopId);
+    }
+    return createJsonPackagesRepository(opsStore, this.sessionBarbershopId);
   }
 }
 

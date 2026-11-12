@@ -535,7 +535,7 @@ ops_idempotency_keys (
 2. `fase1b_02` — sale tenant columns (`sale_items`/`sale_payments`) + payments `tendered_amount`/`applied_amount` + `cash_sessions`/`cash_movements` (`kind`/`direction`, troco CHECK) + `ops_*_cash` (EXECUTE só `service_role`)  
 2g. `fase1b_03g` — gateway isolado: `payment_intents` + `payment_provider_accounts` + events/quarantine (P16) + `ops_apply_payment_webhook` (sem efeito de negócio)  
 3. `fase1b_04` — commissions (unique sale_item + clawback/reversal P15) + advances/payouts/goals + `ops_accrue/reverse/clawback/pay/ranking`  
-4. `fase1b_05` — packages/subscriptions  
+4. `fase1b_05` — packages/subscriptions (`service_package_services` substitui array `service_ids` no cutover; coluna legada mantida na prep) + `ops_sell/consume/revert/cancel` (P25–P27 documentados)  
 5. `fase1b_06` — purchase_orders  
 6. `fase1b_07` — coupons, deposits (intents/events já em 03g; restante)  
 7. `fase1b_07` — `ops_idempotency_keys`, `ops_shop_id_map`, audit grants  
@@ -755,6 +755,9 @@ Para cada `barbershop_id`:
 | P22 | **Remover** de `createPaymentIntent` o caminho de credencial global (`MERCADOPAGO_ACCESS_TOKEN` / `ASAAS_API_KEY`) antes de ligar um provedor real (D12) — decidir com a P5. |
 | P23 | **ETL comissões legadas (antes da 1.B.8):** JSON tem comissão por venda (não por item) e zera `amount` em estornos — definir mapeamento (rateio por item ou entries legadas marcadas) sem perder histórico. |
 | P24 | **Vales no PG:** vale maior que a comissão desconta só até o bruto; saldo do vale continua em aberto (dedução parcial). JSON baixa o vale inteiro (defeito conhecido) — **não muda nesta etapa**. |
+| P25 | **JSON `sellPackageToClient` (defeito, não muda nesta etapa):** cria créditos **antes** da venda; se `createSale` falhar (ex.: caixa fechado), cliente fica com créditos sem pagar. Pagamento fixo em Pix. PG: `ops_sell_package` exige venda `paid` com item `package` já existente. |
+| P26 | **JSON `consumePackageCredit` (defeito, não muda nesta etapa):** sem `appointment_id`, sem trava; dois consumos simultâneos podem passar do saldo. PG: `FOR UPDATE` + `client_package_consumptions` + unique parcial por agendamento. |
+| P27 | **JSON `subscribeClient` (defeito, não muda nesta etapa):** cria assinatura sem cobrança. Cobrança recorrente depende da P5 — fora desta etapa. |
 
 ---
 

@@ -210,7 +210,8 @@ export type ClientPackage = {
   credits_total: number;
   credits_left: number;
   expires_at: string;
-  status: "active" | "expired" | "depleted";
+  /** `canceled` só no adapter PG (1.B.5); JSON não emite. */
+  status: "active" | "expired" | "depleted" | "canceled";
   purchased_at: string;
 };
 
