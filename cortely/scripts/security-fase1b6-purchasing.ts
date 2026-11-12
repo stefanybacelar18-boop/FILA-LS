@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import pg from "pg";
 import {
+  PurchasingError,
   createJsonPayablesRepository,
   createJsonPurchasingRepository,
   createPgPayablesRepository,
@@ -171,6 +172,39 @@ async function main() {
   assert.equal(Number(pay.rows[0].amount), 21);
   assert.equal(String(pay.rows[0].purchase_order_id), order.id);
   ok("PG: criar OC + receber (estoque + payable)");
+
+  // Conta de OC: amount imutável; description/due_date ok
+  await assert.rejects(
+    () =>
+      pgPay.upsertPayable({
+        id: String(recv.payable_id),
+        description: "edit amount",
+        amount: 99,
+        due_date: new Date().toISOString().slice(0, 10),
+        category: "Compra",
+      }),
+    (e: unknown) => e instanceof PurchasingError && e.status === 409 && /FROM_PO/.test(e.message),
+  );
+  const edited = await pgPay.upsertPayable({
+    id: String(recv.payable_id),
+    description: "edit desc",
+    amount: 21,
+    due_date: new Date().toISOString().slice(0, 10),
+    category: "Compra",
+  });
+  assert.equal(edited.description, "edit desc");
+  assert.equal(edited.amount, 21);
+  ok("PG: payable de OC — amount barrado, description ok");
+
+  // Trigger: purchase_order_id imutável em open (UPDATE direto service_role)
+  await assert.rejects(
+    () =>
+      pool.query(`UPDATE public.payables SET purchase_order_id = NULL WHERE id=$1`, [
+        recv.payable_id,
+      ]),
+    (e: unknown) => /imutáv|payables/i.test(String((e as Error)?.message || e)),
+  );
+  ok("PG: UPDATE purchase_order_id de open → bloqueado");
 
   const manual = await pgPay.upsertPayable({
     description: "Luz",

@@ -212,7 +212,13 @@ BEGIN
     RETURN NEW;
   END IF;
   IF OLD.status = NEW.status AND OLD.status = 'open' THEN
-    RETURN NEW; -- editar open ok
+    -- editar open ok, mas tenant e vínculo com OC são imutáveis
+    IF NEW.barbershop_id IS DISTINCT FROM OLD.barbershop_id
+       OR NEW.purchase_order_id IS DISTINCT FROM OLD.purchase_order_id
+    THEN
+      RAISE EXCEPTION 'payables: barbershop_id/purchase_order_id imutáveis';
+    END IF;
+    RETURN NEW;
   END IF;
   RAISE EXCEPTION 'payables: só open→paid / open→canceled (ou editar open)';
 END;
@@ -379,9 +385,12 @@ BEGIN
     RAISE EXCEPTION 'PO_NOT_ORDERED' USING ERRCODE = 'PT409';
   END IF;
 
+  -- ORDER BY product_id: dois receives de OCs distintas com os mesmos
+  -- produtos travam stock na mesma ordem (evita deadlock entre txs).
   FOR v_item IN
     SELECT * FROM public.purchase_order_items i
     WHERE i.purchase_order_id = p_po_id AND i.barbershop_id = p_barbershop_id
+    ORDER BY i.product_id
   LOOP
     PERFORM public.ops_adjust_stock(
       p_barbershop_id,
@@ -494,6 +503,13 @@ BEGIN
     END IF;
     IF v_row.status <> 'open' THEN
       RAISE EXCEPTION 'PAYABLE_NOT_OPEN' USING ERRCODE = 'PT409';
+    END IF;
+    -- Conta gerada por OC: amount imutável (deve bater com total da OC).
+    -- description / due_date / category podem mudar.
+    IF v_row.purchase_order_id IS NOT NULL
+       AND p_amount IS DISTINCT FROM v_row.amount
+    THEN
+      RAISE EXCEPTION 'PAYABLE_FROM_PO' USING ERRCODE = 'PT409';
     END IF;
     UPDATE public.payables AS p
     SET description = p_description,

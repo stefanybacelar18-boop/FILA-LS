@@ -120,6 +120,43 @@ BEGIN
     ELSE RAISE; END IF;
   END;
 
+  -- Conta de OC: amount imutável via upsert; description/due_date ok
+  BEGIN
+    PERFORM public.ops_upsert_payable(
+      shop_a, pay_id, 'Ordem de compra editada', 99.99, CURRENT_DATE, 'Compra', 'owner'
+    );
+    RAISE EXCEPTION 'FAIL: upsert amount de payable PO';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%FROM_PO%' OR SQLSTATE = 'PT409' THEN
+      RAISE NOTICE 'PASS: upsert amount de payable PO → 409';
+    ELSE RAISE; END IF;
+  END;
+  PERFORM public.ops_upsert_payable(
+    shop_a, pay_id, 'Ordem de compra editada', 24.11, CURRENT_DATE + 7, 'Compra', 'owner'
+  );
+  IF (SELECT description FROM public.payables WHERE id = pay_id) <> 'Ordem de compra editada' THEN
+    RAISE EXCEPTION 'FAIL: upsert description de payable PO';
+  END IF;
+  RAISE NOTICE 'PASS: upsert description/due_date de payable PO ok; amount barrado';
+
+  -- Trigger: barbershop_id / purchase_order_id imutáveis em conta open
+  BEGIN
+    UPDATE public.payables SET barbershop_id = shop_b WHERE id = pay_id;
+    RAISE EXCEPTION 'FAIL: mudar barbershop_id de open';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%imutáv%' OR SQLERRM LIKE '%payables%' THEN
+      RAISE NOTICE 'PASS: UPDATE barbershop_id de open → bloqueado';
+    ELSE RAISE; END IF;
+  END;
+  BEGIN
+    UPDATE public.payables SET purchase_order_id = NULL WHERE id = pay_id;
+    RAISE EXCEPTION 'FAIL: limpar purchase_order_id de open';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%imutáv%' OR SQLERRM LIKE '%payables%' THEN
+      RAISE NOTICE 'PASS: UPDATE purchase_order_id de open → bloqueado';
+    ELSE RAISE; END IF;
+  END;
+
   -- Pay payable
   PERFORM public.ops_pay_payable(shop_a, pay_id, 'owner');
   BEGIN
