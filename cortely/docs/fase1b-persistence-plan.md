@@ -20,7 +20,7 @@
 | D3 | **`ops_core`** é a **única unidade de cutover** na 1.B.3: une o antigo sale_graph + oc_graph + package_graph (`sales`, `products`, `stock`, `cash`, `commissions`, `purchasing`, `payables`, `packages`). Proibida execução financeira partida JSON+PG. |
 | D3a | **Prep ≠ cutover.** Schema/adapters/testes (incl. purchasing/payables/packages) em PG **antes** da 1.B.3, sem alterar fonte oficial em produção. |
 | D3b | **Fail-fast no boot:** combinações inválidas **impedem** boot/execução — zero side-effects. |
-| D4 | Venda, pagamento (split) e movimento de caixa **separados**. `sale_payments`: `tendered_amount` + `applied_amount`. Troco = `cash_movements` de saída (`reason=change`) **só** em cash. Invariantes: `Σ applied_amount = sales.total`; `change = Σ(tendered − applied)` **apenas cash**; `tendered >= applied`; troco só cash. Estornos = **nova linha** compensatória — sem `UPDATE`/`DELETE` destrutivo. Ver §4.2. |
+| D4 | Venda, pagamento (split) e movimento de caixa **separados**. `sale_payments`: `tendered_amount` + `applied_amount`. Troco = `cash_movements` de saída (`kind=change`) **só** em cash. Invariantes: `Σ applied_amount = sales.total`; `change = Σ(tendered − applied)` **apenas cash**; `tendered >= applied`; troco só cash. Estornos = **nova linha** compensatória — sem `UPDATE`/`DELETE` destrutivo. Ver §4.2. **Nota 1.B.2:** o enum do DDL original chamado `reason` passou a chamar-se **`kind`**; a coluna `reason` permanece como descrição livre. |
 | D5 | Multi-tenant: FKs **compostas** com `barbershop_id`; backfill → UNIQUE → FK → índices → RLS FORCE; preservar 1.A. |
 | D6 | Comissão paga: bloquear estorno até clawback (default). Reversão/clawback = **nova linha**; unique ativo `(barbershop_id, sale_item_id, barber_id)`; `UNIQUE (clawback_of) WHERE status='clawback'`; FK composta em `clawback_of`. |
 | D7 | Gateway: intents com `barbershop_id NOT NULL`, RLS, FKs compostas; assinatura **antes** de escrita; tenant do **intent**; `UNIQUE (provider, provider_event_id)`; intent inexistente / tenant inconsistente / schema inválido → **`payment_webhook_quarantine`** (sem tenant, sem FK, só service role). Passos 4–6 do pipeline em **uma TX**. |
@@ -299,7 +299,7 @@ sale_payments (
 1. **`Σ sale_payments.applied_amount = sales.total`** (venda `paid`).  
 2. **`change = Σ (tendered_amount − applied_amount)`** calculado **apenas** sobre linhas `method = 'cash'`.  
 3. **`tendered_amount >= applied_amount`** em toda linha.  
-4. **Troco só em cash** — meios não-cash não geram `reason='change'`.
+4. **Troco só em cash** — meios não-cash não geram `kind='change'`.
 
 **DDL `cash_movements`:**
 
@@ -310,19 +310,21 @@ cash_movements (
   cash_session_id UUID NOT NULL,
   sale_payment_id UUID NULL,
   direction TEXT NOT NULL CHECK (direction IN ('in','out')),
-  reason TEXT NOT NULL CHECK (reason IN ('sale_cash_in','change','manual_in','manual_out','refund_out','refund_in')),
+  kind TEXT NOT NULL CHECK (kind IN ('sale_cash_in','change','manual_in','manual_out','refund_out','refund_in')),
+  reason TEXT,                         -- descrição livre (UI); NÃO é o enum
   amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
   created_at TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (id),
   UNIQUE (id, barbershop_id),
   FOREIGN KEY (cash_session_id, barbershop_id)
-    REFERENCES cash_sessions (id, barbershop_id),
+    REFERENCES cash_sessions (id, barbershop_id) ON DELETE RESTRICT,
   FOREIGN KEY (sale_payment_id, barbershop_id)
     REFERENCES sale_payments (id, barbershop_id),
-  CHECK (reason <> 'change' OR sale_payment_id IS NOT NULL),
-  CHECK (reason <> 'change' OR direction = 'out')
+  CHECK (kind <> 'change' OR sale_payment_id IS NOT NULL),
+  CHECK (kind <> 'change' OR direction = 'out')
 )
--- RLS ENABLE+FORCE por barbershop_id
+-- RLS ENABLE+FORCE por barbershop_id; append-only (sem UPDATE/DELETE)
+-- Nota 1.B.2: o nome "reason" do DDL original §4.2 virou a coluna "kind".
 ```
 
 Relação §4.1: um `sale_payment` cash pode ter **até 2** movements (entrada + troco) → `sale_payments 1──0..2 cash_movements`.
@@ -503,8 +505,8 @@ ops_idempotency_keys (
 ### 4.8 Migrations planejadas (repo only — **não criar/aplicar agora**)
 
 0. **`fase1b_00`** — `ops_domain_registry` + `ops_domain_registry_audit` + grants service_role + seed all-json  
-1. `fase1b_01` — sale tenant columns + FK composta + RLS  
-2. `fase1b_02` — payments `tendered_amount`/`applied_amount` + `cash_movements` (change CHECK)  
+1. `fase1b_01` — products/stock/inventory (FKs compostas, CHECKs, `ops_adjust_stock` / `ops_register_inventory_count`)  
+2. `fase1b_02` — sale tenant columns (`sale_items`/`sale_payments`) + payments `tendered_amount`/`applied_amount` + `cash_sessions`/`cash_movements` (`kind`/`direction`, troco CHECK) + `ops_*_cash` (EXECUTE só `service_role`)  
 3. `fase1b_03` — commissions (unique sale_item + clawback) + advances  
 4. `fase1b_04` — packages/subscriptions  
 5. `fase1b_05` — purchase_orders  
@@ -603,7 +605,7 @@ Unique por id. Quarentena se:
 4. cash_sessions  
 5. sales  
 6. sale_items, sale_payments (`tendered_amount`/`applied_amount`)  
-7. cash_movements (incl. `reason=change` → `sale_payment_id`)  
+7. cash_movements (incl. `kind=change` → `sale_payment_id`)  
 8. stock_movements, inventory_counts  
 9. commission_rules → commission_entries (por sale_item)  
 10. staff_advances  
@@ -618,7 +620,7 @@ Unique por id. Quarentena se:
 Para cada `barbershop_id`:
 - `#sales` / Σ `total`  
 - **`Σ applied_amount = Σ total`** (paid)  
-- **`Σ (tendered − applied)` só cash = Σ change / movements `reason=change`**  
+- **`Σ (tendered − applied)` só cash = Σ change / movements `kind=change`**  
 - Caixa: applied por método vs movements  
 - stock; commissions unique ok  
 - intents paid vs aplicados em PG  
@@ -654,7 +656,7 @@ Para cada `barbershop_id`:
 | **Webhook** | Assinatura; tenant do intent; event_id unique; quarantine sem tenant; reprocessamento; TX 4–6 atômica |
 | **1.B.3-G** | paid não cria sale/deposit JSON |
 | **createSale pós-ops_core** | Σ applied = total; tendered≥applied; change só cash; 0..2 movements |
-| **Troco DDL** | `reason=change` exige `sale_payment_id`; direction=out |
+| **Troco DDL** | `kind=change` exige `sale_payment_id`; direction=out |
 | **Estorno** | Nova linha; sem DELETE destrutivo |
 | **Comissão** | Unique (barbershop, sale_item, barber); UNIQUE clawback_of; FK composta |
 | **Rollback** | Pós flip `active_postgres`: registry permanece postgres; sem apply intent→JSON |
@@ -718,8 +720,8 @@ Para cada `barbershop_id`:
 | P14 | Coupons/deposits que afetam venda: incluir em `ops_core` **ou** bloquear o uso até a 1.B.7 — **decidir antes da 1.B.3** |
 | P15 | Reversão de comissão `pending`: coluna `reversal_of` + UNIQUE e payout excluindo entries revertidas — **decidir na 1.B.4** |
 | P16 | `UNIQUE (provider, provider_event_id)` na quarentena com contador de tentativas — **decidir na 1.B.3-G** |
-| P17 | `cash_movements` com `reason=sale_cash_in`: `amount = tendered_amount` do `sale_payment` cash correspondente |
-| P18 | Escrita de estoque/financeiro só via service role (servidor); revogar de `authenticated` o `EXECUTE` das funções `ops_*`, o `INSERT` em `stock_movements` e o `UPDATE` de `products.stock_qty` — **decidir antes da 1.B.3**. Só registro; não implementar na 1.B.1. |
+| P17 | `cash_movements` com `kind=sale_cash_in`: `amount = tendered_amount` do `sale_payment` cash correspondente |
+| P18 | Escrita de estoque/financeiro só via service role (servidor); revogar de `authenticated` o `EXECUTE` das funções `ops_*`, o `INSERT` em `stock_movements` e o `UPDATE` de `products.stock_qty` — **decidir antes da 1.B.3**. **1.B.2 antecipa só para funções novas de caixa** (`ops_open_cash`, `ops_add_cash_movement`, `ops_cash_conference`, `ops_close_cash`): EXECUTE concedido **somente** a `service_role` (nem `anon` nem `authenticated`). |
 
 ---
 

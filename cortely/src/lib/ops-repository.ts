@@ -1,7 +1,8 @@
 /**
- * Cortely 1.B.0/1.B.1 — fachada OpsRepository.
+ * Cortely 1.B.0/1.B.1/1.B.2 — fachada OpsRepository.
  * Com ops_core=json delega ao opsStore atual sem mudar comportamento.
  * 1.B.1: ProductsStockRepository JSON (prod) ou PG (só se registry=postgres).
+ * 1.B.2: CashRepository JSON (prod) ou PG (só se cash=postgres — impossível em prod).
  * Código novo usa barbershop_id da sessão — sem SHOP_ID neste módulo.
  */
 
@@ -13,6 +14,11 @@ import {
   type RegistrySnapshot,
   sourceOf,
 } from "./ops-registry";
+import {
+  createJsonCashRepository,
+  createPgCashRepository,
+  type CashRepository,
+} from "./cash-repository";
 import {
   createJsonProductsStockRepository,
   createPgProductsStockRepository,
@@ -31,7 +37,7 @@ export type OpsRepositoryOptions = {
   registry: RegistrySnapshot;
   /** Tenant da sessão — obrigatório em código novo (D8). */
   sessionBarbershopId: string;
-  /** Cliente PG opcional — só usado se products/stock estiverem em postgres. */
+  /** Cliente PG opcional — só usado se products/stock/cash estiverem em postgres. */
   pg?: PgQueryable;
 };
 
@@ -109,6 +115,22 @@ export class OpsRepository {
       opsStore,
       this.sessionBarbershopId,
     );
+  }
+
+  /**
+   * Adapter caixa.
+   * PG só se cash=postgres (impossível em prod nesta etapa — prep only).
+   */
+  cash(): CashRepository {
+    if (this.source("cash") === "postgres") {
+      if (!this.pg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: adapter PG de caixa exige cliente Postgres",
+        );
+      }
+      return createPgCashRepository(this.pg, this.sessionBarbershopId);
+    }
+    return createJsonCashRepository(opsStore, this.sessionBarbershopId);
   }
 }
 
