@@ -1,7 +1,7 @@
 /**
- * Cortely 1.B.0 — fachada OpsRepository.
+ * Cortely 1.B.0/1.B.1 — fachada OpsRepository.
  * Com ops_core=json delega ao opsStore atual sem mudar comportamento.
- * Qualquer domínio postgres nesta etapa → erro explícito (adapters PG ainda não existem).
+ * 1.B.1: ProductsStockRepository JSON (prod) ou PG (só se registry=postgres).
  * Código novo usa barbershop_id da sessão — sem SHOP_ID neste módulo.
  */
 
@@ -13,6 +13,12 @@ import {
   type RegistrySnapshot,
   sourceOf,
 } from "./ops-registry";
+import {
+  createJsonProductsStockRepository,
+  createPgProductsStockRepository,
+  type PgQueryable,
+  type ProductsStockRepository,
+} from "./products-stock-repository";
 
 export class OpsRepositoryError extends Error {
   constructor(message: string) {
@@ -25,11 +31,14 @@ export type OpsRepositoryOptions = {
   registry: RegistrySnapshot;
   /** Tenant da sessão — obrigatório em código novo (D8). */
   sessionBarbershopId: string;
+  /** Cliente PG opcional — só usado se products/stock estiverem em postgres. */
+  pg?: PgQueryable;
 };
 
 export class OpsRepository {
   readonly sessionBarbershopId: string;
   private readonly registry: RegistrySnapshot;
+  private readonly pg: PgQueryable | undefined;
 
   constructor(opts: OpsRepositoryOptions) {
     if (!opts.sessionBarbershopId || !opts.sessionBarbershopId.trim()) {
@@ -39,29 +48,28 @@ export class OpsRepository {
     }
     this.sessionBarbershopId = opts.sessionBarbershopId;
     this.registry = opts.registry;
+    this.pg = opts.pg;
   }
 
   source(domain: OpsDomain) {
     return sourceOf(this.registry, domain);
   }
 
-  /** Garante que o domínio ainda é json (1.B.0 — sem adapters PG). */
+  /** Garante que o domínio ainda é json (sem adapters PG em produção 1.B.1). */
   requireJson(domain: OpsDomain): void {
     if (this.source(domain) === "postgres") {
       throw new OpsRepositoryError(
-        `OpsRepository: domínio '${domain}' está em postgres, mas adapters PG ainda não existem na 1.B.0`,
+        `OpsRepository: domínio '${domain}' está em postgres`,
       );
     }
   }
 
-  /** Antes de delegar ao opsStore, todos os domínios conhecidos devem ser json. */
   private assertAllJsonForDelegation(): void {
     for (const domain of OPS_DOMAINS) {
       this.requireJson(domain);
     }
   }
 
-  /** ops_core homogêneo json (fail-fast de uso). */
   assertOpsCoreJson(): void {
     for (const domain of OPS_CORE_DOMAINS) {
       this.requireJson(domain);
@@ -70,11 +78,37 @@ export class OpsRepository {
 
   /**
    * Acesso ao opsStore legado — só quando registry all-json.
-   * Não altera comportamento do store; apenas bloqueia se houver postgres.
+   * Passagem direta para rotas (1.B.1) sem mudar comportamento.
    */
   get jsonStore(): typeof opsStore {
     this.assertAllJsonForDelegation();
     return opsStore;
+  }
+
+  /**
+   * Adapter products/stock.
+   * PG só se registry estiver em postgres (impossível em prod nesta etapa).
+   */
+  productsStock(): ProductsStockRepository {
+    const productsPg = this.source("products") === "postgres";
+    const stockPg = this.source("stock") === "postgres";
+    if (productsPg || stockPg) {
+      if (productsPg !== stockPg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: products e stock devem estar na mesma fonte",
+        );
+      }
+      if (!this.pg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: adapter PG exige cliente Postgres",
+        );
+      }
+      return createPgProductsStockRepository(this.pg, this.sessionBarbershopId);
+    }
+    return createJsonProductsStockRepository(
+      opsStore,
+      this.sessionBarbershopId,
+    );
   }
 }
 

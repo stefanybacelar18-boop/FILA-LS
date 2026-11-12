@@ -494,7 +494,7 @@ async function main() {
   assert.throws(
     () => repoPg.jsonStore,
     (e: unknown) =>
-      e instanceof Error && /adapters PG ainda não existem/.test(e.message),
+      e instanceof Error && /está em postgres/.test(e.message),
   );
   ok("OpsRepository: domínio postgres → erro explícito");
 

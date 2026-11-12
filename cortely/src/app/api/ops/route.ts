@@ -7,7 +7,7 @@ import {
   verifyClientProof,
 } from "@/lib/auth";
 import { getAppointment } from "@/lib/data";
-import { opsStore } from "@/lib/ops-store";
+import { getOpsStoreViaRepository } from "@/lib/ops-route-store";
 import { checkRateLimit, clientIp, sensitiveIpKey } from "@/lib/rate-limit";
 import { onlyDigits } from "@/lib/utils";
 
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
         { status: 403 },
       );
     }
+    const opsStore = getOpsStoreViaRepository(session!.barbershop_id);
     const view = req.nextUrl.searchParams.get("view") ?? "snapshot";
 
     if (view === "reports") {
@@ -140,6 +141,10 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
+    if (!session?.barbershop_id) {
+      return NextResponse.json({ error: "Faça login" }, { status: 401 });
+    }
+    const opsStore = getOpsStoreViaRepository(session.barbershop_id);
 
     switch (action) {
       case "open_cash": {
@@ -684,8 +689,7 @@ export async function POST(req: NextRequest) {
 }
 
 function auditRequest(actor: string, body: Record<string, unknown>) {
-  opsStore.snapshot();
-  // reuse openCash audit path via creating a no-op payable? simpler: just touch campaigns
+  // no-op audit hook (mantido por compatibilidade)
   void actor;
   void body;
 }

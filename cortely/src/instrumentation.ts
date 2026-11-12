@@ -1,6 +1,6 @@
 /**
  * Boot hook: carrega o registry com fail-fast (runtime nodejs).
- * Ligação das rotas ao OpsRepository fica para a 1.B.1 — não altera rotas aqui.
+ * Rotas usam OpsRepository via ops-route-store (passagem json na 1.B.1).
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;

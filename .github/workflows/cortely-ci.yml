@@ -101,13 +101,24 @@ jobs:
           CORTELY_REGISTRY_TEST_DB: cortely_fase1b0_registry_test
         run: npx tsx scripts/security-fase1b0-registry-sql.ts
 
+      - name: Security fase 1.B.1 products/stock (SQL + adapters)
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
+          NEXT_PUBLIC_DEMO_MODE: "true"
+          CORTELY_FASE1B1_TEST_DB: cortely_fase1b1_stock_test
+        run: npx tsx scripts/security-fase1b1-products-stock.ts
+
       - name: Production build
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
           NEXT_PUBLIC_DEMO_MODE: "true"
         run: npm run build
 
-      - name: Smoke fase 1.B.0 boot fail-fast (next start)
+      - name: Smoke fase 1.B.0/1.B.1 boot fail-fast (next start)
         env:
           CORTELY_SESSION_SECRET: ci-session-secret-at-least-16-chars
           NEXT_PUBLIC_DEMO_MODE: "true"

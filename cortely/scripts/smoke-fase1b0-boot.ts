@@ -6,6 +6,8 @@
  * Observa e registra o comportamento (exit do processo vs HTTP 5xx).
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -183,6 +185,121 @@ function isFailFastOutcome(r: RunResult): boolean {
   return false;
 }
 
+async function runNextStartWithPosts(opts: {
+  label: string;
+  env: Record<string, string | undefined>;
+  port: number;
+  waitMs: number;
+  postCount: number;
+}): Promise<RunResult & { postStatuses: Array<number | null> }> {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...opts.env,
+    PORT: String(opts.port),
+    HOSTNAME: HOST,
+  };
+  delete env.NEXT_PUBLIC_SUPABASE_URL;
+  delete env.SUPABASE_SERVICE_ROLE_KEY;
+  env.NEXT_PUBLIC_SUPABASE_URL = "";
+  env.SUPABASE_SERVICE_ROLE_KEY = "";
+
+  const child: ChildProcess = spawn(
+    process.execPath,
+    [require.resolve("next/dist/bin/next"), "start", "-H", HOST, "-p", String(opts.port)],
+    { cwd: process.cwd(), env, stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (b) => {
+    stdout += String(b);
+  });
+  child.stderr?.on("data", (b) => {
+    stderr += String(b);
+  });
+
+  let exitCode: number | null = null;
+  let signal: NodeJS.Signals | null = null;
+  const exitPromise = new Promise<void>((resolve) => {
+    child.on("exit", (code, sig) => {
+      exitCode = code;
+      signal = sig;
+      resolve();
+    });
+  });
+
+  const deadline = Date.now() + opts.waitMs;
+  let httpStatus: number | null = null;
+  let httpError: string | null = null;
+  while (Date.now() < deadline) {
+    if (exitCode !== null) break;
+    try {
+      const res = await fetch(`http://${HOST}:${opts.port}/`, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(1500),
+      });
+      httpStatus = res.status;
+      break;
+    } catch (e) {
+      httpError = e instanceof Error ? e.message : String(e);
+      await sleep(250);
+    }
+  }
+
+  const postStatuses: Array<number | null> = [];
+  for (let i = 0; i < opts.postCount; i++) {
+    try {
+      const res = await fetch(`http://${HOST}:${opts.port}/api/ops`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "adjust_stock",
+          product_id: "66666666-6666-4666-8666-666666666661",
+          delta: -1,
+          reason: `smoke-write-${i}`,
+        }),
+        signal: AbortSignal.timeout(3000),
+      });
+      postStatuses.push(res.status);
+    } catch {
+      postStatuses.push(null);
+    }
+  }
+
+  if (exitCode === null) {
+    child.kill("SIGTERM");
+    const killDeadline = Date.now() + 5000;
+    while (exitCode === null && Date.now() < killDeadline) {
+      await sleep(100);
+    }
+    if (exitCode === null) {
+      child.kill("SIGKILL");
+      await exitPromise;
+    } else {
+      await exitPromise;
+    }
+  } else {
+    await exitPromise;
+  }
+
+  const observed =
+    httpStatus !== null ? `http_${httpStatus}` : `no_http exit=${exitCode}`;
+  note(`[${opts.label}] observed=${observed} posts=${postStatuses.join(",")}`);
+  if (stdout.trim()) note(`[${opts.label}] stdout_tail=${stdout.trim().slice(-400)}`);
+  if (stderr.trim()) note(`[${opts.label}] stderr_tail=${stderr.trim().slice(-400)}`);
+
+  return {
+    exitCode,
+    signal,
+    stdout,
+    stderr,
+    httpStatus,
+    httpError,
+    observed,
+    postStatuses,
+  };
+}
+
 async function main() {
   note("=== Cortely fase1b0 boot smoke (next start) ===");
   const secret = process.env.CORTELY_SESSION_SECRET || "ci-session-secret-at-least-16-chars";
@@ -232,9 +349,67 @@ async function main() {
   }
   note("PASS: all-json GET / → 200");
 
+  // 1.B.1: registry inválido + POST /api/ops ×3 → 5xx; JSON store intacto
+  await sleep(500);
+  const dataDir = `/tmp/cortely-smoke-fase1b1-${Date.now()}`;
+  mkdirSync(dataDir, { recursive: true });
+  const storePath = `${dataDir}/cortely-store.json`;
+  const marker = JSON.stringify(
+    {
+      ops: { products: [{ id: "smoke-marker", stock_qty: 42 }] },
+      updated_at: "2026-11-12T00:00:00.000Z",
+    },
+    null,
+    2,
+  );
+  writeFileSync(storePath, marker, "utf8");
+  const hashBefore = createHash("sha256").update(marker).digest("hex");
+
+  const writeFailPort = await freePort();
+  const writeFail = await runNextStartWithPosts({
+    label: "invalid_registry_writes",
+    port: writeFailPort,
+    waitMs: 20000,
+    env: {
+      CORTELY_SESSION_SECRET: secret,
+      NEXT_PUBLIC_DEMO_MODE: "true",
+      CORTELY_OPS_REGISTRY: mixedOpsCoreRegistry(),
+      CORTELY_DATA_DIR: dataDir,
+    },
+    postCount: 3,
+  });
+  if (writeFail.postStatuses.some((s) => s !== null && s >= 200 && s < 300)) {
+    console.error(
+      `FAIL: POST /api/ops retornou 2xx sob registry inválido: ${writeFail.postStatuses}`,
+    );
+    process.exit(1);
+  }
+  if (!writeFail.postStatuses.every((s) => s !== null && s >= 500)) {
+    console.error(
+      `FAIL: esperado 5xx em todos os POSTs, got ${writeFail.postStatuses}`,
+    );
+    process.exit(1);
+  }
+  if (!existsSync(storePath)) {
+    console.error("FAIL: arquivo JSON sumiu");
+    process.exit(1);
+  }
+  const hashAfter = createHash("sha256")
+    .update(readFileSync(storePath))
+    .digest("hex");
+  if (hashBefore !== hashAfter) {
+    console.error(
+      `FAIL: arquivo JSON alterado sob registry inválido before=${hashBefore} after=${hashAfter}`,
+    );
+    process.exit(1);
+  }
+  note(
+    `PASS: registry inválido → POST×3 = 5xx (${writeFail.postStatuses.join(",")}); JSON hash intacto`,
+  );
+
   note("SMOKE_FASE1B0_BOOT_PASSED");
   note(
-    `EVIDENCE mixed=${mixed.observed}; all_json=http_${ok.httpStatus}`,
+    `EVIDENCE mixed=${mixed.observed}; all_json=http_${ok.httpStatus}; writes_5xx=${writeFail.postStatuses.join(",")}; json_hash=${hashBefore.slice(0, 12)}`,
   );
 }
 
