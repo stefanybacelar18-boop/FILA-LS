@@ -290,21 +290,33 @@ BEGIN
     ALTER TABLE public.cash_movements
       ADD CONSTRAINT cash_movements_amount_pos_ck CHECK (amount > 0);
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'cash_movements_change_payment_ck'
-  ) THEN
-    ALTER TABLE public.cash_movements
-      ADD CONSTRAINT cash_movements_change_payment_ck
-      CHECK (kind <> 'change' OR sale_payment_id IS NOT NULL);
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'cash_movements_change_out_ck'
-  ) THEN
-    ALTER TABLE public.cash_movements
-      ADD CONSTRAINT cash_movements_change_out_ck
-      CHECK (kind <> 'change' OR direction = 'out');
-  END IF;
 END $$;
+
+-- kind ↔ direction + sale_payment obrigatório em sale_cash_in/change
+-- (substitui checks estreitos change_payment/change_out da revisão inicial)
+ALTER TABLE public.cash_movements
+  DROP CONSTRAINT IF EXISTS cash_movements_change_payment_ck;
+ALTER TABLE public.cash_movements
+  DROP CONSTRAINT IF EXISTS cash_movements_change_out_ck;
+ALTER TABLE public.cash_movements
+  DROP CONSTRAINT IF EXISTS cash_movements_kind_direction_ck;
+ALTER TABLE public.cash_movements
+  DROP CONSTRAINT IF EXISTS cash_movements_sale_kinds_payment_ck;
+
+ALTER TABLE public.cash_movements
+  ADD CONSTRAINT cash_movements_kind_direction_ck
+  CHECK (
+    (kind IN ('sale_cash_in', 'manual_in', 'refund_in') AND direction = 'in')
+    OR
+    (kind IN ('change', 'manual_out', 'refund_out') AND direction = 'out')
+  );
+
+ALTER TABLE public.cash_movements
+  ADD CONSTRAINT cash_movements_sale_kinds_payment_ck
+  CHECK (
+    kind NOT IN ('sale_cash_in', 'change')
+    OR sale_payment_id IS NOT NULL
+  );
 
 ALTER TABLE public.cash_movements
   ALTER COLUMN amount TYPE NUMERIC(12,2) USING amount::NUMERIC(12,2);

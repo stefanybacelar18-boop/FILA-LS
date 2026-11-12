@@ -93,14 +93,38 @@ BEGIN
   END IF;
   RAISE NOTICE 'PASS: conference ledger 100+50-20=130';
 
-  -- CHECK: kind=change sem sale_payment_id
+  -- CHECK kind ↔ direction / sale_payment
   BEGIN
     INSERT INTO public.cash_movements (
       barbershop_id, cash_session_id, direction, kind, amount, reason, created_by
-    ) VALUES (shop_a, sess_a, 'out', 'change', 10, 'bad', 'x');
+    ) VALUES (shop_a, sess_a, 'out', 'manual_in', 10, 'bad dir', 'x');
+    RAISE EXCEPTION 'FAIL: manual_in com direction=out permitido';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS: manual_in exige direction=in';
+  END;
+  BEGIN
+    INSERT INTO public.cash_movements (
+      barbershop_id, cash_session_id, direction, kind, amount, reason, created_by
+    ) VALUES (shop_a, sess_a, 'in', 'manual_out', 10, 'bad dir', 'x');
+    RAISE EXCEPTION 'FAIL: manual_out com direction=in permitido';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS: manual_out exige direction=out';
+  END;
+  BEGIN
+    INSERT INTO public.cash_movements (
+      barbershop_id, cash_session_id, direction, kind, amount, reason, created_by
+    ) VALUES (shop_a, sess_a, 'in', 'sale_cash_in', 10, 'sem pay', 'x');
+    RAISE EXCEPTION 'FAIL: sale_cash_in sem sale_payment_id permitido';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS: sale_cash_in exige sale_payment_id';
+  END;
+  BEGIN
+    INSERT INTO public.cash_movements (
+      barbershop_id, cash_session_id, direction, kind, amount, reason, created_by
+    ) VALUES (shop_a, sess_a, 'out', 'change', 10, 'sem pay', 'x');
     RAISE EXCEPTION 'FAIL: change sem sale_payment_id permitido';
   EXCEPTION WHEN check_violation THEN
-    RAISE NOTICE 'PASS: kind=change exige sale_payment_id';
+    RAISE NOTICE 'PASS: change exige sale_payment_id';
   END;
 
   -- Venda R$70, cash tendered 100 / applied 70 → entrada 100 + troco 30
@@ -121,6 +145,17 @@ BEGIN
   ) VALUES
     (shop_a, sess_a, pay_a, 'in', 'sale_cash_in', 100, 'cash tendered', 'owner-a'),
     (shop_a, sess_a, pay_a, 'out', 'change', 30, 'troco', 'owner-a');
+  RAISE NOTICE 'PASS: combinações válidas sale_cash_in/in + change/out';
+
+  -- change com direction=in rejeitado (mesmo com payment)
+  BEGIN
+    INSERT INTO public.cash_movements (
+      barbershop_id, cash_session_id, sale_payment_id, direction, kind, amount, reason, created_by
+    ) VALUES (shop_a, sess_a, pay_a, 'in', 'change', 5, 'bad change in', 'x');
+    RAISE EXCEPTION 'FAIL: change/in permitido';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS: change exige direction=out';
+  END;
 
   SELECT * INTO conf FROM public.ops_cash_conference(shop_a, sess_a);
   -- 100 + 50 - 20 + 100 - 30 = 200

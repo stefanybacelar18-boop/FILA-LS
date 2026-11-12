@@ -320,8 +320,11 @@ cash_movements (
     REFERENCES cash_sessions (id, barbershop_id) ON DELETE RESTRICT,
   FOREIGN KEY (sale_payment_id, barbershop_id)
     REFERENCES sale_payments (id, barbershop_id),
-  CHECK (kind <> 'change' OR sale_payment_id IS NOT NULL),
-  CHECK (kind <> 'change' OR direction = 'out')
+  CHECK (
+    (kind IN ('sale_cash_in','manual_in','refund_in') AND direction = 'in')
+    OR (kind IN ('change','manual_out','refund_out') AND direction = 'out')
+  ),
+  CHECK (kind NOT IN ('sale_cash_in','change') OR sale_payment_id IS NOT NULL)
 )
 -- RLS ENABLE+FORCE por barbershop_id; append-only (sem UPDATE/DELETE)
 -- Nota 1.B.2: o nome "reason" do DDL original §4.2 virou a coluna "kind".
@@ -722,6 +725,8 @@ Para cada `barbershop_id`:
 | P16 | `UNIQUE (provider, provider_event_id)` na quarentena com contador de tentativas — **decidir na 1.B.3-G** |
 | P17 | `cash_movements` com `kind=sale_cash_in`: `amount = tendered_amount` do `sale_payment` cash correspondente |
 | P18 | Escrita de estoque/financeiro só via service role (servidor); revogar de `authenticated` o `EXECUTE` das funções `ops_*`, o `INSERT` em `stock_movements` e o `UPDATE` de `products.stock_qty` — **decidir antes da 1.B.3**. **1.B.2 antecipa só para funções novas de caixa** (`ops_open_cash`, `ops_add_cash_movement`, `ops_cash_conference`, `ops_close_cash`): EXECUTE concedido **somente** a `service_role` (nem `anon` nem `authenticated`). |
+| P19 | **ETL (1.B.8):** gerar `cash_movements` `kind='sale_cash_in'` (`amount = tendered_amount`) para cada `sale_payment` cash histórico, para que o esperado do caixa importado bata com o JSON; incluir na reconciliação por tenant. |
+| P20 | **Venda (1.B.3):** a função de venda grava, na mesma TX, `sale_cash_in = tendered` e `change = tendered − applied` (se > 0); teste de contrato JSON×PG do caixa esperado com vendas em dinheiro. |
 
 ---
 
