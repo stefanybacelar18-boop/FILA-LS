@@ -78,7 +78,12 @@ function mapPgError(err: unknown): never {
   if (code === "PT404" || /NOT_FOUND/.test(msg)) {
     throw new PackagesError(404, "NOT_FOUND", msg);
   }
-  if (code === "PT409" || /EXPIRED|NO_CREDITS|CANCELED|MISSING|NOT_PAID|HAS_ACTIVE|ALREADY/.test(msg)) {
+  if (
+    code === "PT409" ||
+    /EXPIRED|NO_CREDITS|CANCELED|MISSING|NOT_PAID|HAS_ACTIVE|ALREADY|MISMATCH|QUANTITY/.test(
+      msg,
+    )
+  ) {
     throw new PackagesError(409, "CONFLICT", msg);
   }
   throw err instanceof Error ? err : new Error(msg);

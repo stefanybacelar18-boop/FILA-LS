@@ -372,6 +372,65 @@ async function main() {
   assert.equal(String(expRow.rows[0].status), "expired");
   ok("expirado não consome e fica expired");
 
+  // Sell concorrente mesma sale_id → idempotente (unique_violation → existing)
+  const shopSell = randomUUID();
+  const clientSell = randomUUID();
+  const pkgSell = randomUUID();
+  const saleSell = randomUUID();
+  await pool.query(
+    `INSERT INTO public.barbershops (id, name, slug) VALUES ($1,'SellRace','sell-race')`,
+    [shopSell],
+  );
+  await pool.query(
+    `INSERT INTO public.clients (id, barbershop_id, full_name, phone) VALUES ($1,$2,'S','2')`,
+    [clientSell, shopSell],
+  );
+  await pool.query(
+    `INSERT INTO public.service_packages (id, barbershop_id, name, price, credits, valid_days)
+     VALUES ($1,$2,'S',60,2,30)`,
+    [pkgSell, shopSell],
+  );
+  await pool.query(
+    `INSERT INTO public.sales (id, barbershop_id, client_id, total, status)
+     VALUES ($1,$2,$3,60,'paid')`,
+    [saleSell, shopSell, clientSell],
+  );
+  await pool.query(
+    `INSERT INTO public.sale_items (
+       sale_id, barbershop_id, kind, ref_id, description, quantity, unit_price, total
+     ) VALUES ($1,$2,'package',$3,'S',1,60,60)`,
+    [saleSell, shopSell, pkgSell],
+  );
+  const sellRace = await Promise.allSettled([
+    pool.query(`SELECT * FROM public.ops_sell_package($1,$2,$3,$4,'a')`, [
+      shopSell,
+      clientSell,
+      pkgSell,
+      saleSell,
+    ]),
+    pool.query(`SELECT * FROM public.ops_sell_package($1,$2,$3,$4,'b')`, [
+      shopSell,
+      clientSell,
+      pkgSell,
+      saleSell,
+    ]),
+  ]);
+  assert.equal(
+    sellRace.filter((r) => r.status === "fulfilled").length,
+    2,
+    `sell paralelo falhou: ${sellRace.map((r) => (r.status === "rejected" ? String(r.reason) : "ok")).join(" | ")}`,
+  );
+  const sellIds = sellRace
+    .filter((r): r is PromiseFulfilledResult<pg.QueryResult> => r.status === "fulfilled")
+    .map((r) => String(r.value.rows[0].client_package_id));
+  assert.equal(sellIds[0], sellIds[1]);
+  const sellCount = await pool.query(
+    `SELECT count(*)::int AS n FROM public.client_packages WHERE barbershop_id = $1 AND sale_id = $2`,
+    [shopSell, saleSell],
+  );
+  assert.equal(Number(sellCount.rows[0].n), 1);
+  ok("sell concorrente mesma sale_id → um client_package");
+
   // OpsRepository
   const allJson = loadRegistry({
     tableExists: false,

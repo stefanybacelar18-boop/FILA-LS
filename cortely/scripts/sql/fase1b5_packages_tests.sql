@@ -236,6 +236,55 @@ BEGIN
     RAISE NOTICE 'PASS: cancel sem consumos ativos';
   END;
 
+  -- Cliente da venda ≠ p_client_id → SALE_CLIENT_MISMATCH
+  DECLARE
+    pkg_m UUID := 'a6666666-6666-4666-8666-6666666666a1';
+    sale_m UUID := 'a1000006-0006-4006-8006-000000000006';
+    client_other UUID := 'a0000002-0002-4002-8002-000000000002';
+  BEGIN
+    INSERT INTO public.clients (id, barbershop_id, full_name, phone)
+    VALUES (client_other, shop_a, 'Outro', '333');
+    INSERT INTO public.service_packages (
+      id, barbershop_id, name, price, credits, valid_days, is_active
+    ) VALUES (pkg_m, shop_a, 'Mis', 30, 1, 90, TRUE);
+    INSERT INTO public.sales (id, barbershop_id, client_id, total, status)
+    VALUES (sale_m, shop_a, client_a, 30, 'paid');
+    INSERT INTO public.sale_items (
+      sale_id, barbershop_id, kind, ref_id, description, quantity, unit_price, total
+    ) VALUES (sale_m, shop_a, 'package', pkg_m::text, 'Mis', 1, 30, 30);
+    BEGIN
+      PERFORM public.ops_sell_package(shop_a, client_other, pkg_m, sale_m, 'owner');
+      RAISE EXCEPTION 'FAIL: client mismatch permitido';
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLERRM LIKE '%SALE_CLIENT_MISMATCH%' OR SQLSTATE = 'PT409' THEN
+        RAISE NOTICE 'PASS: SALE_CLIENT_MISMATCH';
+      ELSE RAISE; END IF;
+    END;
+  END;
+
+  -- quantity <> 1 → PACKAGE_QUANTITY_UNSUPPORTED
+  DECLARE
+    pkg_q UUID := 'a6666666-6666-4666-8666-6666666666b1';
+    sale_q UUID := 'a1000007-0007-4007-8007-000000000007';
+  BEGIN
+    INSERT INTO public.service_packages (
+      id, barbershop_id, name, price, credits, valid_days, is_active
+    ) VALUES (pkg_q, shop_a, 'Qty', 40, 1, 90, TRUE);
+    INSERT INTO public.sales (id, barbershop_id, client_id, total, status)
+    VALUES (sale_q, shop_a, client_a, 80, 'paid');
+    INSERT INTO public.sale_items (
+      sale_id, barbershop_id, kind, ref_id, description, quantity, unit_price, total
+    ) VALUES (sale_q, shop_a, 'package', pkg_q::text, 'Qty', 2, 40, 80);
+    BEGIN
+      PERFORM public.ops_sell_package(shop_a, client_a, pkg_q, sale_q, 'owner');
+      RAISE EXCEPTION 'FAIL: quantity 2 permitido';
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLERRM LIKE '%PACKAGE_QUANTITY_UNSUPPORTED%' OR SQLSTATE = 'PT409' THEN
+        RAISE NOTICE 'PASS: PACKAGE_QUANTITY_UNSUPPORTED';
+      ELSE RAISE; END IF;
+    END;
+  END;
+
   -- Grants
   SELECT EXISTS (
     SELECT 1 FROM information_schema.role_routine_grants

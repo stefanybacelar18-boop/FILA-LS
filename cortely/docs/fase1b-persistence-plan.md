@@ -758,6 +758,7 @@ Para cada `barbershop_id`:
 | P25 | **JSON `sellPackageToClient` (defeito, não muda nesta etapa):** cria créditos **antes** da venda; se `createSale` falhar (ex.: caixa fechado), cliente fica com créditos sem pagar. Pagamento fixo em Pix. PG: `ops_sell_package` exige venda `paid` com item `package` já existente. |
 | P26 | **JSON `consumePackageCredit` (defeito, não muda nesta etapa):** sem `appointment_id`, sem trava; dois consumos simultâneos podem passar do saldo. PG: `FOR UPDATE` + `client_package_consumptions` + unique parcial por agendamento. |
 | P27 | **JSON `subscribeClient` (defeito, não muda nesta etapa):** cria assinatura sem cobrança. Cobrança recorrente depende da P5 — fora desta etapa. |
+| P28 | **Pacote multi-unidade:** `ops_sell_package` exige `sale_items.quantity = 1` para o item `package` (`PACKAGE_QUANTITY_UNSUPPORTED`). Venda de N pacotes na mesma linha fica para depois do cutover. |
 
 ---
 

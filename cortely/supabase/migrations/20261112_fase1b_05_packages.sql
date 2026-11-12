@@ -380,6 +380,7 @@ DECLARE
   v_existing public.client_packages%ROWTYPE;
   v_id UUID;
   v_exp TIMESTAMPTZ;
+  v_qty INT;
 BEGIN
   -- Idempotente por (shop, sale, package)
   SELECT * INTO v_existing
@@ -406,15 +407,22 @@ BEGIN
   IF v_sale.status <> 'paid' THEN
     RAISE EXCEPTION 'SALE_NOT_PAID' USING ERRCODE = 'PT409';
   END IF;
+  IF v_sale.client_id IS NOT NULL AND v_sale.client_id <> p_client_id THEN
+    RAISE EXCEPTION 'SALE_CLIENT_MISMATCH' USING ERRCODE = 'PT409';
+  END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM public.sale_items si
-    WHERE si.sale_id = p_sale_id
-      AND si.barbershop_id = p_barbershop_id
-      AND si.kind = 'package'
-      AND si.ref_id = p_package_id::text
-  ) THEN
+  SELECT si.quantity INTO v_qty
+  FROM public.sale_items si
+  WHERE si.sale_id = p_sale_id
+    AND si.barbershop_id = p_barbershop_id
+    AND si.kind = 'package'
+    AND si.ref_id = p_package_id::text
+  LIMIT 1;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'SALE_MISSING_PACKAGE_ITEM' USING ERRCODE = 'PT409';
+  END IF;
+  IF v_qty <> 1 THEN
+    RAISE EXCEPTION 'PACKAGE_QUANTITY_UNSUPPORTED' USING ERRCODE = 'PT409';
   END IF;
 
   SELECT * INTO v_pkg
@@ -433,16 +441,47 @@ BEGIN
     RAISE EXCEPTION 'CLIENT_NOT_FOUND' USING ERRCODE = 'PT404';
   END IF;
 
+  -- Rechecagem pós-lock (corrida com outra sell da mesma sale)
+  SELECT * INTO v_existing
+  FROM public.client_packages cp
+  WHERE cp.barbershop_id = p_barbershop_id
+    AND cp.sale_id = p_sale_id
+    AND cp.package_id = p_package_id;
+  IF FOUND THEN
+    client_package_id := v_existing.id;
+    credits_total := v_existing.credits_total;
+    expires_at := v_existing.expires_at;
+    status := v_existing.status;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
   v_exp := now() + make_interval(days => v_pkg.valid_days);
 
-  INSERT INTO public.client_packages (
-    barbershop_id, client_id, package_id, sale_id,
-    credits_total, credits_used, expires_at, status
-  ) VALUES (
-    p_barbershop_id, p_client_id, p_package_id, p_sale_id,
-    v_pkg.credits, 0, v_exp, 'active'
-  )
-  RETURNING id INTO v_id;
+  BEGIN
+    INSERT INTO public.client_packages (
+      barbershop_id, client_id, package_id, sale_id,
+      credits_total, credits_used, expires_at, status
+    ) VALUES (
+      p_barbershop_id, p_client_id, p_package_id, p_sale_id,
+      v_pkg.credits, 0, v_exp, 'active'
+    )
+    RETURNING id INTO v_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      SELECT * INTO v_existing
+      FROM public.client_packages cp
+      WHERE cp.barbershop_id = p_barbershop_id
+        AND cp.sale_id = p_sale_id
+        AND cp.package_id = p_package_id;
+      IF NOT FOUND THEN RAISE; END IF;
+      client_package_id := v_existing.id;
+      credits_total := v_existing.credits_total;
+      expires_at := v_existing.expires_at;
+      status := v_existing.status;
+      RETURN NEXT;
+      RETURN;
+  END;
 
   client_package_id := v_id;
   credits_total := v_pkg.credits;
