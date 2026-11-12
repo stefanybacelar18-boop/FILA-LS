@@ -22,7 +22,7 @@
 | D3b | **Fail-fast no boot:** combinações inválidas **impedem** boot/execução — zero side-effects. |
 | D4 | Venda, pagamento (split) e movimento de caixa **separados**. `sale_payments`: `tendered_amount` + `applied_amount`. Troco = `cash_movements` de saída (`kind=change`) **só** em cash. Invariantes: `Σ applied_amount = sales.total`; `change = Σ(tendered − applied)` **apenas cash**; `tendered >= applied`; troco só cash. Estornos = **nova linha** compensatória — sem `UPDATE`/`DELETE` destrutivo. Ver §4.2. **Nota 1.B.2:** o enum do DDL original chamado `reason` passou a chamar-se **`kind`**; a coluna `reason` permanece como descrição livre. |
 | D5 | Multi-tenant: FKs **compostas** com `barbershop_id`; backfill → UNIQUE → FK → índices → RLS FORCE; preservar 1.A. |
-| D6 | Comissão paga: bloquear estorno até clawback (default). Reversão/clawback = **nova linha**; unique ativo `(barbershop_id, sale_item_id, barber_id)`; `UNIQUE (clawback_of) WHERE status='clawback'`; FK composta em `clawback_of`. |
+| D6 | Comissão paga: bloquear estorno até clawback (default = P3). Reversão/clawback = **nova linha**; unique ativo `(barbershop_id, sale_item_id, barber_id)`; `UNIQUE (clawback_of) WHERE status='clawback'`; FK composta em `clawback_of`. **P15 (1.B.4):** reversão de `pending` = linha `reversed` + `reversal_of` + UNIQUE; payout ignora pending revertidos. **P24:** vale PG desconta só até o bruto (parcial). **P23:** ETL legado JSON→PG a decidir antes da 1.B.8. |
 | D7 | Gateway: intents com `barbershop_id NOT NULL`, RLS, FKs compostas; assinatura **antes** de escrita; tenant do **intent**; `UNIQUE (provider, provider_event_id)`; intent inexistente / tenant inconsistente / schema inválido → **`payment_webhook_quarantine`** (sem tenant, sem FK, só service role). Passos 4–6 do pipeline em **uma TX**. |
 | D8 | Tenant da sessão desde **1.B.0**. `SHOP_ID` só em legado JSON + ETL até 1.B.9. |
 | D9 | **`units` adiadas** — ADR §11. |
@@ -534,10 +534,10 @@ ops_idempotency_keys (
 1. `fase1b_01` — products/stock/inventory (FKs compostas, CHECKs, `ops_adjust_stock` / `ops_register_inventory_count`)  
 2. `fase1b_02` — sale tenant columns (`sale_items`/`sale_payments`) + payments `tendered_amount`/`applied_amount` + `cash_sessions`/`cash_movements` (`kind`/`direction`, troco CHECK) + `ops_*_cash` (EXECUTE só `service_role`)  
 2g. `fase1b_03g` — gateway isolado: `payment_intents` + `payment_provider_accounts` + events/quarantine (P16) + `ops_apply_payment_webhook` (sem efeito de negócio)  
-3. `fase1b_03` — commissions (unique sale_item + clawback) + advances  
-4. `fase1b_04` — packages/subscriptions  
-5. `fase1b_05` — purchase_orders  
-6. `fase1b_06` — coupons, deposits, payment_intents, events, quarantine  
+3. `fase1b_04` — commissions (unique sale_item + clawback/reversal P15) + advances/payouts/goals + `ops_accrue/reverse/clawback/pay/ranking`  
+4. `fase1b_05` — packages/subscriptions  
+5. `fase1b_06` — purchase_orders  
+6. `fase1b_07` — coupons, deposits (intents/events já em 03g; restante)  
 7. `fase1b_07` — `ops_idempotency_keys`, `ops_shop_id_map`, audit grants  
 8. `fase1b_08` — concurrency constraints  
 
@@ -734,7 +734,7 @@ Para cada `barbershop_id`:
 |---|---|
 | ~~P13~~ | **Fechado:** tabela canônica após seed; arquivo ignorado se tabela existe; `CORTELY_OPS_REGISTRY`+tabela → fail-fast; nunca promovem `active_postgres`; sem tabela → all-json sem criar nada; registry **global** |
 | P2 | Status `draft` de sale? |
-| P3 | Clawback automático vs só bloqueio (default = bloqueio) |
+| P3 | **Mantido (default = bloqueio):** venda com comissão `paid` só pode ser estornada depois do clawback (nova linha). Estorno da venda = 1.B.3; nesta etapa só funções/regras. |
 | P4 | Caixa open obrigatório em toda sale `paid`? |
 | P5 | **Aberto:** provedor ainda não escolhido (Asaas **ou** Mercado Pago). **1.B.3-G:** só interface `PaymentProvider` + **FakeProvider** (HMAC de teste). Nenhum provedor real / credencial real / chamada externa no CI. |
 | P6 | Profundidade do shadow log |
@@ -743,9 +743,9 @@ Para cada `barbershop_id`:
 | P9 | Duração do freeze 1.B.3 |
 | ~~P10~~ | **Fechado (1.B.3-G):** status `paid` + `paid_at` preenchido; `applied_at NULL` = pago e ainda **não** aplicado (efeito de negócio só na 1.B.3/1.B.7). |
 | P11 | `NUMERIC(12,2)` vs centavos `BIGINT` |
-| P12 | `UNIQUE (id, barbershop_id)` em barbers/services |
+| ~~P12~~ | **Fechado (1.B.4):** `UNIQUE (id, barbershop_id)` em `barbers`, `services` e `sale_items`. |
 | P14 | Coupons/deposits que afetam venda: incluir em `ops_core` **ou** bloquear o uso até a 1.B.7 — **decidir antes da 1.B.3** |
-| P15 | Reversão de comissão `pending`: coluna `reversal_of` + UNIQUE e payout excluindo entries revertidas — **decidir na 1.B.4** |
+| ~~P15~~ | **Fechado (1.B.4):** reversão de `pending` = nova linha `status='reversed'` com `reversal_of` → origem; `UNIQUE (reversal_of) WHERE status='reversed'`; payout ignora `pending` que tenham reversão. |
 | ~~P16~~ | **Fechado (1.B.3-G):** `payment_webhook_quarantine` com `UNIQUE (provider, provider_event_id) WHERE provider_event_id IS NOT NULL` + `attempts INT` + `last_seen_at`; repetição → `attempts++` (sem nova linha). |
 | P17 | `cash_movements` com `kind=sale_cash_in`: `amount = tendered_amount` do `sale_payment` cash correspondente |
 | P18 | Escrita de estoque/financeiro só via service role (servidor); revogar de `authenticated` o `EXECUTE` das funções `ops_*`, o `INSERT` em `stock_movements` e o `UPDATE` de `products.stock_qty` — **decidir antes da 1.B.3**. **1.B.2 antecipa só para funções novas de caixa** (`ops_open_cash`, `ops_add_cash_movement`, `ops_cash_conference`, `ops_close_cash`): EXECUTE concedido **somente** a `service_role` (nem `anon` nem `authenticated`). |
@@ -753,6 +753,8 @@ Para cada `barbershop_id`:
 | P20 | **Venda (1.B.3):** a função de venda grava, na mesma TX, `sale_cash_in = tendered` e `change = tendered − applied` (se > 0); teste de contrato JSON×PG do caixa esperado com vendas em dinheiro. |
 | P21 | **Adapters PG em produção:** como conectam (pooler Supabase, papel dedicado de privilégio mínimo, **nunca** superusuário; pool adequado a serverless) — **decidir antes da 1.B.3**. |
 | P22 | **Remover** de `createPaymentIntent` o caminho de credencial global (`MERCADOPAGO_ACCESS_TOKEN` / `ASAAS_API_KEY`) antes de ligar um provedor real (D12) — decidir com a P5. |
+| P23 | **ETL comissões legadas (antes da 1.B.8):** JSON tem comissão por venda (não por item) e zera `amount` em estornos — definir mapeamento (rateio por item ou entries legadas marcadas) sem perder histórico. |
+| P24 | **Vales no PG:** vale maior que a comissão desconta só até o bruto; saldo do vale continua em aberto (dedução parcial). JSON baixa o vale inteiro (defeito conhecido) — **não muda nesta etapa**. |
 
 ---
 

@@ -1,8 +1,7 @@
 /**
- * Cortely 1.B.0/1.B.1/1.B.2 — fachada OpsRepository.
+ * Cortely 1.B.0–1.B.4 — fachada OpsRepository.
  * Com ops_core=json delega ao opsStore atual sem mudar comportamento.
- * 1.B.1: ProductsStockRepository JSON (prod) ou PG (só se registry=postgres).
- * 1.B.2: CashRepository JSON (prod) ou PG (só se cash=postgres — impossível em prod).
+ * PG adapters só se registry=postgres (impossível em prod nesta etapa).
  * Código novo usa barbershop_id da sessão — sem SHOP_ID neste módulo.
  */
 
@@ -19,6 +18,11 @@ import {
   createPgCashRepository,
   type CashRepository,
 } from "./cash-repository";
+import {
+  createJsonCommissionsRepository,
+  createPgCommissionsRepository,
+  type CommissionsRepository,
+} from "./commissions-repository";
 import {
   createJsonProductsStockRepository,
   createPgProductsStockRepository,
@@ -37,7 +41,7 @@ export type OpsRepositoryOptions = {
   registry: RegistrySnapshot;
   /** Tenant da sessão — obrigatório em código novo (D8). */
   sessionBarbershopId: string;
-  /** Cliente PG opcional — só usado se products/stock/cash estiverem em postgres. */
+  /** Cliente PG opcional — só usado se domínio estiver em postgres. */
   pg?: PgQueryable;
 };
 
@@ -131,6 +135,22 @@ export class OpsRepository {
       return createPgCashRepository(this.pg, this.sessionBarbershopId);
     }
     return createJsonCashRepository(opsStore, this.sessionBarbershopId);
+  }
+
+  /**
+   * Adapter comissões.
+   * PG só se commissions=postgres (impossível em prod nesta etapa — prep only).
+   */
+  commissions(): CommissionsRepository {
+    if (this.source("commissions") === "postgres") {
+      if (!this.pg) {
+        throw new OpsRepositoryError(
+          "OpsRepository: adapter PG de comissões exige cliente Postgres",
+        );
+      }
+      return createPgCommissionsRepository(this.pg, this.sessionBarbershopId);
+    }
+    return createJsonCommissionsRepository(opsStore, this.sessionBarbershopId);
   }
 }
 
