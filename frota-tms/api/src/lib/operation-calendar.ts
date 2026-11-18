@@ -60,16 +60,22 @@ function hitsBetween(from: string, to: string): Map<string, BrazilCalendarHit[]>
 
 function hitItem(hit: BrazilCalendarHit): OperationCalendarItem {
   if (hit.kind === 'FERIADO_NACIONAL') {
-    return { tone: 'risk', label: `Feriado nacional — ${hit.name}. Segura a carga.` };
+    return {
+      tone: 'warn',
+      label: `Feriado nacional — ${hit.name}. Aviso: confirme se a loja abre.`,
+    };
   }
   if (hit.kind === 'FERIADO_ESTADUAL' && hit.scope === 'BA') {
     return {
-      tone: 'risk',
-      label: `Feriado estadual — ${hit.name}. Segura a carga e destino na Bahia.`,
+      tone: 'warn',
+      label: `Feriado estadual — ${hit.name}. Aviso para carga e destino na Bahia.`,
     };
   }
   if (hit.kind === 'FERIADO_ESTADUAL') {
-    return { tone: 'risk', label: `Feriado estadual — ${hit.name}. Segura destino em Sergipe.` };
+    return {
+      tone: 'warn',
+      label: `Feriado estadual — ${hit.name}. Aviso para destino em Sergipe.`,
+    };
   }
   return {
     tone: 'warn',
@@ -147,8 +153,8 @@ export function buildOperationCalendar(args: {
     const municipalItems = [...(municipal.get(date)?.entries() ?? [])]
       .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
       .map(([name, places]) => ({
-        tone: 'risk' as const,
-        label: `Feriado municipal — ${name}. Segura lojas em ${formatPlaces(places)}.`,
+        tone: 'warn' as const,
+        label: `Feriado municipal — ${name}. Aviso para lojas em ${formatPlaces(places)}.`,
       }));
     const items = [
       ...(hits.get(date) ?? []).map(hitItem),

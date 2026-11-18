@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { buildOperationCalendar } from './operation-calendar';
 
 describe('operation calendar', () => {
-  it('marca feriado nacional como dia que segura a carga', () => {
+  it('marca feriado nacional como aviso, sem travar a operação', () => {
     const days = buildOperationCalendar({ from: '2026-11-01', to: '2026-11-30', closures: [] });
     const finados = days.find((day) => day.date === '2026-11-02');
     const consciencia = days.find((day) => day.date === '2026-11-20');
-    expect(finados?.tone).toBe('risk');
+    expect(finados?.tone).toBe('warn');
     expect(finados?.items[0]?.label).toContain('Feriado nacional');
-    expect(finados?.items[0]?.label).toContain('Segura a carga');
-    expect(consciencia?.tone).toBe('risk');
+    expect(finados?.items[0]?.label).toContain('Aviso');
+    expect(finados?.items[0]?.label).not.toContain('Segura a carga');
+    expect(consciencia?.tone).toBe('warn');
     expect(days.some((day) => day.date === '2026-11-21')).toBe(false);
   });
 
@@ -60,7 +61,7 @@ describe('operation calendar', () => {
       ],
     });
     const aniversario = days.find((day) => day.date === '2026-09-18');
-    expect(aniversario?.tone).toBe('risk');
+    expect(aniversario?.tone).toBe('warn');
     expect(aniversario?.items).toHaveLength(1);
     expect(aniversario?.items[0]?.label).toContain('Aniversário de Feira de Santana');
     expect(aniversario?.items[0]?.label).toContain('Feira de Santana/BA');

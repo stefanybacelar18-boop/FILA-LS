@@ -153,7 +153,8 @@ function assessDate(args: {
   }
 
   if (legal.length > 0) {
-    raise('RISCO', withOvernight(`${label}: ${legal.map(hitLabel).join(', ')}.`));
+    // Feriado só informa — não bloqueia confirmar placa / enviar roteiro.
+    raise('ATENCAO', withOvernight(`${label}: ${legal.map(hitLabel).join(', ')}.`));
   }
 
   if (closure?.kind === 'HORARIO_REDUZIDO') {
@@ -194,7 +195,8 @@ export function assessRouteCalendar(input: {
   for (const hit of loadDateHits(routeDateIso)) {
     const label = formatCalendarDate(routeDateIso);
     if (isLegalClosure(hit.kind)) {
-      raiseLoad('RISCO', `${label}: carga no ${hitLabel(hit)}`);
+      // Feriado na data da carga: aviso, sem travar a operação.
+      raiseLoad('ATENCAO', `${label}: carga no ${hitLabel(hit)}`);
     } else {
       raiseLoad('ATENCAO', `${label}: carga em ${hitLabel(hit)}. Confirme se o PAD abre.`);
     }
