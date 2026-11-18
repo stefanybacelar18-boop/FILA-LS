@@ -10,16 +10,17 @@ const weekdayHours = (): StoreHour[] =>
   }));
 
 describe('store-calendar', () => {
-  it('bloqueia carga em feriado nacional', () => {
+  it('avisa carga em feriado nacional sem bloquear', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-01-01',
       stops: [],
     });
-    expect(result.blocked).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.status).toBe('ATENCAO');
     expect(result.summary).toContain('Confraternização Universal');
   });
 
-  it('bloqueia chegada na Bahia em 2 de julho e não bloqueia o mesmo dia em São Paulo', () => {
+  it('avisa chegada na Bahia em 2 de julho sem bloquear e não avisa o mesmo dia em São Paulo', () => {
     const bahia = assessRouteCalendar({
       routeDate: '2026-07-02',
       stops: [
@@ -44,7 +45,8 @@ describe('store-calendar', () => {
         },
       ],
     });
-    expect(bahia.blocked).toBe(true);
+    expect(bahia.blocked).toBe(false);
+    expect(bahia.status).toBe('ATENCAO');
     expect(bahia.summary).toContain('Independência da Bahia');
     expect(saoPaulo.stops[0]?.reasons.join(' ')).not.toContain('Independência da Bahia');
   });
@@ -68,7 +70,7 @@ describe('store-calendar', () => {
     expect(result.summary).toContain('Carnaval');
   });
 
-  it('bloqueia a loja no feriado municipal da cidade, sem horário cadastrado', () => {
+  it('avisa a loja no feriado municipal da cidade sem bloquear, sem horário cadastrado', () => {
     const feira = assessRouteCalendar({
       routeDate: '2026-09-18',
       stops: [
@@ -93,7 +95,8 @@ describe('store-calendar', () => {
         },
       ],
     });
-    expect(feira.blocked).toBe(true);
+    expect(feira.blocked).toBe(false);
+    expect(feira.status).toBe('ATENCAO');
     expect(feira.summary).toContain('Aniversário de Feira de Santana');
     expect(feira.summary).not.toContain('Expediente');
     expect(salvador.stops[0]?.status).toBe('APTO');
@@ -121,7 +124,7 @@ describe('store-calendar', () => {
     expect(result.summary).toContain('São João');
   });
 
-  it('deixa de bloquear o feriado quando a loja informa que abre', () => {
+  it('mantém aviso do feriado quando a loja informa que abre', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-04-21',
       stops: [
@@ -137,7 +140,8 @@ describe('store-calendar', () => {
       closuresByDealership: new Map([['loja', [{ date: '2026-04-21', kind: 'ABRE' }]]]),
     });
     expect(result.stops[0]?.status).toBe('ATENCAO');
-    expect(result.blocked).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.status).toBe('ATENCAO');
     expect(result.loadReasons.join(' ')).toContain('Tiradentes');
   });
 
@@ -192,7 +196,7 @@ describe('store-calendar', () => {
     expect(after.summary).not.toContain('Dia do Trabalho');
   });
 
-  it('avisa o feriado do dia seguinte quando o roteiro é pernoite', () => {
+  it('avisa o feriado do dia seguinte quando o roteiro é pernoite, sem bloquear', () => {
     const result = assessRouteCalendar({
       routeDate: '2026-04-30',
       stops: [
@@ -205,7 +209,8 @@ describe('store-calendar', () => {
         },
       ],
     });
-    expect(result.blocked).toBe(true);
+    expect(result.blocked).toBe(false);
+    expect(result.status).toBe('ATENCAO');
     expect(result.summary).toContain('Dia do Trabalho');
     expect(result.summary).toContain('Entrega do pernoite pode cair neste dia');
   });
@@ -264,7 +269,8 @@ describe('store-calendar', () => {
         },
       ],
     });
-    expect(overnight.blocked).toBe(true);
+    expect(overnight.blocked).toBe(false);
+    expect(overnight.status).toBe('ATENCAO');
     expect(overnight.summary).toContain('São Jorge');
     expect(sameDay.blocked).toBe(false);
     expect(sameDay.summary).not.toContain('São Jorge');
@@ -272,7 +278,7 @@ describe('store-calendar', () => {
     expect(dayAfter.summary).not.toContain('São Jorge');
   });
 
-  it('trata Aracaju da LSL como pernoite e olha o feriado do dia seguinte', () => {
+  it('trata Aracaju da LSL como pernoite e avisa o feriado do dia seguinte sem bloquear', () => {
     const lsl = assessRouteCalendar({
       routeDate: '2026-04-30',
       owner: 'LSL',
@@ -299,7 +305,8 @@ describe('store-calendar', () => {
         },
       ],
     });
-    expect(lsl.blocked).toBe(true);
+    expect(lsl.blocked).toBe(false);
+    expect(lsl.status).toBe('ATENCAO');
     expect(lsl.summary).toContain('Dia do Trabalho');
     expect(ag.blocked).toBe(false);
     expect(ag.summary).not.toContain('Dia do Trabalho');
